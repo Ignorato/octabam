@@ -10,6 +10,37 @@ Voicing rounds up to 16 Sep 2026: `git show 3ceba41:docs/history/VOICING.md`.
 ## Measured
 
 - Wet levels at defaults, SEND 100, one sender: ROOM −10.9, PLATE −13.1, BIG −13.0 dBFS (+6 dB since 16 Sep 2026's makeup; before it −16.9 / −19.1 / −19.0). Eight senders at SEND 100 on loud loops, BIG, WET 127: the wet alone peaks −8.9 dBFS, the host's dry + wet −3.8, no clipped samples.
+- Wet limiter (27 Sep 2026): a feedback peak limiter on the wet at half
+  scale, before the ×2 makeup — `y = wet × g`; while max(|yL|, |yR| of the
+  previous sample) is over 0.398 (= −2 dBFS after the ×2) g steps ×0.9 per
+  sample; under 0.31 (−4 dBFS after the ×2) it climbs 2^-16 per sample
+  (0.9 → 1.0 in ~150 ms; the store's limiter clamps it at 1.0); between
+  the two it holds, so a signal sitting at the ceiling is not modulated
+  sample by sample (without the hold the knob-click gate read −54 dBFS of
+  chatter on a steady 0.3 FS tone; its floor is −70). Three candidates,
+  two compares, two `tmi` pick; no `div`/`rep` (neither has a stock site).
+  The knob-click gate keeps one residual as KNOWN: a DIFF jump on ROOM
+  dumps the diffusers' state as a peak and the limiter turns it into gain
+  steps (−51 dBFS, ceiling −45) where the store's clipping, which the
+  metric leaves out, used to take it; a gentler ×0.953 attack flagged SHMR
+  as well. Drum loop as a send
+  from a THRU at AMP VOL 127, REV 127, WET 127, sample-exact per channel:
+  at a 0 dBFS send the wet railed 7,463 samples (L) / 11,762 (R) per 9 s
+  on PLATE, 469 / 500 on BIG, 3 / 2,874 on ROOM; with the limiter 0 on
+  every mode, peaks −1.1 to −1.8 dBFS, PLATE's RMS −11.4 → −16.0 (the
+  whole loop is over the ceiling there). At a −6 dBFS send 23 / 46 → 0,
+  RMS −15.8 → −16.9. At −12 dBFS bit-identical (max difference −130 dBFS).
+  Earlier tries: moving the tank's −12 dB pad to the bus input railed
+  MORE at 0 dBFS (the limit is the wet sum, not the diffusers); a `rep
+  #24 / div` gain was dropped for lack of a stock site. Slots `$11..$13`
+  (inside the one-word displacement range: `(r7+$68)` costs two words),
+  +30 cycles/sample static (1,145 → 1,175). Words: the limiter took 32 of
+  payload A's 35 free, which left the RIG BURN probe's 21 without a home
+  (`verify_burn` refused); four per-block slots the block code reaches
+  five times each ($6d, $67, $62, $5e) moved into the one-word
+  displacement range ($25, $26, $27, $39), bit-identical, and payload A
+  sits at 23 free.
+  Unheard on hardware.
 - RT60 (a 50 ms burst, −3..−33 dB slope) at TIME 0 / 32 / 64 / 96 / 127:
   ROOM 0.87 / 1.0 / 1.5 / 2.8 / 3.9 s; PLATE 0.9 → 4.4 s; BIG 1.6 → 11.7 s.
   The tank law is `$1e = a − k_mode·(d_min + d_span·(1−t)²)` (k ROOM 0.5 /

@@ -95,7 +95,13 @@
 ;   r7+$83        write phase (persistent, masked on load as well as save)
 ;   $71 WET ramped per sample, $7c its per-sample step (per block)
 ;   r7+$10        TIME's t, glided (per block, 26 Sep 2026)
-;   free: $11..$13, $25..$27, $39, $66, $68, $69, $6e, $7d
+;   r7+$11..$13   wet limiter: gain (persistent), y parked, |yR| for the
+;                 next sample's detector
+;   (27 Sep 2026: four per-block slots moved into the one-word displacement
+;   range for the wet limiter's words -- $6d -> $25, $67 -> $26, $62 -> $27,
+;   $5e -> $39; the lines above still name them by their old numbers, the
+;   code reads the new ones)
+;   free: $5e, $62, $66, $67, $68, $69, $6d, $6e, $7d
 ;   (fourteen; $25/$26 and $39 went to registers 23 Sep 2026)
 ;
 ; Parameters (page 1 slots 0-5, page 2 slots 6-11):
@@ -136,7 +142,7 @@ init:
         move    a,x:(r7+$0e)            ; SHMR
         move    a,x:(r7+$1f)            ; TONE's c
         move    a,x:(r7+$40)            ; TONE's LO
-        move    a,x:(r7+$6d)            ; DIFF's g
+        move    a,x:(r7+$25)            ; DIFF's g
         move    a,x:(r7+$70)            ; WET
         move    a,x:(r7+$10)            ; TIME's t (the glide state)
         move    a,y:>$09f3              ; SIZE's f (the glide state)
@@ -169,7 +175,7 @@ proc:
         and     #>$f,a                  ; 0..15 by construction; garbage masked
         move    a1,x0
         move    x0,a                    ; A2-clean
-        move    a,x:(r7+$67)            ; this call's frame offset
+        move    a,x:(r7+$26)            ; this call's frame offset
 bus_off_done:
 
 ; ---- position-0 housekeeping: flip the shared bus rotation, clear the new
@@ -198,7 +204,7 @@ bus_off_done:
 ; below was written around, one level up. Payload B is sent straight to
 ; bus_notfirst, so it still finds this block's write targets but never elects.
 ; Inert in a normal build: it is a comment.
-        move    x:(r7+$67),a
+        move    x:(r7+$26),a
         tst     a
         bne     bus_notfirst                ; not this block's first call
         move    r7,a
@@ -353,7 +359,7 @@ bus_mine:
         add     #>$50,a                    ; five buffers on == three buffers back
         and     #>$70,a                    ; mod 8
         move    a,x0                    ; x0 = the read offset
-        move    x:(r7+$67),b            ; this call's split-aware frame offset
+        move    x:(r7+$26),b            ; this call's split-aware frame offset
         move    #>$9d8,a                ; the CHAIN buffer
         add     x0,a
         add     b,a
@@ -458,10 +464,10 @@ bus_mine:
         move    a,y:>$09f5              ; ... its per-sample step
         move    #>$901,a                ; the AUX accumulator
         add     x1,a                    ; + this block's write offset
-        move    x:(r7+$67),x0           ; + this call's frame offset
+        move    x:(r7+$26),x0           ; + this call's frame offset
         add     x0,a
         move    a,y:>$09f6              ; the AUX write pointer, for the loop
-        move    x:(r7+$67),a
+        move    x:(r7+$26),a
         tst     a
         bne     rvdelcnt                ; not this block's first call
         move    x1,a                    ; the WRITE buffer's count, as a bare
@@ -540,6 +546,9 @@ warmz:
         add     x0,a
         add     #>$800,a                
         move    a,r5
+        move    #$7f,a                  ; wet limiter gain = 0.992 (climbs to
+        move    a,x:(r7+$11)            ; 1.0 within its release; $13 is
+                                        ; rewritten every sample)
         clr     b                       ; TWO instructions between the r5 write
         move    x:(r7+$15),x0           ; and the AGU read in the loop -- the
                                         ; same spacing the private clear above
@@ -1086,11 +1095,11 @@ shfst:
         add     x0,a                    ; PLATE overflowed $7fffff at DIFF=127
         move    x:(r7+$3f),x0           ; and g read NEGATIVE; the others sat at
         add     x0,a                    ; 0.88-0.97, where an allpass is a
-        move    x:(r7+$6d),x0           ; g, for every allpass -- glided, 1/64
+        move    x:(r7+$25),x0           ; g, for every allpass -- glided, 1/64
         sub     x0,a                    ; per block (1/8 until 26 Sep 2026:
         asr     #$6,a,a                 ; a jump stepped the allpasses,
         add     x0,a                    ; tools/verify/verify_knob_clicks.py)
-        move    a,x:(r7+$6d)
+        move    a,x:(r7+$25)
 
 ; ---- SHMR: page-1 slot 3 ------------------------------------------------
         move    x:(r6+$3),a
@@ -1144,7 +1153,7 @@ shfst:
         bra     g_st
 g_off:
         move    #>$7fffff,a
-        move    a,x:(r7+$62)            ; GLVL: open now, not after an attack
+        move    a,x:(r7+$27)            ; GLVL: open now, not after an attack
         move    #$40,a                  ; ~4.19M samples ~= 95 s: never closes
         move    a,x:(r7+$30)            ; GCNT: never runs out at GATE=0
 g_st:                                   ; (g_off falls through with a still
@@ -1314,7 +1323,7 @@ lfrol:
         move    #>$30000,x0             ; -> $38000 on payload B
         move    #>$4000,a
         add     x0,a
-        move    a,x:(r7+$5e)            ; allpass A base, on line 0
+        move    a,x:(r7+$39)            ; allpass A base, on line 0
         move    #>$4200,a
         add     x0,a
         move    a,x:(r7+$5f)            ; allpass B base, on line 1
@@ -1482,7 +1491,7 @@ lfrol:
         move    #>$1ff,m5               ; the in-loop allpasses are 512
         move    r1,a                    ; the AP phase IS the tank phase
         and     #>$1ff,a                ; (same derivation as $39 in the loop)
-        move    x:(r7+$5e),x0           ; base A
+        move    x:(r7+$39),x0           ; base A
         add     x0,a
         move    a,r5
         move    x:(r7+$61),b            ; spaces the r5 write, and preloads
@@ -1587,7 +1596,7 @@ lfrol:
         move    #0,x0
         teq     x0,a                    ; GCNT == 0 -> target 0
 ; D. one-pole smooth toward target -- the slam ramp:
-        move    x:(r7+$62),b            ; GLVL
+        move    x:(r7+$27),b            ; GLVL
         sub     b,a                     ; delta = target - GLVL  (N=1 if closing)
         move    a,x0                    ; delta
         move    #$02,a                  ; ATTACK coeff ~1.4 ms -- fast, keeps the
@@ -1596,7 +1605,7 @@ lfrol:
         move    a,y0                    ; the moves above don't touch N, so tmi
         mpy     y0,x0,a                 ; sees the sub's flag. coeff * delta
         add     b,a
-        move    a,x:(r7+$62)            ; GLVL += coeff*(target - GLVL)
+        move    a,x:(r7+$27)            ; GLVL += coeff*(target - GLVL)
 
         move    r1,a                    ; the allpass phase IS the tank phase:
         and     #>$7ff,a                ; both advance by 1 a sample, and the
@@ -1618,7 +1627,7 @@ lfrol:
         move    x:(r7+$32),x0            ; base
         add     x0,a
         move    a,r5                    ; = write address
-        move    x:(r7+$6d),y0           ; g, from DIFFUSION; held across all
+        move    x:(r7+$25),y0           ; g, from DIFFUSION; held across all
                                         ; four input allpasses
         bsr     apbody                  ; the rolled allpass body: reads $1b,
                                         ; writes $1b and y:(r5)
@@ -1642,7 +1651,7 @@ lfrol:
         bsr     apbody
 
 ; ---- BLOOM ALLPASSES ------------------------------------------
-        move    x:(r7+$5e),a            ; in-loop AP A base = shared+0x4000
+        move    x:(r7+$39),a            ; in-loop AP A base = shared+0x4000
         add     #>$800,a                  ; -> shared+0x4800  (bloom AP a)
         move    a,x0
         move    n0,a                    ; phase mod 2048
@@ -1975,7 +1984,7 @@ tankend:
 ; one-pole, y:$0905 read phase, y:$0906 HP state.
 ; BUFFER: shared+0x0800, 2048 words, 2048-aligned so the AGU wraps it free.
 
-        move    x:(r7+$5e),a            ; in-loop allpass A base = shared+0x4000,
+        move    x:(r7+$39),a            ; in-loop allpass A base = shared+0x4000,
         sub     #>$3800,a                  ; the shimmer buffer at shared+0x0800,
         move    a,r5                    ; 2048-ALIGNED, as the AGU wrap requires
                                         ; (m5 = $7ff). Derived from
@@ -2267,10 +2276,10 @@ fbB:
         and     #>$1ff,a                ; ...but these buffers are 512. A2 is
                                         ; already 0 (the phase loads positive),
                                         ; so no A2-clean dance is needed here.
-        move    x:(r7+$5e),x0
+        move    x:(r7+$39),x0
         add     x0,a
         move    a,r5                    ; = write address
-        move    x:(r7+$6d),y0           ; g, held in y0 across both lines
+        move    x:(r7+$25),y0           ; g, held in y0 across both lines
         move    y:(r5+n5),b             ; d0
 ; Interpolate against the PREVIOUS sample's d0.
         move    x:(r7+$5c),a            ; d1 = last sample's d0
@@ -2398,7 +2407,7 @@ fbB:
         mpy     y0,x0,a                 ; * (wgain/2), signed (y0,x0)
         asl     #$1,a,a                 ; wet makeup: doubled in full precision
         move    a,x0                    ; GATE: scale the wet by the gate level
-        move    x:(r7+$62),y0           ; GLVL (0..1)
+        move    x:(r7+$27),y0           ; GLVL (0..1)
         mpy     y0,x0,a                 ; signed (y0,x0): wet * gate
         move    a,x0                    ; gated wet L
 ; THE HOST PRINT: dry + wet*WET, in place. The chain input (the aux, or
@@ -2410,6 +2419,43 @@ fbB:
         move    a,x:(r7+$71)
         move    a,y0
         mpy     y0,x0,a                 ; wet * WET
+; ---- WET LIMITER, L: a feedback peak limiter on the wet at half scale
+; (before the x2 makeup), stereo-linked. y = wet * g; while max(|yL|,
+; |yR| of the previous sample) is over the ceiling (0.398 here = 0.797 =
+; -2 dBFS after the x2) g steps down x0.9 per sample; while it is under
+; the lower threshold (0.31 = -4 dBFS after the x2) g climbs
+; back linearly, 2^-16 per sample (0.9 -> 1.0 in ~150 ms; the store's own
+; limiter clamps it at 1.0); between the two g holds, so a signal sitting
+; at the ceiling is not modulated sample by sample (the first cut, with
+; no hold, chattered: -54 dBFS of it on a steady 0.3 FS tone, the
+; knob-click gate's floor is -70). Three candidates are computed first, the
+; compares last, and two tmi pick (27 Sep 2026: at a 0 dBFS send PLATE
+; railed 7,463 samples on L and 11,762 on R in 9 s; no div/rep -- neither
+; has a stock site). Slots: $11 g (persistent, warm-up sets it), $12 y
+; parked across the detector, $13 |yR| for the next sample (all three
+; inside the one-word displacement range).
+        move    x:(r7+$11),x0           ; g
+        move    a,y0                    ; wet L, half scale
+        mpy     y0,x0,a                 ; y = wet * g, signed (y0,x0)
+        move    a,x:(r7+$12)            ; parked
+        move    #$73,y0                 ; 0.9 (a gentler 0.953 flagged SHMR
+        mpy     y0,x0,b                 ; b = g * 0.9, the attack candidate  ; on the knob-click gate as well)
+        move    x0,a
+        add     #>$000080,a             ; a = g + 2^-16, the release
+        move    a,y0
+        move    x:(r7+$12),a
+        abs     a                       ; |yL|
+        move    x:(r7+$13),x0           ; |yR|, the previous sample's
+        cmp     x0,a                    ; N: |yL| < |yR|
+        tmi     x0,a                    ; a = max(|yL|, |yR|)
+        move    x:(r7+$11),x0           ; g, the hold candidate (b = attack,
+                                        ; y0 = release)
+        cmp     #>$330000,a             ; - the ceiling
+        tmi     x0,b                    ; under it -> hold (over: attack)
+        cmp     #>$280000,a             ; - the lower threshold
+        tmi     y0,b                    ; under it -> release
+        move    b,x:(r7+$11)            ; g' (limited to 1.0 by the store)
+        move    x:(r7+$12),a            ; y, on to the makeup
         asl     #$1,a,a                 ; x2: WET 127 = +6 dB (the stores
                                         ; below limit)
         move    x:(r0),x0               ; dry L, still in place
@@ -2418,15 +2464,23 @@ fbB:
         move    y1,a
         sub     x1,a
         move    a,x0
-        move    b,y0
+        move    x:(r7+$20),y0           ; wgain/2 again (b held the limiter's
+                                        ; envelope on the left)
         mpy     y0,x0,a                 ; * (wgain/2)
         asl     #$1,a,a                 ; wet makeup, right channel
         move    a,x0                    ; GATE: same gate level on the right
-        move    x:(r7+$62),y0           ; GLVL
+        move    x:(r7+$27),y0           ; GLVL
         mpy     y0,x0,a                 ; wet * gate
         move    a,x0                    ; gated wet R
         move    x:(r7+$71),y0           ; WET, this sample's
         mpy     y0,x0,a                 ; wet * WET
+; ---- WET LIMITER, R: the same g; |yR| feeds the next sample's detector
+        move    x:(r7+$11),x0           ; g
+        move    a,y0                    ; wet R
+        mpy     y0,x0,a                 ; y = wet * g
+        move    a,b                     ; (y fits: a register move limits)
+        abs     b
+        move    b,x:(r7+$13)            ; |yR|
         asl     #$1,a,a                 ; x2, as on L
         move    x:(r0),x0               ; dry R, still in place
         add     x0,a                    ; + dry at unity
