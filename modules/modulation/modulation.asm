@@ -29,14 +29,14 @@
 ;   $41        the LOFI hold counter (persistent)
 ;   $42        the LOFI hold length; $45 its mask; $46 the TONE knob word;
 ;              $47 mo_para's park (per block)
-;   $48..$69   the block's constant stream on r4/r1: LINE 32 words, PHSR 19,
+;   $48..$6f   the block's constant stream on r4/r1: LINE 40 words, PHSR 19,
 ;              COMB 17 (each loop's header lists the order); each ends in
 ;              MIX's run value and step, then the mode's other steps
 ;   $22        MIX's run value between blocks (26 Sep 2026)
 ;   $43        1 once the run values started at their targets (0 at init and
 ;              on a MODE change; mo_rset)
 ;   $44        the fixed taps' fraction f (per sample, LINE)
-;   $6a..$83 free
+;   $70..$83 free
 ; init zeroes $11..$46 and, on FX1, the lines.
 ; ---------------------------------------------------------------------------
 
@@ -290,9 +290,9 @@ mo_bflng:
 mo_line:
         move    #$1,n0                  ; (short immediate, stock's own form)
 ; Pointer-addressed (22 Sep 2026). The block's constants in a stream at $48
-; (r4), in the order the sample reads them: inc wid | depth centre c fb hold
-; mask c | c fb mask c | bl bd ff c200 kc c200 kb | the same for R | MIX's
-; run and step | the steps of wid depth centre (run values; R and both
+; (r4), in the order the sample reads them: inc wid | depth centre c c' fb
+; hold mask c c' | c c' fb mask c c' | bl bd ff c200 c200' kc c200 c200' kb |
+; the same for R | MIX's run and step | the steps of wid depth centre (run values; R and both
 ; fixed taps read L's depth and centre at r4 + 2/3). The states walk from $23 on r3: lpi L, latch L, lpo L, lpi R,
 ; latch R, lpo R, hp L, lpb L, wet L, hp R, lpb R. r2/r6 = the lines' bases,
 ; y0 = the write phase, n4 = the LFO phase, n1 = the LOFI counter, n2/n6 =
@@ -311,7 +311,7 @@ mo_line:
 ; steps after MIX's); the R tap reads L's depth and centre, and both fixed
 ; taps read the centre and split it per sample (mo_tap), so no tap moves
 ; in one step at a block edge
-        lua     (r4+$1d),r3         ; the steps, the stream's last three words
+        lua     (r4+$25),r3         ; the steps, the stream's last three words
         move    #>$ffffff,m3
         move    x:(r7+$06),y1
         bsr     mo_rset                 ; wid
@@ -319,49 +319,63 @@ mo_line:
         bsr     mo_rset                 ; depth
         move    x:(r7+$02),y1
         bsr     mo_rset                 ; centre
+; every one-pole is s' = c x + c' s with c' = 1 - c (27 Sep 2026: two
+; products, no halving; c' streamed after each c; the pair sums to
+; 1 - 2^-23, a bias under 1 LSB per sample)
         move    x:(r7+$05),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$04),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$42),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$45),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$05),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$05),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$04),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$45),x0
-        move    x0,x:(r1)+
-        move    x:(r7+$05),x0
-        move    x0,x:(r1)+
+        move    #>$7fffff,a
+        sub     x0,a
+        move    a,x1                    ; c'
         move    #>$039912,y0            ; c200 = 0.0281
+        move    #>$7c66ed,b             ; 1 - c200
+        move    x0,x:(r1)+              ; c (lpi L)
+        move    x1,x:(r1)+
+        move    x:(r7+$04),x0
+        move    x0,x:(r1)+              ; fb
+        move    x:(r7+$42),x0
+        move    x0,x:(r1)+              ; hold
+        move    x:(r7+$45),x0
+        move    x0,x:(r1)+              ; mask
+        move    x:(r7+$05),x0
+        move    x0,x:(r1)+              ; c (lpo L)
+        move    x1,x:(r1)+
+        move    x0,x:(r1)+              ; c (lpi R)
+        move    x1,x:(r1)+
+        move    x:(r7+$04),x0
+        move    x0,x:(r1)+              ; fb
+        move    x:(r7+$45),x0
+        move    x0,x:(r1)+              ; mask
+        move    x:(r7+$05),x0
+        move    x0,x:(r1)+              ; c (lpo R)
+        move    x1,x:(r1)+
         move    x:(r7+$07),x0
-        move    x0,x:(r1)+
+        move    x0,x:(r1)+              ; bl
         move    x:(r7+$08),x0
-        move    x0,x:(r1)+
+        move    x0,x:(r1)+              ; bd
         move    x:(r7+$09),x0
-        move    x0,x:(r1)+
-        move    y0,x:(r1)+
+        move    x0,x:(r1)+              ; ff
+        move    y0,x:(r1)+              ; c200 (HP L)
+        move    b,x:(r1)+
         move    x:(r7+$0a),x0
-        move    x0,x:(r1)+
-        move    y0,x:(r1)+
+        move    x0,x:(r1)+              ; kc
+        move    y0,x:(r1)+              ; c200 (LPb L)
+        move    b,x:(r1)+
         move    x:(r7+$0b),x0
-        move    x0,x:(r1)+
+        move    x0,x:(r1)+              ; kb
         move    x:(r7+$07),x0
-        move    x0,x:(r1)+
+        move    x0,x:(r1)+              ; bl
         move    x:(r7+$08),x0
-        move    x0,x:(r1)+
+        move    x0,x:(r1)+              ; bd
         move    x:(r7+$09),x0
-        move    x0,x:(r1)+
-        move    y0,x:(r1)+
+        move    x0,x:(r1)+              ; ff
+        move    y0,x:(r1)+              ; c200 (HP R)
+        move    b,x:(r1)+
         move    x:(r7+$0a),x0
-        move    x0,x:(r1)+
-        move    y0,x:(r1)+
+        move    x0,x:(r1)+              ; kc
+        move    y0,x:(r1)+              ; c200 (LPb R)
+        move    b,x:(r1)+
         move    x:(r7+$0b),x0
-        move    x0,x:(r1)+
+        move    x0,x:(r1)+              ; kb
         bsr     mo_mset                 ; MIX's run and step
         move    #>$1,x0
         move    x0,x:(r7+$43)           ; primed
@@ -379,7 +393,7 @@ mo_line:
         move    a1,n1
         do      n7,>molinz
         move    r4,r1
-        lua     (r4+$1d),r3             ; the steps
+        lua     (r4+$25),r3             ; the steps
         move    (r1)+                   ; inc
         move    x:(r3)+,x0
         move    x:(r1),a
@@ -430,15 +444,11 @@ mo_line:
         bsr     mo_tap
         move    a,n2                    ; tap L
 ; ---- the line write L: LPi(dry) + fb*tap, a LIMITING store -----------------
-        move    x:(r0),a           ; dry L
-        move    x:(r3),b                ; lpi L
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+        move    x:(r0),x0               ; dry L
         move    x:(r1)+,y1              ; c
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0       ; c dry, and lpi L
+        move    x:(r1)+,y1              ; c'
+        mac     x0,y1,a                 ; + c' lpi
         move    a,x:(r3)+
         move    a,b                     ; (limited: an accumulator-to-accumulator
                                         ; MOVE goes through the limiter; TFR would not)
@@ -467,15 +477,11 @@ mo_line:
         and     x0,a
         move    a,y:(r5)                ; write line L
 ; ---- LPo L: wo L ---------------------------------------------------------
-        move    n2,a                    ; tap L
-        move    x:(r3),b
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+        move    n2,x0                   ; tap L
         move    x:(r1)+,y1              ; c
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0       ; c tap, and lpo L
+        move    x:(r1)+,y1              ; c'
+        mac     x0,y1,a
         move    a,x:(r3)+
         move    a,n2                    ; wo L
 ; ---- R: the swept tap ----------------------------------------------------
@@ -488,15 +494,11 @@ mo_line:
         bsr     mo_tap
         move    a,n6                    ; tap R
 ; ---- the line write R: LPi(dry) + fb*tap, a LIMITING store -----------------
-        move    x:(r0+n0),a        ; dry R
-        move    x:(r3),b                ; lpi R
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+        move    x:(r0+n0),x0            ; dry R
         move    x:(r1)+,y1              ; c
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0       ; c dry, and lpi R
+        move    x:(r1)+,y1              ; c'
+        mac     x0,y1,a
         move    a,x:(r3)+
         move    a,b                     ; (limited: an accumulator-to-accumulator
                                         ; MOVE goes through the limiter; TFR would not)
@@ -520,15 +522,11 @@ mo_line:
         and     x0,a
         move    a,y:(r5)                ; write line R
 ; ---- LPo R: wo R ---------------------------------------------------------
-        move    n6,a                    ; tap R
-        move    x:(r3),b
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+        move    n6,x0                   ; tap R
         move    x:(r1)+,y1              ; c
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0       ; c tap, and lpo R
+        move    x:(r1)+,y1              ; c'
+        mac     x0,y1,a
         move    a,x:(r3)+
         move    a,n6                    ; wo R
 ; ---- wet L = bl*fixed + bd*dry + ff*wo + kc*HP(wo of the other side) + kb*LPb(dry)
@@ -557,16 +555,12 @@ mo_line:
         move    x:(r1)+,y1              ; ff
         mac     x0,y1,a
         move    a,x1                    ; the sum so far (limited)
-; HP(wo of the other side): s += c200*(x - s); hp = x - s
-        move    n6,a
-        move    x:(r3),b
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+; HP(wo of the other side): s' = c200 x + c200' s; hp = x - s'
+        move    n6,x0
         move    x:(r1)+,y1              ; c200 = 0.0281
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0       ; and s
+        move    x:(r1)+,y1              ; c200'
+        mac     x0,y1,a
         move    a,x:(r3)+
         move    n6,b
         sub     a,b                     ; hp
@@ -576,15 +570,11 @@ mo_line:
         add     x1,a
         move    a,x1
 ; LPb(dry)
-        move    x:(r0),a
-        move    x:(r3),b
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+        move    x:(r0),x0
         move    x:(r1)+,y1              ; c200
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0
+        move    x:(r1)+,y1              ; c200'
+        mac     x0,y1,a
         move    a,x:(r3)+
         move    a,x0
         move    x:(r1)+,y1              ; kb
@@ -605,16 +595,12 @@ mo_line:
         move    x:(r1)+,y1              ; ff
         mac     x0,y1,a
         move    a,x1                    ; the sum so far (limited)
-; HP(wo of the other side): s += c200*(x - s); hp = x - s
-        move    n2,a
-        move    x:(r3),b
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+; HP(wo of the other side): s' = c200 x + c200' s; hp = x - s'
+        move    n2,x0
         move    x:(r1)+,y1              ; c200 = 0.0281
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0       ; and s
+        move    x:(r1)+,y1              ; c200'
+        mac     x0,y1,a
         move    a,x:(r3)+
         move    n2,b
         sub     a,b                     ; hp
@@ -624,15 +610,11 @@ mo_line:
         add     x1,a
         move    a,x1
 ; LPb(dry)
-        move    x:(r0+n0),a
-        move    x:(r3),b
-        sub     b,a
-        asr     #$1,a,a
-        move    a,x0
+        move    x:(r0+n0),x0
         move    x:(r1)+,y1              ; c200
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        add     b,a
+        mpy     x0,y1,a x:(r3),x0
+        move    x:(r1)+,y1              ; c200'
+        mac     x0,y1,a
         move    a,x:(r3)+
         move    a,x0
         move    x:(r1)+,y1              ; kb
@@ -669,7 +651,7 @@ mo_line:
         move    (r0)+n0                 ; whole loop, so two steps, no reload
 molinz:
         nop
-        move    x:(r4+$1b),x0           ; MIX's run value, for the next block
+        move    x:(r4+$23),x0           ; MIX's run value, for the next block
         move    x0,x:(r7+$22)
         move    y0,a
         move    a1,x:(r7+$20)           ; the write phase
