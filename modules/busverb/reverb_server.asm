@@ -101,6 +101,11 @@
 ;   range for the wet limiter's words -- $6d -> $25, $67 -> $26, $62 -> $27,
 ;   $5e -> $39; the lines above still name them by their old numbers, the
 ;   code reads the new ones)
+;   (27 Sep 2026, the second pass: thirteen more swaps, per-sample slot <->
+;   per-block slot, so the sample loop's displaced accesses are one word:
+;   $71<->$09, $4e<->$0a, $5c<->$10, $5d<->$26, $64<->$28, $78<->$2a,
+;   $79<->$2b, $52<->$31, $53<->$33, $54<->$34, $55<->$35, $40<->$36,
+;   $5f<->$37. Read the map above through this table.)
 ;   free: $5e, $62, $66, $67, $68, $69, $6d, $6e, $7d
 ;   (fourteen; $25/$26 and $39 went to registers 23 Sep 2026)
 ;
@@ -141,10 +146,10 @@ init:
         clr     a
         move    a,x:(r7+$0e)            ; SHMR
         move    a,x:(r7+$1f)            ; TONE's c
-        move    a,x:(r7+$40)            ; TONE's LO
+        move    a,x:(r7+$36)            ; TONE's LO
         move    a,x:(r7+$25)            ; DIFF's g
         move    a,x:(r7+$70)            ; WET
-        move    a,x:(r7+$10)            ; TIME's t (the glide state)
+        move    a,x:(r7+$5c)            ; TIME's t (the glide state)
         move    a,y:>$09f3              ; SIZE's f (the glide state)
         move    #>$ffffff,a
         move    a,y:>$09f4              ; DEL's ramp (the per-sample level): -1,
@@ -175,7 +180,7 @@ proc:
         and     #>$f,a                  ; 0..15 by construction; garbage masked
         move    a1,x0
         move    x0,a                    ; A2-clean
-        move    a,x:(r7+$26)            ; this call's frame offset
+        move    a,x:(r7+$5d)            ; this call's frame offset
 bus_off_done:
 
 ; ---- position-0 housekeeping: flip the shared bus rotation, clear the new
@@ -204,7 +209,7 @@ bus_off_done:
 ; below was written around, one level up. Payload B is sent straight to
 ; bus_notfirst, so it still finds this block's write targets but never elects.
 ; Inert in a normal build: it is a comment.
-        move    x:(r7+$26),a
+        move    x:(r7+$5d),a
         tst     a
         bne     bus_notfirst                ; not this block's first call
         move    r7,a
@@ -359,11 +364,11 @@ bus_mine:
         add     #>$50,a                    ; five buffers on == three buffers back
         and     #>$70,a                    ; mod 8
         move    a,x0                    ; x0 = the read offset
-        move    x:(r7+$26),b            ; this call's split-aware frame offset
+        move    x:(r7+$5d),b            ; this call's split-aware frame offset
         move    #>$9d8,a                ; the CHAIN buffer
         add     x0,a
         add     b,a
-        move    a,x:(r7+$64)            ; this call's chain read address
+        move    a,x:(r7+$28)            ; this call's chain read address
         add     #>$80,a                 ; the REV accumulator sits $80 above
         move    a,x:(r7+$63)            ; this call's REV read address
 ; ---- this call's REV ACC write address: the host's own SEND ---------------
@@ -464,10 +469,10 @@ bus_mine:
         move    a,y:>$09f5              ; ... its per-sample step
         move    #>$901,a                ; the AUX accumulator
         add     x1,a                    ; + this block's write offset
-        move    x:(r7+$26),x0           ; + this call's frame offset
+        move    x:(r7+$5d),x0           ; + this call's frame offset
         add     x0,a
         move    a,y:>$09f6              ; the AUX write pointer, for the loop
-        move    x:(r7+$26),a
+        move    x:(r7+$5d),a
         tst     a
         bne     rvdelcnt                ; not this block's first call
         move    x1,a                    ; the WRITE buffer's count, as a bare
@@ -498,7 +503,7 @@ rvdelcnt:
 
         move    #>$ffffff,m0            ; audio is read and written via r0
         move    #>$4000,x0
-        move    x0,x:(r7+$31)
+        move    x0,x:(r7+$52)
 
 ; ---- warm-up: stock DARK's shape, adapted --------------------------------
         move    x:(r7+$82),a
@@ -524,12 +529,12 @@ warmrun:
                                         ; 0x8000 words: 256 blocks x 128 =
                                         ; 32,768. That allocation is now tank
                                         ; lines and nothing else.
-        move    x:(r7+$31),x0
+        move    x:(r7+$52),x0
         add     x0,a
         move    a,r5                    ; base + count*128, count < 0x100 so
                                         ; the last word is base+0x7fff
         clr     b                       ; the zero source ...
-        move    x:(r7+$31),x0           ; ... and both fill the AGU slot
+        move    x:(r7+$52),x0           ; ... and both fill the AGU slot
         do      #128,>warmz
         move    b,y:(r5)+
 warmz:
@@ -562,8 +567,8 @@ warmz:
         move    b,y:(r5)+
 wshclr:
         move    b,x:(r7+$3e)
-        move    b,x:(r7+$78)            ; wet high-cut states (Round 11): boot
-        move    b,x:(r7+$79)            ; garbage here would click at warm-end
+        move    b,x:(r7+$2a)            ; wet high-cut states (Round 11): boot
+        move    b,x:(r7+$2b)            ; garbage here would click at warm-end
         move    b,x:(r7+$4f)
         move    b,x:(r7+$50)
         move    b,x:(r7+$51)
@@ -579,7 +584,7 @@ wshclr:
         bra     dry                     ; output stays dry until warm
 warmdone:
 ; MARKER_WARM
-        move    x:(r7+$31),x0           ; the base again: everything below
+        move    x:(r7+$52),x0           ; the base again: everything below
                                         ; derives buffers from x0
 
 ; ---- every buffer base, derived once per block --------------------------
@@ -619,10 +624,10 @@ warmdone:
 ; a bare line base (without phase) for lines 4..7.
         move    #>$4000,a               ; line 4 base (4 * 0x1000)
         add     x0,a
-        move    a,x:(r7+$36)
+        move    a,x:(r7+$40)
         move    #>$5000,a               ; line 5 base (5 * 0x1000)
         add     x0,a
-        move    a,x:(r7+$37)
+        move    a,x:(r7+$5f)
         move    #>$6000,a               ; line 6 base (6 * 0x1000)
         add     x0,a
         move    a,x:(r7+$4c)
@@ -642,13 +647,13 @@ warmdone:
         move    a,x:(r7+$32)
         move    #>$2800,a
         add     x0,a
-        move    a,x:(r7+$33)
+        move    a,x:(r7+$53)
         move    #>$3000,a
         add     x0,a
-        move    a,x:(r7+$34)
+        move    a,x:(r7+$54)
         move    #>$3800,a
         add     x0,a
-        move    a,x:(r7+$35)
+        move    a,x:(r7+$55)
         move    #>$4500,a
         add     x0,a
         move    a,x:(r7+$0b)            ; the tank's per-line state table A
@@ -687,7 +692,7 @@ warmdone:
                                         ; track 2's page held bit-23-set garbage,
                                         ; track 1's did not. Reproduced in the
                                         ; emulator by poisoning X:(r7+$83).
-        move    x:(r7+$31),x0
+        move    x:(r7+$52),x0
         add     x0,a                    ; base + LINE_OFF(0x0)
         move    a,r1                    ; line 0
         move    #>$1000,x0
@@ -792,14 +797,14 @@ mdcpy:
             or      y1,a                    ; force the tap ODD (as line 0)
             move    n0,b
             sub     a,b                     ; 4096 - tap, for the modulated read
-            move    b,x:(r7+$2a)
+            move    b,x:(r7+$78)
             move    x:(r7+$76),x0           ; this MODE's line 2 fraction
             mpy     x0,x1,a
             asr     #$a,a,a                 ; back to an integer tap (4096-word lines)
             or      y1,a                    ; force the tap ODD (as line 0)
             move    n0,b
             sub     a,b                     ; 4096 - tap, for the modulated read
-            move    b,x:(r7+$2b)
+            move    b,x:(r7+$79)
             move    x:(r7+$77),x0           ; this MODE's line 3 fraction
             mpy     x0,x1,a
             asr     #$a,a,a                 ; back to an integer tap (4096-word lines)
@@ -823,14 +828,14 @@ mdcpy:
             or      y1,a                    ; force the tap ODD (y1=1)
             move    n0,b
             sub     a,b
-            move    b,x:(r7+$09)            ; line 5
+            move    b,x:(r7+$71)            ; line 5
             move    x:(r7+$76),x0           ; this MODE's line 2 fraction, rescaled
             mpy     x0,x1,a
             asr     #$a,a,a
             or      y1,a                    ; force the tap ODD (y1=1)
             move    n0,b
             sub     a,b
-            move    b,x:(r7+$0a)            ; line 6
+            move    b,x:(r7+$4e)            ; line 6
             move    x:(r7+$77),x0           ; this MODE's line 3 fraction, rescaled
             mpy     x0,x1,a
             asr     #$a,a,a
@@ -869,7 +874,7 @@ mdcpy:
 ; snapping to it when the step rounds to nothing; 0 (init) starts at the
 ; knob. The line gains below are per block, and a TIME jump stepped them.
         move    a1,y1                   ; t, the knob
-        move    x:(r7+$10),b
+        move    x:(r7+$5c),b
         tst     b
         teq     y1,b                    ; the first block: at the knob
         move    y1,a
@@ -881,7 +886,7 @@ mdcpy:
         add     x0,a
         cmp     x0,a                    ; no progress: at the knob
         teq     y1,a
-        move    a,x:(r7+$10)
+        move    a,x:(r7+$5c)
         move    a,x0
         move    #>$3bbbbb,y1            ; the bloom's g: 0.40 + 0.467 t
         mpy     x0,y1,a
@@ -1007,16 +1012,16 @@ mdcpy:
         move    b,x0                    ; x0 = (TONE-64)<<16, floored
         move    #$08,y1
         mpy     x0,y1,a
-        move    x:(r7+$40),x0           ; LO coefficient, glided
+        move    x:(r7+$36),x0           ; LO coefficient, glided
         sub     x0,a
         asr     #$3,a,a
         add     x0,a
-        move    a,x:(r7+$40)
+        move    a,x:(r7+$36)
 
 ; ---- WET: the reverb's level on top of the chain input -------------------
         move    x:(r6+$5),a             ; WET target
         move    x:(r7+$70),x0           ; last block's glided WET: where this
-        move    x0,x:(r7+$71)           ; block's per-sample ramp starts
+        move    x0,x:(r7+$09)           ; block's per-sample ramp starts
         sub     x0,a
         asr     #$3,a,a
         add     x0,a
@@ -1038,7 +1043,7 @@ mdcpy:
         move    x:(r7+$73),y1           ; scaled per MODE, only ever down
         mpy     x0,y1,a                 ; (BIG sits at unity), so the knob keeps
         asl     #$1,a,a
-        move    a,x:(r7+$28)            ; its full range inside each character
+        move    a,x:(r7+$64)            ; its full range inside each character
 
 ; ---- SHFT: shimmer interval select, page-1 slot 4 ------------------------
 ; The width is pinned at 0.75 at the output stage. SHFT selects the shimmer
@@ -1190,15 +1195,15 @@ lf3e:
         move    a1,x1
         asl     #$8,a,a
         move    a2,x0
-        move    x0,x:(r7+$52)            ; AP integer offset, 0..~31 samples
+        move    x0,x:(r7+$31)            ; AP integer offset, 0..~31 samples
         move    x1,a
         and     #>$00ffff,a                
         asl     #$7,a,a                 ; shift by n-1, never n (REVERB.md's
         move    a,x0                    ; interpolation fraction rule)
-        move    x0,x:(r7+$53)            ; AP fraction
+        move    x0,x:(r7+$33)            ; AP fraction
         move    x:(r7+$5a),a            ; triangle back for the tank's own use
         move    a,x0
-        move    x:(r7+$28),y1           ; MOD depth
+        move    x:(r7+$64),y1           ; MOD depth
         mpy     x0,y1,a
         move    a1,x1
         asl     #$8,a,a
@@ -1234,15 +1239,15 @@ lf4f:
         move    a1,x1
         asl     #$8,a,a
         move    a2,x0
-        move    x0,x:(r7+$54)            ; AP integer offset, 0..~31 samples
+        move    x0,x:(r7+$34)            ; AP integer offset, 0..~31 samples
         move    x1,a
         and     #>$00ffff,a                
         asl     #$7,a,a                 ; shift by n-1, never n (REVERB.md's
         move    a,x0                    ; interpolation fraction rule)
-        move    x0,x:(r7+$55)            ; AP fraction
+        move    x0,x:(r7+$35)            ; AP fraction
         move    x:(r7+$5b),a            ; triangle back for the tank's own use
         move    a,x0
-        move    x:(r7+$28),y1           ; MOD depth
+        move    x:(r7+$64),y1           ; MOD depth
         mpy     x0,y1,a
         move    a1,x1
         asl     #$8,a,a
@@ -1278,7 +1283,7 @@ lfrsk:
         sub     #>$400000,a                
         abs     a                       ; triangle, 0 .. $400000
         move    a,x0
-        move    x:(r7+$28),y1           ; MOD depth
+        move    x:(r7+$64),y1           ; MOD depth
         mpy     x0,y1,a
         move    p:(r5)+,n7              ; integer slot -- hoisted 3 above use
         move    a1,x1
@@ -1326,7 +1331,7 @@ lfrol:
         move    a,x:(r7+$39)            ; allpass A base, on line 0
         move    #>$4200,a
         add     x0,a
-        move    a,x:(r7+$5f)            ; allpass B base, on line 1
+        move    a,x:(r7+$37)            ; allpass B base, on line 1
         move    #>214,a
         move    a,x:(r7+$60)            ; 512 - 298    (9.7% of the longest line)
         move    #>66,a
@@ -1352,7 +1357,7 @@ lfrol:
         move    a,y:(r6)+               ;     and it spaces the n1 write
         move    y:(r1+n1),a
         move    a,y:(r6)+n6             ; w2: seed the interpolation carry
-        move    x:(r7+$2a),a            ; -- line 1
+        move    x:(r7+$78),a            ; -- line 1
         move    x:(r7+$21),x0
         sub     x0,a
         move    a,y:(r6)+
@@ -1363,7 +1368,7 @@ lfrol:
         move    a,y:(r6)+
         move    y:(r2+n2),a
         move    a,y:(r6)+n6
-        move    x:(r7+$2b),a            ; -- line 2
+        move    x:(r7+$79),a            ; -- line 2
         move    x:(r7+$56),x0
         sub     x0,a
         move    a,y:(r6)+
@@ -1406,12 +1411,12 @@ lfrol:
         move    a,y:(r6)+
         move    r1,a                    ; line 0 base + phase
         and     #>$fff,a                ; just the phase (m5=$fff wraps it)
-        move    x:(r7+$36),x0           ; line 4 base
+        move    x:(r7+$40),x0           ; line 4 base
         add     x0,a
         move    a,r5
         move    y:(r5+n5),a
         move    a,y:(r6)+n6             ; w2: seed the interpolation carry
-        move    x:(r7+$09),a            ; -- line 5
+        move    x:(r7+$71),a            ; -- line 5
         move    x:(r7+$02),x0
         sub     x0,a
         move    a,y:(r6)+
@@ -1422,12 +1427,12 @@ lfrol:
         move    a,y:(r6)+
         move    r1,a
         and     #>$fff,a
-        move    x:(r7+$37),x0           ; line 5 base
+        move    x:(r7+$5f),x0           ; line 5 base
         add     x0,a
         move    a,r5
         move    y:(r5+n5),a
         move    a,y:(r6)+n6
-        move    x:(r7+$0a),a            ; -- line 6
+        move    x:(r7+$4e),a            ; -- line 6
         move    x:(r7+$04),x0
         sub     x0,a
         move    a,y:(r6)+
@@ -1484,7 +1489,7 @@ lfrol:
 ; is what the in-loop comment ("no other way to do this") ruled out. That
 ; was true per SAMPLE; it is not true once per block.
         move    x:(r7+$60),a            ; allpass A: (512 - tap) - offset - 1
-        move    x:(r7+$52),x0
+        move    x:(r7+$31),x0
         sub     x0,a
         sub     #>$1,a                
         move    a,n5
@@ -1496,20 +1501,20 @@ lfrol:
         move    a,r5
         move    x:(r7+$61),b            ; spaces the r5 write, and preloads
         move    y:(r5+n5),a             ; d1 for the block's first sample
-        move    a,x:(r7+$5c)
-        move    x:(r7+$54),x0           ; allpass B: b still holds (512 - tap)
+        move    a,x:(r7+$10)
+        move    x:(r7+$34),x0           ; allpass B: b still holds (512 - tap)
         move    b,a
         sub     x0,a
         sub     #>$1,a                
         move    a,n5
         move    r1,a
         and     #>$1ff,a
-        move    x:(r7+$5f),x0           ; base B
+        move    x:(r7+$37),x0           ; base B
         add     x0,a
         move    a,r5
-        move    x:(r7+$5c),b            ; spaces the r5 write
+        move    x:(r7+$10),b            ; spaces the r5 write
         move    y:(r5+n5),a
-        move    a,x:(r7+$5d)
+        move    a,x:(r7+$26)
         move    #>$7ff,m5               ; back to the diffusers' 2048
         move    x:(r7+$6a),n2           ; this call's AUX write address and
         move    x:(r7+$63),n3           ; read address: the loop walks them
@@ -1565,11 +1570,11 @@ lfrol:
                                         ; chain sit inside one 2048-aligned
                                         ; block, no wrap)
         mpy     x1,y1,a
-        move    x:(r7+$64),r5           ; this sample's chain read address
+        move    x:(r7+$28),r5           ; this sample's chain read address
         move    x:(r7+$65),y1           ; 1/8 while the delay is live, else 0
                                         ; (spaces the r5 write)
         move    y:(r5)+,x0              ; the repeats x DLY, three blocks back
-        move    r5,x:(r7+$64)
+        move    r5,x:(r7+$28)
         mac     x0,y1,a                 ; the signed order (x1,y1 encodes macsu)
         asl     #$3,a,a                 ; undo the writers' 3-bit headroom
         move    a,y1                    ; the averaged input, feeding the tank:
@@ -1694,7 +1699,7 @@ lfrol:
 ; uses x1. Both were being re-fetched once per line. The allpasses above do
 ; use y0 and x1, which is why this sits after them.
         move    x:(r7+$1f),y0           ; DAMP, for all eight lines
-        move    x:(r7+$40),x1           ; LO coefficient, for all eight lines
+        move    x:(r7+$36),x1           ; LO coefficient, for all eight lines
 
 ; ---- the tank's eight taps, damped and low-cut inside the feedback path --
         move    #>$fff,m5               ; r5 walks a 4096-word LINE now
@@ -2016,13 +2021,13 @@ tankend:
         add     b,a                     ; s' = s + c*(x - s)
         move    a,y:>$0906
         move    x0,a                    ; HP output feeds the LP below
-        move    x:(r7+$4e),b            ; previous filter output
+        move    x:(r7+$0a),b            ; previous filter output
         sub     b,a
         move    a,x0
         move    #>$399999,y1            ; c = 0.45 (R18; was 0.35). Corner ~4.2k
         mpy     x0,y1,a
         add     b,a                     ; y = y_prev + c*(x - y_prev)
-        move    a,x:(r7+$4e)
+        move    a,x:(r7+$0a)
         move    a,y1                    ; hold the filtered sample
 
         move    x1,a
@@ -2269,7 +2274,7 @@ fbB:
         move    x:(r7+$1a),a            ; fb0 from scratch
         move    a,x1                    ; x = the value bound for the line
         move    x:(r7+$60),a
-        move    x:(r7+$52),x0           ; LFO integer offset -- the allpass is
+        move    x:(r7+$31),x0           ; LFO integer offset -- the allpass is
         sub     x0,a                    ; MODULATED now, not static
         move    a,n5                    ; (512 - tap) - offset
         move    n0,a                    ; phase (masked to $7ff above)
@@ -2282,11 +2287,11 @@ fbB:
         move    x:(r7+$25),y0           ; g, held in y0 across both lines
         move    y:(r5+n5),b             ; d0
 ; Interpolate against the PREVIOUS sample's d0.
-        move    x:(r7+$5c),a            ; d1 = last sample's d0
-        move    b,x:(r7+$5c)            ; carry forward
+        move    x:(r7+$10),a            ; d1 = last sample's d0
+        move    b,x:(r7+$10)            ; carry forward
         sub     b,a                     ; d1 - d0
         move    a,x0
-        move    x:(r7+$53),y1           ; fraction
+        move    x:(r7+$33),y1           ; fraction
         mpy     x0,y1,a                 ; f*(d1-d0)
         add     b,a                     ; + d0 -> interpolated tap
         move    a,b
@@ -2305,20 +2310,20 @@ fbB:
         move    x:(r7+$1b),a            ; fb1 from scratch
         move    a,x1                    ; x = the value bound for the line
         move    x:(r7+$61),a
-        move    x:(r7+$54),x0           ; LFO integer offset -- the allpass is
+        move    x:(r7+$34),x0           ; LFO integer offset -- the allpass is
         sub     x0,a                    ; MODULATED now, not static
         move    a,n5                    ; (512 - tap) - offset
         move    n0,a                    ; phase (masked to $7ff above)
         and     #>$1ff,a                ; ...but these buffers are 512
-        move    x:(r7+$5f),x0
+        move    x:(r7+$37),x0
         add     x0,a
         move    a,r5                    ; = write address
         move    y:(r5+n5),b             ; d0
-        move    x:(r7+$5d),a            ; d1 = last sample's d0
-        move    b,x:(r7+$5d)            ; carry forward
+        move    x:(r7+$26),a            ; d1 = last sample's d0
+        move    b,x:(r7+$26)            ; carry forward
         sub     b,a                     ; d1 - d0
         move    a,x0
-        move    x:(r7+$55),y1           ; fraction
+        move    x:(r7+$35),y1           ; fraction
         mpy     x0,y1,a                 ; f*(d1-d0)
         add     b,a                     ; + d0 -> interpolated tap
         move    a,b
@@ -2381,21 +2386,21 @@ fbB:
 
 ; ---- wet high-cut --------------------------------------------
         move    y1,a                    ; M
-        move    x:(r7+$78),b            ; high-cut state, M channel
+        move    x:(r7+$2a),b            ; high-cut state, M channel
         sub     b,a
         move    a,x0
         move    x:(r7+$7a),y0           ; per-mode wet high-cut coefficient
         mpy     x0,y0,a                 ; c*(x - y)
         add     b,a                     ; y += c*(x - y)
-        move    a,x:(r7+$78)
+        move    a,x:(r7+$2a)
         move    a,y1                    ; M, high-cut
         move    x1,a                    ; w*S
-        move    x:(r7+$79),b            ; state, S channel
+        move    x:(r7+$2b),b            ; state, S channel
         sub     b,a
         move    a,x0
         mpy     x0,y0,a
         add     b,a
-        move    a,x:(r7+$79)
+        move    a,x:(r7+$2b)
         move    a,x1                    ; w*S, high-cut
         move    x:(r7+$20),b            ; wet gain (wgain/2)
 
@@ -2413,10 +2418,10 @@ fbB:
 ; THE HOST PRINT: dry + wet*WET, in place. The chain input (the aux, or
 ; the delay's output while it is live) feeds the tank only; the dry the
 ; host hears is its own.
-        move    x:(r7+$71),a            ; WET, ramped per sample: + this
+        move    x:(r7+$09),a            ; WET, ramped per sample: + this
         move    x:(r7+$7c),y0           ; block's step
         add     y0,a
-        move    a,x:(r7+$71)
+        move    a,x:(r7+$09)
         move    a,y0
         mpy     y0,x0,a                 ; wet * WET
 ; ---- WET LIMITER, L: a feedback peak limiter on the wet at half scale
@@ -2472,7 +2477,7 @@ fbB:
         move    x:(r7+$27),y0           ; GLVL
         mpy     y0,x0,a                 ; wet * gate
         move    a,x0                    ; gated wet R
-        move    x:(r7+$71),y0           ; WET, this sample's
+        move    x:(r7+$09),y0           ; WET, this sample's
         mpy     y0,x0,a                 ; wet * WET
 ; ---- WET LIMITER, R: the same g; |yR| feeds the next sample's detector
         move    x:(r7+$11),x0           ; g
