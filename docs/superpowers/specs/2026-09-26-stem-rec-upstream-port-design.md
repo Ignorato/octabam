@@ -35,15 +35,23 @@ groups.
 - **Apply, don't merge.** Each group is brought across as its own commit,
   by cherry-pick where the commit still applies, and otherwise by
   re-applying the change by hand against upstream's current code.
-- **Upstream's version wins where it does the same job.** Our additions go
-  in beside it, not over it:
-  - `--card-out` exists upstream; ours is dropped.
-  - The fixture stages its card with upstream's `emu_card.stage_project`.
-  - `read_file` and `list_dir` stay only if `extract_image` can't serve
-    the verifier.
-  - Our three calling and poking flags are kept: upstream's single
-    `--call` can't make the several calls before play and the calls at
-    chosen frames that the verifier makes.
+- **Each overlap is compared on evidence, and the choice is written
+  down.** Where upstream and `crosscheck` both have code for one job, the
+  plan records what each does, what test or use proves it works, and what
+  it costs. If ours does more or is proven better, ours stays and can be
+  offered upstream. If they're equal, upstream's stays: two copies of one
+  job (two FAT readers, say) can drift apart and disagree, and one copy
+  keeps a later pull request small. The overlaps known now:
+
+  | Overlap | Finding | Choice |
+  |---|---|---|
+  | `--card-out` | The write is identical (the card model's image, one write at the end). Only the report line differs: ours `(N sectors written in the run)`, upstream's `(X bytes, N sector(s) written by the firmware)` | Upstream's. The verifier reads the sector count from that line, so its parse changes, and it fails loudly on a line it can't read: with upstream's text, today's parse would read the byte count and pass `cardfail` whatever happened |
+  | `read_file`, `list_dir` against `extract_image` | Both read the FAT image. Ours reads one file or one folder and has a round-trip test (`verify_card_reader.py`); upstream's reads every file and is used by `verify_set`, with no test of its own | Upstream's, with our round-trip test moved onto it |
+  | `--call-before-play`, `--at` against `--call`, `--call-at` | Ours makes several calls before play, each from main's spin, and calls at chosen frames; upstream's makes one call | Ours, beside upstream's |
+  | Staging the fixture's card | Ours (`emu_rtos.stage_project`) is deleted upstream; upstream's `emu_card.stage_project` takes other arguments | Upstream's, with its arguments checked |
+
+  An overlap found during the port is compared the same way before
+  either copy is dropped.
 - **`stems.s` moves byte for byte.** Its md5 on `stem-rec-v2` equals its
   md5 at `7dee174`. The port changes no module behavior.
 - **A general fix found on the way goes in as its own commit,** named as
