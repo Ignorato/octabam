@@ -22,6 +22,10 @@ record for where code goes; `docs/remixes/` describes each remix;
   midisc's author's unit as OKMS2. octalab (nordseele) is a DRAM module of
   this remixer and has run on an MKI since 11 Sep 2026.
 - **Built and gated, unflashed:** every other remix; main is image 43.
+- **Settings store.** One shared OTX store per project for every module's
+  settings (nordseele/octalab `docs/OTX_PROJECT_PROPOSAL.md`, draft 2,
+  26 Sep 2026; `docs/remixer/MODULES.md` "Settings on the card"). Not
+  implemented; next after the hardware pass.
 - **The platform** (`tools/remix/`): linked GNU-as units, detours, pokes
   and table growth wired by symbol and asserted against stock; recipe-built
   DRAM runtimes; the loader (derived from Octakit's, N payloads,

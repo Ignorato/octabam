@@ -20,6 +20,10 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 | [`usb`](usb.md) / [`usb-audio`](usb.md) | the rig + USB MIDI / + 20-channel USB audio (tracks, MAIN, CUE) | `usb-audio` ✅ 25 Sep 2026 (image 64); `usb` no |
 | [`bottleservice`](bottleservice.md) | `usb-audio` + Octakit (SCENES KITS bridged) | no (port: `make check` with the stress project, Kit save/reload/copy) |
 | [`bus`](bus.md) | BusVerb + BusDelay + Send + tempo sync | ✅ (earlier names) |
+| [`euclid`](euclid.md) | EUCLID on both choosers, stock effects beside it | no |
+| [`miniverb`](miniverb.md) | MINI VERB alone | no |
+| [`tapeecho`](tapeecho.md) | TAPE ECHO alone | the author's unit (OCTACLID4): six instances; a seventh freezes it, open |
+| [`usb-lean`](usb-lean.md) | stock effects + USB MIDI + USB AUDIO, nothing else | no |
 | [`mutables`](mutables.md) | WarpFold, Ripple, Rungs, Streamz, BodeShift | no |
 | [`nimbus`](nimbus.md) | Nimbus alone | no |
 | [`rig-scenes`](rig-scenes.md) / [`rig-kits`](rig-kits.md) / [`rig-mods`](rig-mods.md) | the rig + a family | no |

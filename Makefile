@@ -210,6 +210,7 @@ verify: ## Verify the ColdFire menu edits, module ledger (+ burn probe when it f
 	python3 tools/verify/verify_slots.py
 	python3 tools/verify/verify_initregs.py $(REMIX)
 	python3 tools/verify/verify_replaces.py
+	python3 tools/verify/verify_docs.py
 	python3 tools/build/label_fmt.py
 	python3 tools/verify/verify_octakit.py
 	python3 tools/verify/verify_midiscenes.py
