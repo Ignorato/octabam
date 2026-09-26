@@ -56,7 +56,7 @@ MODULE = Module(
     ),
     dsp=DspSection(
         asm="modules/nimbus/nimbus_grain.asm",
-        priority=8,                   # after rungs
+        priority=8,
         bus_role=BusRole.NONE,
         ybase=YBase.NEVER,            # the buffer is core-private Y, no $30000
         r7_latch_slot=None,

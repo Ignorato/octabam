@@ -81,8 +81,8 @@ Two skeletons and two worked examples:
 
 | you are writing | copy | then read |
 |---|---|---|
-| a ColdFire modification (parts, kits, menus, MIDI, fixes) | `modules/_template_cf/` | `modules/hello-dram/` (one DRAM unit, no hooks), then `modules/midi-scenes/` (a real one, built from its author's repo) |
-| a DSP effect | `modules/_template/` | `modules/hello/` (one knob, 27 words, its own render gate) |
+| a ColdFire modification (parts, kits, menus, MIDI, fixes) | `modules/_template_cf/` | `modules/repitch/` (one linked DRAM unit, detours and pokes), then `modules/midi-scenes/` (built from its author's repo as a submodule) |
+| a DSP effect | `modules/_template/` | `modules/character/` (an in-place insert, its own render gate `verify_character`) |
 
 `docs/remixer/MODULES.md` is the full guide; `docs/remixer/PLACEMENT.md` says
 where the bytes land and how much room there is.

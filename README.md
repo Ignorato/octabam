@@ -55,18 +55,13 @@ unit, image and date.
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| **BODESHIFT** | [sambanks](https://github.com/sambanks) | Warps-style insert: Bode frequency shifter, UP/DOWN/WIDE + feedback. | local render: never flashed |
 | **CHARACTER** | [sambanks](https://github.com/sambanks) | BamSep26 station: fold, saturation, tilt, compressor, width. | on hardware: Sam's MKII |
 | **EUCLID** | [repeat98](https://github.com/repeat98) | Euclidean LP/BP/HP/amp sequencer: swing, envelope, gate, random and loop. | local render: its own render gates; not on hardware |
 | **MINIVERB** | [repeat98](https://github.com/repeat98) | Modulated diffused FDN reverb; independent FX2 buffers, smoothed controls. | local render: `make verify-miniverb`; not flashed |
 | **MODULATION** | [sambanks](https://github.com/sambanks) | BamSep26 station: a modulation pedal -- Juno, Dimension, flanger, phaser, comb; FX1 only. | on hardware: Sam's MKII |
 | **NIMBUS** | [sambanks](https://github.com/sambanks) | Clouds-style insert: 743 ms granular texture, 4 grains, freeze. | local render: never flashed |
-| **RIPPLE** | [sambanks](https://github.com/sambanks) | Ripples-style insert: driven SVF filter, LP/BP/HP, singing resonance. | local render: never flashed |
-| **RUNGS** | [sambanks](https://github.com/sambanks) | Rings-style insert: 8-mode modal resonator, STRING/BELL/GLASS. | local render: never flashed |
 | **SPECTRUM** | [sambanks](https://github.com/sambanks) | BamSep26 station: a filter pedal -- the Moog ladder, SEM (LP..HP by SHPE), BP, Airwindows Capacitor2, formants; ENV and LFO onto the cutoff; width. | on hardware: Sam's MKII |
-| **STREAMZ** | [sambanks](https://github.com/sambanks) | Streams-style insert: vactrol lowpass gate, LPG/VCF/VCA. | local render: never flashed |
 | **TAPE ECHO** | [repeat98](https://github.com/repeat98) | Economy CPU tape echo: two biquads, simple FREE slew, snapped BEAT TIME and page-1 AGE. | on hardware: the author's unit (OCTACLID4): six instances run, a seventh freezes it, open |
-| **WARPFOLD** | [sambanks](https://github.com/sambanks) | Warps-style insert: wavefolder + ring mod, FOLD/RING/BOTH. | local render: never flashed |
 
 ### Machines and the sequencer
 
@@ -106,13 +101,6 @@ unit, image and date.
 | **LOFI AMF FIX** | [bryantysinger/octa-bt-pt](https://github.com/bryantysinger/octa-bt-pt) | Fixes stock LO-FI's AMF knob: mpysu -> mpyuu, both payloads. Ported from bryantysinger/octa-bt-pt. | `make check`: both words disassembled against stock |
 | **RECORDER HOLD** | [sambanks](https://github.com/sambanks) | ColdFire cave: a recorder-buffer FLEX voice reading one sample past its recording repeats the last sample instead of reading zero. | port-gated: 26 Sep 2026 |
 | **RECORDER SPACING** | [sambanks](https://github.com/sambanks) | ColdFire cave: a fixed-RLEN recording is exactly as long as the gap to the next arm, derived from the current arm -- no lane, no stored state. | on hardware: OCTABAM83, 12 Sep 2026 |
-
-### Reference
-
-| module | author | what it does | proof |
-|---|---|---|---|
-| **HELLO WORLD** | [sambanks](https://github.com/sambanks) | Reference minimal insert: one GAIN knob, out = in * GAIN/128. | `make check` |
-| **HELLO DRAM** | [sambanks](https://github.com/sambanks) | Reference minimal ColdFire module: one DRAM unit, no hooks -- the loader canary. | `make check` |
 
 <!-- modules:end -->
 

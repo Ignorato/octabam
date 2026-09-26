@@ -449,7 +449,7 @@ def main():
         _probe.write_text(
             "from remix.schema import Remix\n\n"
             "REMIX = Remix(name='_selftest_nofb', doc='scratch',\n"
-            "              modules=('WARPFOLD', 'SEND'), fallback='NONE')\n")
+            "              modules=('SPECTRUM', 'SEND'), fallback='NONE')\n")
         registry.remix("_selftest_nofb")
         bad += 1
         print("  [FAIL] fallback='NONE' was accepted beside SEND -- an "
@@ -565,17 +565,20 @@ def main():
 
     # ---- MULTI-RUN PLACEMENT, actually built --------------------------
     # The grouping above is arithmetic; this builds a remix whose harvest is
-    # three non-adjacent runs (SPATIALIZER 261 w; FLANGER..DARK REV 3,342 w;
-    # COMB 277 w) and requires STREAMZ (255 w) in run 1 and WARPFOLD (322 w)
+    # two non-adjacent runs (FLANGER+CHORUS 618 w; SPRING REV+DARK REV
+    # 2,130 w, PLATE REV kept on the chooser to split them) and requires
+    # MINIVERB (457 w, placed first) in run 1 and EUCLID (362 w + 33 table)
     # in run 2. A placer that reverted to one bump cursor would leave the
-    # small runs empty and still build.
+    # small run empty and still build.
     _probe = ROOT / "remixes/_selftest_scattered.py"
     _probe.write_text(
         "from remix.schema import Remix\n\n"
         "REMIX = Remix(name='_selftest_scattered', doc='scratch',\n"
-        "              modules=('STREAMZ', 'WARPFOLD'), fallback='NONE',\n"
+        "              modules=('EUCLID', 'MINIVERB', 'PLATE REV'),\n"
+        "              fallback='NONE',\n"
         "              fx1=('FILTER', 'EQUALIZER', 'DJ EQ', 'PHASER',\n"
-        "                   'COMPRESSOR', 'LO-FI'))\n")
+        "                   'SPATIALIZER', 'COMPRESSOR', 'LO-FI',\n"
+        "                   'COMB FILTER'))\n")
     r = subprocess.run([sys.executable, "tools/build/build_bus.py"],
                        cwd=ROOT, capture_output=True, text=True,
                        env={**os.environ, "REMIX": "_selftest_scattered",
@@ -604,7 +607,7 @@ def main():
             if m:
                 _by_pay[_pay]["runs"].append((int(m.group(1), 16),
                                               int(m.group(2), 16)))
-            m = re.match(r"\s{2}(STREAMZ|WARPFOLD)\s+P:0x([0-9a-f]+)", line)
+            m = re.match(r"\s{2}(EUCLID|MINIVERB)\s+P:0x([0-9a-f]+)", line)
             if m:
                 _by_pay[_pay]["at"][m.group(1)] = int(m.group(2), 16)
         if sorted(_by_pay) != ["A", "B"]:
@@ -618,11 +621,11 @@ def main():
                 _in = {k: next((i for i, (lo, hi) in enumerate(_rs)
                                 if lo <= a < hi), None)
                        for k, a in _at.items()}
-                if len(_rs) != 3:
+                if len(_rs) != 2:
                     bad += 1; _ok = False
                     print(f"  [FAIL] 'placer probe' payload {_p}: {len(_rs)} "
-                          f"runs, expected 3")
-                elif sorted(_at) != ["STREAMZ", "WARPFOLD"]:
+                          f"runs, expected 2")
+                elif sorted(_at) != ["EUCLID", "MINIVERB"]:
                     bad += 1; _ok = False
                     print(f"  [FAIL] 'placer probe' payload {_p}: placed "
                           f"{sorted(_at)}, expected both modules")
@@ -635,26 +638,26 @@ def main():
                     print(f"  [FAIL] 'placer probe' payload {_p}: both modules "
                           f"landed in the SAME run ({_in}) -- the placer is "
                           f"not filling the smaller openings")
-                elif _in["STREAMZ"] != 0:
-                    # STREAMZ is 255 words and run 1 holds 261: first-fit
+                elif _in["MINIVERB"] != 0:
+                    # MINIVERB is 457 words and run 1 holds 618: first-fit
                     # MUST take it. Anywhere else means the small opening
                     # was skipped, which is the whole defect.
                     bad += 1; _ok = False
-                    print(f"  [FAIL] 'placer probe' payload {_p}: STREAMZ went "
-                          f"to run {_in['STREAMZ'] + 1}, not the 261-word "
+                    print(f"  [FAIL] 'placer probe' payload {_p}: MINIVERB went "
+                          f"to run {_in['MINIVERB'] + 1}, not the 618-word "
                           f"opening it fits")
             if _ok:
-                print(f"  [PASS] 'placer probe' fills 2 of its 3 non-contiguous "
-                      f"runs in BOTH payloads (STREAMZ into the 261-word "
-                      f"opening, WarpFold into the big run)")
+                print(f"  [PASS] 'placer probe' fills both of its "
+                      f"non-contiguous runs in BOTH payloads (MiniVerb into "
+                      f"the 618-word opening, Euclid into the big run)")
 
     # ---- FX1 rows (Remix.fx1) -------------------------------------------
     # The schema half. The BUILD half -- the relocated list, FX1's own id and
     # cursor tables, and stock's eleven rows unchanged and still first -- is
     # tools/verify/verify_menu.py, which needs a built image and so runs there.
     try:
-        schema.Remix(name="_x", doc="_", modules=("WARPFOLD",),
-                     fallback=schema.NO_FALLBACK, fx1=("WARPFOLD", "WARPFOLD"))
+        schema.Remix(name="_x", doc="_", modules=("SPECTRUM",),
+                     fallback=schema.NO_FALLBACK, fx1=("SPECTRUM", "SPECTRUM"))
         bad += 1
         print("  [FAIL] Remix(fx1=...) accepted a duplicate key")
     except ValueError:
@@ -664,8 +667,8 @@ def main():
     # every fx1 key to be in `modules`. Pinned, because it was required for
     # one day and that would have made a curated FX1 chooser impossible.
     try:
-        schema.Remix(name="_x", doc="_", modules=("WARPFOLD",),
-                     fallback=schema.NO_FALLBACK, fx1=("FILTER", "WARPFOLD"))
+        schema.Remix(name="_x", doc="_", modules=("SPECTRUM",),
+                     fallback=schema.NO_FALLBACK, fx1=("FILTER", "SPECTRUM"))
         print("  [PASS] an fx1 row may be a stock effect with no FX2 row")
     except ValueError as e:
         bad += 1
@@ -673,13 +676,14 @@ def main():
     # A module of ours is FX2-only until a remix says otherwise, and then it
     # is on both -- this is the derivation the remixer's menus column and
     # every resource line read.
-    _wf = registry.modules()["WARPFOLD"]
-    if rig.menus(_wf) != (rig.FX2,):
+    # EUCLID replaces no stock effect, so it has no FX1 row of its own.
+    _eu = registry.modules()["EUCLID"]
+    if rig.menus(_eu) != (rig.FX2,):
         bad += 1
-        print(f"  [FAIL] WarpFold is {rig.menus(_wf)} with no fx1 row")
-    elif rig.menus(_wf, {"WARPFOLD"}) != (rig.FX1, rig.FX2):
+        print(f"  [FAIL] Euclid is {rig.menus(_eu)} with no fx1 row")
+    elif rig.menus(_eu, {"EUCLID"}) != (rig.FX1, rig.FX2):
         bad += 1
-        print(f"  [FAIL] WarpFold is {rig.menus(_wf, {'WARPFOLD'})} with one")
+        print(f"  [FAIL] Euclid is {rig.menus(_eu, {'EUCLID'})} with one")
     else:
         print("  [PASS] an fx1 row moves a module from FX2 to FX1+FX2")
     # ⚠️ ONLY A BUFFER-FREE INSERT MAY TAKE AN FX1 ROW. The measured reason
@@ -687,10 +691,9 @@ def main():
     # through the other FX1 buffers and into FX2 slot 0. Pinned per module so
     # a manifest that starts reading the allocator cannot quietly become
     # eligible.
-    _want = {"NIMBUS": "fixed FX2",
+    _want = {"NIMBUS": "fixed FX2", "MINIVERB": "FX2 slot",
              "REVERB SERVER": "bus server", "DELAY SERVER": "bus server",
-             "WARPFOLD": None, "RIPPLE": None, "RUNGS": None,
-             "STREAMZ": None, "BODESHIFT": None, "HELLO WORLD": None}
+             "SPECTRUM": None, "CHARACTER": None, "EUCLID": None}
     for _k, _frag in _want.items():
         _why = state.fx1_hazard(registry.modules()[_k])
         if (_frag is None) != (_why is None) or (_frag and _frag not in _why):

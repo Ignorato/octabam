@@ -20,7 +20,7 @@ target.
 `tools/` is grouped by what a tool is for. Every group directory is on
 `sys.path` for every tool (`tools/toolpath.py`), so tools import one
 another by bare name wherever they sit; a new script opens with the one
-line `hello-dram`'s verifier does.
+line `verify_dram_boot.py` does.
 
 | directory | what is in it |
 |---|---|
@@ -57,7 +57,7 @@ ones — the DSP toolchain itself is plain CMake). It builds:
 | `ot_emu` | `tools/emu/ot_emu/` (`make emu-cf`) | the headless C++ port of the machine: boots the built image, loads a project from a staged card, runs the sequencer and both DSP cores. `docs/remixer/EMU.md`, `docs/firmware/COLDFIRE_PORT.md` (O14i-O24; O1-O14: `git show 3ceba41:docs/history/COLDFIRE_PORT.md`) |
 | `ot_spec` | `tools/hw/ot_spec.py` | one JSON spec over a project's parts and patterns: `apply` (FX ids by module name, every knob by name, machine type, part names; per pattern track: length, scale, trigs, locks on every page by knob name — PLAYBACK, LFO, AMP, FX1, FX2 — with `clear`; the lock-trig mask follows), `report` (the same shape back), `diff` (two projects, field by field); checksum + read-back on `.work` and `.strd` |
 | `ot_bank` | `tools/hw/ot_bank.py` | the bank file's pattern records: `report` lock counts per page, `strip --pages fx1,fx2` clears them in every pattern (the stamper never touches patterns) |
-| `verify_character` / `verify_spectrum` / `verify_modulation` / `verify_nimbus` / `verify_hello` | `tools/verify/verify_<module>.py` | the module rendered through `dsp_host` on the audition's scratch image against predictable arithmetic or a float reference (in `make check` since 16 Sep 2026; Character's master path reads the shipping build) |
+| `verify_character` / `verify_spectrum` / `verify_modulation` / `verify_nimbus` | `tools/verify/verify_<module>.py` | the module rendered through `dsp_host` on the audition's scratch image against predictable arithmetic or a float reference (in `make check` since 16 Sep 2026; Character's master path reads the shipping build) |
 | `verify_spectrum_ident` | `tools/verify/verify_spectrum_ident.py` | bit-identity of a rewritten Spectrum against a saved reference (`make verify-spectrum-ident SAVE=1`, then without) |
 | `verify_usb` | `tools/verify/verify_usb.py` | the built image enumerated as a USB device under the port: Elektron 1935:0002, the MSC interface, INQUIRY and its CSW over EP1, no uninitialised queue head (`make verify`, 3 s) |
 | `usb_host` | `tools/harness/usb_host.py` | the scripted USB host for the port's bench (`ot_emu --usb-host SOCKET`): enumerate, mass storage, USB-MIDI in/out, drain an isochronous endpoint; octemu's protocol |

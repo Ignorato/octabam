@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SPECTRUM render gates, with arithmetic you can predict.
 
-Renders the station straight through dsp_host (verify_hello's shape: the id
+Renders the station straight through dsp_host (the render-gate shape: the id
 and the slots come from the manifest, the entry points are checked against
 SEND's so an absent module cannot pass as a dry passthrough).
 
@@ -90,7 +90,7 @@ LP = 1   # MODE 0 is LADR since 14 Sep 2026 ("moog is best, first in list")
 
 def render(samples, slot="fx1", guard=False, **kw):
     """samples: MONO ints in Q23 -- dsp_host feeds one stream to both
-    channels (verify_hello's shape). Returns (L, R) lists.
+    channels (the render-gate shape). Returns (L, R) lists.
 
     slot="fx1" (alloc 0, r7 1) is the station's own slot; "fx2" (alloc 1,
     r7 2) is an FX2 instance, which the station runs as a DRY PASS since

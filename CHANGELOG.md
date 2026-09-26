@@ -7,6 +7,16 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- Removed (27 Sep 2026): the five Mutable-Instruments-flavoured inserts
+  WarpFold, Ripple, Rungs, Streamz, BodeShift and their `mutables` remix,
+  and the two reference modules HELLO WORLD (`hello`) and HELLO DRAM
+  (`hello-dram`) with their remixes and `verify_hello`. None had reached
+  hardware. The worked examples are now `modules/character/` (DSP) and
+  `modules/repitch/` (ColdFire); the selftest's placer probe uses
+  MINIVERB and EUCLID. Every image changes by 36 bytes: FX2 ids 0x0a,
+  0x0b, 0x0e, 0x0f, 0x17 and 0x1b are no longer aliased to the fallback
+  (descriptor pointer and both payloads' dispatch entries return to
+  stock's), so a project that selected one of them runs stock's entry.
 - The module table and the remix index are rendered (27 Sep 2026):
   `Module.category`, `author`, `author_url`, `proof`, `proof_note` and
   `Remix.family`, `proof`, `proof_note` in every manifest and selection;

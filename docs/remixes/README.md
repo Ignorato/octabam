@@ -21,7 +21,6 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 | [`bus`](../../remixes/bus/README.md) | The plain two-server image: BusVerb + BusDelay + send bus + tempo sync. | on hardware: under earlier names |
 | [`euclid`](../../remixes/euclid/README.md) | Euclid rhythmic modulation: 12 dB LP/BP/HP or AMP, both FX slots. | local render: the module's render gates |
 | [`miniverb`](../../remixes/miniverb/README.md) | Minimal allocator-owned FDN reverb. | local render: `make verify-miniverb` |
-| [`mutables`](../../remixes/mutables/README.md) | Five MI-flavoured inserts: WarpFold, Ripple, Rungs, Streamz, BodeShift. | local render |
 | [`nimbus`](../../remixes/nimbus/README.md) | Nimbus granular texture, alone. One instance per core. | local render |
 | [`tapeecho`](../../remixes/tapeecho/README.md) | Tape Echo replacing Spring Reverb, alone. | on hardware: the author's unit (OCTACLID4): six instances; a seventh freezes it, open |
 
@@ -46,8 +45,6 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 
 | remix | contains | proof |
 |---|---|---|
-| [`hello`](../../remixes/hello/README.md) | Reference minimal build: the HELLO WORLD gain insert, alone. | `make check` |
-| [`hello-dram`](../../remixes/hello-dram/README.md) | Reference minimal ColdFire build: the HELLO DRAM unit, alone. | `make check` |
 | [`restock`](../../remixes/restock/README.md) | every stock FX2 effect, all fourteen: put my unit back. | `make check` |
 
 Never share a built image: it contains Elektron's OS.
