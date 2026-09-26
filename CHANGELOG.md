@@ -38,6 +38,12 @@ flashed image was built from.
   into the one-word displacement range to keep the RIG BURN probe's words
   (payload A at 23 free). Unheard.
 
+- Modulation cycle pass (27 Sep 2026): LINE 404 → 354, PHSR 397 → 301,
+  COMB 339 → 329 words/sample; the rig's priced worst core 2,836 → 2,648.
+  Image 88 on hardware overran at the fourth Modulation beside the reverb
+  (three fit). Exact rewrites plus two within the reference bars (the
+  one-poles as two products, PHSR's stages rolled): LINE renders differ from
+  main by ≤ 6 LSB, PHSR by ≤ 1 LSB.
 
 - Removed (27 Sep 2026): the five Mutable-Instruments-flavoured inserts
   WarpFold, Ripple, Rungs, Streamz, BodeShift and their `mutables` remix,
