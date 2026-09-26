@@ -35,7 +35,8 @@
 ;   $22        MIX's run value between blocks (26 Sep 2026)
 ;   $43        1 once the run values started at their targets (0 at init and
 ;              on a MODE change; mo_rset)
-;   $44, $6a..$83 free
+;   $44        the fixed taps' fraction f (per sample, LINE)
+;   $6a..$83 free
 ; init zeroes $11..$46 and, on FX1, the lines.
 ; ---------------------------------------------------------------------------
 
@@ -391,9 +392,7 @@ mo_line:
         add     x0,a
         move    a,x:(r1)+               ; centre
         move    r4,r1
-        move    r7,r3
-        move    #$23,n3
-        move    (r3)+n3
+        lua     (r7+$23),r3
 ; ---- advance the write phase ----------------------------------------------
         move    y0,a                    ; 0..1023, so phase + 1 is 1..1024: a2 = 0
         add     #>$1,a
@@ -452,9 +451,8 @@ mo_line:
         move    a1,n5
         move    r2,r5
         move    (r5)+n5                 ; line L at the write phase
-        move    x0,a
 ; ---- mo_lofl, inline (23 Sep 2026; three sites each, FREE allows it) ----
-        move    a,y1
+        move    x0,y1                   ; the limited value
         move    n1,a
         move    x:(r1)+,x0              ; the hold length
         add     #>$1,a
@@ -511,9 +509,8 @@ mo_line:
         move    a1,n5
         move    r6,r5
         move    (r5)+n5                 ; line R at the write phase
-        move    x0,a
 ; ---- mo_lofr, inline (23 Sep 2026; three sites each, FREE allows it) ----
-        move    a,y1
+        move    x0,y1                   ; the limited value
         move    n1,a
         tst     a
         move    x:(r3),a
@@ -535,9 +532,22 @@ mo_line:
         move    a,x:(r3)+
         move    a,n6                    ; wo R
 ; ---- wet L = bl*fixed + bd*dry + ff*wo + kc*HP(wo of the other side) + kb*LPb(dry)
-        move    x:(r4+$3),a             ; the fixed tap at the centre's run
-        move    r2,r5                   ; value (read after this sample's
-        bsr     mo_tap                  ; write: a delay >= 8 never sees it)
+; both fixed taps read the centre's run value (after this sample's write:
+; a delay >= 8 never sees it), so its split into i and f is done once here
+; and kept for R in n3 and $44 (n3 is free until the MIX below)
+        move    x:(r4+$3),a
+        move    a,x0
+        move    x0,a                    ; clean: a0 = 0
+        and     #>$fff,a
+        asl     #$b,a,a
+        move    a1,y1                   ; f
+        move    y1,x:(r7+$44)
+        move    x0,a
+        asr     #$c,a,a
+        move    a1,x0                   ; i
+        move    x0,n3
+        move    r2,r5
+        bsr     mo_itap
         move    a,x0                    ; fixed L
         move    x:(r1)+,y1              ; bl
         mpy     x0,y1,a x:(r0),x0       ; dry L
@@ -582,9 +592,10 @@ mo_line:
         add     x1,a
         move    a,x:(r3)+               ; wet L (limited)
 ; ---- wet R = bl*fixed + bd*dry + ff*wo + kc*HP(wo of the other side) + kb*LPb(dry)
-        move    x:(r4+$3),a             ; the fixed tap at the centre
+        move    n3,x0                   ; the fixed tap: i and f from L's split
+        move    x:(r7+$44),y1
         move    r6,r5
-        bsr     mo_tap
+        bsr     mo_itap
         move    a,x0                    ; fixed R
         move    x:(r1)+,y1              ; bl
         mpy     x0,y1,a x:(r0+n0),x0    ; dry R
@@ -827,9 +838,7 @@ mo_padv:
         move    a1,n1
         do      n7,>mophsz
         move    r4,r1
-        move    r7,r3
-        move    #$25,n3
-        move    (r3)+n3
+        lua     (r7+$25),r3
 ; ===== channel L =====
         move    x:(r3),a                ; the ramps
         move    x:(r1)+,x0              ; dbm
@@ -879,10 +888,8 @@ mo_padv:
         move    x:(r1)+,y1              ; w8
         mac     x0,y1,b
         asl     #$1,b,b                 ; back to full scale
-        move    b,x1                    ; wet L (limited)
-        move    x1,a
 ; ---- mo_lofl, inline (23 Sep 2026; three sites each, FREE allows it) ----
-        move    a,y1
+        move    b,y1                    ; wet L (limited)
         move    n1,a
         move    x:(r1)+,x0              ; the hold length
         add     #>$1,a
@@ -946,10 +953,8 @@ mo_padv:
         move    x:(r1)+,y1              ; w8
         mac     x0,y1,b
         asl     #$1,b,b                 ; back to full scale
-        move    b,x1                    ; wet R (limited)
-        move    x1,a
 ; ---- mo_lofr, inline (23 Sep 2026; three sites each, FREE allows it) ----
-        move    a,y1
+        move    b,y1                    ; wet R (limited)
         move    n1,a
         tst     a
         move    x:(r3),a
@@ -1138,9 +1143,7 @@ mo_bcomb:
         add     x0,a
         move    a,x:(r1)                ; the gain
         move    r4,r1
-        move    r7,r3
-        move    #$23,n3
-        move    (r3)+n3
+        lua     (r7+$23),r3
         move    y0,a
         add     #>$1,a
         and     #>$3ff,a
@@ -1190,8 +1193,7 @@ mo_bcomb:
         move    a1,n5
         move    r2,r5
         move    (r5)+n5
-        move    x1,a
-        move    a,y:(r5)                ; write line L
+        move    x1,y:(r5)               ; write line L
         move    x1,x0                   ; the -12 dB output trim, after the line
         move    x:(r1)+,y1              ; write so the ring is untouched: 0.251
         mpy     x0,y1,a
@@ -1236,8 +1238,7 @@ mo_bcomb:
         move    a1,n5
         move    r6,r5
         move    (r5)+n5
-        move    x1,a
-        move    a,y:(r5)                ; write line R
+        move    x1,y:(r5)               ; write line R
         move    x1,x0                   ; the -12 dB output trim, after the line
         move    x:(r1)+,y1              ; write so the ring is untouched: 0.251
         mpy     x0,y1,a
@@ -1394,14 +1395,11 @@ mo_itap:
         move    y0,a                    ; the write phase
         sub     x0,a
         and     #>$3ff,a                ; (a2 may be stale: a1 is what is read)
-        move    a1,x0
         move    a1,n5
-        move    x0,a
-        add     #>$3ff,a                ; i + 1, mod 1024 (positive throughout)
+        add     #>$3ff,a                ; i + 1, mod 1024 (a1 alone, again)
         and     #>$3ff,a
         move    (r5)+n5                 ; -> sample i
-        move    y:(r5),b                ; t0
-        move    (r5)-n5
+        move    y:(r5)-n5,b             ; t0, and back to the base
         move    a1,n5
         move    (r5)+n5                 ; -> sample i + 1
         move    y:(r5),a                ; t1
@@ -1436,23 +1434,20 @@ mo_herm:
         and     #>$3ff,a
         move    a1,n5
         move    (r5)+n5
-        move    y:(r5),b                ; xm1
-        move    (r5)-n5
+        move    y:(r5)-n5,b             ; xm1, and back to the base
         move    b,x:(r3)+
         move    (r3)+                   ; (c's word)
         add     #>$3ff,a                ; each next index is the last - 1 mod
         and     #>$3ff,a                ; 1024 (a1 only: a2 is stale)
         move    a1,n5
         move    (r5)+n5
-        move    y:(r5),b                ; x0
-        move    (r5)-n5
+        move    y:(r5)-n5,b             ; x0
         move    b,x:(r3)+
         add     #>$3ff,a
         and     #>$3ff,a
         move    a1,n5
         move    (r5)+n5
-        move    y:(r5),b                ; x1
-        move    (r5)-n5
+        move    y:(r5)-n5,b             ; x1
         move    b,x:(r3)+
         move    (r3)+                   ; (w's word)
         add     #>$3ff,a
