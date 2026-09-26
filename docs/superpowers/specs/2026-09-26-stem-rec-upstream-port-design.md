@@ -1,14 +1,43 @@
 # STEM REC on current upstream: the port
 
-Piece 1 of 5. The others, in order: eight tracks and 24-bit in the
-recorder; the STEM REC category in MAIN MENU; the flash; later, a custom
-recording window. Each gets its own spec and plan.
+Piece 1 of the roadmap below. Each piece gets its own spec and plan.
+
+## 0. The roadmap
+
+The order puts a flash early, because the unit's card speed decides the
+rest and no emulator can measure it: the emulated card answers at once.
+
+1. **The port** (this spec), with a FAT32 run: the unit's 64 GB card is
+   FAT32, and every take so far was checked on FAT16.
+2. **Eight tracks at 16-bit, under the emulator.** A fixture with sound
+   in every frame (`--audio-in` through THRU machines), since the current
+   fixture's sounds play only their first four frames. Eight-track takes
+   that stream, wrap and fill the ring, at every track count. The peak
+   ring fill, kept by the recorder.
+3. **A minimal STEM REC category in MAIN MENU.** REC/STOP, T1 to T8, and
+   a status row: the elapsed time, the peak ring fill (for example
+   `REC 01:23 PEAK 12%`), and any error by name. 16-bit only. Checked on
+   the emulator's MKII and MKI panels; a gate: the cursor reaches every
+   category, and SYSTEM reaches OS UPGRADE, because the root is also the
+   recovery screen.
+4. **Flash A, on the MKII.** Precondition: a stock 1.40C `.syx` at hand
+   and the MKII's recovery path known. It proves the menu, measures the
+   card at 1, 2, 4 and 8 tracks from the peak fill, records with static
+   machines playing (the recorder and the sample streams share the card),
+   and compares a take's level with the stock recorder's (the emulator
+   shows T1 about 24 dB below its source, unexplained).
+5. **24-bit, the ring's size, and the file length set every few chunks**
+   (so a power cut keeps what was written), sized from flash A. The ring
+   leaves room in the 10 MiB reserve for the other DRAM modules a combined
+   image may carry.
+6. **Flash B.**
+7. **Later: a custom recording window.**
 
 ## 1. Purpose
 
 Carry STEM REC, and the tool support it depends on, from branch
 `crosscheck` (`7dee174`) onto current upstream `main` (`81126f7`,
-sambanks/octabam), with no change in what it does. Pieces 2 to 4 then
+sambanks/octabam), with no change in what it does. The later pieces then
 build on upstream's emulator, which can show the screen (`--lcd`), take
 panel keys (`--live`), boot as an MKII (`--mkii`) and run a clock
 (`--rtc`). `crosscheck` split from upstream on 9 Sep 2026 and lacks 788
@@ -67,7 +96,7 @@ groups.
 - **The emulator change is additive.** Every existing flag keeps its
   meaning and its report text. A run without the new flags prints what it
   printed before.
-- **No new behavior.** Nothing in pieces 2 to 5 lands here.
+- **No new behavior.** Nothing from piece 2 on lands here.
 
 ## 5. Risks, and how each is handled
 
@@ -87,7 +116,23 @@ groups.
   touch every remix. `make check` for `bamsep26` and for `stems`, and the
   selftest over every remix, must pass.
 
-## 6. Done when
+## 6. The FAT32 run
+
+The emulator's card images are FAT16: `emu_card.build_image` writes
+FAT16, and `extract_image` reads it. The unit's card is FAT32. Stock
+handles FAT32, but STEM REC's use of the raw routines on it (a growing
+file, the sector-0 rewrite, setting the length) has never run.
+
+- `emu_card` gains a FAT32 image: `build_image` can write one, and
+  `extract_image` reads both. Each is held by the round-trip test.
+- The fixture is staged on a FAT32 image too, and the verifier's take
+  checks (`full`, `rowstop`, `stream`, `wrap`, `cap`, `cut`, `exists`,
+  `overflow`) run on it as well as on FAT16.
+- A take check that fails on FAT32 is a finding, reported before any fix.
+  The fix is then its own commit: this piece's "no new behavior" rule
+  covers the port, not a defect the port uncovers.
+
+## 7. Done when
 
 - `stem-rec-v2` carries STEM REC, with `stems.s` byte-identical to
   `7dee174`.
@@ -99,8 +144,12 @@ groups.
 - `make check` passes for upstream's default remix, `bamsep26`, too.
 - Every value the verifier pins that moved is written down in
   `STEM_REC.md`, with its cause.
+- The take checks pass on a FAT32 image, or each failure is reported as a
+  finding.
 
-## 7. Not in this piece
+## 8. Not in this piece
 
-The menu, eight tracks by default, 24-bit, the image for the flash, and
-any pull request to upstream. The pull request waits until you decide.
+Everything from piece 2 on, the image for a flash, and any pull request
+to upstream. The pull request waits until you decide. `DramRegion`
+changes upstream's build core, so it may be worth asking Sam early
+whether he'd take it.
