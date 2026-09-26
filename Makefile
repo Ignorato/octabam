@@ -199,72 +199,51 @@ modmap: ## DSP module load map — which bytes land at which P address
 	python3 tools/build/dsp_modmap.py
 
 .PHONY: verify
-verify: ## Verify the ColdFire menu edits, module ledger (+ burn probe when it fits; it fits since the one-word displaced move, 14 Sep 2026)
+verify: ## The shared gates, then every gate the remix's modules declare (schema.Gate; tools/verify/module_gates.py)
 	@# FIRST, before the selftest rebuilds every remix over out/mainos_bus.bin
 	@# (the boot-verifier trap, AGENTS.md): a module started from a garbage
 	@# instance block must be silent on silence -- the unit's RAM is not zeroed.
 	python3 tools/verify/verify_dirtystate.py $(REMIX)
-	$(PY) tools/verify/verify_tapeecho_cpu.py $(REMIX)
-	python3 tools/verify/verify_miniverb.py $(REMIX)
 	python3 tools/remix/selftest.py
 	python3 tools/verify/verify_slots.py
 	python3 tools/verify/verify_initregs.py $(REMIX)
 	python3 tools/verify/verify_replaces.py
 	python3 tools/verify/verify_docs.py
 	python3 tools/build/label_fmt.py
-	python3 tools/verify/verify_octakit.py
-	python3 tools/verify/verify_midiscenes.py
 	REMIX=$(REMIX) python3 tools/verify/verify_dram_boot.py
-	python3 tools/verify/verify_usb.py
-	@# The four ColdFire-port checks need the .venv (make emu-setup). Without
+	@# The three ColdFire-port checks need the .venv (make emu-setup). Without
 	@# it they SKIP; with it a failure FAILS (until 16 Sep 2026 `|| echo SKIP`
 	@# swallowed every exit code, and verify_modenames had been failing since
 	@# image 27 behind a SKIP line).
 	@if [ -x .venv/bin/python3 ]; then \
 	  .venv/bin/python3 tools/verify/verify_labels.py $(REMIX) && \
 	  .venv/bin/python3 tools/verify/verify_modenames.py $(REMIX) && \
-	  REMIX=$(REMIX) BUILD=$(BUILD) .venv/bin/python3 tools/verify/verify_ccmap.py && \
 	  .venv/bin/python3 tools/verify/verify_hidden.py $(REMIX); \
-	else echo "  [SKIP] labels / mode names / cc map / hidden engines: no .venv (make emu-setup)"; fi
-	python3 tools/verify/verify_grains.py $(REMIX)
-	@# The station and insert gates: each renders its module through dsp_host
-	@# on a scratch image the audition builds (remix-independent; Character's
-	@# master path reads the shipping build and SKIPs when it lacks Character).
-	@# Not in make check until 16 Sep 2026 (run by hand after each station round).
-	python3 tools/verify/verify_character.py
-	python3 tools/verify/verify_spectrum.py
-	python3 tools/verify/verify_modulation.py
-	@# The knob click census: every continuous knob moved mid-render, plus
-	@# the garbage-start gate (a tone from block 0 on a garbage block).
+	else echo "  [SKIP] labels / mode names / hidden engines: no .venv (make emu-setup)"; fi
+	@# The knob click census: every continuous knob of the rig's DSP modules
+	@# moved mid-render, plus the garbage-start gate (a tone from block 0 on a
+	@# garbage block). Builds bamsep26 itself; a remix-independent census.
 	$(PY) tools/verify/verify_knob_clicks.py
-	@# The isolated DSP gates build their own remixes over mainos_bus.bin.
+	@# The modules' own isolated gates: each renders its module through
+	@# dsp_host on a scratch image it builds itself, or checks an author's
+	@# oracle; none reads the selected image. A module names its gates in its
+	@# manifest (schema.Gate); a remix without the module never runs them.
+	REMIX=$(REMIX) BUILD=$(BUILD) $(PY) tools/verify/module_gates.py $(REMIX) --stage isolated
+	@# The isolated gates build their own remixes over mainos_bus.bin.
 	@# Restore the selected image before inspecting its chooser tables.
 	$(MAKE) bus REMIX=$(REMIX)
 	REMIX=$(REMIX) python3 tools/verify/verify_menu.py
-	python3 tools/verify/verify_burn.py $(REMIX)
-	python3 tools/verify/verify_twocore.py
-	python3 tools/verify/verify_onebus.py
-	python3 tools/verify/verify_tempo.py $(REMIX)
-	@# REPITCH: its hooks through the firmware's own code, its page drawings,
-	@# and with OT_PROJECT a live tempo change under the port (SKIPs parts it
-	@# cannot run; a remix without REPITCH is a one-line pass).
-	python3 tools/verify/verify_repitch.py $(REMIX)
-	@# EUCLID: native control laws, executed ColdFire hooks, both DSP payloads,
-	@# panel dial rendering and (with OT_PROJECT) full playback under the port.
-	$(PY) tools/verify/verify_euclid.py $(REMIX)
 	@# A real project on the built image under the ColdFire port (ids, page-2
 	@# delivery, chain audio, the main out); SKIPs without OT_PROJECT (above).
 	python3 tools/verify/verify_set.py $(REMIX)
-	@# A MODE turned on the panel re-defaults its knobs (the FX1 and FX2
-	@# page-2 editors called under the port); SKIPs without OT_PROJECT (above).
-	python3 tools/verify/verify_modedefaults.py $(REMIX)
-	@# TEMPO BUS: the TEMPO window's bus screen driven through the port's live
-	@# panel on verify_set's staged card; SKIPs without it (above).
-	python3 tools/verify/verify_tempobus.py $(REMIX)
-	@# SCENES P2: page-2 locks lerped into the DSP frame by the fader, and
-	@# the page-2 editor with a scene held writing the pool; SKIPs without
-	@# OT_PROJECT (above).
-	python3 tools/verify/verify_scenesp2.py $(REMIX)
+	@# The modules' image-stage gates read the selected image (and, TEMPO BUS,
+	@# the card verify_set staged). Rebuilt first: the set gate leaves its own
+	@# build at out/mainos_bus.bin.
+	$(MAKE) bus REMIX=$(REMIX)
+	@# The USB device model against the built image: stock's MSC function on
+	@# every image, the MIDI and audio functions when the remix carries them.
+	REMIX=$(REMIX) python3 tools/verify/verify_usb.py
+	REMIX=$(REMIX) BUILD=$(BUILD) $(PY) tools/verify/module_gates.py $(REMIX) --stage image
 
 .PHONY: verify-roll
 verify-roll: ## Prove an alternate REVERB engine is bit-identical: make verify-roll CAND=cand.asm [REF=modules/busverb/reverb_server.asm]
@@ -334,8 +313,13 @@ accept: ## Strict local acceptance + JSON report (OT_PROJECT or STRESS_SOURCE re
 	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix "$(REMIX)" $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(ACCEPTARGS)
 
 .PHONY: test-acceptance
-test-acceptance: ## Firmware-free tests of acceptance failures, skips and report handling
+test-acceptance: ## Firmware-free tests of the acceptance runner and the reach classifier
 	python3 -m unittest discover -s tools/verify/tests -p 'test_*.py' -v
+
+BASE ?= origin/main
+.PHONY: reach
+reach: ## The gates this branch's changes reach (the diff against BASE=origin/main); RUN=1 runs them in order
+	python3 tools/verify/reach.py --base $(BASE) $(if $(RUN),--run,) $(REACHARGS)
 
 .PHONY: modules
 modules: ## List the module index and the available remixes
@@ -387,7 +371,7 @@ ci-emu: ## CI: build the ColdFire port (tools/emu/ot_emu) and run its unit tests
 	ctest --test-dir out/emu-ci --output-on-failure -E '^(rtos|dsp|repitch-stock|repitch-patch)$$'
 
 .PHONY: ci
-ci: test-acceptance ci-dsp ci-emu ## Everything CI runs, locally
+ci: reach test-acceptance ci-dsp ci-emu ## Everything CI runs, locally
 
 .PHONY: emu-setup
 emu-setup: ## Provision the remixer deps (unicorn + textual) into .venv via uv

@@ -139,18 +139,30 @@ because the author keeps developing where they are:
 
 ## Gates
 
-**`make check REMIX=<name>` is the floor**, for every remix you touched. It
-builds, prices cycles, runs the ledger selftest, the menu verification,
-the oracles and — for any remix with DRAM code — boots the image under the
-ColdFire port and reads each window back against the linked image. Never
-claim something works because it assembled.
+**`make check REMIX=<name>` is the floor**, for every remix the change
+reaches. It builds, prices cycles, runs the shared gates (the ledger
+selftest, the menu, the dirty-state render, the docs, a project under the
+ColdFire port) and then every gate the selected modules declare in their
+manifests (`schema.Gate`, run by `tools/verify/module_gates.py`). A remix
+without a module never runs that module's gates; a module without gates
+has only the shared ones. Never claim something works because it
+assembled.
 
-For acceptance evidence, use `make accept REMIX=<name> OT_PROJECT=<dir>`.
-Unlike the development check, this refuses missing evidence and writes a
-versioned JSON report. The initial pressure profile covers the bamsep26
-DSP selection; unsupported DSP selections are blocked, never silently
-approved. See [the acceptance contract](docs/remixer/ACCEPTANCE.md) for
-generated fixtures, report fields, coverage and hardware limitations.
+**`make reach`** reads the branch's diff against `origin/main` and prints
+the gates it reaches: a module's remixes from the selections, a
+verifier's owners, refhash for the build, `make ci-dsp`/`ci-emu` for the
+toolchains. `make reach RUN=1` runs them in order. It refuses a tree that
+is not rebased onto the base.
+
+For acceptance evidence, use `make accept REMIX=<name>` with
+`STRESS_SOURCE=<a local project>` (the fixture is generated for the
+remix) or `OT_PROJECT=<dir>` (a project you prepared). Unlike the
+development check, this refuses missing evidence and writes a versioned
+JSON report. The pressure stages run when every DSP module in the
+selection declares its dearest settings (`schema.Module.dear`); a module
+without them blocks the remix, by name, never a render at defaults. See
+[the acceptance contract](docs/remixer/ACCEPTANCE.md) for the fixture,
+report fields, coverage and hardware limitations.
 
 **If you changed the build rather than a module, prove it changed
 nothing**: `scripts/refhash.sh save` on a tree you trust, then
@@ -177,17 +189,28 @@ that #415 had renamed).
 
 ```bash
 git fetch upstream && git rebase upstream/main
-make check REMIX=<name>              # every remix the change can reach
-make test-acceptance                 # firmware-free, seconds
-make accept REMIX=bamsep26 STRESS_SOURCE=<a local project>
-make accept REMIX=<name> OT_PROJECT=<project>   # any other remix the change reaches
-scripts/refhash.sh check             # the change touches the build (save the baseline on main first)
-make ci                              # optional: exactly what CI runs
+make reach BASE=upstream/main        # the gates this diff reaches, in order
+STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1   # run them
 ```
 
-A remix whose DSP selection has no pressure profile makes `make accept`
-report `blocked`; name it in the PR. List each command and its result in
-the PR body.
+What `make reach` lists, by what changed:
+
+| changed | gates |
+|---|---|
+| `modules/<name>/` (a pin bump too) | `make check` and `make accept` for every remix that carries the module |
+| `remixes/<name>/remix.py` | `make check`, `make accept` for that remix |
+| `tools/verify/verify_<x>.py` | `make check` for the remixes of the modules whose manifests name it; the default remix for a shared gate |
+| `tools/build/`, `tools/remix/`, `dsp/` | `scripts/refhash.sh check` (save the baseline on main first), `make check` on the default remix and on `bus`, `make test-acceptance` |
+| `tools/harness/dsp_host/`, `tools/patches/` | `make ci-dsp`, then `make check` (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
+| `tools/emu/` | `make ci-emu`, `make emu-cf`, `make check` with OT_PROJECT |
+| the acceptance runner, the stress generator, `pressure.py` | `make test-acceptance`, `make check`, `make accept` |
+| `docs/`, `*.md` | `python3 tools/verify/verify_docs.py` |
+| `Makefile`, `.github/` | `make check`, `make ci` |
+| anything else | `make check` on the default remix, named as unclassified |
+
+A remix with a DSP module that declares no `dear` makes `make accept`
+report `blocked` with the module's name; say so in the PR. List each
+command and its result in the PR body (`make reach`'s output is the list).
 
 ## What CI checks
 
@@ -197,7 +220,8 @@ bytes, so it checks only what needs none:
 
 | job | make target | what it proves |
 |---|---|---|
-| acceptance runner tests | `make test-acceptance` | `make accept` refuses skipped, failed, incomplete and over-budget evidence |
+| gates the PR reaches | `make reach` | the diff classifies and the tree is rebased; the job log carries the gate list the PR body must answer (pull requests only) |
+| acceptance runner tests | `make test-acceptance` | `make accept` refuses skipped, failed, incomplete and over-budget evidence; `make reach` classifies paths as documented |
 | dsp56300 + our patch | `make ci-dsp` | the vendored DSP emulator at its pin takes `tools/patches/dsp56300.patch`, builds, passes upstream's own test runner, and `dsp_asm` emits the one-word displaced move (`make check-asm`) |
 | ColdFire port unit tests | `make ci-emu` | `tools/emu/ot_emu` builds against the pinned cores and passes the EMAC, peripheral and mc68k unit tests |
 

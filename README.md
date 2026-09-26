@@ -177,6 +177,7 @@ port of it (`tools/emu/ot_emu`, `make emu-cf`):
 
 ```bash
 make check REMIX=<name>             # boots the image under the port; OT_PROJECT=<dir> adds a real project
+make reach                          # the gates this branch's diff reaches, in order; RUN=1 runs them
 make panel REMIX=<name>             # the virtual front panel with sound at localhost:8563 (tools/panel/README.md)
 make emu-live REMIX=<name>          # the screen and keys in a window, no sound
 ```

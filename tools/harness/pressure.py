@@ -34,6 +34,10 @@ from remix.schema import BusRole       # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 OUT = ROOT / "out/pressure"
 TRACKS_PER_CORE = 4
+# Payload A runs on core 0 and serves tracks 5-8; B on core 1, tracks 1-4
+# (measured 10 Aug 2026). A server is bank-bound to one payload, which is
+# how the pricer knows which core it lives on.
+PAYLOAD_OF_CORE = {0: "A", 1: "B"}
 
 
 def price_modules(remix):
@@ -56,7 +60,8 @@ def price_modules(remix):
         fx1_only = m.claims is not None and m.claims.fx1_only
         on_fx2 = not fx1_only and m.key != "SEND"      # SEND is the FX2 fallback itself
         mods[m.key] = dict(stem=stem, cycles=row["cycles"], inner=row["inner"],
-                          server=server, on_fx1=on_fx1, on_fx2=on_fx2)
+                          server=server, on_fx1=on_fx1, on_fx2=on_fx2,
+                          payloads="".join(sorted(m.dsp.payloads)))
     return mods
 
 
@@ -95,7 +100,7 @@ def price(a):
     summary = {}
     for core, label in ((0, "core 0 (T5-8)"), (1, "core 1 (T1-4)")):
         # which server lives on this core: payload A (core 0) hosts the reverb
-        srv = next((k for k in servers if (k == "REVERB SERVER") == (core == 0)), None)
+        srv = next((k for k in servers if mods[k]["payloads"] == PAYLOAD_OF_CORE[core]), None)
         lay = enumerate_layouts(mods, srv)
         over = {c: v for c, v in lay.items() if v > wall}
         under = {c: v for c, v in lay.items() if v <= wall}
@@ -137,18 +142,15 @@ def fmt(combo):
 
 
 # ---- A2: render ------------------------------------------------------------
-# Every mode and knob at its dearest setting. Modes are the pricer's "worst
-# loop"; knobs that gate work (a send at 0 registers nothing, MIX 0 can
-# short-circuit a stage) go to their maximum so nothing is skipped.
-DEAR = {
-    # (the knob sets follow the manifests of 26 Sep 2026; rig_render refuses a name it does not know)
-    "CHARACTER": {"DRV": 127, "FOLD": 127, "COMP": 127, "MIX": 127, "WDTH": 127, "SAT": 0},
-    "SPECTRUM": {"RES": 127, "MODE": 3, "ENV": 127, "LDP": 127},   # MODE 3 = VOWL (4 until 27 Sep 2026)
-    "MODULATION": {"MIX": 127, "FDBK": 127, "DPTH": 127, "MODE": 4, "LOFI": 127},   # MODE 4 = PHSR, the dearest loop
-    "DELAY SERVER": {"DEL": 100, "FDBK": 100, "MODE": 1, "SCTR": 127, "DENS": 127, "WET": 127},
-    "REVERB SERVER": {"REV": 100, "MODE": 2, "SHMR": 127, "DIFF": 127, "GATE": 0, "WET": 127},
-    "SEND": {"DEL": 100, "REV": 100},
-}
+# Every mode and knob at its dearest setting: each module's `dear`
+# (schema.Module.dear), validated against its own knobs at load. A DSP
+# module without one is rendered at DEFAULTS here and blocks `make accept`
+# (acceptance.pressure_profile) -- the fixture must never be quieter than
+# the manifest says.
+def dear(key):
+    return dict(registry.by_key(key).dear)
+
+
 LETTER_TRACKS = {0: (5, 6, 7, 8), 1: (1, 2, 3, 4)}
 
 
@@ -158,6 +160,8 @@ def render(a):
     if not tsv.is_file():
         sys.exit(f"{tsv} missing -- run `pressure.py price --remix {remix.name}` first")
     rows = [l.rstrip("\n").split("\t") for l in open(tsv)][1:]
+    mods = price_modules(remix)
+    servers = {k for k, m in mods.items() if m["server"]}
     by_core = {0: [], 1: []}
     for core, cyc, verdict, layout in rows:
         by_core[int(core)].append((int(cyc), verdict, layout))
@@ -181,7 +185,7 @@ def render(a):
             fx1, fx2 = slot.split("+")
             tracks.append(f"T{t}={fx2}" if fx1 == "-" else f"T{t}={fx1}+{fx2}")
             for eff, fxn in ((fx1, 1), (fx2, 2)):
-                for k, v in DEAR.get(eff, {}).items():
+                for k, v in (dear(eff) if eff in mods else {}).items():
                     sets += ["--set", f"T{t}:FX{fxn}:{k}={v}"]
         # the other core carries the plain rig so the bus has both ends
         other = 1 - core
@@ -222,7 +226,7 @@ def render(a):
                 who = inst_kind.get(k, "?")
                 if clob:
                     flags.append(f"instance {k} ({who}) CLOBBERS a loaded module ({clob} regions)")
-                elif stray and who not in ("REVERB SERVER", "DELAY SERVER"):
+                elif stray and who not in servers:
                     flags.append(f"instance {k} ({who}) writes {stray} stray regions outside its window")
                 elif stray:
                     notes.append(f"{who} {stray} strays (bus scratch/relocated buffers: expected)")

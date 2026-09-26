@@ -82,9 +82,15 @@ class GateTests(unittest.TestCase):
         self.assertEqual(a.aggregate([dict(status="blocked"), dict(status="failed")]), "failed")
         self.assertEqual(a.aggregate([dict(status="passed"), dict(status="not_applicable")]), "passed")
 
-    def test_unknown_dsp_profile_blocks_instead_of_using_defaults(self):
-        status, _ = a.pressure_profile([SimpleNamespace(key="NEW EFFECT", dsp=object())])
+    def test_module_without_dear_settings_blocks_instead_of_using_defaults(self):
+        known = SimpleNamespace(key="KNOWN", dsp=object(), params=(1,), dear={"MIX": 127})
+        new = SimpleNamespace(key="NEW EFFECT", dsp=object(), params=(1,), dear={})
+        status, reason = a.pressure_profile([known, new])
         self.assertEqual(status, "blocked")
+        self.assertIn("NEW EFFECT", reason)
+        self.assertNotIn("KNOWN", reason)
+        status, _ = a.pressure_profile([known])
+        self.assertEqual(status, "ready")
         status, _ = a.pressure_profile([SimpleNamespace(key="CF PATCH", dsp=None)])
         self.assertEqual(status, "not_applicable")
 

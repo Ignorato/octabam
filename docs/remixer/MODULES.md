@@ -88,6 +88,37 @@ pins its behaviour, `HARDWARE` ran on a unit. The selftest refuses a
 module without all of them. A module whose manifest is executed from an
 author's repository adds them with `dataclasses.replace` (`modules/synth`).
 
+Two more fields are the checks. `gates` names the verifiers `make check`
+runs when a remix carries the module, and `dear` its dearest knob
+settings:
+
+```python
+    gates=(Gate("tools/verify/verify_character.py", remix_arg=False),),
+    dear={"DRV": 127, "FOLD": 127, "COMP": 127, "MIX": 127, "WDTH": 127, "SAT": 0},
+```
+
+`tools/verify/module_gates.py` collects the selection's gates, runs each
+script once (two modules naming one gate share it) with `REMIX` and
+`BUILD` exported, the remix name as `argv[1]` when `remix_arg` is set,
+and `.venv/bin/python3` when `venv` is set and the venv exists. An
+`"isolated"` gate (the default) builds its own scratch image or none and
+runs before the selected image is restored; an `"image"` gate reads
+`out/mainos_bus.bin` and runs after `make bus` and the shared set gates
+(`verify_tempobus` reads the card `verify_set` staged). A script that
+does not exist fails; the shared gates (the ledger selftest, the menu,
+the dirty-state render, the docs, the knob census, the set under the
+port) stay in the Makefile. Until 27 Sep 2026 the Makefile listed every
+module's verifier by hand, each one written to SKIP when the remix
+lacked its module.
+
+`dear` is every knob at its dearest setting, by the Param's own name: the
+mode the pricer calls the worst loop, knobs that gate work (a send at 0
+registers nothing, MIX 0 short-circuits a stage) at their maximum. The
+pressure render and the stress fixture read it; `make accept` is blocked,
+by name, for a remix with a DSP module that has none. The schema checks
+each name against `params` when the manifest loads, so a knob rename
+refuses the build rather than failing a fixture after the merge.
+
 `make remix` opens the remixer (`tools/remix/app.py`, Textual, provisioned
 by `make emu-setup`; manual `docs/remixer/REMIXER.md`). It derives a
 placement role and a track range for every module (`tools/remix/rig.py`):
@@ -770,7 +801,9 @@ catches each collision it claims to.
 ## Before you open a PR
 
 - `make check` is the floor. Never claim an effect works because it
-  assembled.
+  assembled. `make reach` lists the gates the branch's diff reaches;
+  `RUN=1` runs them.
+- Your gates and your `dear` settings go in the manifest, in the same PR.
 - If you changed the build rather than a module: `scripts/refhash.sh save`
   on a tree you trust, make the change, `scripts/refhash.sh check`; 26
   configurations, artifacts and build reports, bit-identical.

@@ -7,6 +7,18 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The gates follow the modules (27 Sep 2026): a manifest names its own
+  verifiers (`schema.Gate`) and its dearest knob settings
+  (`Module.dear`, checked against its knobs at load); `make verify` runs
+  the shared gates and then `tools/verify/module_gates.py` for the
+  selection, so a remix never runs another module's gates and a new
+  module needs no Makefile edit. `make accept` takes any remix: the
+  pressure stages run when every DSP module declares `dear` and block by
+  name otherwise; the stress fixture is derived from the selection
+  (servers on their cores' first tracks, the most different FX1 modules
+  that fit under the wall). `make reach` classifies the branch's diff
+  into the gates it reaches and `RUN=1` runs them; CI prints the list on
+  every PR. `pressure.py`'s knob table moved into the manifests.
 - Character savings (27 Sep 2026): 355 -> 241 static cycles/sample
   (TAPE 105, TUBE 99, INFL 66 in the SAT fork). Both channels share one
   register for each of FOLD's gq/trim and TONE's k/t; SAT's DRV-0 flag and
