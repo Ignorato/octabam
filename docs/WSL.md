@@ -90,7 +90,7 @@ dependency, and this route does not provide it:
 - `scripts/setup.sh:31` now requires `m68k-elf-gcc` and adds it to the
   Homebrew list when it is missing, so on a machine without brew `make setup`
   stops at `brew install` with `brew: command not found`.
-- Every remix with linked ColdFire units (octakit, midi-scenes, hello-dram,
+- Every remix with linked ColdFire units (octakit, midi-scenes,
   scenes-kits) needs `m68k-elf-as`, `ld`, `objcopy` and `nm`, and
   `tools/build/build_bus.py:1494` refuses without them. `make check` runs the
   selftest over every remix, so it fails on this route.

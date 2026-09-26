@@ -11,7 +11,7 @@ Decide first which kind you are writing.
 - An **insert** processes its own track's frames in place: no bus role, no
   shared-window claim, placed in both payloads, runnable on any track and
   several at once. `bus_role=BusRole.NONE`, `ybase=YBase.NEVER`, and most
-  of the hazards below do not apply. `modules/hello/` is the worked example.
+  of the hazards below do not apply. `modules/character/` is the worked example.
 - A **server** owns a bus accumulator, is bank-bound to one core, and takes
   part in the rotation, the housekeeping election and the auto-gain. There
   are two; `docs/effects/XBUS.md`.
@@ -19,43 +19,41 @@ Decide first which kind you are writing.
 - A **ColdFire module** changes what the firmware does (parts, kits, menus,
   MIDI, bug fixes) and touches no audio; midisc (`modules/midi-scenes`)
   and Octakit (`modules/octakit`) are this shape. Skeleton
-  `modules/_template_cf/`, minimal example `modules/hello-dram/`, section
+  `modules/_template_cf/`, worked example `modules/repitch/`, section
   "Declaring a ColdFire module" below; `docs/remixer/PLACEMENT.md` says
   where the bytes land.
 
-## The worked example: HELLO WORLD
+## The worked example: CHARACTER
 
-`modules/hello/` is a linear volume knob: one page-1 knob, 27 words of DSP,
-stateless.
+`modules/character/` is an in-place insert: seven knobs, no bus role, no
+buffer, both payloads, any track.
 
 ```
-modules/hello/manifest.py    the declaration -- one knob, one donor, one id
-modules/hello/gain.asm       the engine -- init, proc, in place, 27 words
-modules/hello/README.md      status, measured vs inferred, what is open
-remixes/hello/remix.py       the remix: HELLO WORLD alone; README.md beside it
-tools/verify/verify_hello.py render gates with exactly predictable arithmetic
+modules/character/manifest.py      the declaration -- knobs, donor, id, ModeViews
+modules/character/character.asm    the engine -- init, proc, in place
+modules/character/README.md        status, measured vs inferred, what is open
+remixes/bamsep26/remix.py          a remix that carries it (FX1 and FX2)
+tools/verify/verify_character.py   render gates against a float reference
 ```
 
 ```bash
-make check REMIX=hello
-python3 tools/remix/audition.py hello out/dry/drums_110.wav GAIN=64
-python3 tools/verify/verify_hello.py            # ALL GATES PASSED, 0 LSB
+make check REMIX=bamsep26
+python3 tools/remix/audition.py character out/dry/drums_110.wav DRV=64
+python3 tools/verify/verify_character.py
 ```
 
 `modules/_template/` is the skeleton to copy: a manifest with every field
 commented and nothing else.
 
-`verify_hello.py` drives the effect with a full-scale bipolar ramp and
-asserts the output exactly: unity at GAIN=127 is bit-identical, GAIN=0 is
-all zero, every intermediate gain is `(in × g) >> 23` to 0 LSB; the
-negative half of the ramp proves the `mpy` did not become an `mpysu`. Give
-your module one gate whose answer you can compute by hand.
+Give your module one gate whose answer you can compute by hand: drive
+both signs of a full-scale signal (the negative half proves an `mpy` did
+not become an `mpysu`), predict the arithmetic, assert to the LSB.
 
 Make the gate name the effect it measures: an id the image does not
 implement aliases to the fallback, and dsp_host renders a plausible dry
-passthrough that a unity gate passes. `verify_hello.py` reads the id and
-the knob slot out of the manifest and refuses if they resolve to SEND's
-entry points.
+passthrough that a unity gate passes. Read the id and the knob slots out
+of the manifest and refuse if they resolve to SEND's entry points
+(`verify_character.py` does).
 
 ## The shape of a module
 
@@ -841,8 +839,8 @@ writes no byte.
 
 ```python
 REMIX = Remix(name="warped-fx1", doc="…",
-              modules=("WARPFOLD",), fallback="NONE",
-              fx1=("FILTER", "EQUALIZER", "DJ EQ", "PHASER", "WARPFOLD",
+              modules=("SPECTRUM",), fallback="NONE",
+              fx1=("FILTER", "EQUALIZER", "DJ EQ", "PHASER", "SPECTRUM",
                    "COMPRESSOR", "LO-FI"))
 ```
 
@@ -882,8 +880,7 @@ The first is measured (`docs/firmware/DSP.md` "wrong claim 1", bisected on
 hardware: a 16K layout at an FX1 base runs to `0x53ff`, through the other
 FX1 buffers and into FX2 slot 0).
 
-What is left is the insert class (WarpFold, Ripple, Rungs, Streamz,
-BodeShift, Hello World) plus SEND. Those keep all their state in their own
+What is left is the insert class (Spectrum, Character) plus SEND. Those keep all their state in their own
 `r7` block, which the dispatcher hands out per instance: FX1 instance *k*
 and FX2 instance *k* get different blocks.
 

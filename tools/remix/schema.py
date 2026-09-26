@@ -1132,9 +1132,9 @@ class Remix:
     #     engine per payload). A second instance on a core is the open
     #     "duplicate instances corrupt audio after ~5.45 s" item.
     #
-    # What is left is exactly the INSERT class: WarpFold, Ripple, Rungs,
-    # Streamz, BodeShift, Hello World -- and SEND, which is buffer-free
-    # (untested there, but nothing measured argues against it).
+    # What is left is exactly the INSERT class (Spectrum, Character) -- and
+    # SEND, which is buffer-free (untested there, but nothing measured
+    # argues against it).
     # PLACED BUT NOT LISTED. Each key here is carried by the image -- code,
     # id, descriptor clone -- and takes NO CHOOSER ROW, with its twelve
     # parameter names blanked so the track page it lands on draws no knobs.
