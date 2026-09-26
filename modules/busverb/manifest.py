@@ -4,7 +4,7 @@ Clones DARK REV's descriptor. Every slot states its name, including the ones
 the donor already carries, because the harness reads these names.
 """
 
-from remix.schema import (BusRole, Claims, YBase, DspSection, Formatter,
+from remix.schema import (Category, Proof, BusRole, Claims, YBase, DspSection, Formatter,
                           Harness, Kind, MenuEntry, Module, Param)
 
 _PLAIN = Formatter.PLAIN
@@ -80,6 +80,8 @@ MODULE = Module(
     name="busverb",
     key="REVERB SERVER",
     kind=Kind.DSP_EFFECT,
+    category=Category.BUS, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII",
     doc="Eight-line FDN reverb: ROOM/PLATE/BIG, shimmer, gate, mid/side width.",
     menu=MenuEntry(
         fx2_id=0x07,

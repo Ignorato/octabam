@@ -25,7 +25,7 @@ tracks in the emulator against the firmware editor)."""
 
 import pathlib
 
-from remix.schema import CavePatch, Kind, Module
+from remix.schema import Category, Proof, CavePatch, Kind, Module
 
 # Page-2 clamp counts, slots 6..11: selects carry their count, knobs 128.
 # Must match modules/busverb and modules/busdelay.
@@ -93,6 +93,8 @@ MODULE = Module(
     name="cc-map",
     key="CC MAP",
     kind=Kind.CF_PATCH,
+    category=Category.MIDI_USB, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII (tag 13)",
     doc="MIDI CC 62-67 drive the FX2 engine's page-2 slots 6-11; CC 68-73 the FX1 station's.",
     cf_patches=(CavePatch(
         label="CC->FX2/FX1 page-2 cave + dispatch repoint",

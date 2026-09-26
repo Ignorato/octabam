@@ -7,12 +7,14 @@ detours. Needs USB MIDI: the audio function joins its composite, and the
 ISR shim chains to USB MIDI's. README.md has the design and what was
 measured.
 """
-from remix.schema import Detour, Kind, Linked, Module, Override, Poke
+from remix.schema import Category, Proof, Detour, Kind, Linked, Module, Override, Poke
 
 H = bytes.fromhex
 
 MODULE = Module(
     name="usbaudio", key="USB AUDIO", kind=Kind.CF_PATCH,
+    category=Category.MIDI_USB, author="markandrus/octemu", author_url="https://github.com/markandrus/octemu",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII (image 64, 25 Sep 2026); Tim's MKI (OCTATRICK9, 26 Sep 2026)",
     doc="Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu).",
     linked=(Linked("usbaudio", "modules/usbaudio/usbaudio.s", cpu="5475", dram=True),),
     detours=(

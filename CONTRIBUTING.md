@@ -59,14 +59,19 @@ README.md       what it is, what was MEASURED, what is INFERRED, what is open
 <sources>       .s for the ColdFire, .asm for the DSP -- or `upstream/`, a submodule
 ```
 
-plus a remix that carries it (`remixes/<name>.py`), a page for that remix
-(`docs/remixes/<name>.md`, listed in `docs/remixes/README.md`), a row in
-`README.md`'s module table under its category, and, for anything with
+plus a remix that carries it (`remixes/<name>/remix.py` and a `README.md`
+beside it: what is in it, where it has run) and, for anything with
 behaviour worth pinning, a gate (`tools/verify/verify_<name>.py`, added to
 `make verify`). Nothing else registers it: the registry discovers every
 `modules/*/manifest.py`, and refuses two modules on one key or one FX2 id.
-`tools/verify/verify_docs.py` (in `make verify`) refuses a module key
-absent from the README table and a remix without a page.
+
+The manifest's `category`, `author`, `author_url`, `proof` and `proof_note`
+are the README's module table (`make docs` renders it and the remix index
+from the manifests and the selections; the selftest refuses a module
+without them, `verify_docs` a stale copy). `proof` is one of `CHECK`,
+`RENDER`, `PORT`, `HARDWARE`; the note names the unit, image and date, or
+the gate. A remix declares `family` (`rig`, `effects`, `mods`,
+`reference`) and the same `proof` pair.
 
 Settings a module keeps on the card (a checkbox, a profile) go in the
 shared OTX store once it exists, not in a file of the module's own;

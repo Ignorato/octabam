@@ -11,7 +11,7 @@ a screaming peak, deliberately short of self-oscillation.
 DRV=0 is unity into the filter and MIX=0 is an exact passthrough.
 """
 
-from remix.schema import (BusRole, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Category, Proof, BusRole, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -21,6 +21,8 @@ MODULE = Module(
     name="ripple",
     key="RIPPLE",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.RENDER, proof_note="never flashed",
     doc="Ripples-style insert: driven SVF filter, LP/BP/HP, singing resonance.",
     menu=MenuEntry(
         fx2_id=0x0b,

@@ -32,7 +32,7 @@ stateless.
 modules/hello/manifest.py    the declaration -- one knob, one donor, one id
 modules/hello/gain.asm       the engine -- init, proc, in place, 27 words
 modules/hello/README.md      status, measured vs inferred, what is open
-remixes/hello.py             the remix: HELLO WORLD alone
+remixes/hello/remix.py       the remix: HELLO WORLD alone; README.md beside it
 tools/verify/verify_hello.py render gates with exactly predictable arithmetic
 ```
 
@@ -72,9 +72,27 @@ exports a `MODULE`; directories starting with `_` are skipped.
 `tools/remix/schema.py` is the vocabulary; its comments carry the reasoning
 behind each field.
 
+Five fields are the README's module table, rendered by `make docs`
+(`tools/remix/index.py --write`) and held current by `verify_docs`:
+
+```python
+    category=Category.TRACK,            # BUS, TRACK, MACHINES, PARTS, MIDI_USB, FIXES, REFERENCE
+    author="repeat98", author_url="https://github.com/repeat98",
+    proof=Proof.RENDER,                 # CHECK, RENDER, PORT, HARDWARE
+    proof_note="its own render gates; not on hardware",   # the unit, image, date; or the gate
+```
+
+`category` is where the module sits in the table, the index and the
+remixer's AVAILABLE pane. `proof` is the vocabulary of the last column:
+`CHECK` builds and boots under the port, `RENDER` was heard or measured
+locally and never flashed, `PORT` has a gate under the ColdFire port that
+pins its behaviour, `HARDWARE` ran on a unit. The selftest refuses a
+module without all of them. A module whose manifest is executed from an
+author's repository adds them with `dataclasses.replace` (`modules/synth`).
+
 `make remix` opens the remixer (`tools/remix/app.py`, Textual, provisioned
 by `make emu-setup`; manual `docs/remixer/REMIXER.md`). It derives a
-category and a track range for every module (`tools/remix/rig.py`):
+placement role and a track range for every module (`tools/remix/rig.py`):
 
 - **bus effect** (`harness.is_server`): one payload, declared in
   `dsp.payloads`; payload A serves tracks 5-8, payload B tracks 1-4
@@ -268,7 +286,7 @@ instance). The build writes its list row and cursor position;
 `verify_menu` checks that its descriptor and id entry are byte-identical to
 stock. A stock effect a remix leaves out is left alone entirely: an old
 project that selects it still runs it, it just has no row.
-`remixes/restock.py` is the fourteen.
+`remixes/restock/remix.py` is the fourteen.
 
 Two rules, both enforced:
 

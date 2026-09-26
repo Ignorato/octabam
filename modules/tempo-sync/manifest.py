@@ -30,7 +30,7 @@ NOTEMPO=1 installs neither; the DSP then reads no note and TIME draws in
 milliseconds.
 """
 
-from remix.schema import CavePatch, FormatterReg, Kind, Module
+from remix.schema import Category, Proof, CavePatch, FormatterReg, Kind, Module
 
 # The per-frame voice-record writer, at the instruction that publishes the
 # FX2 id. Ten bytes: three instructions, displaced into the cave.
@@ -52,6 +52,8 @@ MODULE = Module(
     name="tempo-sync",
     key="TEMPO SYNC",
     kind=Kind.CF_PATCH,
+    category=Category.BUS, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII",
     doc="ColdFire caves: publishes the held MIDI note to BusDelay, and draws "
         "BusDelay TIME as a tempo division.",
     cf_patches=(

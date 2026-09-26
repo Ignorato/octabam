@@ -46,7 +46,7 @@ bytes (the cave is position-independent: the one self-reference is a
 pc-relative pea).
 """
 
-from remix.schema import CavePatch, Kind, Module
+from remix.schema import Category, Proof, CavePatch, Kind, Module
 
 CONV_HOOK = 0x40006da6
 CONV_HOOK_STOCK = bytes.fromhex("712c0002" "5280")   # mvs.b 2(a4),d0; addq.l #1,d0
@@ -116,6 +116,8 @@ MODULE = Module(
     name="rlen-plen",
     key="RLEN PLEN",
     kind=Kind.CF_PATCH,
+    category=Category.MACHINES, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.PORT, proof_note="26 Sep 2026",
     doc="ColdFire cave: RLEN value PLEN (past MAX) = one loop of the track's "
         "pattern on its own scale, so TRIG ONE + QREC PLEN records the next "
         "pass and stops.",

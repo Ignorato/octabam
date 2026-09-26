@@ -161,6 +161,6 @@ Open: whether the caves fire on the unit.
   (the hardware result)
 - `modules/recorder-spacing/`, `modules/recorder-hold/`, `modules/flex-seekbind/`,
   `modules/flex-seekbind-ctr/`
-- `remixes/recfix.py`, `docs/remixes/recfix.md`
+- `remixes/recfix/remix.py`, `remixes/recfix/README.md`
 - `out/hw/softretrig/tempo_seam.py`, `lever_e.py` (the arithmetic gate,
   115,200 cases)

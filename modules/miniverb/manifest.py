@@ -1,9 +1,11 @@
 """Full-rate, modulated four-branch diffused FDN insert with allocator-owned memory."""
-from remix.schema import (BusRole, Claims, DspSection, Formatter, Harness,
+from remix.schema import (Category, Proof, BusRole, Claims, DspSection, Formatter, Harness,
                           Kind, MenuEntry, Module, Param, YBase)
 
 MODULE = Module(
     name="miniverb", key="MINIVERB", kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="repeat98", author_url="https://github.com/repeat98",
+    proof=Proof.RENDER, proof_note="`make verify-miniverb`; not flashed",
     doc="Modulated diffused FDN reverb; independent FX2 buffers, smoothed controls.",
     menu=MenuEntry(fx2_id=0x16, replaces="DARK REV", donor_desc=0x400d58b8,
                    abbr=b"MINI", fullname=b"Mini Verb", build_tag=False),

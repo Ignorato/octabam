@@ -32,7 +32,7 @@ caller's return address and his `reload` stub substitutes it
 sites for rel_after.
 """
 
-from remix.schema import Claims, Detour, Kind, Linked, Module, Poke
+from remix.schema import Category, Proof, Claims, Detour, Kind, Linked, Module, Poke
 
 UP = "modules/midi-scenes/upstream/gas/"
 H = bytes.fromhex
@@ -112,6 +112,8 @@ MODULE = Module(
     name="midi-scenes",
     key="MIDI SCENES",
     kind=Kind.CF_PATCH,
+    category=Category.PARTS, author="bkkbrls-del/midisc", author_url="https://github.com/bkkbrls-del/midisc",
+    proof=Proof.HARDWARE, proof_note="`ok-ms` on his unit, 14 Sep 2026",
     doc="MIDI-driven scene locks (hold/morph/save/reload/clear/copy/paste), "
         "built from bkkbrls-del/midisc as linker-placed units.",
     linked=UNITS,

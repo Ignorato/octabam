@@ -3,7 +3,7 @@
 octabam is a remixer for the Octatrack's OS: a mod is a module, a remix is
 a selection of modules, and the build turns a remix and the user's own
 1.40C into one image. `docs/remixer/PLACEMENT.md` is the architecture
-record for where code goes; `docs/remixes/` describes each remix;
+record for where code goes; `remixes/<name>/README.md` describes each remix;
 `CHANGELOG.md` records each flashed image.
 
 ## Where it stands (21 Sep 2026)

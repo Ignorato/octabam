@@ -29,7 +29,7 @@ gives; the read offset is masked, not the address.
 
 Not a bus client: does not housekeep, does not write the bus."""
 
-from remix.schema import (BusRole, Claims, DspSection, Formatter, Harness,
+from remix.schema import (Category, Proof, BusRole, Claims, DspSection, Formatter, Harness,
                           Kind, MenuEntry, ModeView, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -86,6 +86,8 @@ MODULE = Module(
     name="modulation",
     key="MODULATION",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII",
     doc="BamSep26 station: a modulation pedal -- Juno, Dimension, flanger, phaser, comb; FX1 only.",
     menu=MenuEntry(
         fx2_id=0x12,

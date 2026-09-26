@@ -7,6 +7,15 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The module table and the remix index are rendered (27 Sep 2026):
+  `Module.category`, `author`, `author_url`, `proof`, `proof_note` and
+  `Remix.family`, `proof`, `proof_note` in every manifest and selection;
+  `make docs` writes README.md's table (by category) and
+  docs/remixes/README.md; `verify_docs` in `make check` refuses a stale
+  copy, the selftest a module without the fields. A remix is a directory,
+  `remixes/<name>/remix.py` + `README.md` (the pages moved from
+  docs/remixes/). The remixer's AVAILABLE pane groups by the same
+  categories. Eight merged modules had no README row before this.
 - RLEN PLEN in `recfix` (26 Sep 2026): RLEN value 65, drawn PLEN, past
   MAX: one loop of the track's pattern on its own scale, so TRIG ONE +
   QREC PLEN records the next pass and stops (RLEN counts master-clock

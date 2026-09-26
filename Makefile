@@ -343,6 +343,9 @@ test-acceptance: ## Firmware-free tests of acceptance failures, skips and report
 modules: ## List the module index and the available remixes
 	python3 tools/remix/index.py
 
+docs: ## Render README.md's module table and docs/remixes/README.md from the manifests and the selections
+	python3 tools/remix/index.py --write
+
 .PHONY: remix
 remix: ## The remixer: swap effects in and out, dial + hear them, build the image
 	$(PY) tools/remix/app.py

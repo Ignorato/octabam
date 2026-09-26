@@ -25,12 +25,14 @@ Assemble (from the repo root, for the .include): `m68k-elf-as -mcpu=5475
 against the pinned bytes below.
 """
 
-from remix.schema import CavePatch, Kind, Module
+from remix.schema import Category, Proof, CavePatch, Kind, Module
 
 MODULE = Module(
     name="recorder-hold",
     key="RECORDER HOLD",
     kind=Kind.CF_PATCH,
+    category=Category.FIXES, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.PORT, proof_note="26 Sep 2026",
     doc="ColdFire cave: a recorder-buffer FLEX voice reading one sample past its "
         "recording repeats the last sample instead of reading zero.",
     cf_patches=(

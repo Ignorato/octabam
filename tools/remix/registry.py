@@ -169,9 +169,16 @@ REMIXES_DIR = ROOT / "remixes"
 DEFAULT_REMIX = "bus"
 
 
+def remix_path(name: str) -> pathlib.Path:
+    """remixes/<name>/remix.py, the remix's directory beside its README; or
+    the flat remixes/<name>.py the TUI and the selftest write as scratch."""
+    d = REMIXES_DIR / name / "remix.py"
+    return d if d.exists() else REMIXES_DIR / f"{name}.py"
+
+
 def remix(name: str = DEFAULT_REMIX):
-    """Load remixes/<name>.py and return its REMIX."""
-    f = REMIXES_DIR / f"{name}.py"
+    """Load remixes/<name>/remix.py and return its REMIX."""
+    f = remix_path(name)
     if not f.exists():
         raise SystemExit(f"no remix {name!r} -- have {sorted(remix_names())}")
     tools = str(ROOT / "tools")
@@ -219,8 +226,12 @@ def remix(name: str = DEFAULT_REMIX):
 def remix_names() -> list[str]:
     if not REMIXES_DIR.is_dir():
         return []
-    return sorted(f.stem for f in REMIXES_DIR.glob("*.py")
-                  if not f.name.startswith("_"))
+    names = {d.name for d in REMIXES_DIR.iterdir()
+             if d.is_dir() and not d.name.startswith(("_", "."))
+             and (d / "remix.py").exists()}
+    names |= {f.stem for f in REMIXES_DIR.glob("*.py")
+              if not f.name.startswith("_")}
+    return sorted(names)
 
 
 def selected(r) -> list:

@@ -16,12 +16,14 @@ Requires both SCENES P2 and OCTAKIT in the remix: with the overrides and no
 SCENES P2 stub at the entries her wrappers would be unreachable.
 """
 
-from remix.schema import Kind, Module, Override
+from remix.schema import Category, Proof, Kind, Module, Override
 
 MODULE = Module(
     name="scenes-p2-kits",
     key="SCENES P2 KITS",
     kind=Kind.CF_PATCH,
+    category=Category.PARTS, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.PORT, proof_note="26 Sep 2026",
     doc="The bridge that lets SCENES P2 and Octakit share the page-2 editor entries.",
     overrides=(
         Override(0x4003A9DC, "OCTAKIT",

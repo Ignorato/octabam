@@ -7,7 +7,8 @@ stands, what is measured about the ground, and the work order.
 `docs/remixer/PLACEMENT.md` is the architecture record for where code goes.
 
 The repo is organised as **modules** (`modules/<name>/manifest.py` declares one
-contribution) composed into **remixes** (`remixes/<name>.py` selects a set).
+contribution) composed into **remixes** (`remixes/<name>/remix.py` selects a
+set, `README.md` beside it says where it has run).
 `make modules` lists them, with the compatibility matrix; `make remix`
 composes one. `docs/remixer/MODULES.md` is the contributor guide and
 `CONTRIBUTING.md` the contract. The build refuses to start when two selected

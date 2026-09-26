@@ -12,7 +12,7 @@ half-angle polynomial; tuning error ~0.2% at the extremes (measured).
 MIX=0 is an exact passthrough.
 """
 
-from remix.schema import (BusRole, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Category, Proof, BusRole, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -22,6 +22,8 @@ MODULE = Module(
     name="rungs",
     key="RUNGS",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.RENDER, proof_note="never flashed",
     doc="Rings-style insert: 8-mode modal resonator, STRING/BELL/GLASS.",
     menu=MenuEntry(
         fx2_id=0x17,

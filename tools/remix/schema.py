@@ -31,6 +31,49 @@ class Kind(Enum):
                                 # (tools/remix/stock.py is the whole list)
 
 
+class Category(Enum):
+    """Where a module sits in the module table, the index and the remixer's
+    AVAILABLE pane. A display grouping, not a placement class: rig.category()
+    derives the placement role (server / insert / mod / system) from the
+    declaration and decides track ranges; this says what the module is FOR."""
+
+    BUS = "bus"                 # the aux bus and its plumbing
+    TRACK = "track"             # an effect on a track: stations, inserts, replacements
+    MACHINES = "machines"       # machines and the sequencer
+    PARTS = "parts"             # Parts, Kits and scenes, and the bridges between them
+    MIDI_USB = "midi-usb"       # MIDI and USB
+    FIXES = "fixes"             # a fix to stock behaviour
+    REFERENCE = "reference"     # the canaries
+    STOCK = "stock"             # a stock effect kept in the chooser
+
+
+CATEGORY_TITLE = {
+    Category.BUS: "Effects: the bus",
+    Category.TRACK: "Effects: on a track",
+    Category.MACHINES: "Machines and the sequencer",
+    Category.PARTS: "Parts, Kits and scenes",
+    Category.MIDI_USB: "MIDI and USB",
+    Category.FIXES: "Fixes",
+    Category.REFERENCE: "Reference",
+    Category.STOCK: "Stock effects",
+}
+
+
+class Proof(Enum):
+    """How far a module or a remix has been proven. The vocabulary of the
+    module table's last column and the remix index's; `proof_note` names the
+    unit, image and date for HARDWARE, or the gate for the rest."""
+
+    CHECK = "check"             # builds and boots under the port (make check)
+    RENDER = "render"           # heard or measured in a local render, never flashed
+    PORT = "port"               # a gate under the ColdFire port pins its behaviour
+    HARDWARE = "hardware"       # ran on a unit
+
+
+PROOF_TEXT = {Proof.CHECK: "`make check`", Proof.RENDER: "local render",
+              Proof.PORT: "port-gated", Proof.HARDWARE: "on hardware"}
+
+
 STOCK_FX2_IDS = frozenset({0x04, 0x05, 0x08, 0x0c, 0x0d, 0x10, 0x11, 0x12,
                            0x13, 0x14, 0x15, 0x16, 0x18, 0x19, 0x1c})
 
@@ -754,6 +797,15 @@ class Module:
     mode_slot: int | None = None
     mode_views: tuple[ModeView, ...] = ()
     name_selects: tuple[NameSelect, ...] = ()
+    # ---- the module table (README.md, `make docs`) ------------------------
+    # The selftest requires all four on every non-stock module; the README's
+    # table is rendered from them (tools/remix/index.py --write) and
+    # verify_docs refuses a stale copy.
+    category: Category | None = None
+    author: str = ""             # a GitHub handle or a name, as the table credits it
+    author_url: str = ""         # the author's repository or profile
+    proof: Proof | None = None
+    proof_note: str = ""         # the unit, image and date; or the gate
 
     def __post_init__(self):
         if self.params and len(self.params) != 12:
@@ -1033,6 +1085,10 @@ class Remix:
     modules: tuple[str, ...]
     fallback: str                # module KEY that unimplemented ids alias to,
                                  # or NO_FALLBACK for the firmware's own NONE
+    # ---- the remix index (docs/remixes/README.md, `make docs`) -----------
+    family: str = ""             # "rig", "effects", "mods", "reference"
+    proof: Proof | None = None   # schema.Proof; as a module's
+    proof_note: str = ""
     # ---- which of them ALSO get a row on FX1 ------------------------------
     # THE OTHER HALF OF "BOTH SLOTS", and it belongs to the REMIX rather than
     # to the module: which menu an effect appears on is a composition choice,

@@ -19,7 +19,7 @@ fold -> saturate -> tilt -> compress -> width.
 Page 1: DRV FOLD WDTH COMP TONE MIX; page 2: SAT (22 Sep 2026: TXTR removed,
 WDTH in its slot; 20 Sep 2026: TONE back on page 1 in the return's slot)."""
 
-from remix.schema import (BusRole, Claims, DspSection, Formatter, Harness,
+from remix.schema import (Category, Proof, BusRole, Claims, DspSection, Formatter, Harness,
                           Kind, MenuEntry, ModeView, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -57,6 +57,8 @@ MODULE = Module(
     name="character",
     key="CHARACTER",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII",
     doc="BamSep26 station: fold, saturation, tilt, compressor, width.",
     menu=MenuEntry(
         fx2_id=0x1c,

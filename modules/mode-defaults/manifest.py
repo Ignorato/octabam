@@ -27,7 +27,7 @@ the FX1 editor likewise for a station. Not measured: the panel redraw on
 hardware.
 """
 
-from remix.schema import Detour, Kind, Linked, Module
+from remix.schema import Category, Proof, Detour, Kind, Linked, Module
 
 H = bytes.fromhex
 
@@ -56,6 +56,8 @@ MODULE = Module(
     name="mode-defaults",
     key="MODE DEFAULTS",
     kind=Kind.CF_PATCH,
+    category=Category.BUS, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII (images 26/27, 15 Sep 2026)",
     doc="A MODE turned on the panel re-defaults the knobs around it "
         "(the manifests' ModeViews), on FX1 and FX2.",
     linked=(Linked("modedef", "modules/mode-defaults/modedef.s", include=table_inc),),
