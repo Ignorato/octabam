@@ -844,31 +844,30 @@ mo_padv:
         bsr     mo_apst
         move    x0,n2                   ; the feedback section's output
         clr     b           y0,y1       ; bm ; the tap sum
-        bsr     mo_apst                 ; the mod stages
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w2
+; the eight mod stages, two per trip with the pair's tap weight after them
+; (27 Sep 2026: rolled, mo_apst's body inline; the partial sums stay in b's
+; 56 bits -- one weight is set, the others 0, so there is nothing to limit
+; between them)
+        do      #4,>mo_pml
+        mpy     x0,y1,a x:(r3),x1       ; b0 x, and z
+        add     x1,a                    ; y
+        move    x0,x1                   ; x
+        move    a,x0                    ; y (LIMITING)
+        mpy     x0,y1,a                 ; b0 y
+        sub     x1,a                    ; - x
+        move    a,x:(r3)+               ; z' (limited), next stage
+        mpy     x0,y1,a x:(r3),x1
+        add     x1,a
+        move    x0,x1
+        move    a,x0
+        mpy     x0,y1,a
+        sub     x1,a
+        move    a,x:(r3)+
+        move    x:(r1)+,y1              ; w2 w4 w6 w8
         mac     x0,y1,b
-        move    b,x1
-        move    x1,b                    ; the sum, limited and clean
         move    y0,y1                   ; bm
-        bsr     mo_apst
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w4
-        mac     x0,y1,b
-        move    b,x1
-        move    x1,b                    ; the sum, limited and clean
-        move    y0,y1                   ; bm
-        bsr     mo_apst
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w6
-        mac     x0,y1,b
-        move    b,x1
-        move    x1,b                    ; the sum, limited and clean
-        move    y0,y1                   ; bm
-        bsr     mo_apst
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w8
-        mac     x0,y1,b
+mo_pml:
+        nop
         asl     #$1,b,b                 ; back to full scale
 ; ---- mo_lofl, inline (23 Sep 2026; three sites each, FREE allows it) ----
         move    b,y1                    ; wet L (limited)
@@ -909,31 +908,30 @@ mo_padv:
         bsr     mo_apst
         move    x0,n6                   ; the feedback section's output
         clr     b           y0,y1       ; bm ; the tap sum
-        bsr     mo_apst                 ; the mod stages
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w2
+; the eight mod stages, two per trip with the pair's tap weight after them
+; (27 Sep 2026: rolled, mo_apst's body inline; the partial sums stay in b's
+; 56 bits -- one weight is set, the others 0, so there is nothing to limit
+; between them)
+        do      #4,>mo_pmr
+        mpy     x0,y1,a x:(r3),x1       ; b0 x, and z
+        add     x1,a                    ; y
+        move    x0,x1                   ; x
+        move    a,x0                    ; y (LIMITING)
+        mpy     x0,y1,a                 ; b0 y
+        sub     x1,a                    ; - x
+        move    a,x:(r3)+               ; z' (limited), next stage
+        mpy     x0,y1,a x:(r3),x1
+        add     x1,a
+        move    x0,x1
+        move    a,x0
+        mpy     x0,y1,a
+        sub     x1,a
+        move    a,x:(r3)+
+        move    x:(r1)+,y1              ; w2 w4 w6 w8
         mac     x0,y1,b
-        move    b,x1
-        move    x1,b                    ; the sum, limited and clean
         move    y0,y1                   ; bm
-        bsr     mo_apst
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w4
-        mac     x0,y1,b
-        move    b,x1
-        move    x1,b                    ; the sum, limited and clean
-        move    y0,y1                   ; bm
-        bsr     mo_apst
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w6
-        mac     x0,y1,b
-        move    b,x1
-        move    x1,b                    ; the sum, limited and clean
-        move    y0,y1                   ; bm
-        bsr     mo_apst
-        bsr     mo_apst
-        move    x:(r1)+,y1              ; w8
-        mac     x0,y1,b
+mo_pmr:
+        nop
         asl     #$1,b,b                 ; back to full scale
 ; ---- mo_lofr, inline (23 Sep 2026; three sites each, FREE allows it) ----
         move    b,y1                    ; wet R (limited)
