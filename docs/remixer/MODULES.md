@@ -291,8 +291,7 @@ Two rules, both enforced:
 - **Four stock effects allocate an instance buffer**: SPATIALIZER, FLANGER,
   CHORUS, COMB read `X:0x213` at init (measured by scanning the payload
   disassembly). The allocator hands out a base per track slot, and those
-  bases are the addresses BusVerb's tank, Nimbus's line and BusDelay's line
-  hardcode; the chooser is one list for all eight tracks, so an image cannot
+  bases are the addresses BusVerb's tank and BusDelay's line hardcode; the chooser is one list for all eight tracks, so an image cannot
   keep them apart. The ledger refuses the pair
   (`Claims.stock_instance_buffer` against any module with
   `owns_fx2_buffers` or a non-`NEVER` `ybase`). All four are legal in an
@@ -756,9 +755,8 @@ per core, not per instance. Declare `Claims(reserved_private_y=…)` only for
 a word you mean to own but do not yet reference.
 
 `Y:0x4000`-`0xBFFF` is declared, not derived: `Claims(owns_fx2_buffers=True)`.
-That region is two FX2 instance slots per core; BusVerb's tank and Nimbus's
-line are hardcoded there, so two such modules on one core overwrite each
-other. A scan cannot tell an address from a mask (`and #>$7fff`), and
+That region is two FX2 instance slots per core; BusVerb's tank is
+hardcoded there, so two such modules on one core overwrite each other. A scan cannot tell an address from a mask (`and #>$7fff`), and
 static scanning could not locate the stock reverbs' buffers, which compute
 their bases at runtime (`docs/firmware/DSP.md` §7c).
 

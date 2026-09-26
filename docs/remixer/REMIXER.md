@@ -88,7 +88,7 @@ arrives as the build's refusal, naming the payload: `payload B: SPECTRUM
 overruns the region (3599 > 2724 words)`.
 
 Measured costs, payload A (27 Sep 2026): Send 262, Euclid 362 (+33
-table), MiniVerb 457, Nimbus 500, Character 999 (+51), Spectrum 1,346
+table), MiniVerb 457, Character 999 (+51), Spectrum 1,346
 (+54), Modulation 1,481 (+148), BusVerb 2,035 (+194 LFO lines and
 table), BusDelay 1,437 (+60, payload B).
 

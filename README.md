@@ -59,7 +59,6 @@ unit, image and date.
 | **EUCLID** | [repeat98](https://github.com/repeat98) | Euclidean LP/BP/HP/amp sequencer: swing, envelope, gate, random and loop. | local render: its own render gates; not on hardware |
 | **MINIVERB** | [repeat98](https://github.com/repeat98) | Modulated diffused FDN reverb; independent FX2 buffers, smoothed controls. | local render: `make verify-miniverb`; not flashed |
 | **MODULATION** | [sambanks](https://github.com/sambanks) | BamSep26 station: a modulation pedal -- Juno, Dimension, flanger, phaser, comb; FX1 only. | on hardware: Sam's MKII |
-| **NIMBUS** | [sambanks](https://github.com/sambanks) | Clouds-style insert: 743 ms granular texture, 4 grains, freeze. | local render: never flashed |
 | **SPECTRUM** | [sambanks](https://github.com/sambanks) | BamSep26 station: a filter pedal -- the Moog ladder, SEM (LP..HP by SHPE), BP, Airwindows Capacitor2, formants; ENV and LFO onto the cutoff; width. | on hardware: Sam's MKII |
 | **TAPE ECHO** | [repeat98](https://github.com/repeat98) | Economy CPU tape echo: two biquads, simple FREE slew, snapped BEAT TIME and page-1 AGE. | on hardware: the author's unit (OCTACLID4): six instances run, a seventh freezes it, open |
 

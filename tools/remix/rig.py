@@ -538,8 +538,7 @@ def pinned_slots(mod) -> int:
     owns_fx2_buffers is the two CORE-PRIVATE slots (0x4000/0x8000); a
     substituted ybase is the two SHARED-WINDOW ones (0x30000/0x34000 on core
     0, 0x38000/0x3c000 on core 1 -- measured, X:0x255 in both payloads).
-    BusVerb has both and so holds all four; Nimbus the first pair;
-    BusDelay the second.
+    BusVerb has both and so holds all four; BusDelay the second pair.
     """
     from remix.schema import YBase
     c = getattr(mod, "claims", None)

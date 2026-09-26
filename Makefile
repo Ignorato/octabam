@@ -237,7 +237,6 @@ verify: ## Verify the ColdFire menu edits, module ledger (+ burn probe when it f
 	@# The knob click census: every continuous knob moved mid-render, plus
 	@# the garbage-start gate (a tone from block 0 on a garbage block).
 	$(PY) tools/verify/verify_knob_clicks.py
-	python3 tools/verify/verify_nimbus.py
 	@# The isolated DSP gates build their own remixes over mainos_bus.bin.
 	@# Restore the selected image before inspecting its chooser tables.
 	$(MAKE) bus REMIX=$(REMIX)
