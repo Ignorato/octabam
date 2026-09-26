@@ -174,9 +174,9 @@ other modules keep none. The shared settings store for all modules, OTX
 (`otx.work` / `otx.strd` in the project folder, one record per module,
 unknown records preserved byte for byte by any firmware that saves), is
 specified in
-[nordseele/octalab `docs/OTX_PROJECT_PROPOSAL.md`](https://github.com/nordseele/octalab/blob/main/docs/OTX_PROJECT_PROPOSAL.md)
-(draft 2, 26 Sep 2026) with author-facing
-[guidelines](https://github.com/nordseele/octalab/blob/main/docs/OTX_MODULE_GUIDELINES.md);
+[`docs/proposals/OTX_PROJECT_PROPOSAL.md`](docs/proposals/OTX_PROJECT_PROPOSAL.md)
+(nordseele, draft 2, 26 Sep 2026) with author-facing
+[guidelines](docs/proposals/OTX_MODULE_GUIDELINES.md);
 not implemented. `docs/remixer/MODULES.md` "Settings on the card" says
 what a module declares under it.
 
@@ -244,7 +244,7 @@ dsp/               shared DSP infrastructure: the null stub and the probes
 docs/remixer/      using and extending the remixer: MODULES, PLACEMENT, REMIXER, TOOLING, EMU, HARNESS, ACCEPTANCE, FLASHING, FAILURE_MODES
 docs/firmware/     the firmware, reverse-engineered: ARCHITECTURE, KERNEL, DSP, CHIP, TABLES, PARAM_PAGES, MAINMENU, PANEL, MIDI, LFO, LEVEL_LAW, COLDFIRE_DELAY, COLDFIRE_PORT, RECORDER, RECORDER_CLICK, REPITCH, SAMPLE_SAVE, STORAGE; CONTRIBUTIONS is the dated index of what each contributor sent
 docs/effects/      the effects: XBUS (the bus), REVERB, MASTER, PORTS
-docs/proposals/    technical propositions that are not on PLAN.md (MULTITRACK_TO_CARD); the settings store's is in nordseele/octalab
+docs/proposals/    technical propositions: OTX_PROJECT_PROPOSAL + OTX_MODULE_GUIDELINES (the settings store), MULTITRACK_TO_CARD
 ```
 
 ## Credit
