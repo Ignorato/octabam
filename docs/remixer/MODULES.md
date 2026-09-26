@@ -581,11 +581,11 @@ Three kinds of state, three homes:
 | personal material: Kits, grooves, presets, anything a musician would copy to another project on its own | files the module owns, beside the stock project files | the module |
 | the module's settings: how it behaves or looks (a checkbox, a menu option, a USB profile) | today: nowhere, or a private file (Octakit's Kits carry their own; octalab writes `octalab_grooves.map` and `octalab_generators.map`, "OTGM" v1). Proposed: one shared store per project, OTX | the shared core |
 
-OTX is specified in nordseele/octalab's
-[`docs/OTX_PROJECT_PROPOSAL.md`](https://github.com/nordseele/octalab/blob/main/docs/OTX_PROJECT_PROPOSAL.md)
+OTX is specified in nordseele's
+[`docs/proposals/OTX_PROJECT_PROPOSAL.md`](../proposals/OTX_PROJECT_PROPOSAL.md)
 (draft 2, 26 Sep 2026; the format and the precedence) and
-[`docs/OTX_MODULE_GUIDELINES.md`](https://github.com/nordseele/octalab/blob/main/docs/OTX_MODULE_GUIDELINES.md)
-(what an author declares). Nothing of it is implemented on 27 Sep 2026;
+[`docs/proposals/OTX_MODULE_GUIDELINES.md`](../proposals/OTX_MODULE_GUIDELINES.md)
+(what an author declares; the same texts are published in nordseele/octalab `docs/`). Nothing of it is implemented on 27 Sep 2026;
 the manifest API below is the proposal's illustration, not
 `tools/remix/schema.py`.
 

@@ -23,7 +23,7 @@ record for where code goes; `remixes/<name>/README.md` describes each remix;
   this remixer and has run on an MKI since 11 Sep 2026.
 - **Built and gated, unflashed:** every other remix; main is image 43.
 - **Settings store.** One shared OTX store per project for every module's
-  settings (nordseele/octalab `docs/OTX_PROJECT_PROPOSAL.md`, draft 2,
+  settings (`docs/proposals/OTX_PROJECT_PROPOSAL.md`, nordseele, draft 2,
   26 Sep 2026; `docs/remixer/MODULES.md` "Settings on the card"). Not
   implemented; next after the hardware pass.
 - **The platform** (`tools/remix/`): linked GNU-as units, detours, pokes
