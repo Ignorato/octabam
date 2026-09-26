@@ -14,7 +14,7 @@ walk up or down the spectrum in a spiral -- the classic Bode barber-pole.
 MIX=0 is an exact passthrough.
 """
 
-from remix.schema import (BusRole, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Category, Proof, BusRole, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -24,6 +24,8 @@ MODULE = Module(
     name="bodeshift",
     key="BODESHIFT",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.RENDER, proof_note="never flashed",
     doc="Warps-style insert: Bode frequency shifter, UP/DOWN/WIDE + feedback.",
     menu=MenuEntry(
         fx2_id=0x0f,

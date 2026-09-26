@@ -21,12 +21,14 @@ stock sites (`modules/midi-scenes` is the worked example); see
 "Declaring a ColdFire module".
 """
 
-from remix.schema import Kind, Linked, Module
+from remix.schema import Category, Proof, Kind, Linked, Module
 
 MODULE = Module(
     name="hello-dram",
     key="HELLO DRAM",
     kind=Kind.CF_PATCH,
+    category=Category.REFERENCE, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.CHECK, proof_note="",
     doc="Reference minimal ColdFire module: one DRAM unit, no hooks -- the "
         "loader canary.",
     linked=(Linked("hello", "modules/hello-dram/hello.s", dram=True),),

@@ -42,7 +42,7 @@ except ImportError:
 from rich.markup import escape  # noqa: E402  (rich ships with textual)
 
 from remix import audition, registry, rig, stock  # noqa: E402
-from remix.schema import NO_FALLBACK, on_the_bus  # noqa: E402
+from remix.schema import CATEGORY_TITLE, Category, NO_FALLBACK, on_the_bus  # noqa: E402
 from remix.state import (BUILT_IMAGE, CAVE_BYTES, DONOR_WORDS, ROOT,  # noqa: E402
                          State)
 
@@ -628,15 +628,16 @@ class RemixerScreen(Screen):
         self.rerender()
 
     # ---- the rows each pane walks ---------------------------------------
-    # Group order for the library pane: the way you meet them -- the two big
-    # bus effects, then the inserts that stack, then the firmware mods, then
-    # plumbing, then stock.
-    _GROUPS = (rig.SERVER, rig.INSERT, rig.MOD, rig.SYSTEM)
+    # Group order for the library pane: schema.Category's, the module
+    # table's (the bus, on a track, machines, Parts, MIDI/USB, fixes,
+    # reference), then stock.
+    _GROUPS = tuple(Category)
 
     def avail_rows(self):
-        """Everything that COULD be in an image: our modules, then stock."""
+        """Everything that COULD be in an image: our modules by category
+        (schema.Category, the module table's grouping), then stock."""
         mods = [m for m in registry.modules().values() if not m.is_stock]
-        mods.sort(key=lambda m: (self._GROUPS.index(rig.category(m)),
+        mods.sort(key=lambda m: (self._GROUPS.index(m.category or Category.REFERENCE),
                                  disp(m).lower()))
         return mods + list(stock.MODULES)
 
@@ -895,8 +896,7 @@ class RemixerScreen(Screen):
         cur_line, group = head, None
         verdicts = self._mod_verdicts(st)
         for i, m in enumerate(rows):
-            cat = rig.STOCK if m.is_stock else rig.category(m)
-            g = rig.GROUP_TITLE[cat]
+            g = CATEGORY_TITLE[m.category or Category.REFERENCE]
             if g != group:
                 group = g
                 out.append(f"[dim {WARN}]── {g} ──[/]")
@@ -1619,7 +1619,8 @@ class RemixerScreen(Screen):
                         self._head("Unit", UNIT) + ["[dim]nothing selected[/]"])
             return
         out = self._head(disp(mod), UNIT)
-        bits = [rig.GROUP_TITLE[rig.category(mod)]]
+        bits = [CATEGORY_TITLE[mod.category or Category.REFERENCE],
+                rig.GROUP_TITLE[rig.category(mod)]]
         if mod.menu:
             bits.append(f"id 0x{mod.menu.fx2_id:02x}")
             bits.append("+".join(rig.menus(mod, st.fx1)))
@@ -2481,11 +2482,16 @@ class RemixerScreen(Screen):
                 return
 
             def documented(doc):
-                pth = ROOT / f"remixes/{name}.py"
-                pth.write_text(st.as_remix(
-                    name, doc or "a selection composed in the remixer"))
+                doc = doc or "a selection composed in the remixer"
+                d = ROOT / "remixes" / name
+                d.mkdir(exist_ok=True)
+                (d / "remix.py").write_text(st.as_remix(name, doc))
+                if not (d / "README.md").exists():
+                    (d / "README.md").write_text(
+                        f"# `{name}` -- {doc}\n\nWritten by the remixer; "
+                        f"say what is in it and where it has run.\n")
                 st.loaded_name = name
-                st.msg = f"wrote remixes/{name}.py"
+                st.msg = f"wrote remixes/{name}/remix.py"
                 self.rerender()
             self.app.push_screen(TextPrompt("one-line description:"),
                                  documented)

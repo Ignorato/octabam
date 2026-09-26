@@ -1,44 +1,35 @@
 #!/usr/bin/env python3
-"""Every module has a row in README.md's module table and every remix a page
-under docs/remixes/ listed in docs/remixes/README.md.
+"""The two Markdown copies of the registry are current, and every remix has
+its README.
 
     python3 tools/verify/verify_docs.py
 
-Eight merged modules and four remixes had neither on 27 Sep 2026; the
-index (`make modules`) is generated from the manifests, the README is a
-copy, and nothing compared them.
+README.md's module table and docs/remixes/README.md are rendered from the
+manifests and the selections by `make docs` (tools/remix/index.py --write);
+this refuses a stale copy. It also refuses a remix directory without a
+README.md. Eight merged modules and four remixes had no row or page on
+27 Sep 2026, when the README was a hand copy nothing compared.
 """
-import pathlib, re, sys
+import pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
-from remix import registry
+from remix import index, registry
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 def main():
-    readme = ROOT.joinpath("README.md").read_text()
-    table = readme[readme.index("## What it carries"):readme.index("## Quick start")]
-    bold = " ".join(re.findall(r"\*\*(.+?)\*\*", table)).upper()
-    fails = []
-    for m in registry.modules().values():
-        if m.is_stock:
-            continue
-        if m.key.upper() not in bold and m.name.upper() not in bold \
-                and m.name.replace("-", " ").upper() not in bold:
-            fails.append(f"README.md: no module-table row names {m.key!r} ({m.name})")
-    index = ROOT.joinpath("docs/remixes/README.md").read_text()
-    for path in sorted(ROOT.glob("remixes/*.py")):
-        name = path.stem
-        # A remix may share a page with a sibling (octatrick-usb -> octatrick.md).
-        link = re.search(r"\[`%s`\]\(([^)]+)\)" % re.escape(name), index)
-        if link is None:
-            fails.append(f"docs/remixes/README.md: does not link `{name}` to a page")
-        elif not (ROOT / "docs/remixes" / link.group(1)).exists():
-            fails.append(f"docs/remixes/{link.group(1)}: linked for `{name}`, missing")
+    fails = [f"{p.relative_to(ROOT)} is stale: make docs" for p in index.stale()]
+    for name in registry.remix_names():
+        d = ROOT / "remixes" / name
+        if not d.is_dir():
+            fails.append(f"remixes/{name}.py: a remix is a directory, remixes/{name}/remix.py + README.md")
+        elif not (d / "README.md").exists():
+            fails.append(f"remixes/{name}/README.md: missing")
     for f in fails:
         print("  [FAIL]", f)
     n = len([m for m in registry.modules().values() if not m.is_stock])
-    print(f"verify_docs: {n} modules, {len(list(ROOT.glob('remixes/*.py')))} remixes, {len(fails)} missing")
+    print(f"verify_docs: {n} modules, {len(registry.remix_names())} remixes, "
+          f"{len(fails)} problem{'s' if len(fails) != 1 else ''}")
     return 1 if fails else 0
 
 

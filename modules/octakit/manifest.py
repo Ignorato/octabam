@@ -52,7 +52,7 @@ import pathlib
 import re
 
 from remix import arena
-from remix.schema import ArenaReserve, Kind, Module, Runtime
+from remix.schema import Category, Proof, ArenaReserve, Kind, Module, Runtime
 
 _ABI = pathlib.Path(__file__).parent / "upstream/runtime/abi.inc"
 
@@ -82,6 +82,8 @@ MODULE = Module(
     name="octakit",
     key="OCTAKIT",
     kind=Kind.CF_PATCH,
+    category=Category.PARTS, author="emuyia/ems-octakit", author_url="https://github.com/emuyia/ems-octakit",
+    proof=Proof.HARDWARE, proof_note="her build reproduced byte for byte; `ok-ms` on midisc's author's unit, 14 Sep 2026",
     doc="Em's Octakit: 256 Kits per Project instead of 64 Parts, built from "
         "her repo (submodule) as a loader-appended DRAM runtime.",
     runtime=Runtime(

@@ -13,7 +13,7 @@ SENS=0 leaves the envelope shut, so with MIX up the effect is a gate that
 never opens; MIX=0 is an exact passthrough.
 """
 
-from remix.schema import (BusRole, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Category, Proof, BusRole, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -23,6 +23,8 @@ MODULE = Module(
     name="streamz",
     key="STREAMZ",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.RENDER, proof_note="never flashed",
     doc="Streams-style insert: vactrol lowpass gate, LPG/VCF/VCA.",
     menu=MenuEntry(
         fx2_id=0x0e,

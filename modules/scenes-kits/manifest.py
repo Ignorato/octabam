@@ -13,13 +13,15 @@ Part Reload beside her kits is a separate collision with its own bridge,
 modules/kits-reload (14 Sep 2026).
 """
 
-from remix.schema import Kind, Module, Override
+from remix.schema import Category, Proof, Kind, Module, Override
 
 
 MODULE = Module(
     name="scenes-kits",
     key="SCENES KITS",
     kind=Kind.CF_PATCH,
+    category=Category.PARTS, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.PORT, proof_note="in `kits` and `bottleservice`",
     doc="The bridge that lets CC MAP and Octakit share the CC dispatch "
         "(MIDI SCENES needs no bridging since 1.40MSCN6).",
     overrides=(

@@ -9,13 +9,15 @@ passthrough; GAIN=0 is exact silence. Both are render gates. The cost of
 the exact top: 126 -> 127 steps 0.984 -> 1.0 (~0.14 dB).
 """
 
-from remix.schema import (BusRole, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Category, Proof, BusRole, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param, YBase)
 
 MODULE = Module(
     name="hello",
     key="HELLO WORLD",
     kind=Kind.DSP_EFFECT,
+    category=Category.REFERENCE, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.CHECK, proof_note="",
     doc="Reference minimal insert: one GAIN knob, out = in * GAIN/128.",
 
     menu=MenuEntry(

@@ -47,7 +47,7 @@ from __future__ import annotations
 
 import pathlib
 
-from remix.schema import Claims, Harness, Kind, MenuEntry, Module, Param
+from remix.schema import Category, Claims, Harness, Kind, MenuEntry, Module, Param
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 STOCK_IMAGE = ROOT / "out/raw/section_3_MAIN_OS.bin"
@@ -202,7 +202,7 @@ def _stock(key, name, fx2_id, desc, abbr, fullname, words, doc, char,
            buffer=False):
     WORDS[key] = words
     return Module(
-        name=name, key=key, kind=Kind.STOCK, doc=doc,
+        name=name, key=key, kind=Kind.STOCK, doc=doc, category=Category.STOCK,
         menu=MenuEntry(fx2_id=fx2_id, donor_desc=desc, abbr=abbr,
                        fullname=fullname),
         params=_params(desc, fullname.decode("latin1"), key),

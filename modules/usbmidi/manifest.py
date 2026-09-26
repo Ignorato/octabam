@@ -14,7 +14,7 @@ import importlib.util
 import pathlib
 
 from remix import schema
-from remix.schema import Detour, Kind, Linked, Module, SymbolRef
+from remix.schema import Category, Proof, Detour, Kind, Linked, Module, SymbolRef
 
 # Manifests are executed from source, not imported as a package; the
 # descriptor generator beside this file is loaded by path.
@@ -27,6 +27,8 @@ H = bytes.fromhex
 
 MODULE = Module(
     name="usbmidi", key="USB MIDI", kind=Kind.CF_PATCH,
+    category=Category.MIDI_USB, author="markandrus/octemu", author_url="https://github.com/markandrus/octemu",
+    proof=Proof.PORT, proof_note="enumerates, receives and transmits under the port (`verify_usb`); not on hardware",
     doc="Class-compliant USB-MIDI in and out on the OT's own USB port, mirroring the DIN ports (markandrus/octemu).",
     linked=(
         # his unit, verbatim: the build re-links it at his zone address and

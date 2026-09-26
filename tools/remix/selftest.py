@@ -239,6 +239,19 @@ def main():
         else:
             bad += 1
             print(f"  [FAIL] {mod.name}: category {cat} derived tracks {tr}")
+    # ---- the module table's fields --------------------------------------
+    # README.md's table is rendered from these (make docs); a module without
+    # them has no row, which is how eight merged modules went unlisted.
+    for mod in registry.modules().values():
+        if mod.is_stock:
+            continue
+        missing = [f for f in ("category", "author", "author_url", "proof")
+                   if not getattr(mod, f)]
+        if missing:
+            bad += 1
+            print(f"  [FAIL] {mod.name}: manifest declares no {', '.join(missing)}")
+    print("  [PASS] every module declares category, author, author_url, proof")
+
     # A server that never declared its payload must refuse, not guess: the
     # field's default is {"A","B"} and a guess would put the effect on all
     # eight tracks of the picker.

@@ -28,7 +28,7 @@ SYNC drawn from memory dumps (`--mem-dump` of the window planes). The
 screen itself: see the PR.
 """
 
-from remix.schema import Detour, Kind, Linked, Module, Poke
+from remix.schema import Category, Proof, Detour, Kind, Linked, Module, Poke
 
 H = bytes.fromhex
 ENGINES = ("DELAY SERVER", "REVERB SERVER")    # box 0, box 1
@@ -85,6 +85,8 @@ MODULE = Module(
     name="tempo-bus",
     key="TEMPO BUS",
     kind=Kind.CF_PATCH,
+    category=Category.BUS, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.PORT, proof_note="`verify_set`; nothing on hardware",
     doc="The TEMPO window lists and edits BusDelay's and BusVerb's knobs "
         "(UP/DOWN = row, A or B = value, LEFT/RIGHT = engine, FUNC + LEVEL = 0.1 BPM).",
     # Both pinned in measured free runs (docs/remixer/PLACEMENT.md): the

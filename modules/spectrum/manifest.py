@@ -22,7 +22,7 @@ Every mpy is `mpy x0,y1`, the audited-signed form, but the VOWL decode's
 store limiter.
 """
 
-from remix.schema import (ModeView, BusRole, Claims, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Category, Proof, ModeView, BusRole, Claims, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -67,6 +67,8 @@ MODULE = Module(
     name="spectrum",
     key="SPECTRUM",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII",
     doc="BamSep26 station: a filter pedal -- the Moog ladder, SEM (LP..HP by SHPE), BP, Airwindows Capacitor2, formants; ENV and LFO onto the cutoff; width.",
     menu=MenuEntry(
         fx2_id=0x04,

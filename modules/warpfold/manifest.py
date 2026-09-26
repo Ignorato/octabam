@@ -18,7 +18,7 @@ effect nulls against its input at either extreme -- the render harness uses
 both as correctness gates.
 """
 
-from remix.schema import (BusRole, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Category, Proof, BusRole, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -28,6 +28,8 @@ MODULE = Module(
     name="warpfold",
     key="WARPFOLD",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.RENDER, proof_note="never flashed",
     doc="Warps-style insert: wavefolder + ring mod, FOLD/RING/BOTH.",
     menu=MenuEntry(
         fx2_id=0x0a,

@@ -16,7 +16,7 @@ the same core.
 MIX=0 is an exact passthrough (during warm-up the effect outputs pure dry).
 """
 
-from remix.schema import (BusRole, Claims, DspSection, Formatter, Harness,
+from remix.schema import (Category, Proof, BusRole, Claims, DspSection, Formatter, Harness,
                           Kind, MenuEntry, Module, Param, YBase)
 
 _PLAIN = Formatter.PLAIN
@@ -26,6 +26,8 @@ MODULE = Module(
     name="nimbus",
     key="NIMBUS",
     kind=Kind.DSP_EFFECT,
+    category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
+    proof=Proof.RENDER, proof_note="never flashed",
     doc="Clouds-style insert: 743 ms granular texture, 4 grains, freeze.",
     menu=MenuEntry(
         fx2_id=0x1a,

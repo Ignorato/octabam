@@ -16,9 +16,17 @@ manifest, and this file only re-exports its MODULE. Nothing inside
 On hardware as OCTATRICK9 (remix octatrick-usb) on Tim's MKI, 26 Sep 2026.
 """
 
+import dataclasses
 import pathlib
 import runpy
+
+from remix.schema import Category, Proof
 
 _UPSTREAM = pathlib.Path(__file__).resolve().parent / "upstream" / "direct-jump" / "manifest.py"
 
 MODULE = runpy.run_path(str(_UPSTREAM), run_name="remix_manifest_direct_jump")["MODULE"]
+# The module table's fields are octabam's (README.md, `make docs`), so they
+# are added here rather than in his manifest.
+MODULE = dataclasses.replace(
+    MODULE, category=Category.MACHINES, author="timhastie/octatrick-modules", author_url="https://github.com/timhastie/octatrick-modules",
+    proof=Proof.HARDWARE, proof_note="`octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9)")
