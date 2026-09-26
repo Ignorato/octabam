@@ -2,18 +2,6 @@
 
 [![CI](https://github.com/sambanks/octabam/actions/workflows/ci.yml/badge.svg)](https://github.com/sambanks/octabam/actions/workflows/ci.yml)
 
-> **A personal research project, shared in case it is useful to you.** I
-> work on this for my own unit and publish it so others can build on it.
-> Pull requests are very welcome — a module, a port of someone's mod, a
-> fix, a doc correction. Issues and feature requests are not something I
-> can take on — this is a spare-time project and the queue is already my
-> own. If there is something you want the remixer to do, the way to get
-> it is to build it (`CONTRIBUTING.md`, `docs/remixer/MODULES.md`) and
-> send the PR; I will gladly review it. And if you would like to run a
-> supported version of this — one that takes requests, tracks issues and
-> answers questions — please fork it and do exactly that. The licence
-> allows it and I would be glad to see it.
-
 A remixer for the Elektron Octatrack's operating system: pick the
 modifications you want and build them into one firmware image from your
 own copy of OS 1.40C.
@@ -24,6 +12,11 @@ a remix into a card-flashable image: placing code, wiring hooks by symbol,
 refusing collisions by name, and proving every ported module against its
 author's own build byte for byte. No firmware is distributed here; every
 image is derived from the user's own 1.40C on the user's machine.
+
+Pull requests are accepted: a module, a port of an existing mod, a fix,
+a doc correction (`CONTRIBUTING.md`, `docs/remixer/MODULES.md`). Issues
+are disabled and there is no request queue. The licence is MIT; a fork
+that takes requests and tracks issues is allowed.
 
 **[docs/remixes/BUILDING.md](docs/remixes/BUILDING.md)** is the step-by-step
 guide from a fresh machine to a flashed unit.
