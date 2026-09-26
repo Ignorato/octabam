@@ -417,7 +417,7 @@ class Claims:
     # The allocator hands the buffer out PER TRACK SLOT: on core 0 the four
     # slots are Y:0x4000, 0x8000, 0x30000 and 0x34000, on core 1 0x4000,
     # 0x8000, 0x38000 and 0x3c000 -- and those are exactly the addresses
-    # BusVerb's tank, Nimbus's line and BusDelay's line hardcode. So a
+    # BusVerb's tank and BusDelay's line hardcode. So a
     # buffered stock effect on the wrong track silently corrupts a server
     # on the same core, and the chooser is one list for all eight tracks,
     # so the build cannot tell which track it will land on. The ledger
@@ -1122,10 +1122,10 @@ class Remix:
     #     into FX2 slot 0". NIMBUS LITE reads the allocator and IS exposed;
     #     an earlier draft of this comment claimed nothing was, which was
     #     wrong -- it had checked only the fixed-base modules.
-    #   * A module with FIXED buffers in the FX2 region (BusVerb, Nimbus,
+    #   * A module with FIXED buffers in the FX2 region (BusVerb,
     #     BusDelay). An FX1 instance still writes to Y:0x4000 and up, i.e.
     #     into some other track's FX2 buffer. The hazard exists on FX2 too --
-    #     it is why Nimbus is documented "one per core" -- but an FX1 row
+    #     it is why such a module is one per core -- but an FX1 row
     #     doubles the slots it can be reached from, a second instance on the
     #     SAME track included.
     #   * A bus SERVER, which is one per core by design (SPEC places one

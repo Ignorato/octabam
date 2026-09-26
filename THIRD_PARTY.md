@@ -22,7 +22,6 @@ time (`.incbin`, `make os`).
 | markandrus/octemu `custom/coldfire/usb-audio.s`, `custom/usb-audio.py` (descriptors) | MIT | markandrus | `modules/usbaudio` (his shims, producer, packet builder and servo; the loader replaces his card payload machinery) |
 | markandrus/octemu `src/board/ot-board.c` USB packet bench (line protocol) | MIT | markandrus | `tools/emu/ot_emu/usb.h` speaks the same protocol so his `tests/usb-host.py` drives the port; the model is written here |
 | Airwindows Capacitor2 | MIT | Chris Johnson | `modules/spectrum` ISO (`capacitor2_ref.py`) |
-| Mutable Instruments Clouds (the algorithm's shape, not the code) | MIT | Emilie Gillet | `modules/nimbus` — written here after the published design |
 
 Retired transcriptions (in history only): jpcima `string-machine` (BSL-1.0,
 the Solina ensemble, removed 16 Sep 2026).

@@ -23,7 +23,7 @@ Checked, and how it knows:
   stock buffers      declared (Claims.stock_instance_buffer). A stock effect
                      that takes an instance buffer from the host's bump
                      allocator gets a per-track base -- the addresses
-                     BusVerb, Nimbus and BusDelay hardcode -- and the chooser
+                     BusVerb and BusDelay hardcode -- and the chooser
                      is one list for all eight tracks, so the build cannot
                      know which track it lands on. Refused beside any module
                      with fixed Y buffers.
@@ -326,8 +326,8 @@ def check(selected) -> list[str]:
     # ---- the per-core FX2 instance buffer region --------------------------
     # Y:0x4000-0xBFFF is TWO FX2 instance slots of 16,384 words, per core and
     # not per instance in any sense a module can rely on: BusVerb hardcodes
-    # its tank there and Nimbus hardcodes its granular line there, so two of
-    # them on one core write over each other. Each works perfectly alone.
+    # its tank there, and a second module with fixed buffers there (Nimbus,
+    # until 27 Sep 2026) writes over it. Each works perfectly alone.
     # Declared rather than scanned -- see Claims.owns_fx2_buffers for why a
     # scan cannot tell an address from a mask.
     # Per CORE: two owners on DIFFERENT payloads never meet (BusVerb's tank
@@ -364,7 +364,6 @@ def check(selected) -> list[str]:
     #   BusVerb   all four of its core's -- tank in tracks 1-2's slots,
     #              relocated buffers in tracks 3-4's. No track on that core
     #              can host an allocating stock effect.
-    #   Nimbus     tracks 1-2's slots of whichever core hosts it.
     #   BusDelay  tracks 3-4's (its lines are based at 0x38000/0x3c000), so
     #              on ITS core an allocating stock effect is safe on tracks
     #              1-2 and collides on 3-4.

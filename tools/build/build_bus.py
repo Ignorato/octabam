@@ -470,47 +470,6 @@ STOCK_DELAY_ID = 0x08
 STOCK_DELAY_P = 0x400d4ace          # DELAY's E (0x400d4a96) + 0x38
 
 
-# ---- DEV repro hooks for outsider modules ----------------------------------
-# The three core sources have their override arms written out at the top of
-# main() (MODE, DMODE, DNOTE and the rest). A module that arrives later needs
-# the same kind of lever without another special case in the placement loop,
-# so it declares a marker in its source and a rule here.
-#
-# ⚠️ EVERY HOOK HERE IS DEV-ONLY: the counter word
-# lives at Y:0x37FFE in payload A's owned half of the shared window (init-
-# zeroed, above the bus scratch at 0x360d2), which is free ground in a DEV
-# layout and is NOT a promise about any shipping one.
-def _dev_hooks(key, src):
-    if key != "NIMBUS":
-        return src
-    at = os.environ.get("NFRZAT")
-    if at is None:
-        return src
-    if os.environ.get("DEV") is None:
-        sys.exit("NFRZAT=n is a DEV-only repro hook (its counter word lives "
-                 "in payload A's shared-window half) -- set DEV=1")
-    if src.count("; NFRZ_OVERRIDE") != 1:
-        sys.exit("NFRZAT=n set but the NIMBUS source has no single "
-                 "; NFRZ_OVERRIDE marker")
-    # Branchless, and the same shared-flag idiom as everywhere else: `sub`
-    # sets N once, the two Tcc read it, and the interleaved immediate moves
-    # do not disturb the condition codes.
-    src = src.replace(
-        "; NFRZ_OVERRIDE",
-        "        move    y:>$37ffe,a\n"
-        "        add     #>1,a\n"
-        "        move    a,y:>$37ffe\n"
-        "        move    #>%d,x0\n"
-        "        sub     x0,a\n"
-        "        move    #>0,x0\n"
-        "        tmi     x0,a\n"
-        "        move    #>1,x0\n"
-        "        tpl     x0,a" % int(at))
-    print(f"  *** NFRZAT OVERRIDE: Nimbus freezes after {int(at)} "
-          f"post-warm blocks ***")
-    return src
-
-
 _SCRATCH = None
 
 # Disassemble what you assemble (AGENTS.md): dsp_asm's own listing (-list)
@@ -2427,7 +2386,7 @@ mkgo:""",
         # core sources have at the top of main().
         for _k in CARRIED:
             if _k not in _texts and _k in ASM_SRC:
-                _src_k = _dev_hooks(_k, pathlib.Path(ASM_SRC[_k]).read_text())
+                _src_k = pathlib.Path(ASM_SRC[_k]).read_text()
                 _mk = remix_modules().get(_k)
                 if (_x and _mk is not None and _mk.harness is not None
                         and _mk.harness.bus_client):

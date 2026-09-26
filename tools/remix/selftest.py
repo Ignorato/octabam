@@ -83,8 +83,8 @@ CASES = [
      [_effect("alpha", 0x07, reserved=(0x0905,)),
       _effect("beta", 0x1e, reserved=(0x0905,))], "core-private Y"),
     # The shape this one guards is a module that works perfectly in every
-    # test done alone: BusVerb's tank and Nimbus's granular line are both
-    # hardcoded into Y:0x4000-0xBFFF, which is per CORE.
+    # test done alone: BusVerb's tank is hardcoded into Y:0x4000-0xBFFF,
+    # which is per CORE, and a second such module on the core overwrites it.
     ("two effects owning the FX2 instance buffer region",
      [_effect("alpha", 0x07, buffers=True),
       _effect("beta", 0x1e, buffers=True)], "FX2 instance buffers"),
@@ -691,7 +691,7 @@ def main():
     # through the other FX1 buffers and into FX2 slot 0. Pinned per module so
     # a manifest that starts reading the allocator cannot quietly become
     # eligible.
-    _want = {"NIMBUS": "fixed FX2", "MINIVERB": "FX2 slot",
+    _want = {"MINIVERB": "FX2 slot",
              "REVERB SERVER": "bus server", "DELAY SERVER": "bus server",
              "SPECTRUM": None, "CHARACTER": None, "EUCLID": None}
     for _k, _frag in _want.items():

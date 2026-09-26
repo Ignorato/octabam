@@ -17,6 +17,9 @@ flashed image was built from.
   0x0b, 0x0e, 0x0f, 0x17 and 0x1b are no longer aliased to the fallback
   (descriptor pointer and both payloads' dispatch entries return to
   stock's), so a project that selected one of them runs stock's entry.
+- Removed (27 Sep 2026): NIMBUS (Clouds-flavoured granular insert, never
+  flashed), its `nimbus` remix, `verify_nimbus` and the `NFRZAT` DEV hook.
+  FX2 id 0x1a is free and de-aliased the same way.
 - The module table and the remix index are rendered (27 Sep 2026):
   `Module.category`, `author`, `author_url`, `proof`, `proof_note` and
   `Remix.family`, `proof`, `proof_note` in every manifest and selection;

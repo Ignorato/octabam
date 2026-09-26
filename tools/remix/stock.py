@@ -34,7 +34,7 @@ on the ColdFire (DMA over SDRAM rings, docs/firmware/COLDFIRE_DELAY.md).
   SPATIALIZER, FLANGER, CHORUS, COMB allocate an FX2 instance buffer through
                  the host's bump allocator (X:0x213 at init;
                  docs/firmware/DSP.md section 10) at per-track bases that
-                 are the addresses BusVerb, Nimbus and BusDelay hardcode.
+                 are the addresses BusVerb and BusDelay hardcode.
                  The ledger refuses them beside any module with fixed Y
                  buffers (Claims.stock_instance_buffer).
 

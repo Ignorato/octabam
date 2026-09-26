@@ -21,7 +21,6 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 | [`bus`](../../remixes/bus/README.md) | The plain two-server image: BusVerb + BusDelay + send bus + tempo sync. | on hardware: under earlier names |
 | [`euclid`](../../remixes/euclid/README.md) | Euclid rhythmic modulation: 12 dB LP/BP/HP or AMP, both FX slots. | local render: the module's render gates |
 | [`miniverb`](../../remixes/miniverb/README.md) | Minimal allocator-owned FDN reverb. | local render: `make verify-miniverb` |
-| [`nimbus`](../../remixes/nimbus/README.md) | Nimbus granular texture, alone. One instance per core. | local render |
 | [`tapeecho`](../../remixes/tapeecho/README.md) | Tape Echo replacing Spring Reverb, alone. | on hardware: the author's unit (OCTACLID4): six instances; a seventh freezes it, open |
 
 ## Firmware mods on the stock effects
