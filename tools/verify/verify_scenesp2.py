@@ -12,7 +12,8 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           weight table, runs 120 frames with the transport on, and reads
           T1's voice record (0x80000110, both pings): at fader 64 MODE must
           snap to the A side (1) and TIME lerp to 60; at fader 0 the B side
-          alone: MODE the knob (0), TIME 20.
+          alone: MODE the knob (measured by a run with the pool's count 0),
+          TIME 20.
   editor  calls the FX2 page-2 editor `0x4003a9dc(5, 2 ticks)` on T1 with
           scene A held (0x460d169c = 1): the Part byte and the live lane
           must not move; the pool in the Part DB's part-0 window and its
@@ -122,23 +123,34 @@ def main():
     # scene 1 / T1 / slot 5 = 20, scene 0 / T1 / slot 0 (MODE) = 1 -- in part
     # 0 of every bank (the playing bank is the saved one, not bank 0)
     pool = [0x50, 0x32, 3, 0x00, 0x05, 100, 0x08, 0x05, 20, 0x00, 0x00, 1]
-    common = []
-    for bank in range(16):
-        common += pokes_bytes(BLOB + bank * BANK_STRIDE + POOL_OFF, pool)
-        common += pokes_bytes(BLOB + bank * BANK_STRIDE + SEL_OFF, [0, 1])
-    common += ["0x80000006=0", "0x80000007=0"]
-    for xf, want_mode, want_time in ((64, 1, 60), (0, 0, 20)):
-        dump, log = OUT / f"rec_{xf}.bin", OUT / f"frames_{xf}.txt"
+
+    def frames(tag, pool, xf):
+        common = []
+        for bank in range(16):
+            common += pokes_bytes(BLOB + bank * BANK_STRIDE + POOL_OFF, pool)
+            common += pokes_bytes(BLOB + bank * BANK_STRIDE + SEL_OFF, [0, 1])
+        common += ["0x80000006=0", "0x80000007=0"]
+        dump, log = OUT / f"rec_{tag}.bin", OUT / f"frames_{tag}.txt"
         cmd = base + ["--sequencer", "--internal-clock", "--frames", "120", "--dsp", "--main-level", "64",
                       "--poke-trig", "2", "--poke", ";".join(common + weights(xf)),
                       "--mem-dump", f"{RECORDS:#x},1024={dump}"]
         text = run(cmd, log)
-        check(f"fader {xf}: 120 frames ran", "frames run : 120" in text)
+        check(f"{tag}: 120 frames ran", "frames run : 120" in text)
         rec = dump.read_bytes()
-        for ping in (0, 1):
-            r = rec[ping * 0x200:ping * 0x200 + 64]
-            check(f"fader {xf}: ping {ping} T1 MODE (hw 24 hi) = {r[48]} (want {want_mode}: "
-                  f"{'the A side, a select snaps' if xf >= 64 else 'the knob, B alone'})", r[48] == want_mode)
+        return [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)]
+
+    # the knob alone: the same run with the pool's count 0, so what fader 0
+    # (the B side, which holds no MODE lock) must read is measured from the
+    # project: T1's MODE is 1 in the stress fixture's part 0 and 0 in
+    # OCTABAM89_setgate's (a literal 0 failed `make accept`, 26 Sep 2026)
+    knob = frames("knob", pool[:2] + [0] + pool[3:], 0)
+    knob_mode = knob[0][48]
+    check(f"knob alone: both pings read T1 MODE {knob_mode}", knob[1][48] == knob_mode)
+    for xf, want_mode, want_time, why in ((64, 1, 60, "the A side, a select snaps"),
+                                          (0, knob_mode, 20, "the knob, B alone")):
+        for ping, r in enumerate(frames(f"fader {xf}", pool, xf)):
+            check(f"fader {xf}: ping {ping} T1 MODE (hw 24 hi) = {r[48]} (want {want_mode}: {why})",
+                  r[48] == want_mode)
             check(f"fader {xf}: ping {ping} T1 TIME (hw 26 lo) = {r[53]} (want {want_time})", r[53] == want_time)
 
     # ---- the editor with a scene held -------------------------------------
