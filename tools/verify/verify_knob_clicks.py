@@ -91,6 +91,11 @@ KNOWN = {
     # per-sample fractional ramp in the tank loop prices ~100 cycles/sample
     # on the reverb, more than the worst core's headroom
     ("REVERB SERVER", "SIZE"): ("the tank taps are integers that step per block", -25.0),
+    # a DIFF jump dumps the diffusers' state as a peak; the wet limiter turns
+    # that peak into x0.9-per-sample gain steps (-51 dBFS on ROOM, 27 Sep
+    # 2026) where the store's own limiting, which this metric leaves out,
+    # used to clip it
+    ("REVERB SERVER", "DIFF"): ("the wet limiter's attack on the diffuser dump", -45.0),
 }
 STEPPED = {
     ("MODULATION", "LOFI"): "hold length and bit mask are integers",

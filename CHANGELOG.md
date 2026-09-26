@@ -7,6 +7,17 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- BusVerb wet limiter (27 Sep 2026): a feedback peak limiter on the wet
+  before the x2 makeup, ceiling −2 dBFS, attack x0.9 per sample, hold
+  between −4 and −2 dBFS, linear release ~150 ms, stereo-linked (the
+  right's peak reaches the detector one sample late). At a 0 dBFS send PLATE had railed 7,463 samples on L and
+  11,762 on R per 9 s of a drum loop; now 0 on every mode, peaks −1.1 to
+  −1.8 dBFS. Bit-identical at a −12 dBFS send. +30 cycles/sample static
+  (1,145 -> 1,175); r7 slots $11..$13, with four per-block slots moved
+  into the one-word displacement range to keep the RIG BURN probe's words
+  (payload A at 23 free). Unheard.
+
+
 - Removed (27 Sep 2026): the five Mutable-Instruments-flavoured inserts
   WarpFold, Ripple, Rungs, Streamz, BodeShift and their `mutables` remix,
   and the two reference modules HELLO WORLD (`hello`) and HELLO DRAM
