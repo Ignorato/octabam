@@ -326,6 +326,11 @@ burn-image: burn ## Repack the RIG BURN build into a card-flashable .bin (BUILD=
 	@echo "  MIDI image: out/OCTATRACK_OS1.40C_$(VERSION)B.syx"
 
 .PHONY: check
+.PHONY: check-remixes
+check-remixes: ## The per-remix half for REMIXES="a b c", JOBS=4 worktrees at a time (out/shards/<i>, each its own port build; logs in out/check_shards/)
+	@test -n "$(REMIXES)" || { echo "REMIXES is unset: make $@ REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
+	BUILD=$(BUILD) python3 tools/verify/check_shards.py --jobs $(or $(JOBS),4) $(REMIXES)
+
 check: bus cycles verify ## Everything that can be checked without hardware (the set gates run under the port when OT_PROJECT or ~/.octabam_project names a project)
 	@# verify_burn.py shells out to build_bus.py twice -- with and without
 	@# BURN=1, neither with XBUS/SPEC -- and each run overwrites
@@ -349,9 +354,9 @@ check-remix: bus cycles verify-remix ## The per-remix half of make check: build,
 # Full local evidence; ordinary check remains useful for development.
 # STRESS_SOURCE copies a private project and generates the remix's stress fixture.
 .PHONY: accept
-accept: ## Strict local acceptance + JSON report (OT_PROJECT or STRESS_SOURCE required)
-	$(need-remix)
-	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix "$(REMIX)" $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(ACCEPTARGS)
+accept: ## Strict local acceptance + JSON report: REMIX=<one>, or REMIXES="a b c" with the remix-independent half once (OT_PROJECT or STRESS_SOURCE required)
+	@test -n "$(REMIXES)" || { echo "REMIX is unset: make $@ REMIX=<name>, or REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
+	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix $(REMIXES) $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(ACCEPTARGS)
 
 .PHONY: test-acceptance
 test-acceptance: ## Firmware-free tests of the acceptance runner and the reach classifier
@@ -359,8 +364,8 @@ test-acceptance: ## Firmware-free tests of the acceptance runner and the reach c
 
 BASE ?= origin/main
 .PHONY: reach
-reach: ## The gates this branch's changes reach (the diff against BASE=origin/main); RUN=1 runs them in order
-	python3 tools/verify/reach.py --base $(BASE) $(if $(RUN),--run,) $(REACHARGS)
+reach: ## The gates this branch's changes reach (the diff against BASE=origin/main); RUN=1 runs them in order, KEEP=1 every one then a table, JOBS=n the check-remix lines over n worktrees
+	python3 tools/verify/reach.py --base $(BASE) $(if $(RUN),--run,) $(if $(KEEP),--keep-going,) $(if $(JOBS),--jobs $(JOBS),) $(REACHARGS)
 
 .PHONY: modules
 modules: ## List the module index and the available remixes

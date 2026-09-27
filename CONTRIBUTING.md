@@ -201,23 +201,28 @@ that #415 had renamed).
 git fetch upstream && git rebase upstream/main
 make reach BASE=upstream/main        # the gates this diff reaches, in order
 STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1   # run them
+STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1 KEEP=1 JOBS=4
+#   KEEP=1: every gate, then one table (instead of stopping at the first failure)
+#   JOBS=4: the check-remix lines over four worktrees at a time (make check-remixes)
 ```
 
 What `make reach` lists, by what changed:
 
 | changed | gates |
 |---|---|
-| `modules/<name>/` (a pin bump too) | `make check` and `make accept` for every remix that carries the module |
-| `remixes/<name>/remix.py` | `make check`, `make accept` for that remix |
+| `modules/<name>/` (a pin bump too) | `make accept` for every remix that carries the module (one `REMIXES="..."` line; it runs both halves of `make check` itself, the shared half once) |
+| `remixes/<name>/remix.py` | `make accept` for that remix |
 | `tools/verify/verify_<x>.py` | `make check` for the remixes of the modules whose manifests name it; every remix for a shared gate |
 | `tools/build/`, `tools/remix/`, `dsp/` | `scripts/refhash.sh check` (save the baseline on main first), `make test-acceptance`, `make check` on every remix |
 | `tools/harness/dsp_host/`, `tools/patches/` | `make ci-dsp`, then `make check` on every remix (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
 | `tools/emu/` | `make ci-emu`, `make emu-cf`, `make check` on every remix, with OT_PROJECT |
-| the acceptance runner, the stress generator, `pressure.py` | `make test-acceptance`, `make check` and `make accept` on every remix |
+| the acceptance runner, the stress generator, `pressure.py` | `make test-acceptance`, `make accept` on every remix |
 | `docs/`, `*.md` | `python3 tools/verify/verify_docs.py` |
 | `Makefile`, `.github/` | `make check` on every remix, `make ci` |
 | anything else | `make check` on every remix, named as unclassified |
 
+Without `STRESS_SOURCE` the accept line cannot run, so the list carries
+the `make check` lines separately and names the accept line as blocked.
 A remix with a DSP module that declares no `dear` makes `make accept`
 report `blocked` with the module's name; say so in the PR. List each
 command and its result in the PR body (`make reach`'s output is the list).
