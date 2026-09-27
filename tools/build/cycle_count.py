@@ -310,8 +310,8 @@ def _measure_loop(name, src, lines, i):
     # CONDITIONAL branch whose target label sits LATER in the same loop body
     # is allowed, because such a branch can only SKIP code: the word span
     # already counts what it skips, so the figure stays a ceiling for that
-    # path rather than becoming wrong. Nimbus needs this -- its per-grain
-    # scatter latches and its freeze gate are all two-instruction skips.
+    # path rather than becoming wrong. BusDelay (the REVERSE skips),
+    # Character (its sample loop) and Euclid declare it.
     #
     # The FORWARD test is the whole safety of it and is enforced, not
     # trusted: a BACKWARD conditional branch is a loop, the span would count

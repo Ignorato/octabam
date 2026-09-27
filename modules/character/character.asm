@@ -1,7 +1,7 @@
 ; ---------------------------------------------------------------------------
 ; CHARACTER -- fold, saturate, tilt, compress, width.
 ;
-; Insert contract (modules/ripple/ripple_svf.asm): frames in place at
+; Insert contract: frames in place at
 ; x:(r0)/x:(r0+n0), knobs from r6, state in this instance's r7 block. The
 ; station never touches the bus.
 ;
@@ -613,7 +613,7 @@ ch_rdone:
         move    x:(r5),a
         add     x0,a
         move    a,x:(r5)+               ; m, and r5 is back at the ring's head
-; ---- FOLD: WarpFold's wrap-and-reflect, both channels --------------------
+; ---- FOLD: wrap-and-reflect, both channels ---------------------------------
         move    x:(r0),x0
         move    x:(r5)+,y1              ; gq = gain/64
         mpy     x0,y1,a                 ; v/64

@@ -568,7 +568,7 @@ dwarmc:
 ;
 ; ⚠️ THE HALF-OFFSET CASE HAS AN EXACT TEST and the quarter-offset one does
 ; not: two triangle windows a half period apart sum to exactly 1, so DC in
-; must come back flat. That is the gate that caught Nimbus's double-rate
+; must come back flat. That is the gate that caught a double-rate
 ; window (AGENTS.md, the a0 trap), and it is why the two-grain build is the
 ; better-checked of the two.
 ;
@@ -1077,12 +1077,11 @@ drevcnt:
         move    a,x:(r7-$a)             ; GRAIN pitch-ceiling multiplier
 
 ; ---- GRAIN per-block decode -----------------------------------------------
-; Nimbus's grain family from the SIZE select ($5f), in REVERSE's index order
+; The grain family from the SIZE select ($5f), in REVERSE's index order
 ; so one select reads the same way in both modes: 0 = 46 ms (G 2048),
 ; 1 = 93 ms (4096, the default), 2 = 23 ms (1024), 3 = 186 ms (8192). Per
 ; size: the mask G-1, G/4 (grain-to-grain offset), the one-multiply window's
-; multiplier 2^(23-k) (modules/nimbus/nimbus_grain.asm: 2^(23-k), NOT
-; 2^(24-k) -- the a0 trap) and 2^(32-k), which turns the lag into the pitch
+; multiplier 2^(23-k) (NOT 2^(24-k) -- the a0 trap, AGENTS.md) and 2^(32-k), which turns the lag into the pitch
 ; ceiling below with one mpy. Per block, so the loop pays nothing. All four
 ; come from the table read above (the right half of the SIZE row).
 ; The read distance base: lag + G + 2, with lag = min(TIME, 28670 - mask)
