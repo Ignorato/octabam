@@ -32,5 +32,18 @@ class LayoutTests(unittest.TestCase):
         self.assertIsNone(pressure.fallback_of(table(send=False)))
 
 
+class EnvTests(unittest.TestCase):
+    def test_price_modules_exports_the_remix_for_cycle_count(self):
+        import os, types
+        from unittest.mock import patch
+        fake_cc = types.SimpleNamespace(measure=lambda stem: dict(cycles=1, inner=""))
+        remix = types.SimpleNamespace(name="probe", fx1=(), modules=())
+        with patch.dict(os.environ, {}, clear=True), patch.dict(sys.modules, {"cycle_count": fake_cc}), \
+                patch.object(pressure.registry, "modules", return_value={}), \
+                patch.object(pressure.registry, "selected", return_value=[]):
+            pressure.price_modules(remix)
+            self.assertEqual(os.environ.get("REMIX"), "probe")
+
+
 if __name__ == "__main__":
     unittest.main()

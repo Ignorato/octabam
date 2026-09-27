@@ -43,6 +43,11 @@ PAYLOAD_OF_CORE = {0: "A", 1: "B"}
 def price_modules(remix):
     """{key: (stem, cycles, server, on_fx1, on_fx2)} for the remix's DSP modules."""
     import cycle_count as cc
+    # cycle_count reads the selected remix from $REMIX (its grain count);
+    # `pressure.py --remix X` and `stress_project.py --remix X` name the
+    # remix by argument, so export it here (27 Sep 2026: "no remix
+    # selected" from the generator once nothing defaulted).
+    os.environ["REMIX"] = remix.name
     mods = {}
     stock_fx1 = set()
     from remix import stock as _stock
