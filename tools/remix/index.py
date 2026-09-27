@@ -117,7 +117,9 @@ def module_table(mods) -> str:
         for m in ms:
             author = f"[{m.author}]({m.author_url})" if m.author_url else m.author
             doc = m.doc.replace("|", "\\|")
-            lines.append(f"| **{m.key}** | {author} | {doc} | {proof_text(m)} |")
+            d = f"modules/{m.name}"
+            link = f"{d}/README.md" if (ROOT / d / "README.md").exists() else f"{d}/"
+            lines.append(f"| [**{m.key}**]({link}) | {author} | {doc} | {proof_text(m)} |")
         lines.append("")
     lines.append(END)
     return "\n".join(lines)
