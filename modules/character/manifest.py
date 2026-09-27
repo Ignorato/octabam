@@ -32,18 +32,16 @@ import math as _m
 _P = _m.log(10.0) + 1.0
 def _q(v): return min(0x7FFFFF, max(0, round(v * (1 << 23))))
 
-# DaTube's curve: u^P over u in [0, 1], stored as u^P / 2 in 17 pairs (value,
-# slope to the next), interpolated in chtube over u/2 in 1/32 steps. T(u) =
-# u - u^P applied to u = 1 - |x|; past |x| = 1 the JSFX goes linear, which is
-# the same formula with u^P dropped -- the lookup clamps u at 0. TUBE's post
-# gain is a per-block division in the source.
+# DaTube's curve: u^P over u in [0, 1], stored as u^P / 2 at 17 points, then
+# the 17 slopes to the next point (the last 0): chtube indexes both halves
+# with one idx, interpolating over u/2 in 1/32 steps. T(u) = u - u^P applied
+# to u = 1 - |x|; past |x| = 1 the JSFX goes linear, which is the same
+# formula with u^P dropped -- the lookup clamps u at 0. TUBE's post gain is
+# a per-block division in the source.
 def _tube_up(n=16):
     t = [0.5 * (i / n) ** _P for i in range(n + 1)]
-    out = []
-    for i in range(n + 1):
-        out.append(_q(t[i]))
-        out.append(_q(t[i + 1] - t[i]) if i < n else 0)
-    return tuple(out)
+    return (tuple(_q(v) for v in t)
+            + tuple(_q(t[i + 1] - t[i]) if i < n else 0 for i in range(n + 1)))
 
 
 TUBE_UP = _tube_up()

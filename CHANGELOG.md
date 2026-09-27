@@ -7,6 +7,19 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- Character savings (27 Sep 2026): 355 -> 241 static cycles/sample
+  (TAPE 105, TUBE 99, INFL 66 in the SAT fork). Both channels share one
+  register for each of FOLD's gq/trim and TONE's k/t; SAT's DRV-0 flag and
+  mode are one ring word tested once; the arms reordered so TAPE falls
+  through; long immediates moved into ring words; TapeHead's v - v^3 and
+  its x0.7 accumulate are `mac`s, g3*trim one exact coefficient; DaTube's
+  table split into values then slopes (one index, no mask) with a `mac`
+  interpolation; WIDTH hands MIX its outputs in registers (limited as the
+  stores were); COMP reads the key's R in TONE. Tilt and level_s states
+  moved to $1b..$1d, fold trim to $18, ramp steps to $56..$5b. Payload A
+  251 free words, B 855 (on main after #481). Bit-identical: `verify_ident character` 9/9, and
+  16 renders moving every knob, DRV to 0 and back, COMP off/on and SAT
+  mid-render at -12 dB and a level that drives every clip.
 - Spectrum BP into SEM (27 Sep 2026): MODE is LADR SEM ISO VOWL; SEM's SHPE
   sweeps LP (0) -> BP (64) -> HP (127), an equal-power crossfade (a tone at
   the cutoff holds its level within 0.1 dB across the sweep; the notch at
