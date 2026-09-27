@@ -9,9 +9,10 @@ sent to the unit over SysEx (each line acknowledged) or written for BC Manager.
 
 Presets (`--preset`, default `rig`):
   rig     push-encoder groups 1-4 = DEL send, REV send, LEVEL, AMP VOL per track
-          (eight encoders = eight tracks); lower row 1 = BusDelay on T1 (slots
-          2-9), row 2 = BusVerb on T5 (slots 2-9), row 3 = delay PTCH TIME, verb
-          DLY TIME, scene fader, T8's Character DRV COMP TONE (the master, FX1);
+          (eight encoders = eight tracks); lower row 1 = BusDelay on T1, row 2 =
+          BusVerb on T5, column-aligned: WET MODE TONE TIME, then FDBK/SIZE
+          PING/DIFF SCTR/SHMR DENS/SHFT; row 3 = delay SIZE PTCH, verb GATE DLY,
+          scene fader, T8's Character DRV COMP TONE (the master, FX1);
           buttons 33-40 MUTE, 41-48 SOLO per track.
   t1..t8  one track: groups 1-4 = FX1 page 1, FX1 page 2, FX2 page 1, FX2 page 2
           (LEVEL, AMP VOL, scene fader on the spare encoders); lower rows =
@@ -53,6 +54,9 @@ PAGE2 = {"FX2": 62, "FX1": 68}
 LEVEL, AMPVOL, XFADE, MUTE, SOLO = 46, 25, 48, 49, 50
 ROLES = {1: "DELAY SERVER", 5: "REVERB SERVER"}      # the rig's hosts; every other track runs SEND
 STATIONS = ("SPECTRUM", "CHARACTER", "MODULATION")   # FX1; the track's pick is not known here
+# rig lower rows, as slot numbers of the engines' params (busdelay / busverb manifests)
+DLY_ROW, DLY_TAIL = (5, 6, 3, 11, 2, 4, 7, 8), (9, 10)    # WET MODE TONE TIME FDBK PING SCTR DENS | SIZE PTCH
+VRB_ROW, VRB_TAIL = (5, 6, 7, 11, 2, 8, 3, 4), (9, 10)    # WET MODE TONE TIME SIZE DIFF SHMR SHFT | GATE DLY
 
 # BCL acknowledge codes (BCL revision R1); the code is what the unit said.
 ERRORS = {0: "ok", 1: "unknown token", 2: "data without token", 3: "argument missing",
@@ -106,13 +110,14 @@ def rig_preset(channels):
         enc[25 + t] = knob(ch, AMPVOL, f"T{t+1} AMP VOL")
     dly, vrb = mods["DELAY SERVER"].params, mods["REVERB SERVER"].params
     cd, cv = channels[0], channels[4]
-    for i, s in enumerate(range(2, 10)):
-        enc[33 + i] = param_knob(cd, "FX2", s, dly[s], "T1 BDLY")
-        enc[41 + i] = param_knob(cv, "FX2", s, vrb[s], "T5 BVRB")
-    enc[49] = param_knob(cd, "FX2", 10, dly[10], "T1 BDLY")
-    enc[50] = param_knob(cd, "FX2", 11, dly[11], "T1 BDLY")
-    enc[51] = param_knob(cv, "FX2", 10, vrb[10], "T5 BVRB")
-    enc[52] = param_knob(cv, "FX2", 11, vrb[11], "T5 BVRB")
+    # the two engine rows share columns: WET MODE TONE TIME, then the pairs FDBK/SIZE, PING/DIFF,
+    # SCTR/SHMR, DENS/SHFT (grain beside shimmer); row 3 carries SIZE PTCH and GATE DLY
+    for i, (sd, sv) in enumerate(zip(DLY_ROW, VRB_ROW)):
+        enc[33 + i] = param_knob(cd, "FX2", sd, dly[sd], "T1 BDLY")
+        enc[41 + i] = param_knob(cv, "FX2", sv, vrb[sv], "T5 BVRB")
+    for i, (sd, sv) in enumerate(zip(DLY_TAIL, VRB_TAIL)):
+        enc[49 + i] = param_knob(cd, "FX2", sd, dly[sd], "T1 BDLY")
+        enc[51 + i] = param_knob(cv, "FX2", sv, vrb[sv], "T5 BVRB")
     enc[53] = fader(channels[0])
     # 54-56: the master track's station (T8 FX1 = CHARACTER in the rig, docs/effects/MASTER.md): DRV, COMP, TONE
     ch8, chr_ = channels[7], mods["CHARACTER"].params
