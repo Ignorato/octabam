@@ -447,6 +447,14 @@ def slot_frames(dump_path, k):
     return [s for _, s in sorted(out)]
 
 
+# Frames the eight-track run lasts: STOP at 300, then time for the writer to
+# close eight files. Upstream's port gives each card sector 8 samples of
+# latency (30b530a, 27 Sep 2026); the writer then needs 255 frames from
+# FINISHING to IDLE (measured the same day). It was 400 while the emulated
+# card answered at once.
+EIGHT_FRAMES = 700
+
+
 def eight(s):
     """stems_tracks = 0xFF before the arm: eight files, each equal to its
     own read-back slot at one fixed lag, and no two alike. The hook latches
@@ -457,7 +465,7 @@ def eight(s):
     if not FIXTURE8.exists():
         check("eight: the 8-track fixture exists (stems_fixture.py --eight)", False)
         return
-    log, dump, card, words, _ = port(s, 400, stop_at=300, tag="eight", fixture=FIXTURE8,
+    log, dump, card, words, _ = port(s, EIGHT_FRAMES, stop_at=300, tag="eight", fixture=FIXTURE8,
                                      pokes_before=[(s["stems_tracks"] + 3, 0xff)])
     st, status, _, wr, rd, nfr = words
     check("eight: the task finished (state IDLE, no error)", st == ST_IDLE and status == 0,
@@ -481,7 +489,13 @@ def eight(s):
 ERR_OVERFLOW, ERR_EXISTS, ERR_WRITE = 1, 4, 5
 RING_SIZE = 0x400000
 DRIVER_DRQ_POLL = 0x40014cf4             # the stock write command's wait for DRQ (STEM_REC.md 11.4)
-OVERFLOW_FRAMES = 4000                   # the task writes the whole 4 MiB ring after the guard
+# The overflow run: STOP at OVERFLOW_STOP, the row at OVERFLOW_FRAMES - 200,
+# the end at OVERFLOW_FRAMES. The task writes the whole 4 MiB ring after the
+# guard; under upstream's card latency (8 samples a sector, 30b530a) that
+# takes 5,167 frames from FINISHING to IDLE (measured 27 Sep 2026), so the
+# row must come later than the 3,800 it did while the card answered at once.
+OVERFLOW_STOP = 3600
+OVERFLOW_FRAMES = 7200
 
 
 def watched(s, extra=(), span=8):
@@ -602,7 +616,7 @@ def overflow(s):
     pokes = [(s["stems_hold"] + 3, 1)]
     pokes += [(s["stems_rd"] + i, (rd >> (24 - 8 * i)) & 0xff) for i in range(4)]
     pokes += [(s["stems_rd_off"] + i, (rd_off >> (24 - 8 * i)) & 0xff) for i in range(4)]
-    log, _, card, words, _ = port(s, OVERFLOW_FRAMES, stop_at=OVERFLOW_FRAMES - 400, tag="overflow",
+    log, _, card, words, _ = port(s, OVERFLOW_FRAMES, stop_at=OVERFLOW_STOP, tag="overflow",
                                   pokes=pokes, dump_blocks=False,
                                   calls=((OVERFLOW_FRAMES - 200, s["stems_action"]),),
                                   extra=watched(s, span=24))

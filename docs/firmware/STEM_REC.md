@@ -6666,6 +6666,29 @@ frames into play" is `crosscheck`'s port. 🟡 On upstream's port it lands
 about 2 frames into play: inferred from frame 0's shift above, not measured
 on its own.
 
+### 13.3 Upstream's card latency, merged 27 Sep 2026 ✅
+
+Upstream's port gives each ATA data sector 8 samples, about 181 µs, before
+its interrupt (`30b530a`, "a card-like figure"); until then it was 1. Merged
+into `main` (`9208165`) and measured the same evening:
+
+- **Every take is 23 frames longer:** `tap` 325, `full` 425, `rowstop` 225,
+  `stream` 1,725, `cut` 1,524, `wrap` 325. The same port binary, image and
+  card give 325 frames at the new latency and 302 with `--ata-latency 1`, so
+  the latency is the whole cause: the transport start reads the card, and
+  frame 0 falls later after the arm. Section 13.2's 2.6 frames and 12.2's
+  26 are two settings of the port, not two behaviors of STEM REC. The lag
+  stays 40, `cardfail` still writes 23 sectors (3,460,329 polls), and the
+  writer's stack is unchanged.
+- **The writer needs time to write.** From FINISHING to IDLE: 255 frames for
+  the eight-track take (302 frames, eight files), 5,167 for the overflow
+  run's 4 MiB ring. `verify_stems` now gives those two runs that time (the
+  eight-track run 400 → 700 frames; the overflow run's row 3,800 → 7,000,
+  its end 7,200). No check's bound changed.
+- 🟡 Inferred from those two runs: the emulated card writes about 2.2 MB/s
+  in one long file and about 1.7 MB/s across eight small ones. That is the
+  port's model, not the unit's card; flash A measures the card.
+
 ## 14. FAT32
 
 Every take before this section ran on a FAT16 image. The unit's card is
