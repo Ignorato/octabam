@@ -6,7 +6,7 @@ sends the proc call to P:0 = the reset vector. Image 99 hung
 every core that loaded a Spectrum on FX1 at project load, found under the
 ColdFire port; dsp_host cannot see it because it calls init and proc itself.
 
-    python3 tools/verify/verify_initregs.py [remix]      (default: bamsep26)
+    python3 tools/verify/verify_initregs.py [remix]      
 
 A static scan of each DSP module's source from `init:` to the first `rts`
 for a write to r1 / n1 / m1 (a `move ...,r1`, `,n1`, `,m1`, a `(r1)+` style

@@ -6,7 +6,7 @@ Every case below renders through tools/harness/dsp_host with BOTH payloads boote
 (docs/remixer/HARNESS.md "Two cores"): the senders and the delay on payload B where
 the unit runs them, the reverb on payload A, so the chain buffer and its
 liveness stamp cross the real core boundary. The image is the rig remix
-(bamsep26) as SPEC -- the stations must be in it. Since 20 Sep 2026 each
+(registry.fixture: the smallest carrying both servers, SEND, the stations and RIG HOSTS) as SPEC -- the stations must be in it. Since 20 Sep 2026 each
 engine's wet comes out on the track that hosts it (the hosts are not fed, so
 a host's stream IS its engine's wet*WET); there is no return station.
 

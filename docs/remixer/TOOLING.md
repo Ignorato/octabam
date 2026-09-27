@@ -138,7 +138,7 @@ the default m68k core does not decode this CPU.
 
 `tools/build/build_bus.py` is the builder (`make bus` = `XBUS=1 SPEC=1`).
 It builds a remix: a named selection of modules (`make bus REMIX=<name>`,
-default `bamsep26`; `make modules` lists the modules and the remixes,
+default `bottleservice`; `make modules` lists the modules and the remixes,
 `make remix` composes one interactively). Each `modules/<name>/manifest.py`
 declares one contribution against `tools/remix/schema.py`, and
 `tools/remix/ledger.py` refuses a selection whose modules collide.

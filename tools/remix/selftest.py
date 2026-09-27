@@ -550,7 +550,7 @@ def main():
              "repitch": (),
              "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "bamsep26": _rig, "rig-scenes": _rig, "rig-kits": _rig,
+             "rig-scenes": _rig, "rig-kits": _rig,
              "rig-mods": _rig, "usb": _rig, "usb-audio": _rig,
              "bottleservice": _rig}
     for _n in registry.remix_names():

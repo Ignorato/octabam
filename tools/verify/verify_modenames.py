@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The MODE formatter really does rename its neighbours -- CALLED, not read.
 
-    python3 tools/verify/verify_modenames.py [remix]      (default: bamsep26)
+    python3 tools/verify/verify_modenames.py [remix]      
 
 verify_labels' method, one step further. That file calls each
 select's formatter on the emulated ColdFire and compares what it PRINTED with

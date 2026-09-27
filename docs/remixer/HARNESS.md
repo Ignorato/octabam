@@ -186,7 +186,7 @@ rather than under the port (`docs/firmware/LEVEL_LAW.md`); the AMP stage
 was measured on a THRU and is inferred for FLEX/STATIC.
 
 **The rig on a real set:** `tools/hw/ot_project.py rigproj SONGSET
-out/set/RIGSONG bamsep26` writes the rig's layout (ids, defaults, mode
+out/set/RIGSONG bottleservice` writes the rig's layout (ids, defaults, mode
 views) into every part of a copy of the song set;
 `tools/harness/set_stems.py out/set/RIGSONG --bank B --part P --audio DIR
 --out D/stems` writes T1..T8 from each track's STATIC sample at its slot
@@ -241,7 +241,7 @@ probe (`--tone out/o9d/kickAB_late.wav`) for anything with a delay in it.
 
 ## pressure.py
 
-`python3 tools/harness/pressure.py price --remix bamsep26` enumerates every
+`python3 tools/harness/pressure.py price --remix bottleservice` enumerates every
 per-core layout the remix lets a user select (four tracks × FX1 ∈ {none,
 the FX1 rows of ours} × FX2 ∈ {SEND, this core's server, ours on the FX2
 chooser, stock rows at 0}, at most one server per core) and sums the static

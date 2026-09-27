@@ -3,7 +3,7 @@
 Generate a local Octatrack project with eight simultaneous FLEX tracks, three active LFOs per track, 15 locked parameter slots per step (14 on the tracks `verify_set` probes), and the remix's costly DSP paths:
 
 ```sh
-python3 tools/harness/stress_project.py --remix bamsep26            # writes out/stress-project
+python3 tools/harness/stress_project.py --remix bottleservice            # writes out/stress-project
 python3 tools/harness/stress_project.py --remix miniverb --layout   # print the placement, write nothing
 ```
 

@@ -176,7 +176,7 @@ PORT ?= A
 .PHONY: port-compare
 port-compare: ## One part under the firmware (ot_emu) and under rig_render on the same input: make port-compare PROJECT=dir [IMAGE=out/mainos_bus.bin] [PCARGS='--tone out/o9d/kickAB_late.wav']
 	$(need-remix)
-	@test -n "$(PROJECT)" || { echo "usage: make port-compare PROJECT=out/o9d/proj_t1eqA [IMAGE=out/mainos_bus.bin REMIX=bamsep26] [PCARGS=...]"; exit 1; }
+	@test -n "$(PROJECT)" || { echo "usage: make port-compare PROJECT=out/o9d/proj_t1eqA [IMAGE=out/mainos_bus.bin REMIX=bottleservice] [PCARGS=...]"; exit 1; }
 	python3 tools/harness/port_compare.py --project $(PROJECT) --remix $(REMIX) $(if $(IMAGE),--image $(IMAGE)) $(PCARGS)
 
 .PHONY: reverb
@@ -236,7 +236,7 @@ verify: ## The shared gates, then every gate the remix's modules declare (schema
 	else echo "  [SKIP] labels / mode names / hidden engines: no .venv (make emu-setup)"; fi
 	@# The knob click census: every continuous knob of the rig's DSP modules
 	@# moved mid-render, plus the garbage-start gate (a tone from block 0 on a
-	@# garbage block). Builds bamsep26 itself; a remix-independent census.
+	@# garbage block). Builds the rig fixture itself (registry.fixture); remix-independent.
 	$(PY) tools/verify/verify_knob_clicks.py
 	@# The modules' own isolated gates: each renders its module through
 	@# dsp_host on a scratch image it builds itself, or checks an author's

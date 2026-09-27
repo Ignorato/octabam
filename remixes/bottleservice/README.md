@@ -19,7 +19,7 @@ selection; named after the set it is built for.
 - **SCENES P2** (Sam Banks) — scene locks and the crossfader on page 2 of FX1 and FX2: hold a scene and turn a page-2 knob (FUNC + turn removes the lock); the fader lerps locked page-2 slots into the DSP frame, a select snapping at the midpoint; locks follow scene copy / paste / clear / undo and travel in the Part. Port only (`modules/scenes-p2/README.md`).
 - **SCENES P2 KITS** (Sam Banks) — the bridge over Octakit's page-2 editor wrappers: a held-scene turn writes the lock pool and never enters her wrapper; every other turn reaches it whole.
 
-DSP side identical to `bamsep26` (payload A 430 words free, B 1,128;
+DSP side identical to `bottleservice` (payload A 430 words free, B 1,128;
 worst core priced 2,792 of 3,120). Image 1.19 MB.
 
 ## Status
@@ -46,4 +46,4 @@ worst core priced 2,792 of 3,120). Image 1.19 MB.
 As [`usb-audio`](../usb/README.md#build-and-flash) with `REMIX=bottleservice`. **Back
 up projects first**: Octakit migrates Parts to Kits on load and downgrading
 may lose Kit data (her README). After the flash, on old projects:
-`ot_project.py host` / `stamp-defaults` as for `bamsep26`.
+`ot_project.py host` / `stamp-defaults` as for `bottleservice`.

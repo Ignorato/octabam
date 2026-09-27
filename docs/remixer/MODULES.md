@@ -32,12 +32,12 @@ buffer, both payloads, any track.
 modules/character/manifest.py      the declaration -- knobs, donor, id, ModeViews
 modules/character/character.asm    the engine -- init, proc, in place
 modules/character/README.md        status, measured vs inferred, what is open
-remixes/bamsep26/remix.py          a remix that carries it (FX1 and FX2)
+remixes/bottleservice/remix.py     a remix that carries it (FX1 and FX2)
 tools/verify/verify_character.py   render gates against a float reference
 ```
 
 ```bash
-make check REMIX=bamsep26
+make check REMIX=bottleservice
 python3 tools/remix/audition.py character out/dry/drums_110.wav DRV=64
 python3 tools/verify/verify_character.py
 ```

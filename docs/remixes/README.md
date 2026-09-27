@@ -6,12 +6,11 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 
 | remix | contains | proof |
 |---|---|---|
-| [`bamsep26`](../../remixes/bamsep26/README.md) | The rig: bus (BusVerb on T5 + BusDelay on T1) + three stations. | on hardware: Sam's MKII, image 43 (OCTABAM43, 21 Sep 2026) |
 | [`bottleservice`](../../remixes/bottleservice/README.md) | The rig + USB MIDI + USB AUDIO + Octakit. | port-gated: `make check` with the stress project; Kit save, reload and copy measured |
 | [`rig-kits`](../../remixes/rig-kits/README.md) | The rig + Octakit. | `make check` |
 | [`rig-mods`](../../remixes/rig-mods/README.md) | The rig + MIDI SCENES + Octakit, bridged. | `make check` |
 | [`rig-scenes`](../../remixes/rig-scenes/README.md) | The rig + MIDI SCENES. | `make check` |
-| [`usb`](../../remixes/usb/README.md) | bamsep26 + USB MIDI (class-compliant, mirrors DIN). | `make check` |
+| [`usb`](../../remixes/usb/README.md) | The rig + USB MIDI (class-compliant, mirrors DIN). | `make check` |
 | [`usb-audio`](../../remixes/usb-audio/README.md) | usb + USB AUDIO: the tracks, MAIN and CUE over USB (UAC2, 20 channels). | on hardware: Sam's MKII, image 64, 25 Sep 2026 |
 
 ## Effects

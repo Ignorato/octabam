@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The GRAIN cycle lever changes GRAIN and nothing else.
 
-    python3 tools/verify/verify_grains.py [remix]      (default: bamsep26)
+    python3 tools/verify/verify_grains.py [remix]      
 
 `schema.Remix.grains = 2` rolls BusDelay's reader from four grains per line
 to two, for the cycles: the delay's core cannot carry four active stations
