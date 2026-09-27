@@ -417,6 +417,13 @@ dsp=DspSection(
   spelled `$30000`, and the literal is censused.
 - **`ptable`**: a tuple of words the build parks in the stock curve bank
   (X:0x4840) and points the source's `$fab1e0` literal at.
+- **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
+  label)`). The two stock words at `site` become `jsr >label` after
+  placement, the build asserting them first; the section replays the
+  displaced instruction. A section with hooks and no `MenuEntry` is placed
+  on `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject
+  at the frame head, P:0x88, on payload A. The ledger refuses two sections
+  on one site of one payload.
 - **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
 
 ## Declaring a ColdFire module
@@ -780,8 +787,9 @@ own.
 
 `tools/remix/ledger.py` refuses a build whose selected modules collide, and
 names both: FX2 ids, cave ranges, hook sites, detour sites, pokes, runtime
-writes, core-private Y words, the per-core FX2 instance buffer region,
-appended runtimes (one per image), arena reserves.
+writes, DSP hook sites per payload (`DspSection.hooks`), on-chip SRAM
+windows (`Claims.sram`), core-private Y words, the per-core FX2 instance
+buffer region, appended runtimes (one per image), arena reserves.
 
 Core-private Y is derived by scanning your source for `y:>$09xx`. Low Y is
 per core, not per instance. Declare `Claims(reserved_private_y=…)` only for

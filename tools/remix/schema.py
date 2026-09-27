@@ -281,6 +281,24 @@ class MenuEntry:
 
 
 @dataclass(frozen=True)
+class DspHook:
+    """A `jsr` planted in STOCK DSP code, into a placed section.
+
+    The two stock words at `site` (one two-word instruction) become
+    `jsr >label`; the section replays the displaced instruction itself. The
+    build asserts `stock` before it writes, on every payload the section is
+    placed on, and the ledger refuses two modules hooking one site. This is
+    how DSP code with no chooser row is reached at all: USB AUDIO IN's RX
+    inject at the frame head, P:0x88.
+    """
+
+    site: int                                  # P address of the displaced instruction
+    stock: tuple[int, int]                     # its two words, as the image has them
+    label: str                                 # the section's entry for this site
+    note: str = ""
+
+
+@dataclass(frozen=True)
 class DspSection:
     """The module's DSP56300 code.
 
@@ -315,6 +333,10 @@ class DspSection:
     # its limits). ⚠️ So a module with a table may read P for NOTHING
     # ELSE: every `p:(` in its code is the table.
     ptable: tuple[int, ...] = ()
+    # Entries into this section from STOCK code (schema.DspHook). A section
+    # with hooks and no MenuEntry is placed on `payloads` only and takes no
+    # dispatch entry; one with a menu may carry hooks as well.
+    hooks: tuple[DspHook, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -455,6 +477,12 @@ class Claims:
     # 1.40MIDISC8). SCENES P2's pool is the same 144 bytes as the sparse
     # blob, so the ledger refuses the pair by name.
     part_window: tuple[tuple[int, int, str], ...] = ()
+    # ON-CHIP SRAM a module's DMA engine reads or writes: (address, length,
+    # what). 32 KB at 0x80000000; stock's highest static use ends at
+    # 0x80007874 (a 768-byte buffer at 0x80007574). USB AUDIO IN keeps its
+    # dTDs and packet buffers in the top 1 KB. The ledger refuses an overlap
+    # between two modules; the stock extent is the author's census.
+    sram: tuple[tuple[int, int, str], ...] = ()
 
     def __post_init__(self):
         if self.buffer_words is not None and not self.stock_instance_buffer:
@@ -925,6 +953,9 @@ class Module:
                     f"0x{self.menu.fx2_id:02x} is not a stock effect's -- a "
                     f"replacement must carry the id it replaces, or the stock "
                     f"effect stays and yours is a separate row")
+        if self.dsp is not None and self.menu is None and not self.dsp.hooks:
+            raise ValueError(f"{self.name}: DSP code with no menu entry and no "
+                             f"DspHook is unreachable -- nothing dispatches it")
         if self.kind is Kind.STOCK and (self.dsp is not None or self.cf_patches):
             raise ValueError(f"{self.name}: a STOCK entry carries no code or "
                              f"caves -- they are already in the image (its "

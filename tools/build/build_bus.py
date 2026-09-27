@@ -223,6 +223,13 @@ PAGE2_COUNTS = {m.key: {i: p.count for i, p in enumerate(m.params)
 STEPPED_SLOTS = {m.key: m.stepped_slots for m in _CLONED if m.stepped_slots}
 BIPOLAR_SLOTS = {m.key: m.bipolar_slots for m in _CLONED if m.bipolar_slots}
 _DEF_ASM = {m.key: m.dsp.asm for m in _CLONED}
+# DSP code reached from STOCK code rather than a chooser row
+# (schema.DspSection.hooks with no MenuEntry): placed like an effect, on
+# the payloads it names, with no dispatch entry. USB AUDIO IN's RX inject.
+HOOKED = [k for k in REMIX.modules
+          if _MODS[k].dsp is not None and _MODS[k].menu is None]
+for _k in HOOKED:
+    _DEF_ASM[_k] = _MODS[_k].dsp.asm
 
 
 # ---- P-relative field offsets (PARAM_PAGES.md section 5b) ------------------
@@ -432,7 +439,7 @@ ASM_SRC = {k: v for k, v in {**_DEF_ASM,
                              else "dsp/page2_probe.asm" if os.environ.get("PROBE") == "1"
                              else "dsp/tempoprobe.asm" if os.environ.get("TPROBE") == "1"
                              else os.environ.get("RVSRC") or _DEF_ASM.get("REVERB SERVER")),
-           "SEND": _DEF_ASM.get("SEND")}.items() if k in CARRIED}
+           "SEND": _DEF_ASM.get("SEND")}.items() if k in CARRIED or k in HOOKED}
 
 # per payload: donor P addresses for CODE space, the proven null stub, the
 # X:0x215/X:0x235 module address, and DELAY SERVER's payload-specific Y base
@@ -548,7 +555,7 @@ def _roundtrip(list_out, blob, org, label):
                  f"in tools/build/build_bus.py updated:\n{sites or '    (no sites)'}")
 
 
-def assemble(src_text, org, label=""):
+def assemble_syms(src_text, org, label=""):
     global _SCRATCH
     if _SCRATCH is None:
         import tempfile
@@ -565,6 +572,13 @@ def assemble(src_text, org, label=""):
                 (l.split() for l in symf.read_text().split("\n") if l))
     if DISASM.exists() and os.environ.get("NOROUNDTRIP") != "1":
         _roundtrip(r.stdout, blob, org, label)
+    return words, syms
+
+
+def assemble(src_text, org, label=""):
+    """(words, init address, proc address) of an effect; a section with no
+    dispatch entry (DspSection.hooks only) goes through assemble_syms."""
+    words, syms = assemble_syms(src_text, org, label)
     return words, syms["init"], syms["proc"]
 
 
@@ -2057,6 +2071,20 @@ mkgo:""",
         pp = PP[tag]
         mods, _ = modules(bytes(img), va, ln)
 
+        def _p_off(addr):
+            """Image address of P word `addr`, through the record holding it."""
+            for sp, a, cnt, off in mods:
+                if sp == 0 and a <= addr < a + cnt:
+                    return va + off + (addr - a) * 3
+            sys.exit(f"payload {tag}: no P record holds P:0x{addr:05x}")
+
+        def rdw_p_at(addr):
+            i = _p_off(addr) - BASE
+            return img[i] | (img[i + 1] << 8) | (img[i + 2] << 16)
+
+        def wrw_p_at(addr, v):
+            wrw_p(_p_off(addr), v)
+
         def record(addr):
             rec = [m for m in mods if m[0] == 0 and m[1] == addr]
             if len(rec) != 1:
@@ -2100,7 +2128,7 @@ mkgo:""",
             # Nothing harvested is the honest default for a stock chooser --
             # every word belongs to a stock effect that is using it -- but a
             # module of ours has to go somewhere.
-            _need = [m for m in _SEL if m.dsp is not None]
+            _need = [m for m in _SEL if m.dsp is not None] + [_MODS[k] for k in HOOKED]
             if _need:
                 sys.exit(f"payload {tag}: nothing is harvested, so there is "
                          f"nowhere to place "
@@ -2383,7 +2411,7 @@ mkgo:""",
         # ROTINIT / ROTLATCH markers are substituted by _prep like SEND's.
         # It MAY also declare its own DEV repro hooks below -- the generic version of the arms the three
         # core sources have at the top of main().
-        for _k in CARRIED:
+        for _k in CARRIED + [k for k in HOOKED if tag in _MODS[k].dsp.payloads]:
             if _k not in _texts and _k in ASM_SRC:
                 _src_k = pathlib.Path(ASM_SRC[_k]).read_text()
                 _mk = remix_modules().get(_k)
@@ -2465,7 +2493,7 @@ hostquit:
 
         plan = tuple(
             (m.key, _prep(_ybase(m, _texts[m.key]), m.key, m.dsp.r7_latch_slot))
-            for m in sorted((remix_modules()[k] for k in CARRIED
+            for m in sorted((remix_modules()[k] for k in CARRIED + HOOKED
                              if k in _texts), key=lambda m: m.dsp.priority))
         if _x:
             _g = [n for n, t in plan if "never housekeeps" in t]
@@ -2688,10 +2716,10 @@ hostquit:
                         _s2, _xt_sites[name] = _p2x(_s2, name)
                     else:
                         _c += len(_tab)
-                _w, _ia, _pa = assemble(_s2, _c, label=name)
+                _w, _syms = assemble_syms(_s2, _c, label=name)
                 _last = (_c, len(_w))
                 if _c + len(_w) <= _end:
-                    _fit = (_r, _tab, _s2, _c, _w, _ia, _pa)
+                    _fit = (_r, _tab, _s2, _c, _w, _syms)
                     break
             if _fit is None:
                 if len(runs) < 2 and _last is not None:
@@ -2708,7 +2736,15 @@ hostquit:
                          f"separate runs but the largest single opening has "
                          f"only {_big}; harvest an effect BETWEEN two runs to "
                          f"join them into one")
-            _r, tab, src, cursor, words, init_a, proc_a = _fit
+            _r, tab, src, cursor, words, _syms = _fit
+            _hooks = remix_modules()[name].dsp.hooks if name in remix_modules() else ()
+            init_a, proc_a = _syms.get("init"), _syms.get("proc")
+            if name not in HOOKED and (init_a is None or proc_a is None):
+                sys.exit(f"payload {tag}: {name} has no init/proc labels")
+            for _h in _hooks:
+                if _h.label not in _syms:
+                    sys.exit(f"payload {tag}: {name}'s hook at P:0x{_h.site:05x} names "
+                             f"label {_h.label!r}, which the source does not define")
             if tab is not None and _xa is not None:
                 if len(tab) != _xa[1]:
                     sys.exit(f"payload {tag}: {name}'s table is {len(tab)} "
@@ -2740,6 +2776,23 @@ hostquit:
                           f"({len(tab):4d} words)  {name}'s table")
             place(words, cursor)
             _r["cursor"] = cursor + len(words)
+            for _h in _hooks:
+                # the two stock words become `jsr >label`; the section
+                # replays the displaced instruction (schema.DspHook)
+                _got = (rdw_p_at(_h.site), rdw_p_at(_h.site + 1))
+                if _got != tuple(_h.stock):
+                    sys.exit(f"payload {tag}: {name}'s hook site P:0x{_h.site:05x} holds "
+                             f"{_got[0]:06x} {_got[1]:06x}, not stock "
+                             f"{_h.stock[0]:06x} {_h.stock[1]:06x}; refusing")
+                wrw_p_at(_h.site, 0x0BF080)
+                wrw_p_at(_h.site + 1, _syms[_h.label])
+                print(f"  {'HOOK':13} P:0x{_h.site:05x} -> {name} {_h.label} "
+                      f"P:0x{_syms[_h.label]:05x}  {_h.note}")
+            if name in HOOKED:
+                print(f"  {name:13} P:0x{cursor:05x}..0x{cursor + len(words):05x} "
+                      f"({len(words):4} words)  no dispatch entry: reached by its hook(s)")
+                cursor += len(words)
+                continue
             wrw_p(pp["xtab"] + NEW_IDS[name] * 3, init_a)
             wrw_p(pp["xtab"] + (32 + NEW_IDS[name]) * 3, proc_a)
             if name == REMIX.fallback:
