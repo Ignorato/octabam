@@ -26,11 +26,10 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           a poked entry of 50 and expects the same entry updated, count 1.
 
 SKIPs without a project, without the port, or for a remix without SCENES
-P2. Under a remix with Octakit the editor section SKIPs by name: her editor
-wrapper refuses a `--call` (no UI context) once she is active, and since 28
-Sep 2026 the port's load runs to completion, so she is (before, the fixed
-20 s load left her quiesced and her wrapper trampolined to stock). The knob
-and fader checks run under every remix.
+P2. Under a remix with Octakit the editor call runs through her wrapper
+(SCENES P2 KITS): until 28 Sep 2026 SCENES P2's entry detour displaced
+twelve bytes and her trampoline continued at entry+8 into a nop, so the
+body read a garbage slot and her marker check halted every page-2 turn.
 """
 import argparse, os, pathlib, shutil, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
@@ -168,11 +167,6 @@ def main():
             check(f"fader {xf}: ping {ping} T1 TIME (hw 26 lo) = {r[53]} (want {want_time})", r[53] == want_time)
 
     # ---- the editor with a scene held -------------------------------------
-    if "OCTAKIT" in remix.modules:
-        print(f"  [SKIP] editor: {a.remix} carries OCTAKIT, whose editor wrapper refuses a direct call "
-              f"once she is active (gk_track_setup_byte_fatal); drive it from the panel instead")
-        print(f"verify_scenesp2: {'FAIL' if fails else 'ok'} ({fails} failure(s))")
-        return 1 if fails else 0
     early = f"{TRACK_CUR:#x}=0;{SCENE_HELD + 3:#x}=1;{PART_DISP:#x}=0"
     dumps = ";".join([f"{DBPTR:#x},4={OUT / 'dbptr.bin'}"]
                      + [f"{BLOB + b * BANK_STRIDE + POOL_OFF:#x},12={OUT / f'pool_{b}.bin'}" for b in range(16)]

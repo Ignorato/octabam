@@ -13,6 +13,12 @@ are skipped and `P2_NEXT2` / `P2_NEXT1` are defined as the wrappers they
 carried; SCENES P2's stubs sit at the entries and jump on to her wrapper
 whenever no scene is held.
 
-Measured under the port (rig-kits): the held-scene call returns and writes
-the pool; the unheld call reaches her wrapper, which refuses a `--call` the
-same way plain rig-kits does (no UI context).
+The stubs' detours displace eight bytes, the span her entry write takes,
+so her trampoline's continuation at entry+8 finds the stock slot load
+intact. Measured under the port (rig-kits, bottleservice, 28 Sep 2026):
+the held-scene call returns and writes the pool; the unheld call reaches
+her wrapper, whose protocol runs whole (marker 1, result validated), from
+a `--call` and from the panel alike. Until 28 Sep the detours displaced
+twelve bytes and that load was a nop under her: every unheld page-2 turn
+halted in `gk_track_setup_byte_fatal`, which had been read as her wrapper
+refusing a call without UI context (`docs/remixer/FAILURE_MODES.md`).
