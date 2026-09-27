@@ -72,6 +72,11 @@ class ClassifyTests(unittest.TestCase):
         for p in ("tools/verify/acceptance.py", "tools/verify/tests/test_x.py", "tools/harness/pressure.py"):
             self.assertIn("make test-acceptance", commands([p]), p)
 
+    def test_the_classifier_itself_reaches_only_its_tests(self):
+        self.assertEqual(commands(["tools/verify/reach.py"]), ["make test-acceptance"])
+        self.assertEqual(commands(["tools/verify/tests/test_reach.py"]), ["make test-acceptance"])
+        self.assertIn('make check-shared REMIXES="bamsep26 miniverb usb"', commands(["tools/verify/module_gates.py"]))
+
     def test_toolchain_port_docs_ci(self):
         self.assertEqual(commands(["tools/patches/dsp56300.patch"])[0], "make ci-dsp")
         self.assertIn("make ci-emu", commands(["tools/emu/ot_emu/machine.h"]))

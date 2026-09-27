@@ -126,9 +126,12 @@ def classify(paths, ctx):
                 gates = [CMD["verify_docs"]]
             else:
                 gates = [cmd_check(name), cmd_accept(name)]
-        elif path in ("tools/verify/acceptance.py", "tools/verify/reach.py",
-                      "tools/verify/module_gates.py", "tools/harness/stress_project.py",
-                      "tools/harness/pressure.py") or path.startswith("tools/verify/tests/"):
+        elif path == "tools/verify/reach.py" or path.startswith("tools/verify/tests/"):
+            # The classifier and its tests change what is PRINTED, not what
+            # any gate runs; their own tests are the gate.
+            gates = [CMD["test-acceptance"]]
+        elif path in ("tools/verify/acceptance.py", "tools/verify/module_gates.py",
+                      "tools/harness/stress_project.py", "tools/harness/pressure.py"):
             gates = [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes]
             note = "the acceptance machinery: every remix"
         elif path.startswith("tools/verify/"):
