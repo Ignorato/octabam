@@ -7,6 +7,18 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- `make reach` places a file by what depends on it (28 Sep 2026): the
+  Python imports and the `tools/x/y.py` paths the code runs or reads (not
+  the ones in comments, docstrings or messages) form a graph over
+  `tools/`; a change reaches the gates that transitively depend on it. A
+  gate of the shared half reaches `make check-shared` alone (155 s, was
+  every remix's per-remix half too); a gate of the per-remix half every
+  `check-remix` without the shared half; a file no gate depends on
+  (`tools/hw/bcr2000.py`, a render tool) nothing, named as such. The
+  Makefile is placed by which targets changed against the base: only the
+  check graph, a variable or a define reaches every remix; two new Ghidra
+  targets (#483) reach nothing. Before, `tools/harness/`, `tools/hw/`,
+  `scripts/` and any Makefile edit reached every remix.
 - The build's memo (28 Sep 2026): `tools/remix/runtime_build.py` keeps the
   aPLib packer's output by the sha256 of its input and a `Runtime`'s three
   artifacts (raw, packed, append) plus symbols by the sha256 of the recipe,
