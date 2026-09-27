@@ -93,9 +93,10 @@ lines persist.
   (−123 dBFS) and one PHSR setting by 1 LSB; every other setting is
   bit-identical. `verify_modulation` reference errors unchanged (JUNO
   2.33e-5 → 2.36e-5, PHSR hard 5.55e-5 → 5.53e-5); `make verify-knobs` 0
-  flagged, 0 garbage-start flagged. Priced, not applied: LOFI removed −22
-  words/sample in every loop (its inline hold and mask); PHSR capped at 4
-  stages −76 (two trips of the roll), which drops 6/8-stage phasing.
+  flagged, 0 garbage-start flagged. Priced on a scratch edit, not applied:
+  LOFI removed −18 words/sample in every loop (its inline hold and mask;
+  LINE 336, PHSR 280, COMB 311); PHSR capped at 4 stages −68 (two trips of
+  the roll: PHSR 230), which drops 6/8-stage phasing.
 - **1,480 words** with the knob ramps (26 Sep 2026; payload A FREE 61 in
   the rig; pricer per loop LINE 404, PHSR 397, COMB 339 words/sample).
   Before them: 1,383 words (`make bus`, 23 Sep 2026; 1,352 on 22 Sep, 1,128 on 20
