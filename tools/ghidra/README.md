@@ -47,7 +47,8 @@ both processors' SLEIGH with the release's own compiler and the loop-end
 analyzer against the release's jars (`lib/DSP56300.jar`), and builds the
 native decompiler with the release's gradle wrapper
 (`support/gradle/gradlew buildNatives`) when the release has none for the
-machine. The 12.1.4 release ships them for `linux_x86_64` and
+machine (the platform of the JDK's `java`, as Ghidra picks it, so an
+x86_64 `bash` under Rosetta still gets `mac_arm_64`). The 12.1.4 release ships them for `linux_x86_64` and
 `win_x86_64` only; without one no DSP function decompiles and MAIN_OS
 drops to 2,147 functions / 181,378 instructions, two of the three callers
 of `0x40054cd8` missing (measured without one in

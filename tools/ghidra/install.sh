@@ -55,12 +55,18 @@ JMIN="$(sed -n 's/^application.java.min=//p' "$PROPS")"
 JVER="$("$JAVAC" -version 2>&1 | sed -n 's/^javac \([0-9]*\).*/\1/p')"
 [ -n "$JVER" ] && [ "$JVER" -ge "${JMIN:-21}" ] || die "$JAVAC is JDK ${JVER:-?}; Ghidra $VERSION needs ${JMIN:-21}+ (set JAVA_HOME)"
 
-case "$(uname -s)-$(uname -m)" in
-    Darwin-arm64) PLATFORM=mac_arm_64 ;;
-    Darwin-x86_64) PLATFORM=mac_x86_64 ;;
-    Linux-x86_64) PLATFORM=linux_x86_64 ;;
-    Linux-aarch64 | Linux-arm64) PLATFORM=linux_arm_64 ;;
-    *) die "no Ghidra native platform for $(uname -s) $(uname -m)" ;;
+# The native platform is the JVM's, as Ghidra and gradle pick it, not the
+# shell's: an x86_64 bash under Rosetta reports x86_64 on an arm64 Mac.
+JAVA="${JAVA_HOME:+$JAVA_HOME/bin/}java"
+JPROPS="$("$JAVA" -XshowSettings:properties -version 2>&1)" || die "$JAVA -XshowSettings:properties failed"
+jprop() { printf '%s\n' "$JPROPS" | sed -n "s/^ *$1 = //p"; }
+JOS="$(jprop os.name)" JARCH="$(jprop os.arch)"
+case "$JOS-$JARCH" in
+    "Mac OS X-aarch64") PLATFORM=mac_arm_64 ;;
+    "Mac OS X-x86_64") PLATFORM=mac_x86_64 ;;
+    Linux-amd64 | Linux-x86_64) PLATFORM=linux_x86_64 ;;
+    Linux-aarch64) PLATFORM=linux_arm_64 ;;
+    *) die "no Ghidra native platform for $JAVA's os.name=${JOS:-?} os.arch=${JARCH:-?}" ;;
 esac
 
 [ "$VERSION" = "$TESTED" ] || say "warning: $STOCK is Ghidra $VERSION; this is written against $TESTED (continuing if the patch applies)"
