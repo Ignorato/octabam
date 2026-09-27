@@ -18,8 +18,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 from remix import ledger, registry, schema, state, stock  # noqa: E402
-from remix.schema import (CavePatch, Claims, DspSection, Kind, MenuEntry,  # noqa: E402
-                          Module, Param, YBase)
+from remix.schema import (CavePatch, Claims, DramRegion, DspSection, Kind,  # noqa: E402
+                          Linked, MenuEntry, Module, Param, YBase)
 
 
 def _effect(name, fx2_id, priority=0, reserved=(), buffers=False,
@@ -70,6 +70,14 @@ def _cave(name, cave_addr, length=16, hook_addr=None):
     )
 
 
+def _region(name, symbol):
+    return Module(
+        name=name, key=name.upper(), kind=Kind.CF_PATCH, doc="fixture",
+        linked=(Linked(name, "does/not/exist.s", dram=True),),
+        dram_regions=(DramRegion(symbol, 0x1000),),
+    )
+
+
 CASES = [
     ("two modules claiming one FX2 id",
      [_effect("alpha", 0x07), _effect("beta", 0x07)], "fx2 id"),
@@ -106,6 +114,8 @@ CASES = [
     ("a table module beside a module addressing the stock curve bank",
      [_effect("alpha", 0x07, ptable=(1, 2, 3)),
       _effect("beta", 0x1e, asm=str(_HARD_ASM))], "X:0x4840 curve bank"),
+    ("two modules claiming one DRAM region symbol",
+     [_region("alpha", "ring"), _region("beta", "ring")], "DRAM region"),
 ]
 
 CLEAN = [_effect("alpha", 0x07, reserved=(0x0905,)),

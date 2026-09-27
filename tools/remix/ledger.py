@@ -434,4 +434,15 @@ def check(selected) -> list[str]:
                       f"a core share this word")
             owner[w] = m.name
 
+    # ---- DRAM regions (schema.DramRegion) ---------------------------------
+    # A region is a linker symbol; two modules defining the same one would
+    # both link against whichever --defsym came last, silently sharing it.
+    dram_owner: dict[str, str] = {}
+    for m in selected:
+        for r in getattr(m, "dram_regions", ()):
+            if r.symbol in dram_owner:
+                clash("DRAM region", dram_owner[r.symbol], m.name,
+                      f"the symbol {r.symbol}")
+            dram_owner[r.symbol] = m.name
+
     return problems
