@@ -68,6 +68,18 @@ state untouched. A held-scene edit alone does not mark the Kit dirty in
 her bookkeeping (the stock Part dirty bits are set). Her writes touch none
 of the other seven sites.
 
+The entry detours displace eight bytes (`lea` + `movem`), the span her
+own entry write takes, and `fx2_stock` / `fx1_stock` continue at entry+8
+where the stock `moveal %sp@(32),%a2` still stands. Until 28 Sep 2026 they
+displaced twelve and the build nopped that instruction: her trampoline
+replays eight bytes and continues at entry+8, so under her the body ran
+with a garbage slot in a2, took its slot>5 exit before the store, her
+marker count read 0 and `gk_track_setup_byte_fatal` halted the unit on
+every page-2 knob turn (rig-kits, bottleservice; measured under the port
+from the panel, never flashed). The same halt was what the direct `--call`
+of the editors met, which had been read as her wrapper refusing a call
+without UI context.
+
 ## Measured (the port, 26 Sep 2026; `tools/verify/verify_scenesp2.py`)
 
 - bamsep26 and rig-kits (Octakit): pool `{scene 0: MODE 1, TIME 100;

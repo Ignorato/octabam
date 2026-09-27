@@ -3,6 +3,30 @@
 Symptom → cause (measured, inferred or open) → fix. Add an entry the moment
 a mode is seen on hardware.
 
+## Every FX1/FX2 page-2 knob turn halts under Octakit with SCENES P2 (rig-kits, bottleservice) ✅ measured under the port (28 Sep 2026), never flashed, fixed the same day
+
+**Symptom.** With SCENES P2 and Octakit in the image (SCENES P2 KITS
+bridging the editor entries), any turn of knobs A-F on an EFFECT SETUP
+page stops the unit: `illegal` at `gk_track_setup_byte_fatal`
+(`0x45d28e98` in bottleservice's runtime). kits (Octakit alone) takes
+the same turn.
+
+**Cause.** SCENES P2's entry detours at `0x4003a9dc` / `0x4003abe4`
+displaced twelve bytes, so the build nopped the third stock instruction
+(`moveal %sp@(32),%a2`, the slot argument). Octakit's own entry write is
+eight bytes and her trampoline replays eight, continuing at entry+8: with
+the bridge her wrapper ran the body through those nops, a2 held a stale
+code address, the body took its slot>5 exit before the store, her marker
+count read 0 and `validate_result` reported corrupt. Traced under the
+port with `--watch-pc` on the wrapper's branch sites and on the editor's
+entry, marker and exit.
+
+**Fix.** The detours displace eight bytes (`pad_to=8`) and the stubs
+continue at entry+8 (`modules/scenes-p2`). Measured: knob B moves slot 7,
+a four-tick MODE turn lands MODE 1 with MODE DEFAULTS' view in the lane,
+no halt; `verify_modedefaults` and `verify_scenesp2` run their editor
+calls under bottleservice again (their Octakit SKIPs removed).
+
 ## Junk on main R for one frame, from T1 with BusDelay, about twice a minute ✅ measured on the unit (images 32-38, 25 Sep 2026), fix built (image 39)
 
 **Symptom.** With BusDelay hosted on T1 (STATIC, panned hard left), main R
