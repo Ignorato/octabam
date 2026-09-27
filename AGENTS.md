@@ -57,7 +57,8 @@ the floor.
 
 **Before opening a PR, and again before merging one:** rebase onto
 `origin/main` and run every gate in `CONTRIBUTING.md` "Before you open a
-PR" on the rebased tree; list each command and its result in the PR body.
+PR" on the rebased tree (`make reach` lists them from the diff; `RUN=1`
+runs them); list each command and its result in the PR body.
 Gates run before the rebase are not a result. PR #396 was written on
 `4b07c52`; #415 and #437 renamed SEND's and BusDelay's knobs after that,
 the merge was textually clean in `pressure.py`, and its stress fixture

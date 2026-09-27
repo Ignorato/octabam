@@ -11,36 +11,36 @@ that its tools or fixture are missing.
 
 Use your own stock 1.40C, initialized submodules, the documented assembler
 toolchain, DSP host, emulator venv and a worktree-local `make emu-cf`
-build. Nothing flashes hardware.
+build. Nothing flashes hardware. Any remix:
 
 ```sh
-make accept REMIX=bamsep26 STRESS_SOURCE="/path/to/local/project"
+make accept REMIX=<name> STRESS_SOURCE="/path/to/local/project"
 # Or supply a project you prepared for this remix:
-make accept REMIX=bamsep26 OT_PROJECT="/path/to/local/project"
+make accept REMIX=<name> OT_PROJECT="/path/to/local/project"
 # Optional fresh destination and per-command timeout:
-make accept REMIX=bamsep26 OT_PROJECT="/path/to/local/project" \
+make accept REMIX=<name> OT_PROJECT="/path/to/local/project" \
   ACCEPTARGS='--out out/acceptance/review-1 --timeout 3600'
 ```
 
-The generated fixture reuses the stress-project work from
-`repeat98/octamad` commit `28957d7`: eight FLEX tracks, three LFOs per
-track, dense parameter locks, and four Parts/patterns.
-FX2 slot 0 (DEL) on T2 and T5 is reserved for `verify_set`'s CC 40 checks
-(14 locked slots on those tracks, 15 elsewhere); their third LFO targets
-FX1 instead.
-Only its generator is distributed. Project bytes stay local.
-The sample path is project-relative, so `verify_set` can find and stage
-the generated audio. See [STRESS_PROJECT](../../tools/harness/STRESS_PROJECT.md).
+`STRESS_SOURCE` names a locally saved project whose `.work`/`.strd`
+files seed the fixture; `tools/harness/stress_project.py` derives the
+placement from the remix's selection and writes eight FLEX tracks, three
+LFOs per track, dense parameter locks and four Parts/patterns
+([STRESS_PROJECT](../../tools/harness/STRESS_PROJECT.md)). FX2 slot 0
+on T2 and on every server's track carries no lock or LFO: `verify_set`
+sends CC 40 there and reads the value back. Only the generator is
+distributed; project bytes stay local. The sample path is
+project-relative, so `verify_set` can find and stage the generated audio.
 
 Acceptance runs these stages, serially:
 
-1. Check prerequisites and the available stress profile.
+1. Check prerequisites and the pressure profile (below).
 2. Generate or fingerprint the project fixture.
 3. Run the existing `make check` with the exact remix, build and project;
    refuse missing evidence even when a verifier returns zero.
 4. Save the restored shipping image's fingerprint and price the selected
    remix. Reject a static estimate above its declared DSP wall.
-5. Price the existing rig's layouts; reject any layout over the wall.
+5. Price the selection's layouts; reject any layout over the wall.
 6. Render the six dearest and four seeded random layouts per core using
    deterministic input on all eight tracks, dirty memory and write guards.
    Record the per-layout flags and instruction meters.
@@ -52,12 +52,20 @@ worktree's `out/`, so run one acceptance job per worktree.
 
 ## Coverage is explicit
 
-The initial DSP pressure profile covers precisely the six DSP modules
-in bamsep26 (SEND, the two servers and the three stations). Other DSP
-selections are **blocked** until a profile specifies their worst settings,
-routing, fixtures and assertions. Adding a module must not silently test
-it at default settings. ColdFire-only remixes have no DSP pressure stage;
-the ordinary image, oracle and project gates still apply.
+The pressure stages (5, 6) and the fixture's knob values read each
+module's dearest settings from its manifest (`schema.Module.dear`: the
+mode the pricer calls the worst loop, work-gating knobs at maximum,
+checked against the module's own knobs when the manifest loads). The
+profile is **ready** when every DSP module in the selection declares
+one, **blocked** with the missing modules' names otherwise, and
+**not applicable** for a selection with no DSP module (the image, oracle
+and project gates still apply). A module is never rendered at default
+settings and called covered; a module PR that wants the pressure stages
+adds `dear` beside its gates.
+
+Declared on 27 Sep 2026: SEND, DELAY SERVER, REVERB SERVER, CHARACTER,
+SPECTRUM, MODULATION. Blocked until their authors declare one: MINIVERB,
+TAPE ECHO, EUCLID, CF METER.
 
 A generated project's automated playback checks A01 through the existing
 `verify_set`. A02-A04 exist for further testing; this workflow does not
@@ -106,11 +114,13 @@ before sharing: filenames and paths can reveal local project information.
 ## PR checks
 
 `make test-acceptance` runs firmware-free negative controls: successful
-commands that skip, stderr skips, swallowed failures, timeouts, unknown
-DSP profiles, missing prerequisites, stale destinations, absent meters, incomplete sampling and budget
-overruns. The CI job tests this machinery only; a green job does not
-replace a local acceptance report.
+commands that skip, stderr skips, swallowed failures, timeouts, a module
+without `dear`, missing prerequisites, stale destinations, absent
+meters, incomplete sampling and budget overruns; and the `make reach`
+path classifier against a fake registry. The CI job tests this machinery
+only; a green job does not replace a local acceptance report. CI also
+prints `make reach`'s gate list for every pull request.
 
 Submit the command, source revision, report status, coverage, skipped or
 blocked stages, and outstanding hardware evidence with a module PR.
-A new module's profile and behavioral tests belong in that same PR.
+A new module's gates, `dear` and behavioral tests belong in that same PR.

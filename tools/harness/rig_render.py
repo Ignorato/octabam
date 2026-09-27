@@ -263,7 +263,7 @@ def write_wav(path, L, R):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--image", default="out/mainos_bus.bin", help="a BUILT image (make bus REMIX=...)")
-    ap.add_argument("--remix", default=os.environ.get("REMIX", "bamsep26"),
+    ap.add_argument("--remix", default=os.environ.get("REMIX"),
                     help="which remix the image is (resolves ids to modules)")
     ap.add_argument("--tracks", default="", help="T1=D,T2=S,... (letter or module KEY; 'a+b' = FX1+FX2)")
     ap.add_argument("--project", help="project dir: take ids AND knobs from a part")

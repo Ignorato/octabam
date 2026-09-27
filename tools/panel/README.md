@@ -32,8 +32,8 @@ it; `/transport` taps the matrix keys. His text below still describes
 both backends.
 
 ```sh
-make panel REMIX=bamsep26                       # OT_PROJECT=<dir>, or the path in ~/.octabam_project
-make panel REMIX=bamsep26 PANEL_PORT=8571 PANELARGS='--sound off'
+make panel REMIX=bottleservice                       # OT_PROJECT=<dir>, or the path in ~/.octabam_project
+make panel REMIX=bottleservice PANEL_PORT=8571 PANELARGS='--sound off'
 make panel-app                                   # out/Virtual Panel.app (File > Open Firmware Image: out/panel_<remix>.bin)
 ```
 

@@ -1,6 +1,6 @@
 """bottleservice -- the rig plus USB MIDI, USB AUDIO and Octakit.
 
-bamsep26's selection (hosts, TEMPO BUS) with USB MIDI and USB AUDIO on
+the rig's selection (the bus, three stations, hosts, TEMPO SYNC, CC MAP, MODE DEFAULTS, TEMPO BUS, SCENES P2; `bamsep26` until 27 Sep 2026) with USB MIDI and USB AUDIO on
 the DRAM platform (as `usb-audio`) and Em's Octakit (as `rig-kits`, with
 SCENES KITS bridging CC MAP and Octakit on the CC dispatch). Unflashed.
 """

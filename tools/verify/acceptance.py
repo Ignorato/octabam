@@ -143,16 +143,18 @@ def budget_result(data):
 
 
 def pressure_profile(modules):
-    # pressure.py's DEAR/ODD and the opposite-core SEND fixture only cover
-    # the existing rig. Do not quietly run unknown modules at default knobs.
-    from pressure import DEAR
-    dsp_keys = {m.key for m in modules if m.dsp is not None}
-    if not dsp_keys:
+    """Ready when every DSP module of the selection declares its dearest
+    settings (schema.Module.dear); blocked, by name, when one does not. A
+    module is never rendered at default knobs and called covered."""
+    dsp = [m for m in modules if m.dsp is not None]
+    if not dsp:
         return "not_applicable", "remix has no DSP modules"
-    if dsp_keys != set(DEAR):
-        return "blocked", ("no pressure profile for this DSP selection; "
-                           "the current profile requires " + ", ".join(sorted(DEAR)))
-    return "ready", "bamsep26 station/bus pressure profile"
+    missing = sorted(m.key for m in dsp
+                     if getattr(m, "params", ()) and not getattr(m, "dear", None))
+    if missing:
+        return "blocked", ("no dearest settings (schema.Module.dear) for "
+                           + ", ".join(missing))
+    return "ready", "every DSP module declares its dearest settings: " + ", ".join(sorted(m.key for m in dsp))
 
 
 def pressure_evidence_error(rows, price):
@@ -192,11 +194,11 @@ def write_report(out, report):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--remix", default=os.environ.get("REMIX", "bamsep26"))
+    ap.add_argument("--remix", default=os.environ.get("REMIX"))
     fixture = ap.add_mutually_exclusive_group()
     fixture.add_argument("--project", type=pathlib.Path)
     fixture.add_argument("--stress-source", type=pathlib.Path,
-                         help="generate the bamsep26 fixture from a local project")
+                         help="generate the remix's stress fixture from a local project")
     ap.add_argument("--out", type=pathlib.Path,
                     default=ROOT / "out/acceptance" / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
     ap.add_argument("--timeout", type=int, default=3600, help="seconds per command")
@@ -246,8 +248,6 @@ def main(argv=None):
         problems = []
         if project is None and args.stress_source is None:
             problems.append("provide --project / OT_PROJECT or --stress-source")
-        if args.stress_source and args.remix != "bamsep26":
-            problems.append("the generated stress fixture is for bamsep26 only")
         if profile == "blocked":
             problems.append(reason)
         required = [ROOT / "out/raw/section_3_MAIN_OS.bin",
@@ -263,6 +263,7 @@ def main(argv=None):
         if args.stress_source:
             project = out / "STRESS"
             if not run("fixture", [sys.executable, "tools/harness/stress_project.py",
+                                   "--remix", args.remix,
                                    "--source", str(args.stress_source.expanduser().resolve()),
                                    "--out", str(project)]):
                 return 1

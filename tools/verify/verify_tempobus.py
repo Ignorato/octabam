@@ -2,8 +2,8 @@
 """TEMPO BUS under the port: the TEMPO key opens the bus screen, the knobs
 edit the hosts, the window closes clean.
 
-    python3 tools/verify/verify_tempobus.py bamsep26     # after verify_set
-    OT_PROJECT=<dir> make check REMIX=bamsep26            # the same, from make verify
+    python3 tools/verify/verify_tempobus.py bottleservice     # after verify_set
+    OT_PROJECT=<dir> make check REMIX=bottleservice            # the same, from make verify
 
 Boots the image and card verify_set staged (out/setverify/image.bin,
 card.img), drives the panel through `ot_emu --live` (key and encoder events
@@ -67,7 +67,7 @@ def png(path, w, h, px, scale=4):
 
 
 def main():
-    remix = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REMIX", "bamsep26")
+    remix = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REMIX")
     mods = registry.remix(remix).modules
     if "TEMPO BUS" not in mods:
         print(f"  [SKIP] verify_tempobus: {remix} does not carry TEMPO BUS")

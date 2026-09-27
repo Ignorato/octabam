@@ -229,8 +229,7 @@ def _print_remixes():
     print("REMIXES  (remixes/<name>/remix.py)\n")
     for name in registry.remix_names():
         r = registry.remix(name)
-        default = "  <- default" if name == registry.DEFAULT_REMIX else ""
-        print(f"  {r.name:<12} {r.doc}{default}")
+        print(f"  {r.name:<12} {r.doc}")
         print(f"      {r.family or 'reference'} | {proof_text(r)}")
         print(f"      modules: {', '.join(r.modules)}")
         if r.fx1:

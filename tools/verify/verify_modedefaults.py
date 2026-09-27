@@ -68,7 +68,7 @@ def run_port(image, card, set_name, name, track, call, dump, log):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("remix", nargs="?", default=registry.DEFAULT_REMIX)
+    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX"))
     ap.add_argument("--project", default=os.environ.get("OT_PROJECT", ""))
     ap.add_argument("--set-name", default="OCTABAM")
     ap.add_argument("--name", default="MODEDEF")
@@ -77,6 +77,17 @@ def main():
     remix = registry.remix(a.remix)
     if "MODE DEFAULTS" not in remix.modules:
         print(f"  [ -- ] verify_modedefaults: {a.remix} carries no MODE DEFAULTS"); return 0
+    if "OCTAKIT" in remix.modules:
+        # Octakit wraps the track-setup-byte editors (her
+        # track_setup_byte_editors.S): a descriptor, bank, pattern, track and
+        # a workspace update state, or gk_track_setup_byte_fatal (`illegal`).
+        # The port's direct `--call` of the editor carries none of that
+        # context, so under her runtime it halts at 0x45d28e98 = that symbol
+        # (27 Sep 2026, bottleservice). Measuring MODE DEFAULTS beside
+        # Octakit needs the panel path (as verify_tempobus drives), not a call.
+        print(f"  [SKIP] verify_modedefaults: {a.remix} carries OCTAKIT, whose editor wrapper "
+              f"refuses a direct call (gk_track_setup_byte_fatal); drive it from the panel instead")
+        return 0
     if not a.project:
         print("  [SKIP] verify_modedefaults: no project (OT_PROJECT=<dir> or --project)"); return 0
     if not EMU.is_file():

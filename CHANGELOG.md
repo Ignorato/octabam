@@ -7,6 +7,34 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The gates follow the modules (27 Sep 2026): a manifest names its own
+  verifiers (`schema.Gate`) and its dearest knob settings
+  (`Module.dear`, checked against its knobs at load); `make verify` runs
+  the shared gates and then `tools/verify/module_gates.py` for the
+  selection, so a remix never runs another module's gates and a new
+  module needs no Makefile edit. `make accept` takes any remix: the
+  pressure stages run when every DSP module declares `dear` and block by
+  name otherwise; the stress fixture is derived from the selection
+  (servers on their cores' first tracks, the most different FX1 modules
+  that fit under the wall). `make reach` classifies the branch's diff
+  into the gates it reaches and `RUN=1` runs them; CI prints the list on
+  every PR. `pressure.py`'s knob table moved into the manifests. There
+  is no default remix any more: `make` and every tool take `REMIX=<name>`
+  and refuse without it; the bus, knob-census, Character and CC MAP gates
+  ask the registry for the smallest remix carrying what they need
+  (`registry.fixture`); refhash names its subject (`bus`) itself. The
+  selftest refuses a module no remix carries. `remixes/bamsep26` is
+  removed (bottleservice is its strict superset). Running every remix's
+  `make check` found: `verify_set` wanted Character's count on an FX1 id a
+  remix ran as stock LO-FI (kits, scenes); `generate_cpu.py --check`
+  called Tape Echo's cpu.s stale under a gcc other than the one that
+  wrote it (it records the gcc and SKIPs under another); `scripts/setup.sh`
+  staged `dsp_host` without rebuilding it, so the shared binary had ignored
+  `-paramfile` since #388 (verify_miniverb's "MOD residual 0.000", PR
+  #356's two reviews); `verify_modedefaults` SKIPs by name under Octakit,
+  whose editor wrapper halts a direct call (`gk_track_setup_byte_fatal`).
+  selftest refuses a module no remix carries.
+  every PR. `pressure.py`'s knob table moved into the manifests.
 - Character savings (27 Sep 2026): 355 -> 241 static cycles/sample
   (TAPE 105, TUBE 99, INFL 66 in the SAT fork). Both channels share one
   register for each of FOLD's gq/trim and TONE's k/t; SAT's DRV-0 flag and

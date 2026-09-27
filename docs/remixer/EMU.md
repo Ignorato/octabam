@@ -205,7 +205,7 @@ prints the registers and the transfer counts; a primed queue head whose
 token was never cleared is named on stderr (the defect that crashed a unit
 twice under octemu's USB-audio payload).
 
-Measured 25 Sep 2026: the stock stack in `bamsep26` enumerates at high
+Measured 25 Sep 2026: the stock stack in `bottleservice` enumerates at high
 speed and answers INQUIRY `Elektron Octatrack DPS-1 0002` with a good CSW
 (`make verify` runs this as `verify_usb`, 3 s). octemu's USB-MIDI image
 built from the same stock bytes enumerates with three interfaces, and two
