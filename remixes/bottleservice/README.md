@@ -1,6 +1,6 @@
 # `bottleservice` — the rig, USB, Octakit
 
-[`usb-audio`](../usb/README.md) (the rig + USB MIDI + USB AUDIO) with Em's Octakit
+The rig with USB MIDI, USB AUDIO MASTER (track 8 over USB) and Em's Octakit
 (256 Kits per Project in place of Parts) and the SCENES KITS bridge that
 lets CC MAP and Octakit share the MIDI CC dispatch entry. Sam's own
 selection; named after the set it is built for.
@@ -9,7 +9,12 @@ selection; named after the set it is built for.
 
 - Everything in [`usb-audio`](../usb/README.md): the bus (BusDelay on T1, BusVerb on
   T5, SEND elsewhere), the three FX1 stations, TEMPO SYNC, CC MAP, MODE
-  DEFAULTS, RIG HOSTS, TEMPO BUS, USB MIDI, USB AUDIO.
+  DEFAULTS, RIG HOSTS, TEMPO BUS, USB MIDI.
+- **USB AUDIO MASTER** in place of `usb-audio`'s twenty channels: a
+  two-channel 44.1 kHz 24-bit input carrying track 8's L/R, post-FX,
+  pre-fader (the master track), at both USB speeds.
+  [`modules/usb-audio-master/README.md`](../../modules/usb-audio-master/README.md).
+  Port only.
 - **OCTAKIT** (Em, [ems-octakit](https://github.com/emuyia/ems-octakit)):
   [`modules/octakit/README.md`](../../modules/octakit/README.md). Her
   runtime takes the top 528 pages of the sample arena (3.2 MB); the USB

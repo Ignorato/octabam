@@ -18,7 +18,7 @@ REMIX = Remix(
     modules=("REVERB SERVER", "DELAY SERVER", "SEND",
              "SPECTRUM", "CHARACTER", "MODULATION",
              "TEMPO SYNC", "CC MAP", "MODE DEFAULTS", "RIG HOSTS", "TEMPO BUS",
-             "USB MIDI", "USB AUDIO"),
+             "USB MIDI", "USB AUDIO EXTENDED"),
     fallback="SEND",
     hidden=("REVERB SERVER", "DELAY SERVER"),
     host_slots=(("DELAY SERVER", 2), ("REVERB SERVER", 2)),
