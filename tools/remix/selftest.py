@@ -535,6 +535,7 @@ def main():
     _want = {"restock": (), "recfix": (), "mods": (), "ok-ms": (), "usb-lean": (),
              "octatrick": (), "octatrick-usb": (),     # stock effects + ColdFire modules, no DSP words
              "repitch": (),
+             "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
              "bamsep26": _rig, "rig-scenes": _rig, "rig-kits": _rig,
              "rig-mods": _rig, "usb": _rig, "usb-audio": _rig,
