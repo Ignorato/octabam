@@ -43,63 +43,63 @@ unit, image and date.
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| **DELAY SERVER** | [sambanks](https://github.com/sambanks) | Multi-mode delay: CLEAN / pitched GRAIN cloud / REVERSE, tape wow. | on hardware: Sam's MKII |
-| **REVERB SERVER** | [sambanks](https://github.com/sambanks) | Eight-line FDN reverb: ROOM/PLATE/BIG, shimmer, gate, mid/side width. | on hardware: Sam's MKII |
-| **MODE DEFAULTS** | [sambanks](https://github.com/sambanks) | A MODE turned on the panel re-defaults the knobs around it (the manifests' ModeViews), on FX1 and FX2. | on hardware: Sam's MKII (images 26/27, 15 Sep 2026) |
-| **RIG HOSTS** | [sambanks](https://github.com/sambanks) | A new part is born hosted: T1 FX2 = BusDelay, T5 = BusVerb, T8 = the stock DELAY, the rest SEND. | port-gated: a new project born hosted under the port |
-| **SEND** | [sambanks](https://github.com/sambanks) | Bus client: DEL into the delay, REV into the reverb, from any track. The default effect. | on hardware: Sam's MKII |
-| **TEMPO BUS** | [sambanks](https://github.com/sambanks) | The TEMPO window lists and edits BusDelay's and BusVerb's knobs (UP/DOWN = row, A or B = value, LEFT/RIGHT = engine, FUNC + LEVEL = 0.1 BPM). | port-gated: `verify_set`; nothing on hardware |
-| **TEMPO SYNC** | [sambanks](https://github.com/sambanks) | ColdFire caves: publishes the held MIDI note to BusDelay, and draws BusDelay TIME as a tempo division. | on hardware: Sam's MKII |
+| [**DELAY SERVER**](modules/busdelay/README.md) | [sambanks](https://github.com/sambanks) | Multi-mode delay: CLEAN / pitched GRAIN cloud / REVERSE, tape wow. | on hardware: Sam's MKII |
+| [**REVERB SERVER**](modules/busverb/README.md) | [sambanks](https://github.com/sambanks) | Eight-line FDN reverb: ROOM/PLATE/BIG, shimmer, gate, mid/side width. | on hardware: Sam's MKII |
+| [**MODE DEFAULTS**](modules/mode-defaults/README.md) | [sambanks](https://github.com/sambanks) | A MODE turned on the panel re-defaults the knobs around it (the manifests' ModeViews), on FX1 and FX2. | on hardware: Sam's MKII (images 26/27, 15 Sep 2026) |
+| [**RIG HOSTS**](modules/rig-hosts/README.md) | [sambanks](https://github.com/sambanks) | A new part is born hosted: T1 FX2 = BusDelay, T5 = BusVerb, T8 = the stock DELAY, the rest SEND. | port-gated: a new project born hosted under the port |
+| [**SEND**](modules/send/README.md) | [sambanks](https://github.com/sambanks) | Bus client: DEL into the delay, REV into the reverb, from any track. The default effect. | on hardware: Sam's MKII |
+| [**TEMPO BUS**](modules/tempo-bus/README.md) | [sambanks](https://github.com/sambanks) | The TEMPO window lists and edits BusDelay's and BusVerb's knobs (UP/DOWN = row, A or B = value, LEFT/RIGHT = engine, FUNC + LEVEL = 0.1 BPM). | port-gated: `verify_set`; nothing on hardware |
+| [**TEMPO SYNC**](modules/tempo-sync/README.md) | [sambanks](https://github.com/sambanks) | ColdFire caves: publishes the held MIDI note to BusDelay, and draws BusDelay TIME as a tempo division. | on hardware: Sam's MKII |
 
 ### Effects: on a track
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| **CHARACTER** | [sambanks](https://github.com/sambanks) | BamSep26 station: fold, saturation, tilt, compressor, width. | on hardware: Sam's MKII |
-| **EUCLID** | [repeat98](https://github.com/repeat98) | Euclidean LP/BP/HP/amp sequencer: swing, envelope, gate, random and loop. | local render: its own render gates; not on hardware |
-| **MINIVERB** | [repeat98](https://github.com/repeat98) | Modulated diffused FDN reverb; independent FX2 buffers, smoothed controls. | local render: `make verify-miniverb`; not flashed |
-| **MODULATION** | [sambanks](https://github.com/sambanks) | BamSep26 station: a modulation pedal -- Juno, Dimension, flanger, phaser, comb; FX1 only. | on hardware: Sam's MKII |
-| **SPECTRUM** | [sambanks](https://github.com/sambanks) | BamSep26 station: a filter pedal -- the Moog ladder, SEM (LP..HP by SHPE), BP, Airwindows Capacitor2, formants; ENV and LFO onto the cutoff; width. | on hardware: Sam's MKII |
-| **TAPE ECHO** | [repeat98](https://github.com/repeat98) | Economy CPU tape echo: two biquads, simple FREE slew, snapped BEAT TIME and page-1 AGE. | on hardware: the author's unit (OCTACLID4): six instances run, a seventh freezes it, open |
+| [**CHARACTER**](modules/character/README.md) | [sambanks](https://github.com/sambanks) | BamSep26 station: fold, saturation, tilt, compressor, width. | on hardware: Sam's MKII |
+| [**EUCLID**](modules/euclid/README.md) | [repeat98](https://github.com/repeat98) | Euclidean LP/BP/HP/amp sequencer: swing, envelope, gate, random and loop. | local render: its own render gates; not on hardware |
+| [**MINIVERB**](modules/miniverb/README.md) | [repeat98](https://github.com/repeat98) | Modulated diffused FDN reverb; independent FX2 buffers, smoothed controls. | local render: `make verify-miniverb`; not flashed |
+| [**MODULATION**](modules/modulation/README.md) | [sambanks](https://github.com/sambanks) | BamSep26 station: a modulation pedal -- Juno, Dimension, flanger, phaser, comb; FX1 only. | on hardware: Sam's MKII |
+| [**SPECTRUM**](modules/spectrum/README.md) | [sambanks](https://github.com/sambanks) | BamSep26 station: a filter pedal -- the Moog ladder, SEM (LP..HP by SHPE), BP, Airwindows Capacitor2, formants; ENV and LFO onto the cutoff; width. | on hardware: Sam's MKII |
+| [**TAPE ECHO**](modules/tapeecho/README.md) | [repeat98](https://github.com/repeat98) | Economy CPU tape echo: two biquads, simple FREE slew, snapped BEAT TIME and page-1 AGE. | on hardware: the author's unit (OCTACLID4): six instances run, a seventh freezes it, open |
 
 ### Machines and the sequencer
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| **DIRECT JUMP** | [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules) | CHAIN AFTER: DIRECT (its unused value 1) -- a pattern change lands at the next step, the step count continuing (A4/Rytm direct jump). | on hardware: `octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9) |
-| **SCALE QUANTIZER** | [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules) | PROJECT > CONTROL > SEQUENCER > SCALE: the PTCH knob and CHROMATIC trig keys quantize to a scale (24 scales, OFF = stock); > GLIDE: the synth's glide time (OFF, 1..127) and 303-style legato on the chromatic keys; polyphonic chromatic keys on a synth track whose VOIC is 2..4. | on hardware: `octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9) |
-| **REPITCH** | [repeat98](https://github.com/repeat98) | Adds TSTR REPITCH (STATIC/FLEX and the sample's own TIMESTRETCH): project-tempo following by playback speed, without grains; PTCH off. | on hardware: an MKII, 16 Sep 2026 (OCTABAM81); `verify_repitch` |
-| **RLEN PLEN** | [sambanks](https://github.com/sambanks) | ColdFire cave: RLEN value PLEN (past MAX) = one loop of the track's pattern on its own scale, so TRIG ONE + QREC PLEN records the next pass and stops. | port-gated: 26 Sep 2026 |
-| **SYNTH MACHINE** | [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules) | A FLEX track whose sample is named SYNTH* plays a two-operator FM voice (STRT/LEN/RTRG/RTIM = ratio/index/feedback/decay); the DSP shapes and effects it as a sample. Its PLAYBACK page reads RATO/INDX/FDBK/DEC with icons and the title FM SYNTH. | on hardware: `octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9) |
+| [**DIRECT JUMP**](modules/direct-jump/README.md) | [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules) | CHAIN AFTER: DIRECT (its unused value 1) -- a pattern change lands at the next step, the step count continuing (A4/Rytm direct jump). | on hardware: `octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9) |
+| [**SCALE QUANTIZER**](modules/quantizer/README.md) | [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules) | PROJECT > CONTROL > SEQUENCER > SCALE: the PTCH knob and CHROMATIC trig keys quantize to a scale (24 scales, OFF = stock); > GLIDE: the synth's glide time (OFF, 1..127) and 303-style legato on the chromatic keys; polyphonic chromatic keys on a synth track whose VOIC is 2..4. | on hardware: `octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9) |
+| [**REPITCH**](modules/repitch/README.md) | [repeat98](https://github.com/repeat98) | Adds TSTR REPITCH (STATIC/FLEX and the sample's own TIMESTRETCH): project-tempo following by playback speed, without grains; PTCH off. | on hardware: an MKII, 16 Sep 2026 (OCTABAM81); `verify_repitch` |
+| [**RLEN PLEN**](modules/rlen-plen/README.md) | [sambanks](https://github.com/sambanks) | ColdFire cave: RLEN value PLEN (past MAX) = one loop of the track's pattern on its own scale, so TRIG ONE + QREC PLEN records the next pass and stops. | port-gated: 26 Sep 2026 |
+| [**SYNTH MACHINE**](modules/synth/README.md) | [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules) | A FLEX track whose sample is named SYNTH* plays a two-operator FM voice (STRT/LEN/RTRG/RTIM = ratio/index/feedback/decay); the DSP shapes and effects it as a sample. Its PLAYBACK page reads RATO/INDX/FDBK/DEC with icons and the title FM SYNTH. | on hardware: `octatrick-usb` on his MKI, 26 Sep 2026 (OCTATRICK9) |
 
 ### Parts, Kits and scenes
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| **KITS RELOAD** | [sambanks](https://github.com/sambanks) | The bridge that lets MIDI SCENES' Part Reload run beside Octakit's kit reload (her caller check, his post-reload restore). | on hardware: `ok-ms`, 14 Sep 2026 |
-| **MIDI SCENES** | [bkkbrls-del/midisc](https://github.com/bkkbrls-del/midisc) | MIDI-driven scene locks (hold/morph/save/reload/clear/copy/paste), built from bkkbrls-del/midisc as linker-placed units. | on hardware: `ok-ms` on his unit, 14 Sep 2026 |
-| **OCTAKIT** | [emuyia/ems-octakit](https://github.com/emuyia/ems-octakit) | Em's Octakit: 256 Kits per Project instead of 64 Parts, built from her repo (submodule) as a loader-appended DRAM runtime. | on hardware: her build reproduced byte for byte; `ok-ms` on midisc's author's unit, 14 Sep 2026 |
-| **SCENES KITS** | [sambanks](https://github.com/sambanks) | The bridge that lets CC MAP and Octakit share the CC dispatch (MIDI SCENES needs no bridging since 1.40MSCN6). | port-gated: in `kits` and `bottleservice` |
-| **SCENES P2** | [sambanks](https://github.com/sambanks) | Scene locks and the crossfader on FX1/FX2 page 2 (hold a scene, turn a page-2 knob). | port-gated: 26 Sep 2026 |
-| **SCENES P2 KITS** | [sambanks](https://github.com/sambanks) | The bridge that lets SCENES P2 and Octakit share the page-2 editor entries. | port-gated: 26 Sep 2026 |
+| [**KITS RELOAD**](modules/kits-reload/README.md) | [sambanks](https://github.com/sambanks) | The bridge that lets MIDI SCENES' Part Reload run beside Octakit's kit reload (her caller check, his post-reload restore). | on hardware: `ok-ms`, 14 Sep 2026 |
+| [**MIDI SCENES**](modules/midi-scenes/README.md) | [bkkbrls-del/midisc](https://github.com/bkkbrls-del/midisc) | MIDI-driven scene locks (hold/morph/save/reload/clear/copy/paste), built from bkkbrls-del/midisc as linker-placed units. | on hardware: `ok-ms` on his unit, 14 Sep 2026 |
+| [**OCTAKIT**](modules/octakit/README.md) | [emuyia/ems-octakit](https://github.com/emuyia/ems-octakit) | Em's Octakit: 256 Kits per Project instead of 64 Parts, built from her repo (submodule) as a loader-appended DRAM runtime. | on hardware: her build reproduced byte for byte; `ok-ms` on midisc's author's unit, 14 Sep 2026 |
+| [**SCENES KITS**](modules/scenes-kits/README.md) | [sambanks](https://github.com/sambanks) | The bridge that lets CC MAP and Octakit share the CC dispatch (MIDI SCENES needs no bridging since 1.40MSCN6). | port-gated: in `kits` and `bottleservice` |
+| [**SCENES P2**](modules/scenes-p2/README.md) | [sambanks](https://github.com/sambanks) | Scene locks and the crossfader on FX1/FX2 page 2 (hold a scene, turn a page-2 knob). | port-gated: 26 Sep 2026 |
+| [**SCENES P2 KITS**](modules/scenes-p2-kits/README.md) | [sambanks](https://github.com/sambanks) | The bridge that lets SCENES P2 and Octakit share the page-2 editor entries. | port-gated: 26 Sep 2026 |
 
 ### MIDI and USB
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| **CC MAP** | [sambanks](https://github.com/sambanks) | MIDI CC 62-67 drive the FX2 engine's page-2 slots 6-11; CC 68-73 the FX1 station's. | on hardware: Sam's MKII (tag 13) |
-| **USB AUDIO** | [markandrus/octemu](https://github.com/markandrus/octemu) | Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu). | on hardware: Sam's MKII (image 64, 25 Sep 2026); Tim's MKI (OCTATRICK9, 26 Sep 2026) |
-| **USB MIDI** | [markandrus/octemu](https://github.com/markandrus/octemu) | Class-compliant USB-MIDI in and out on the OT's own USB port, mirroring the DIN ports (markandrus/octemu). | port-gated: enumerates, receives and transmits under the port (`verify_usb`); not on hardware |
+| [**CC MAP**](modules/cc-map/README.md) | [sambanks](https://github.com/sambanks) | MIDI CC 62-67 drive the FX2 engine's page-2 slots 6-11; CC 68-73 the FX1 station's. | on hardware: Sam's MKII (tag 13) |
+| [**USB AUDIO**](modules/usbaudio/README.md) | [markandrus/octemu](https://github.com/markandrus/octemu) | Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu). | on hardware: Sam's MKII (image 64, 25 Sep 2026); Tim's MKI (OCTATRICK9, 26 Sep 2026) |
+| [**USB MIDI**](modules/usbmidi/README.md) | [markandrus/octemu](https://github.com/markandrus/octemu) | Class-compliant USB-MIDI in and out on the OT's own USB port, mirroring the DIN ports (markandrus/octemu). | port-gated: enumerates, receives and transmits under the port (`verify_usb`); not on hardware |
 
 ### Fixes
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| **FLEX SEEK BIND** | [sambanks](https://github.com/sambanks) | ColdFire cave: a same-slot/type/generation FLEX re-bind takes the bind's same-sample path (DSP seek) instead of becoming a new note. | on hardware: OCTABAM83, 12 Sep 2026 |
-| **FLEX SEEK BIND CTR** | [sambanks](https://github.com/sambanks) | ColdFire cave: on a same-sample FLEX re-bind, do not bump the voice's per-bind counter (pairs with FLEX SEEK BIND). | on hardware: OCTABAM83, 12 Sep 2026 |
-| **LOFI AMF FIX** | [bryantysinger/octa-bt-pt](https://github.com/bryantysinger/octa-bt-pt) | Fixes stock LO-FI's AMF knob: mpysu -> mpyuu, both payloads. Ported from bryantysinger/octa-bt-pt. | `make check`: both words disassembled against stock |
-| **RECORDER HOLD** | [sambanks](https://github.com/sambanks) | ColdFire cave: a recorder-buffer FLEX voice reading one sample past its recording repeats the last sample instead of reading zero. | port-gated: 26 Sep 2026 |
-| **RECORDER SPACING** | [sambanks](https://github.com/sambanks) | ColdFire cave: a fixed-RLEN recording is exactly as long as the gap to the next arm, derived from the current arm -- no lane, no stored state. | on hardware: OCTABAM83, 12 Sep 2026 |
+| [**FLEX SEEK BIND**](modules/flex-seekbind/) | [sambanks](https://github.com/sambanks) | ColdFire cave: a same-slot/type/generation FLEX re-bind takes the bind's same-sample path (DSP seek) instead of becoming a new note. | on hardware: OCTABAM83, 12 Sep 2026 |
+| [**FLEX SEEK BIND CTR**](modules/flex-seekbind-ctr/) | [sambanks](https://github.com/sambanks) | ColdFire cave: on a same-sample FLEX re-bind, do not bump the voice's per-bind counter (pairs with FLEX SEEK BIND). | on hardware: OCTABAM83, 12 Sep 2026 |
+| [**LOFI AMF FIX**](modules/lofi-amf-fix/README.md) | [bryantysinger/octa-bt-pt](https://github.com/bryantysinger/octa-bt-pt) | Fixes stock LO-FI's AMF knob: mpysu -> mpyuu, both payloads. Ported from bryantysinger/octa-bt-pt. | `make check`: both words disassembled against stock |
+| [**RECORDER HOLD**](modules/recorder-hold/README.md) | [sambanks](https://github.com/sambanks) | ColdFire cave: a recorder-buffer FLEX voice reading one sample past its recording repeats the last sample instead of reading zero. | port-gated: 26 Sep 2026 |
+| [**RECORDER SPACING**](modules/recorder-spacing/README.md) | [sambanks](https://github.com/sambanks) | ColdFire cave: a fixed-RLEN recording is exactly as long as the gap to the next arm, derived from the current arm -- no lane, no stored state. | on hardware: OCTABAM83, 12 Sep 2026 |
 
 <!-- modules:end -->
 
