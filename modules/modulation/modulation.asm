@@ -843,8 +843,7 @@ mo_padv:
         move    a,x1                    ; bf (limited)
         move    n2,x0                   ; y previous (halved, as the chain runs)
         move    x:(r1)+,y1              ; fb
-        mpy     x0,y1,a
-        move    x:(r0),b           
+        mpy     x0,y1,a     x:(r0),b
         asr     #$1,b,b
         add     b,a                     ; u = x/2 + fb * yprev: the chain runs at
         move    a,x0                    ; HALF scale (an allpass cascade peaks
@@ -853,8 +852,7 @@ mo_padv:
         bsr     mo_apst                 ; the feedback stages
         bsr     mo_apst
         move    x0,n2                   ; the feedback section's output
-        move    y0,y1                   ; bm
-        clr     b                       ; the tap sum
+        clr     b           y0,y1       ; bm ; the tap sum
         bsr     mo_apst                 ; the mod stages
         bsr     mo_apst
         move    x:(r1)+,y1              ; w2
@@ -921,8 +919,7 @@ mo_padv:
         bsr     mo_apst                 ; the feedback stages
         bsr     mo_apst
         move    x0,n6                   ; the feedback section's output
-        move    y0,y1                   ; bm
-        clr     b                       ; the tap sum
+        clr     b           y0,y1       ; bm ; the tap sum
         bsr     mo_apst                 ; the mod stages
         bsr     mo_apst
         move    x:(r1)+,y1              ; w2

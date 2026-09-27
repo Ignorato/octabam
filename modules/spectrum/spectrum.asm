@@ -642,11 +642,9 @@ fs_svf:
         move    a,x:(r2)+               ; s1' (r2 -> the next channel's s0)
 ; wetA = kLP*lp + kHP*hp + kBP*bp (exact in the accumulator, any order)
         move    x:(r1)+,y1              ; kLP
-        mpy     x0,y1,a
-        move    x1,x0                   ; hp
+        mpy     x0,y1,a     x1,x0       ; hp
         move    x:(r1)+,y1              ; kHP
-        mac     x0,y1,a
-        move    y0,x0                   ; bp
+        mac     x0,y1,a     y0,x0       ; bp
         move    x:(r1)+,y1              ; kBP
         mac     x0,y1,a
         move    a,x:(r0)                ; out (limited)
@@ -684,11 +682,9 @@ fs_svf:
         move    a,x:(r2)+               ; s1'
 ; wetA = kLP*lp + kHP*hp + kBP*bp (exact in the accumulator, any order)
         move    x:(r1)+,y1              ; kLP
-        mpy     x0,y1,a
-        move    x1,x0                   ; hp
+        mpy     x0,y1,a     x1,x0       ; hp
         move    x:(r1)+,y1              ; kHP
-        mac     x0,y1,a
-        move    y0,x0                   ; bp
+        mac     x0,y1,a     y0,x0       ; bp
         move    x:(r1)+,y1              ; kBP
         mac     x0,y1,a
         move    a,x:(r0+n0)             ; out (limited)
@@ -697,8 +693,7 @@ fs_svf:
         move    x:(r0+n0),x0            ; R
         add     x0,a
         asr     #$1,a,a
-        move    a,x1                    ; mid
-        sub     x0,a                    ; mid - R = (L - R)/2, floor
+        sub     x0,a        a,x1        ; mid ; mid - R = (L - R)/2, floor
         move    a,x0                    ; side
         move    x:(r1)+,y1              ; side gain / 2
         mpy     x0,y1,a
@@ -947,8 +942,7 @@ fs_vbz:
         move    x:(r0+n0),x0
         add     x0,a
         asr     #$1,a,a
-        move    a,x1                    ; mid
-        sub     x0,a
+        sub     x0,a        a,x1        ; mid
         move    a,x0                    ; side
         move    x:(r1)+,y1              ; side gain / 2
         mpy     x0,y1,a
@@ -1066,8 +1060,7 @@ fs_ladr:
         move    x:(r0+n0),x0
         add     x0,a
         asr     #$1,a,a
-        move    a,x1                    ; mid
-        sub     x0,a
+        sub     x0,a        a,x1        ; mid
         move    a,x0                    ; side
         move    x:(r1)+,y1              ; side gain / 2
         mpy     x0,y1,a
@@ -1189,8 +1182,7 @@ fs_cap:
         move    x:(r0+n0),x0
         add     x0,a
         asr     #$1,a,a
-        move    a,x1                    ; mid
-        sub     x0,a
+        sub     x0,a        a,x1        ; mid
         move    a,x0                    ; side
         move    x:(r7+$2c),y1           ; side gain / 2
         mpy     x0,y1,a

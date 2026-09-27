@@ -731,8 +731,7 @@ ch_sinfl:
 ; y = 2e gx (1 - |gx|) + (1 - e) x2; out = 2y. e = DRV/128; g and t = 1 - |gx|
 ; live halved. Stateless; the ring holds e/2, 1 - e. Clobbers x0, x1, y1, a, b.
         asr     #$1,a,a                 ; x2
-        move    a,x1
-        abs     a
+        abs     a           a,x1
         move    a,x0                    ; |x2|
         move    #$20,y1                 ; 0.25
         mpy     x0,y1,a
@@ -741,8 +740,7 @@ ch_sinfl:
         move    x1,x0                   ; x2
         mpy     x0,y1,a
         asl     #$1,a,a                 ; gx = g*x2
-        move    a,x0                    ; gx
-        abs     a
+        abs     a           a,x0        ; gx
         asr     #$1,a,a
         neg     a
         add     #>$400000,a             ; t/2 = 0.5 - |gx|/2, in [0.25, 0.5]
@@ -766,8 +764,7 @@ ch_sinfl:
         mpy     x0,y1,a
         asl     #$3,a,a                 ; x*G, up to 4 in the accumulator
         asr     #$1,a,a                 ; x2
-        move    a,x1
-        abs     a
+        abs     a           a,x1
         move    a,x0                    ; |x2|
         move    #$20,y1                 ; 0.25
         mpy     x0,y1,a
@@ -776,8 +773,7 @@ ch_sinfl:
         move    x1,x0                   ; x2
         mpy     x0,y1,a
         asl     #$1,a,a                 ; gx = g*x2
-        move    a,x0                    ; gx
-        abs     a
+        abs     a           a,x0        ; gx
         asr     #$1,a,a
         neg     a
         add     #>$400000,a             ; t/2 = 0.5 - |gx|/2, in [0.25, 0.5]
@@ -819,8 +815,7 @@ ch_nosat:
         sub     x0,a                    ; x - 2 lp'
         move    a,x0
         move    x:(r5)+,y1              ; t/2
-        mpy     x0,y1,a
-        move    x:(r4),b
+        mpy     x0,y1,a     x:(r4),b
         add     b,a
         move    a,x:(r4)+
         move    x:(r4),a                ; R
@@ -836,8 +831,7 @@ ch_nosat:
         sub     x0,a
         move    a,x0
         move    x:(r5)+,y1
-        mpy     x0,y1,a
-        move    x:(r4),b
+        mpy     x0,y1,a     x:(r4),b
         add     b,a
         move    a,x:(r4)-
 ; ---- COMPRESS: COMP 0 skips the stage

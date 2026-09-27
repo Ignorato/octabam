@@ -7,6 +7,15 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- Parallel-move folding (27 Sep 2026): an adjacent move and ALU op with
+  no dependency between them become one instruction (the parallel move
+  reads its source before the op writes). Only forms the stock payloads
+  already run; the audited mpysu orders left alone; no address-register
+  write moved closer to its use. BusVerb 36 (1,146 -> 1,090 static
+  cycles/sample, payload A 34 -> 70 free words), Spectrum 8, Character 6,
+  Modulation 3, BusDelay 1. Bit-identical: BusVerb on ROOM/PLATE/BIG at
+  -12 and 0 dBFS sends; BusDelay (3 modes), Spectrum, Character and
+  Modulation (every mode) per channel, 25 files.
 - BusVerb slot pass (27 Sep 2026): 22 per-sample slots the loop reached
   with two-word displaced moves swapped into the one-word range against
   per-block slots (`_MODE_SLOTS` and `LFOTAB` renumbered with them).
