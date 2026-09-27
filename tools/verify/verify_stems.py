@@ -418,6 +418,7 @@ def cut(s):
 
 FIXTURE8 = pathlib.Path("out/stems_fixture8.json")   # tools/verify/stems_fixture.py --eight
 FIXTURE32 = pathlib.Path("out/stems_fixture32.json")   # tools/verify/stems_fixture.py --fat32
+FIXTURE_THRU = pathlib.Path("out/stems_fixture_thru.json")   # stems_fixture.py --thru
 CARD_READY = 0x460d1cb8     # emu_card.FW_CARD_READY: := 1 after the firmware's card init and mount
 SUFFIX = ""                 # appended to every run's tag: "32" while the FAT32 checks run
 
@@ -748,6 +749,32 @@ def fat32(s):
         FIXTURE, SUFFIX = saved, ""
 
 
+def thru(s):
+    """The THRU fixture's proof: every track's read-back sounds in every
+    frame from its first sounding frame, and the eight signals differ. The
+    recorder stays IDLE (armed, then cancelled): this is the fixture, not
+    STEM REC."""
+    if not FIXTURE_THRU.exists():
+        check("thru: the THRU fixture exists (stems_fixture.py --thru)", False)
+        return
+    _, dump, _, _, _ = port(s, 400, tag="thru", fixture=FIXTURE_THRU,
+                            calls_before=(s["stems_action"], s["stems_action"]))
+    tracks = [slot_frames(dump, k) for k in range(8)]
+    firsts = []
+    for k, frames in enumerate(tracks):
+        first = next((i for i, f in enumerate(frames) if any(f)), None)
+        firsts.append(first)
+        silent = [i for i in range(first + 1, len(frames)) if not any(frames[i])] if first is not None else []
+        check(f"thru: T{k + 1} sounds in every frame from its first",
+              first is not None and not silent and len(frames) - first > 200,
+              f"from frame {first}, {len(silent)} silent frame(s) after it")
+    if None in firsts:
+        return
+    start = max(firsts)
+    sigs = {tuple(map(tuple, fr[start:])) for fr in tracks}
+    check("thru: the eight signals are distinct", len(sigs) == 8, f"{len(sigs)} distinct of 8")
+
+
 def main():
     from remix import registry
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -767,6 +794,7 @@ def main():
           card_out_sectors(CARD_OUT_UPSTREAM) == 23 and card_out_sectors(CARD_OUT_CROSSCHECK) is None)
     if EMU.exists() and FIXTURE.exists():
         probe(s)
+        thru(s)
         tap(s)
         full(s)
         rowstop(s)
