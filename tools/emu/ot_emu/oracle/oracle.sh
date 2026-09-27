@@ -251,8 +251,6 @@ for name in stock card; do
 	cmp_bin "$name.serial_a" "$RDIR/$name/serial.a" "$CDIR/$name/serial.a"
 	cmp_bin "$name.serial_b" "$RDIR/$name/serial.b" "$CDIR/$name/serial.b"
 	cmp_bin "$name.golden" "$RDIR/$name/golden.json" "$CDIR/$name/golden.json"
-	"$PY" "$ROOT/tools/emu/ot_emu/oracle.py" "$RDIR/$name/golden.json" "$CDIR/$name/golden.json" > "$CDIR/$name/oracle_py.txt" 2>&1; rc=$?
-	verdict "$name.oracle_py" $rc "$(tail -1 "$CDIR/$name/oracle_py.txt")"
 done
 
 if ! skipped render; then

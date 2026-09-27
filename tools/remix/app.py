@@ -1744,7 +1744,7 @@ class RemixerScreen(Screen):
 
         ⚠️ SHOWN ONLY WHEN THE SELECTION ACTUALLY CHANGES IT, which is the
         case this view was built for -- a patched-in top-level row
-        (PLAN.md section 5) -- and which no remix yet hits: a selection can
+        -- and which no remix yet hits: a selection can
         change the top-level menu only by writing the tables at 0x400cbc00,
         and every one of them changes ZERO bytes of it. As a permanent
         fixture it was the same picture every time.

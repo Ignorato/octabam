@@ -440,7 +440,7 @@ help: ## Show this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / \
 	  {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo
-	@echo "Cold start:  read PLAN.md, then  make setup && make os && make recon && make modules"
+	@echo "Cold start:  read README.md, then  make setup && make os && make recon && make modules"
 	@echo "Modules:     make modules      the index, the compatibility matrix, the remixes"
 	@echo "             make check REMIX=<name>   build + every gate for one selection"
 	@echo "             make remix        compose a selection interactively"

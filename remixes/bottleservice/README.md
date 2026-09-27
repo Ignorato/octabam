@@ -43,7 +43,7 @@ worst core priced 2,792 of 3,120). Image 1.19 MB.
 
 ## Build and flash
 
-As [`usb-audio`](usb.md#build-and-flash) with `REMIX=bottleservice`. **Back
+As [`usb-audio`](../usb/README.md#build-and-flash) with `REMIX=bottleservice`. **Back
 up projects first**: Octakit migrates Parts to Kits on load and downgrading
 may lose Kit data (her README). After the flash, on old projects:
 `ot_project.py host` / `stamp-defaults` as for `bamsep26`.

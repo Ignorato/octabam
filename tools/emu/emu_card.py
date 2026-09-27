@@ -591,9 +591,9 @@ def attach(r, image, log=None, cold_hooks=True):
     """Map the card into a warm machine (after `emu_bringup.boot`).
 
     cold_hooks=False leaves out the two hooks that satisfy waits by hand
-    (`on_wait`, `on_nowait`) -- for route A (tools/emu/emu_rtos.py), where the
-    kernel's own event wait must block and the ATA interrupt must complete
-    the command. The observers (messages, paths) stay."""
+    (`on_wait`, `on_nowait`), for a caller whose kernel event wait must
+    block and whose ATA interrupt must complete the command. The observers
+    (messages, paths) stay."""
     uc = r.uc
     card = AtaCard(image, log)
     s = CardSession(r, card)

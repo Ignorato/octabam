@@ -534,4 +534,4 @@ chars; the modules' ≤ 5, "1/16T"); whether A is consulted where B's count matt
 - Which staged index and live-lane bytes an FX1 page-2 edit uses when
   opened from the page key (`0x4005a5b0`, the 4→3 remap; no emulator
   drives it): a hardware read (turn a station's MODE, SAVE, read the part
-  file). Gates per-mode defaults on the unit (`PLAN.md`).
+  file). Gates per-mode defaults on the unit.
