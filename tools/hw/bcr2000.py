@@ -17,9 +17,10 @@ Presets (`--preset`, default `rig`):
   t1..t8  one track: groups 1-4 = FX1 page 1, FX1 page 2, FX2 page 1, FX2 page 2
           (LEVEL, AMP VOL, scene fader on the spare encoders); lower rows =
           PLAYBACK, AMP, LFO page 1; buttons as `rig`.
-  Both:   user buttons 49-52 = BusDelay MODE step, BusVerb MODE step, and under them
-          BusDelay SIZE step (4-way), BusVerb SHFT step (6-way); the fader encoder
-          runs 127 -> 0 so left is scene A.
+  Both:   user buttons = BusDelay SIZE up/down (left pair), BusVerb SHFT up/down
+          (right pair); the push clicks of T1/T2 step BusDelay MODE up/down and T5/T6
+          BusVerb MODE, in every group (a BCR increment clamps, it does not wrap);
+          the fader encoder runs 127 -> 0 so left is scene A.
   all     rig then t1..t8; `--store N` stores rig at N and t1..t8 at N+1..N+8.
 
 Without `--store` the preset lands in the BCR's edit buffer only.
@@ -92,11 +93,20 @@ def fader(ch):
 
 def user_buttons(channels):
     """The four bottom-right buttons, the same on every preset."""
-    # 49/50 the engines' MODE, 51/52 under them: the delay's grain SIZE (4-way) and the verb's shimmer SHFT (6-way)
-    return {49: dict(ch=channels[0], cc=PAGE2["FX2"], label="DLY MODE step", step=(0, 2)),
-            50: dict(ch=channels[4], cc=PAGE2["FX2"], label="VRB MODE step", step=(0, 2)),
-            51: dict(ch=channels[0], cc=slot_cc("FX2", 9), label="DLY SIZE step", step=(0, 3)),
-            52: dict(ch=channels[4], cc=slot_cc("FX2", 4), label="VRB SHFT step", step=(0, 5))}
+    # A BCR increment clamps at the range's end (measured 27 Sep 2026: every press at max sent max), so a select
+    # takes two buttons, up over down. 49/51 = the delay's grain SIZE (4-way), 50/52 = the verb's shimmer SHFT (6-way).
+    # The engines' MODE sits on the push clicks of the host tracks' encoders, the same in all four groups:
+    # T1's click up / T2's down for the delay, T5's up / T6's down for the verb.
+    b = {49: dict(ch=channels[0], cc=slot_cc("FX2", 9), label="DLY SIZE up", step=(0, 3), inc=1),
+         51: dict(ch=channels[0], cc=slot_cc("FX2", 9), label="DLY SIZE down", step=(0, 3), inc=-1),
+         50: dict(ch=channels[4], cc=slot_cc("FX2", 4), label="VRB SHFT up", step=(0, 5), inc=1),
+         52: dict(ch=channels[4], cc=slot_cc("FX2", 4), label="VRB SHFT down", step=(0, 5), inc=-1)}
+    for g in range(4):
+        b[1 + 8 * g] = dict(ch=channels[0], cc=PAGE2["FX2"], label="DLY MODE up (push T1)", step=(0, 2), inc=1)
+        b[2 + 8 * g] = dict(ch=channels[0], cc=PAGE2["FX2"], label="DLY MODE down (push T2)", step=(0, 2), inc=-1)
+        b[5 + 8 * g] = dict(ch=channels[4], cc=PAGE2["FX2"], label="VRB MODE up (push T5)", step=(0, 2), inc=1)
+        b[6 + 8 * g] = dict(ch=channels[4], cc=PAGE2["FX2"], label="VRB MODE down (push T6)", step=(0, 2), inc=-1)
+    return b
 
 
 def param_knob(ch, page, slot, param, tag):
@@ -170,8 +180,8 @@ def bcl(name, enc, btn, store=None):
                 f"  .default {min(max(e['default'], min(e['lo'], e['hi'])), max(e['lo'], e['hi']))}"]
     for n in sorted(btn):
         b = btn[n]
-        if "step" in b:      # one press = next value, wrapping at the count
-            par, mode, dflt = f"{b['step'][0]} {b['step'][1]} increment 1", "", b["step"][0]
+        if "step" in b:      # one press = one step; the BCR clamps at the range's end, it does not wrap
+            par, mode, dflt = f"{b['step'][0]} {b['step'][1]} increment {b.get('inc', 1)}", "", b["step"][0]
         elif "shot" in b:    # one fixed value on press
             par, mode, dflt = f"{b['shot']} {b['shot']} toggleoff", "  .mode down", b["shot"]
         else:
