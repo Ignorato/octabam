@@ -212,14 +212,13 @@ What `make reach` lists, by what changed:
 |---|---|
 | `modules/<name>/` (a pin bump too) | `make accept` for every remix that carries the module (one `REMIXES="..."` line; it runs both halves of `make check` itself, the shared half once) |
 | `remixes/<name>/remix.py` | `make accept` for that remix |
-| `tools/verify/verify_<x>.py` | `make check` for the remixes of the modules whose manifests name it; every remix for a shared gate |
-| `tools/build/`, `tools/remix/`, `dsp/` | `scripts/refhash.sh check` (save the baseline on main first), `make test-acceptance`, `make check` on every remix |
-| `tools/harness/dsp_host/`, `tools/patches/` | `make ci-dsp`, then `make check` on every remix (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
-| `tools/emu/` | `make ci-emu`, `make emu-cf`, `make check` on every remix, with OT_PROJECT |
-| the acceptance runner, the stress generator, `pressure.py` | `make test-acceptance`, `make accept` on every remix |
+| a file under `tools/` or `scripts/` | by dependency: the Python imports and the `tools/x/y.py` paths the code runs or reads form a graph, and a change reaches the gates that depend on it. The build (`build_bus.py`, `cycle_count.py`, `dsp/`) and what it imports: `scripts/refhash.sh check` (save the baseline on main first), `make test-acceptance`, every remix. A gate of the shared half (the selftest, slots, replaces, docs, label_fmt, the knob census, a manifest gate with `remix_arg=False`): `make check-shared` for every remix or the owners' remixes. A gate of the per-remix half (dirtystate, initregs, dram_boot, labels, modenames, hidden, menu, set, usb): `make check-remix` for every remix. A manifest gate with `remix_arg=True`: its owners' remixes. The acceptance runner, the stress generator, `pressure.py`: `make test-acceptance`, `make accept` on every remix. A file no gate depends on: nothing, and the listing says so |
+| `tools/harness/dsp_host/`, `tools/patches/`, `scripts/setup.sh`, `scripts/vendor.sh` | `make ci-dsp`, then every remix (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
+| `tools/emu/ot_emu/` | `make ci-emu`, `make emu-cf`, every remix's per-remix half, with OT_PROJECT |
+| `Makefile` | by target, against the base: a target of the check graph (`bus`, `cycles`, `verify*`, `check*`), a variable or a `define`: every remix and `make ci`; `accept`, `reach`, `check-remixes`, `test-acceptance`: the runner tests; a ci target: `make ci`; any other target: nothing |
 | `docs/`, `*.md` | `python3 tools/verify/verify_docs.py` |
-| `Makefile`, `.github/` | `make check` on every remix, `make ci` |
-| anything else | `make check` on every remix, named as unclassified |
+| `.github/` | `make ci` |
+| anything else | every remix, named as unclassified |
 
 Without `STRESS_SOURCE` the accept line cannot run, so the list carries
 the `make check` lines separately and names the accept line as blocked.

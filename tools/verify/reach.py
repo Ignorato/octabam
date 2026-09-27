@@ -1,17 +1,63 @@
 #!/usr/bin/env python3
-"""Which gates a change reaches: the diff against main, classified by path.
+"""Which gates a change reaches: the diff against main, classified by what
+depends on each changed file.
 
     python3 tools/verify/reach.py [--base origin/main] [--run] [--paths ...]
-    make reach [BASE=origin/main] [RUN=1]
+    make reach [BASE=origin/main] [RUN=1] [KEEP=1] [JOBS=n]
 
 CONTRIBUTING's "every remix the change can reach" was worked out by hand:
 a module's remixes from the selections, a build change's refhash, a
 verifier's callers. This reads the changed paths (committed and not,
 against the merge-base with `--base`) and prints the commands, one line
 each, with the paths that put them there; `--run` runs them in order and
-stops at the first failure. There is no default remix: a path
-it cannot place, a shared gate or a build change reaches EVERY remix, and
-an unclassified path is named as such.
+stops at the first failure (`--keep-going`: every one, then a table).
+There is no default remix: the build and an unclassified path reach EVERY
+remix, and an unclassified path is named as such.
+
+HOW A PATH IS PLACED (28 Sep 2026; before, by directory):
+
+  modules/<name>/           the remixes carrying the module: make check (both
+                            halves) and make accept for each
+  remixes/<name>/remix.py   that remix
+  tools/, scripts/          by DEPENDENCY: the Python imports (`from remix
+                            import`, `import send_probe`) and the
+                            `tools/x/y.py` path strings in every tools/ file
+                            are a graph; a changed file reaches the gates
+                            that transitively depend on it --
+                              the build (build_bus.py, cycle_count.py, dsp/)
+                                -> refhash, the runner tests, every remix (both halves)
+                              a gate of the SHARED half (the verify-shared
+                              recipe: selftest, slots, replaces, docs,
+                              label_fmt, the knob census; a manifest gate
+                              with remix_arg=False)
+                                -> make check-shared for every remix / its owners
+                              a gate of the PER-REMIX half (the verify-remix
+                              recipe: dirtystate, initregs, dram_boot, labels,
+                              modenames, hidden, menu, set, usb)
+                                -> make check-remix for every remix
+                              a manifest gate with remix_arg=True
+                                -> make check for its owners' remixes
+                              the acceptance machinery (acceptance.py,
+                              module_gates.py, stress_project.py, pressure.py)
+                                -> the runner tests, every remix, accept for every remix
+                              a file no gate depends on (bcr2000.py, a render
+                              tool a `make render*` target runs)
+                                -> nothing, and the note says so
+                            tools/emu/ (the port) is every remix's per-remix
+                            half plus ci-emu and emu-cf; tools/harness/dsp_host,
+                            tools/patches, setup.sh, vendor.sh are ci-dsp
+                            plus every remix
+  Makefile                  by TARGET: the targets whose recipe or
+                            prerequisites changed against the base --
+                            the check graph (bus, cycles, verify*, check*)
+                            reaches every remix and make ci; the runner's
+                            targets (accept, reach, check-remixes,
+                            test-acceptance) the runner tests; the ci
+                            targets make ci; any other target nothing; a
+                            changed variable or define, every remix
+  docs/, *.md               verify_docs
+  .github/                  make ci
+  anything else             every remix, named unclassified
 
 It refuses a tree that is not rebased onto the base (the base must be an
 ancestor of HEAD): gates run before a rebase are not a result (PR #396).
@@ -19,25 +65,19 @@ CI runs the dry form on every pull request so the expected local gates are
 in the job log; it has no firmware, so it runs none of them.
 
 Two or more remixes to check are printed as one `make check-shared
-REMIXES="..."` (the ledger selftest, the knob census and the isolated
-module gates that build their own image: once) and a `make check-remix
-REMIX=<r>` each (its build, cycles, dirty state, init regs, DRAM boot,
-labels, its own module gates, menu, the set under the port, USB). One
-remix stays `make check`. The two halves together are `make check`.
-
-`make accept` runs both halves itself (the shared half once for every
-remix it is given), so with STRESS_SOURCE set a remix that reaches
-accept has no separate check line and the accept remixes are one `make
-accept REMIXES="..."`; without it the check lines stay, and the accept
-line is listed as blocked. `--run --keep-going` runs every gate and
-prints one table instead of stopping at the first failure; `--run --jobs
-N` runs the check-remix lines through `check_shards.py`, N worktrees at a
-time.
+REMIXES="..."` (once) and a `make check-remix REMIX=<r>` each; one remix
+alone stays `make check`. `make accept` runs both halves itself (the shared
+half once for every remix it is given), so with STRESS_SOURCE set a remix
+that reaches accept has no separate check line and the accept remixes are
+one `make accept REMIXES="..."`; without it the check lines stay and the
+accept line is listed as blocked. `--run --jobs N` runs the check-remix
+lines through `check_shards.py`, N worktrees at a time.
 """
 import argparse
-import fnmatch
+import ast
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import time
@@ -49,9 +89,31 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 # One command per gate; the order is the order they run in.
 ORDER = ("verify_docs", "selftest", "test-acceptance", "ci-dsp", "ci-emu", "emu-cf", "refhash", "check-shared", "check", "check-remix", "accept", "ci")
 
+# The build: a change here is every remix, both halves, and refhash proves
+# the artifacts identical. dsp/ holds the sources build_bus assembles.
+BUILD_ROOTS = ("tools/build/build_bus.py", "tools/build/cycle_count.py")
+# The acceptance runner and what it drives: the runner tests, then accept
+# for every remix (which runs both halves of every check itself).
+ACCEPTANCE = ("tools/verify/acceptance.py", "tools/verify/module_gates.py",
+              "tools/harness/stress_project.py", "tools/harness/pressure.py")
+CLASSIFIER = ("tools/verify/reach.py",)
+# Makefile targets by what a change to them reaches.
+MAKE_CHECK = {"bus", "cycles", "verify", "verify-shared", "verify-remix", "check", "check-shared", "check-remix",
+              "need-remix", "os", "recon"}
+MAKE_RUNNER = {"accept", "test-acceptance", "reach", "check-remixes"}
+MAKE_CI = {"ci", "ci-dsp", "ci-emu", "emu-cf", "check-asm"}
+
 
 def cmd_check(remix):
     return ("check", f"make check REMIX={remix}")
+
+
+def cmd_check_remix(remix):
+    return ("check-remix", f"make check-remix REMIX={remix}")
+
+
+def cmd_check_shared(remixes):
+    return ("check-shared", f'make check-shared REMIXES="{" ".join(sorted(remixes))}"')
 
 
 def cmd_accept(remix):
@@ -60,6 +122,10 @@ def cmd_accept(remix):
 
 def accept_remix(command):
     return command.split("REMIX=")[1].split()[0]
+
+
+def shared_remixes(command):
+    return command.split('REMIXES="')[1].split('"')[0].split()
 
 
 CMD = {
@@ -73,22 +139,194 @@ CMD = {
     "ci": ("ci", "make ci"),
 }
 
+# ---- the dependency graph over tools/ ------------------------------------
+
+IMPORT = re.compile(r"^\s*(?:from\s+([A-Za-z_][\w.]*)\s+import\s+([\w, ]+)|import\s+([A-Za-z_][\w.]*))", re.M)
+PATHREF = re.compile(r"\b((?:tools|scripts|dsp)/[A-Za-z0-9_./-]+\.[A-Za-z0-9]+)\b")
+# A path string is a dependency when the code RUNS or READS it: an argument
+# of one of these calls (an argv list inside subprocess.run counts), or a
+# `ROOT / "tools/x/y.py"`. A path in a comment, a docstring, a message or a
+# build-report hint is prose (build_bus.py names render_reverb.py and
+# verify_delay.py in hints, and every remix "depended" on both).
+RUNS_OR_READS = {"run", "Popen", "check_output", "check_call", "call", "open", "Path", "PurePath",
+                 "read_text", "read_bytes", "exists", "is_file", "glob", "rglob", "joinpath", "execv", "execvp"}
+
+
+def path_refs(text):
+    """The repo paths a Python source runs or reads (see RUNS_OR_READS)."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return set()
+    parents = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = node
+    out = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Constant) and isinstance(node.value, str)):
+            continue
+        refs = PATHREF.findall(node.value)
+        if not refs:
+            continue
+        p = parents.get(node)
+        while p is not None and not isinstance(p, ast.stmt):
+            if isinstance(p, ast.BinOp) and isinstance(p.op, ast.Div):
+                out.update(refs); break
+            if isinstance(p, ast.Call):
+                f = p.func
+                name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", "")
+                if name in RUNS_OR_READS:
+                    out.update(refs); break
+            p = parents.get(p)
+    return out
+
+
+def resolve_import(module, names, exists):
+    """The repo files an import statement names, by toolpath's rules: the
+    `remix` package under tools/, every group directory by bare name."""
+    out = set()
+    parts = module.split(".")
+    base = "tools/" + "/".join(parts)
+    if exists(base + ".py"):
+        out.add(base + ".py")
+    if exists(base + "/__init__.py"):
+        out.add(base + "/__init__.py")
+    for n in names:                     # `from hw import ot_bank`: tools/hw has no __init__
+        if exists(f"{base}/{n}.py"):
+            out.add(f"{base}/{n}.py")
+    if len(parts) == 1:
+        for g in ("build", "harness", "emu", "hw", "verify"):
+            if exists(f"tools/{g}/{module}.py"):
+                out.add(f"tools/{g}/{module}.py")
+    return out
+
+
+def scan_deps(root=ROOT):
+    """{file: set(files it imports or names by path)} over tools/**/*.py and
+    scripts/*.sh; a submodule's files are not ours."""
+    files = [p for p in root.glob("tools/**/*.py") if "upstream" not in p.parts]
+    files += list(root.glob("scripts/*.sh"))
+    rel = lambda p: p.relative_to(root).as_posix()
+    known = {rel(p) for p in files}
+    exists = lambda path: path in known or (root / path).is_file()
+    deps = {}
+    for p in files:
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        d = set()
+        if p.suffix == ".py":
+            for m in IMPORT.finditer(text):
+                if m.group(1):
+                    d |= resolve_import(m.group(1), [n.strip().split(" as ")[0] for n in m.group(2).split(",")], exists)
+                else:
+                    d |= resolve_import(m.group(3), [], exists)
+        refs = path_refs(text) if p.suffix == ".py" else {
+            r for line in text.splitlines() if not line.lstrip().startswith("#") for r in PATHREF.findall(line)}
+        for ref in refs:
+            if exists(ref):
+                d.add(ref)
+        d.discard(rel(p))
+        deps[rel(p)] = d
+    return deps
+
+
+def makefile_targets(text):
+    """{target: its prerequisites + recipe text}, {variable: its line},
+    {define: its body} from a Makefile's text; comments, blanks and .PHONY
+    lines are not a change."""
+    targets, variables, defines = {}, {}, {}
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r"^define\s+(\S+)", line)
+        if m:
+            body = []
+            i += 1
+            while i < len(lines) and not lines[i].startswith("endef"):
+                body.append(lines[i]); i += 1
+            defines[m.group(1)] = "\n".join(body)
+            i += 1
+            continue
+        m = re.match(r"^([A-Za-z_][\w-]*)\s*[?:+]?=(.*)$", line)
+        if m:
+            variables[m.group(1)] = line.strip()
+            i += 1
+            continue
+        m = re.match(r"^([A-Za-z0-9_.-]+):(?!=)(.*)$", line)
+        if m and not line.startswith((".PHONY", "\t")):
+            recipe = [m.group(2).split("##")[0].strip()]
+            i += 1
+            while i < len(lines) and lines[i].startswith("\t"):
+                recipe.append(lines[i].strip()); i += 1
+            targets[m.group(1)] = "\n".join(recipe)
+            continue
+        i += 1
+    return targets, variables, defines
+
+
+def makefile_changes(base_text, head_text):
+    """(changed targets, changed variables or defines) between two Makefiles."""
+    bt, bv, bd = makefile_targets(base_text or "")
+    ht, hv, hd = makefile_targets(head_text or "")
+    targets = sorted(k for k in set(bt) | set(ht) if bt.get(k) != ht.get(k))
+    other = sorted(k for k in set(bv) | set(hv) if bv.get(k) != hv.get(k))
+    other += sorted(k for k in set(bd) | set(hd) if bd.get(k) != hd.get(k))
+    return targets, other
+
+
+def recipe_scripts(make_text, target):
+    m = re.search(r"^%s:[^\n]*\n((?:\t[^\n]*\n)+)" % re.escape(target), make_text, re.M)
+    return set(re.findall(r"tools/\S+\.py", m.group(1))) if m else set()
+
 
 class Context:
-    """What the classifier needs from the registry, so tests can fake it."""
+    """What the classifier needs from the registry and the tree, so tests
+    can fake it."""
 
-    def __init__(self, module_key, remixes_of, gate_owners, remixes, exists=None):
+    def __init__(self, module_key, remixes_of, gate_owners, remixes, exists=None, deps=None,
+                 shared_scripts=(), remix_scripts=(), gate_shared=None, make_base=None, make_head=None):
         self.module_key = module_key        # module directory -> key
         self.remixes_of = remixes_of        # key -> sorted remix names carrying it
         self.gate_owners = gate_owners      # verifier path -> keys whose manifests name it
         self.remixes = remixes              # every remix: the floor, since nothing is the default
         self.exists = exists or (lambda path: (ROOT / path).exists())
+        self.deps = deps or {}              # file -> files it depends on
+        self.shared_scripts = set(shared_scripts) - set(ACCEPTANCE)   # the verify-shared recipe's
+        self.remix_scripts = set(remix_scripts) - set(ACCEPTANCE)     # the verify-remix recipe's
+        self.gate_shared = gate_shared or {}   # manifest gate script -> True when remix_arg=False
+        self.make_base, self.make_head = make_base, make_head
+        self._dependents = None
 
     def every(self):
+        """Every remix, both halves (plan() folds these into one check-shared
+        and a check-remix each)."""
         return [cmd_check(r) for r in self.remixes]
 
+    def every_remix(self):
+        return [cmd_check_remix(r) for r in self.remixes]
+
+    def dependents(self, path):
+        """Every file that depends on `path`, transitively."""
+        if self._dependents is None:
+            rev = {}
+            for f, ds in self.deps.items():
+                for d in ds:
+                    rev.setdefault(d, set()).add(f)
+            self._dependents = rev
+        seen, todo = set(), [path]
+        while todo:
+            p = todo.pop()
+            for f in self._dependents.get(p, ()):
+                if f not in seen:
+                    seen.add(f); todo.append(f)
+        return seen
+
     @classmethod
-    def from_registry(cls):
+    def from_registry(cls, base=None):
         from remix import registry
         mods = registry.modules()
         module_key = {m.name: m.key for m in mods.values()}
@@ -96,12 +334,95 @@ class Context:
         for name in registry.remix_names():
             for k in registry.remix(name).modules:
                 remixes_of.setdefault(k, []).append(name)
-        gate_owners = {}
+        gate_owners, gate_shared = {}, {}
         for m in mods.values():
             for g in getattr(m, "gates", ()):
                 gate_owners.setdefault(g.script, []).append(m.key)
+                gate_shared[g.script] = gate_shared.get(g.script, True) and not g.remix_arg
+        make_head = (ROOT / "Makefile").read_text()
+        make_base = None
+        if base:
+            r = subprocess.run(["git", "show", f"{base}:Makefile"], cwd=ROOT, capture_output=True, text=True)
+            make_base = r.stdout if r.returncode == 0 else None
         return cls(module_key, {k: sorted(v) for k, v in remixes_of.items()}, gate_owners,
-                   registry.remix_names())
+                   registry.remix_names(), deps=scan_deps(),
+                   shared_scripts=recipe_scripts(make_head, "verify-shared"),
+                   remix_scripts=recipe_scripts(make_head, "verify-remix"),
+                   gate_shared=gate_shared, make_base=make_base, make_head=make_head)
+
+
+def route_tool(path, ctx):
+    """A tools/ or scripts/ file: the gates that depend on it."""
+    if path.startswith("dsp/") or path in BUILD_ROOTS:
+        return [CMD["refhash"], CMD["test-acceptance"]] + ctx.every(), "the build: every remix; refhash proves the artifacts and reports identical"
+    if path in CLASSIFIER or path.startswith("tools/verify/tests/"):
+        return [CMD["test-acceptance"]], "the classifier and its tests: their own tests are the gate"
+    if path in ACCEPTANCE:
+        return [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes], "the acceptance machinery: every remix"
+    if path.startswith("tools/emu/ot_emu/"):
+        return [CMD["ci-emu"], CMD["emu-cf"]] + ctx.every_remix(), "the ColdFire port: every remix's per-remix half (the set gates need OT_PROJECT)"
+    if path.startswith(("tools/harness/dsp_host/", "tools/patches/")) or path in ("scripts/setup.sh", "scripts/vendor.sh"):
+        return [CMD["ci-dsp"]] + ctx.every(), "the DSP toolchain: rebuild it first (scripts/setup.sh; a dsp_host change in an isolated tree, AGENTS.md)"
+    if path == "scripts/refhash.sh":
+        return [CMD["refhash"]], ""
+    users = ctx.dependents(path) | {path}
+    gates, notes = [], []
+    if users & set(BUILD_ROOTS):
+        return [CMD["refhash"], CMD["test-acceptance"]] + ctx.every(), "the build depends on it: every remix; refhash proves the artifacts and reports identical"
+    if users & set(ACCEPTANCE):
+        gates += [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes]
+        notes.append("the acceptance machinery depends on it: every remix")
+    if users & set(CLASSIFIER):
+        gates.append(CMD["test-acceptance"])
+    if users & ctx.shared_scripts:
+        gates.append(cmd_check_shared(ctx.remixes))
+        notes.append("a gate of the shared half: " + ", ".join(sorted(pathlib.PurePosixPath(u).stem for u in users & ctx.shared_scripts)))
+    if users & ctx.remix_scripts:
+        gates += ctx.every_remix()
+        notes.append("a gate of every remix's per-remix half: " + ", ".join(sorted(pathlib.PurePosixPath(u).stem for u in users & ctx.remix_scripts)))
+    for script in sorted(users & set(ctx.gate_owners)):
+        owners = ctx.gate_owners[script]
+        remixes = sorted({r for k in owners for r in ctx.remixes_of.get(k, [])})
+        if not remixes:
+            continue
+        if ctx.gate_shared.get(script):
+            gates.append(cmd_check_shared(remixes))
+        else:
+            gates += [cmd_check(r) for r in remixes]
+        notes.append(f"{pathlib.PurePosixPath(script).stem}, a gate of " + ", ".join(owners))
+    if path.startswith("tools/verify/") and not gates and path.startswith("tools/verify/verify_"):
+        notes.append("a verifier no recipe or manifest runs (its own make target)")
+    if not gates and not notes:
+        notes.append("no gate depends on it")
+    return gates, "; ".join(notes)
+
+
+def route_makefile(ctx):
+    if ctx.make_base is None:
+        return ctx.every() + [CMD["ci"]], "the Makefile (no base to diff against): every remix"
+    targets, other = makefile_changes(ctx.make_base, ctx.make_head)
+    gates, notes = [], []
+    if other:
+        gates += ctx.every() + [CMD["ci"]]
+        notes.append("variables or defines changed: " + ", ".join(other) + ": every remix")
+    check = [t for t in targets if t in MAKE_CHECK]
+    if check:
+        gates += ctx.every() + [CMD["ci"]]
+        notes.append("the check graph: " + ", ".join(check) + ": every remix")
+    runner = [t for t in targets if t in MAKE_RUNNER]
+    if runner:
+        gates.append(CMD["test-acceptance"])
+        notes.append("the runner's targets: " + ", ".join(runner))
+    ci = [t for t in targets if t in MAKE_CI]
+    if ci:
+        gates.append(CMD["ci"])
+        notes.append("ci targets: " + ", ".join(ci))
+    rest = [t for t in targets if t not in MAKE_CHECK | MAKE_RUNNER | MAKE_CI]
+    if rest:
+        notes.append("targets outside the check graph: " + ", ".join(rest) + ": no gate")
+    if not targets and not other:
+        notes.append("no target, variable or define changed")
+    return gates, "; ".join(notes)
 
 
 def classify(paths, ctx):
@@ -140,45 +461,13 @@ def classify(paths, ctx):
                 gates = [CMD["verify_docs"]]
             else:
                 gates = [cmd_check(name), cmd_accept(name)]
-        elif path.endswith(".md"):
-            # A README anywhere under tools/ or scripts/ is a doc, not the tool.
-            gates = [CMD["verify_docs"]]
-        elif path == "tools/verify/reach.py" or path.startswith("tools/verify/tests/"):
-            # The classifier and its tests change what is PRINTED, not what
-            # any gate runs; their own tests are the gate.
-            gates = [CMD["test-acceptance"]]
-        elif path in ("tools/verify/acceptance.py", "tools/verify/module_gates.py",
-                      "tools/harness/stress_project.py", "tools/harness/pressure.py"):
-            gates = [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes]
-            note = "the acceptance machinery: every remix"
-        elif path.startswith("tools/verify/"):
-            owners = ctx.gate_owners.get(path, [])
-            remixes = sorted({r for k in owners for r in ctx.remixes_of.get(k, [])})
-            if remixes:
-                gates = [cmd_check(r) for r in remixes]
-                note = "a gate of " + ", ".join(owners)
-            else:
-                gates = ctx.every()
-                note = "a shared gate: every remix"
-        elif path.startswith(("tools/remix/", "tools/build/", "dsp/")):
-            gates = [CMD["refhash"], CMD["test-acceptance"]] + ctx.every()
-            note = "the build: every remix; refhash proves the artifacts and reports identical"
-        elif path.startswith(("tools/harness/dsp_host/", "tools/patches/")) or path in (
-                "scripts/setup.sh", "scripts/vendor.sh"):
-            gates = [CMD["ci-dsp"]] + ctx.every()
-            note = "the DSP toolchain: rebuild it first (scripts/setup.sh; a dsp_host change in an isolated tree, AGENTS.md)"
-        elif path.startswith("tools/emu/"):
-            gates = [CMD["ci-emu"], CMD["emu-cf"]] + ctx.every()
-            note = "the ColdFire port: the set gates need OT_PROJECT"
-        elif path.startswith(("tools/harness/", "tools/hw/", "tools/panel/", "scripts/")):
-            gates = ctx.every()
-            if path == "scripts/refhash.sh":
-                gates = [CMD["refhash"]]
+        elif top in ("tools", "scripts", "dsp"):
+            gates, note = route_tool(path, ctx)
         elif path == "Makefile":
-            gates = ctx.every() + [CMD["ci"]]
+            gates, note = route_makefile(ctx)
         elif path.startswith(".github/"):
             gates = [CMD["ci"]]
-        elif path.startswith("docs/"):
+        elif path.endswith(".md") or path.startswith("docs/"):
             gates = [CMD["verify_docs"]]
         elif path in ("pyproject.toml", "uv.lock", "LICENSE", ".gitignore", ".gitmodules"):
             gates = ctx.every()
@@ -193,48 +482,76 @@ def plan(rows, accept_runs_check=True):
     """The commands in run order, each once, with the paths that put it
     there. Two or more remixes to check become ONE `make check-shared`
     (the remix-independent gates, once) and a `make check-remix` each; a
-    single remix stays `make check`. Two or more remixes to accept become
-    ONE `make accept REMIXES="..."` (the runner runs the shared half once),
-    and with `accept_runs_check` (STRESS_SOURCE is set, so the accept
-    line will run) a remix that is accepted is not checked separately:
-    accept runs both halves of its check itself."""
+    single full check alone stays `make check`. Two or more remixes to
+    accept become ONE `make accept REMIXES="..."` (the runner runs the
+    shared half once), and with `accept_runs_check` (STRESS_SOURCE is set,
+    so the accept line will run) a remix that is accepted is not checked
+    separately: accept runs both halves of its check itself."""
     by_cmd = {}
     for path, gates, _ in rows:
         for kind, command in gates:
             by_cmd.setdefault((kind, command), []).append(path)
     accepts = {k: v for k, v in by_cmd.items() if k[0] == "accept"}
+    accepted = []
     if accepts:
-        names = sorted(accept_remix(c) for _, c in accepts)
+        accepted = sorted(accept_remix(c) for _, c in accepts)
         paths = sorted({p for v in accepts.values() for p in v})
         for k in accepts:
             del by_cmd[k]
-        if len(names) > 1:
-            by_cmd[("accept", f'make accept REMIXES="{" ".join(names)}" STRESS_SOURCE=${{STRESS_SOURCE}}')] = paths
+        if len(accepted) > 1:
+            by_cmd[("accept", f'make accept REMIXES="{" ".join(accepted)}" STRESS_SOURCE=${{STRESS_SOURCE}}')] = paths
         else:
-            by_cmd[cmd_accept(names[0])] = paths
+            by_cmd[cmd_accept(accepted[0])] = paths
         if accept_runs_check:
-            for k in [k for k in by_cmd if k[0] == "check" and accept_remix(k[1]) in names]:
+            for k in [k for k in by_cmd if k[0] in ("check", "check-remix") and accept_remix(k[1]) in accepted]:
                 del by_cmd[k]
     checks = {k: v for k, v in by_cmd.items() if k[0] == "check"}
-    if len(checks) > 1:
-        names = sorted(c.split("REMIX=")[1] for _, c in checks)
-        paths = sorted({p for v in checks.values() for p in v})
-        for k in checks:
+    halves = [k for k in by_cmd if k[0] in ("check-shared", "check-remix")]
+    if len(checks) > 1 or (checks and halves):
+        # full checks beside other halves: every full check is its two halves
+        for (k, c), v in checks.items():
+            del by_cmd[(k, c)]
+            r = accept_remix(c)
+            by_cmd.setdefault(cmd_check_shared([r]), []).extend(v)
+            by_cmd.setdefault(cmd_check_remix(r), []).extend(v)
+    shared = {k: v for k, v in by_cmd.items() if k[0] == "check-shared"}
+    if len(shared) > 1:
+        names = sorted({r for _, c in shared for r in shared_remixes(c)})
+        paths = sorted({p for v in shared.values() for p in v})
+        for k in shared:
             del by_cmd[k]
-        by_cmd[("check-shared", f'make check-shared REMIXES="{" ".join(names)}"')] = paths
-        for (_, c), v in checks.items():
-            by_cmd[("check-remix", c.replace("make check ", "make check-remix "))] = v
+        by_cmd[cmd_check_shared(names)] = paths
     keyed = sorted(by_cmd.items(), key=lambda kv: (ORDER.index(kv[0][0]), kv[0][1]))
-    return [(kind, command, paths) for (kind, command), paths in keyed]
+    return [(kind, command, sorted(set(paths))) for (kind, command), paths in keyed]
 
 
 def remixes_reached(rows):
     out = set()
     for _, gates, _ in rows:
         for kind, command in gates:
-            if kind == "check":
-                out.add(command.split("REMIX=")[1])
+            if kind in ("check", "check-remix"):
+                out.add(accept_remix(command))
+            elif kind == "check-shared":
+                out |= set(shared_remixes(command))
     return sorted(out)
+
+
+def sharded(items, jobs):
+    """The check-remix lines as one `check_shards.py --jobs N` line, in
+    the first one's place: each remix's half in its own worktree, N at a
+    time (the halves all write out/mainos_bus.bin, so one tree runs one)."""
+    remixes = [c.split("REMIX=")[1] for k, c, _ in items if k == "check-remix"]
+    if len(remixes) < 2:
+        return items
+    out, done = [], False
+    for kind, command, paths in items:
+        if kind != "check-remix":
+            out.append((kind, command, paths))
+        elif not done:
+            all_paths = sorted({p for k, _, ps in items if k == "check-remix" for p in ps})
+            out.append(("check-remix", f"python3 tools/verify/check_shards.py --jobs {jobs} " + " ".join(remixes), all_paths))
+            done = True
+    return out
 
 
 def git(*args):
@@ -267,7 +584,7 @@ def main(argv=None):
         merge_base, paths = None, sorted(set(a.paths))
     else:
         merge_base, paths = changed_paths(a.base)
-    ctx = Context.from_registry()
+    ctx = Context.from_registry(base=merge_base or a.base)
     rows = classify(paths, ctx)
     if merge_base:
         print(f"reach: {len(paths)} changed path{'s' if len(paths) != 1 else ''} against {a.base} ({merge_base[:10]})")
@@ -285,6 +602,8 @@ def main(argv=None):
     for kind, command, from_paths in items:
         why = from_paths[0] + (f" +{len(from_paths) - 1}" if len(from_paths) > 1 else "")
         print(f"  {command:56}  # {why}")
+    if not items:
+        print("  (none: no gate depends on what changed)")
     if any(k == "accept" for k, _, _ in items) and not stress:
         print("\nSTRESS_SOURCE is unset: point it at a local project (never committed) for the accept line"
               " (it then runs the accepted remixes' checks itself).")
@@ -318,24 +637,6 @@ def main(argv=None):
         return 2 if all(r[1] == "BLOCKED" for r in bad) else 1
     print("reach: every gate passed")
     return 0
-
-
-def sharded(items, jobs):
-    """The check-remix lines as one `check_shards.py --jobs N` line, in
-    the first one's place: each remix's half in its own worktree, N at a
-    time (the halves all write out/mainos_bus.bin, so one tree runs one)."""
-    remixes = [c.split("REMIX=")[1] for k, c, _ in items if k == "check-remix"]
-    if len(remixes) < 2:
-        return items
-    out, done = [], False
-    for kind, command, paths in items:
-        if kind != "check-remix":
-            out.append((kind, command, paths))
-        elif not done:
-            all_paths = sorted({p for k, _, ps in items if k == "check-remix" for p in ps})
-            out.append(("check-remix", f"python3 tools/verify/check_shards.py --jobs {jobs} " + " ".join(remixes), all_paths))
-            done = True
-    return out
 
 
 if __name__ == "__main__":
