@@ -23,6 +23,16 @@ flashed image was built from.
   and refuse without it; the bus, knob-census, Character and CC MAP gates
   ask the registry for the smallest remix carrying what they need
   (`registry.fixture`); refhash names its subject (`bus`) itself. The
+  selftest refuses a module no remix carries. `remixes/bamsep26` is
+  removed (bottleservice is its strict superset). Running every remix's
+  `make check` found: `verify_set` wanted Character's count on an FX1 id a
+  remix ran as stock LO-FI (kits, scenes); `generate_cpu.py --check`
+  called Tape Echo's cpu.s stale under a gcc other than the one that
+  wrote it (it records the gcc and SKIPs under another); `scripts/setup.sh`
+  staged `dsp_host` without rebuilding it, so the shared binary had ignored
+  `-paramfile` since #388 (verify_miniverb's "MOD residual 0.000", PR
+  #356's two reviews); `verify_modedefaults` SKIPs by name under Octakit,
+  whose editor wrapper halts a direct call (`gk_track_setup_byte_fatal`).
   selftest refuses a module no remix carries.
   every PR. `pressure.py`'s knob table moved into the manifests.
 - Character savings (27 Sep 2026): 355 -> 241 static cycles/sample
