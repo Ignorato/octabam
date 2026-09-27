@@ -424,6 +424,10 @@ emu-card: ## Boot with an emulated CF card holding PROJECT and load it
 disasm: ## Open radare2 on the decompressed ColdFire MAIN OS
 	scripts/disasm.sh
 
+.PHONY: ghidra
+ghidra: ## One Ghidra project: the MAIN OS and both DSP payloads (out/ghidra). GHIDRA=<install dir>; tools/ghidra/README.md
+	python3 tools/ghidra/ot_ghidra.py import $(if $(GHIDRA),--ghidra $(GHIDRA))
+
 .PHONY: where
 where: ## Every doc paragraph citing one ColdFire address + a disasm window. make where A=0x40004d40 [N=128]
 	@test -n "$(A)" || { echo "usage: make where A=0x40004d40 [N=bytes]"; exit 1; }
