@@ -12,7 +12,8 @@ def ctx():
         module_key={"character": "CHARACTER", "miniverb": "MINIVERB", "orphan": "ORPHAN"},
         remixes_of={"CHARACTER": ["bamsep26", "usb"], "MINIVERB": ["miniverb"], "ORPHAN": []},
         gate_owners={"tools/verify/verify_character.py": ["CHARACTER"]},
-        remixes=["bamsep26", "miniverb", "usb"])
+        remixes=["bamsep26", "miniverb", "usb"],
+        exists=lambda path: path != "modules/gone")
 
 
 EVERY = ['make check-shared REMIXES="bamsep26 miniverb usb"',
@@ -39,6 +40,14 @@ class ClassifyTests(unittest.TestCase):
         rows = reach.classify(["modules/orphan/manifest.py"], ctx())
         self.assertIn("no remix carries", rows[0][2])
         self.assertEqual(commands(["modules/orphan/manifest.py"]), ["python3 tools/remix/selftest.py"])
+
+    def test_removed_module_directory_runs_nothing_and_says_so(self):
+        rows = reach.classify(["modules/gone/manifest.py"], ctx())
+        self.assertIn("removed module directory", rows[0][2])
+        self.assertEqual(commands(["modules/gone/manifest.py"]), [])
+
+    def test_unknown_but_present_module_directory_is_the_floor(self):
+        self.assertEqual(commands(["modules/mystery/manifest.py"]), EVERY)
 
     def test_template_runs_nothing(self):
         self.assertEqual(commands(["modules/_template/manifest.py"]), [])
