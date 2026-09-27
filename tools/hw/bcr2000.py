@@ -149,13 +149,13 @@ def bcl(name, enc, btn, store=None):
            "  .egroups 4", "  .fkeys on", "  .lock off", "  .init"]
     for n in sorted(enc):
         e = enc[n]
-        select = e["hi"] < 127
+        select = abs(e["hi"] - e["lo"]) < 127
         out += [f"$encoder {n} ; {e['label']}",
                 f"  .easypar CC {e['ch']} {e['cc']} {e['lo']} {e['hi']} absolute",
                 "  .showvalue on",
                 f"  .mode {'1dot' if select else 'bar'}",
                 f"  .resolution {'24 24 24 24' if select else '96 96 96 96'}",
-                f"  .default {min(e['default'], e['hi'])}"]
+                f"  .default {min(max(e['default'], min(e['lo'], e['hi'])), max(e['lo'], e['hi']))}"]
     for n in sorted(btn):
         b = btn[n]
         if "step" in b:      # one press = next value, wrapping at the count
