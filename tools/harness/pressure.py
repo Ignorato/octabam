@@ -65,11 +65,18 @@ def price_modules(remix):
     return mods
 
 
+def fallback_of(mods):
+    """What an unassigned FX2 slot runs: SEND when the remix carries it (the
+    build aliases unimplemented ids to it), else the firmware's own NONE
+    (cost 0; schema.NO_FALLBACK)."""
+    return "SEND" if "SEND" in mods else None
+
+
 def enumerate_layouts(mods, core_server):
     """Every (fx1, fx2) x 4 tracks for one core, as sorted tuples (order on a
     core does not change the sum), with the per-core cost."""
     fx1_opts = [None] + sorted(k for k, m in mods.items() if m["on_fx1"] and not m["server"])
-    fx2_opts = ["SEND"] + sorted(k for k, m in mods.items() if m["on_fx2"] and not m["server"] and k != "SEND")
+    fx2_opts = [fallback_of(mods)] + sorted(k for k, m in mods.items() if m["on_fx2"] and not m["server"] and k != "SEND")
     if core_server:
         fx2_opts.append(core_server)
     slots = [(a, b) for a in fx1_opts for b in fx2_opts]
@@ -77,8 +84,10 @@ def enumerate_layouts(mods, core_server):
     cost[None] = 0
     seen = {}
     for combo in itertools.combinations_with_replacement(slots, TRACKS_PER_CORE):
-        if sum(1 for _, b in combo if b == core_server) > 1:
+        if core_server and sum(1 for _, b in combo if b == core_server) > 1:
             continue                                   # one server per core
+        if not any(a or b for a, b in combo):
+            continue                                   # nothing of ours on the core: nothing to price or render
         c = sum(cost[a] + cost[b] for a, b in combo)
         seen[combo] = c
     return seen
@@ -138,7 +147,7 @@ def price(a):
 
 
 def fmt(combo):
-    return " | ".join(f"{a or '-'}+{b}" for a, b in combo)
+    return " | ".join(f"{a or '-'}+{b or '-'}" for a, b in combo)
 
 
 # ---- A2: render ------------------------------------------------------------
@@ -182,15 +191,16 @@ def render(a):
     for n, (core, cyc, verdict, layout) in enumerate(picks):
         tracks, sets = [], []
         for t, slot in zip(LETTER_TRACKS[core], layout.split(" | ")):
-            fx1, fx2 = slot.split("+")
-            tracks.append(f"T{t}={fx2}" if fx1 == "-" else f"T{t}={fx1}+{fx2}")
+            fx1, fx2 = slot.split("+")                # "-" is an empty slot: rig_render's "."
+            tracks.append(f"T{t}={fx1.replace('-', '.')}+{fx2.replace('-', '.')}")
             for eff, fxn in ((fx1, 1), (fx2, 2)):
                 for k, v in (dear(eff) if eff in mods else {}).items():
                     sets += ["--set", f"T{t}:FX{fxn}:{k}={v}"]
         # the other core carries the plain rig so the bus has both ends
         other = 1 - core
         for t in LETTER_TRACKS[other]:
-            tracks.append(f"T{t}=SEND")
+            if fallback_of(mods):
+                tracks.append(f"T{t}={fallback_of(mods)}")
         outdir = OUT / f"render_{remix.name}_c{core}_{n:03d}"
         cmd = [sys.executable, str(ROOT / "tools/harness/rig_render.py"), "--image", str(image), "--remix", remix.name,
                "--tracks", ",".join(tracks), "--stems", str(stems), "--seconds", str(a.seconds), "--tail", "0.5",
