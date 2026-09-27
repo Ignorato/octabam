@@ -13,8 +13,10 @@ Presets (`--preset`, default `rig`):
           2-9), row 2 = BusVerb on T5 (slots 2-9), row 3 = delay PTCH TIME, verb
           DLY TIME, crossfader; buttons 33-40 MUTE, 41-48 SOLO per track.
   t1..t8  one track: groups 1-4 = FX1 page 1, FX1 page 2, FX2 page 1, FX2 page 2
-          (LEVEL, AMP VOL, crossfader on the spare encoders); lower rows =
+          (LEVEL, AMP VOL, scene fader on the spare encoders); lower rows =
           PLAYBACK, AMP, LFO page 1; buttons as `rig`.
+  Both:   user buttons 49-52 = BusDelay MODE step, BusVerb MODE step, scene A, scene B
+          (CC 48 at 127 / 0); the fader encoder runs 127 -> 0 so left is scene A.
   all     rig then t1..t8; `--store N` stores rig at N and t1..t8 at N+1..N+8.
 
 Without `--store` the preset lands in the BCR's edit buffer only.
@@ -26,7 +28,8 @@ SOLO 50, on the track's trig channel); page 2 is CC MAP (modules/cc-map: FX2
 over CC re-defaults the knobs around it (MODE DEFAULTS). Delay TONE (CC 42
 on T1) reaches the DSP only while T1's FX2 page is on screen (MIDI.md
 "Hardware findings"). MUTE/SOLO are sent as 127/0 toggles; the value the OT
-treats as "on" is not measured here.
+treats as "on" is not measured here, and which end of CC 48 is scene A is
+inferred from the panel fader's inversion, not measured.
 
 The OT: PROJECT > MIDI > CONTROL > AUDIO CC IN on; each track's trig channel
 set (T1-8 = 1-8 is the default, `--channels` follows the project).
@@ -74,6 +77,19 @@ def knob(ch, cc, label, count=None, default=0):
     return dict(ch=ch, cc=cc, lo=0, hi=hi, default=default or 0, label=label)
 
 
+def fader(ch):
+    """CC 48 lands inverted (MIDI.md 4: the firmware stores 127 - value), so the encoder runs 127 -> 0: left = scene A."""
+    return dict(ch=ch, cc=XFADE, lo=127, hi=0, default=127, label="SCENE A>B")
+
+
+def user_buttons(channels):
+    """The four bottom-right buttons, the same on every preset."""
+    return {49: dict(ch=channels[0], cc=PAGE2["FX2"], label="DLY MODE step", step=(0, 2)),
+            50: dict(ch=channels[4], cc=PAGE2["FX2"], label="VRB MODE step", step=(0, 2)),
+            51: dict(ch=channels[0], cc=XFADE, label="SCENE A", shot=127),
+            52: dict(ch=channels[0], cc=XFADE, label="SCENE B", shot=0)}
+
+
 def param_knob(ch, page, slot, param, tag):
     return knob(ch, slot_cc(page, slot), f"{tag} {param.name.decode() or '-'}", param.count, param.default)
 
@@ -96,12 +112,12 @@ def rig_preset(channels):
     enc[50] = param_knob(cd, "FX2", 11, dly[11], "T1 BDLY")
     enc[51] = param_knob(cv, "FX2", 10, vrb[10], "T5 BVRB")
     enc[52] = param_knob(cv, "FX2", 11, vrb[11], "T5 BVRB")
-    enc[53] = knob(channels[0], XFADE, "CROSSFADER")
+    enc[53] = fader(channels[0])
     return "OCTABAM RIG", enc, mute_solo(channels)
 
 
 def mute_solo(channels):
-    btn = {}
+    btn = user_buttons(channels)
     for t in range(8):
         btn[33 + t] = dict(ch=channels[t], cc=MUTE, label=f"T{t+1} MUTE")
         btn[41 + t] = dict(ch=channels[t], cc=SOLO, label=f"T{t+1} SOLO")
@@ -121,7 +137,7 @@ def track_preset(track, channels):
         default = st[0][s].default
         enc[1 + s + 2 * (s // 6)] = knob(ch, slot_cc("FX1", s), f"T{track} FX1 {'/'.join(sorted(names)) or '-'}", count, default)
         enc[17 + s + 2 * (s // 6)] = param_knob(ch, "FX2", s, fx2[s], f"T{track} FX2")
-    enc[7], enc[8], enc[15] = knob(ch, LEVEL, f"T{track} LEVEL"), knob(ch, AMPVOL, f"T{track} AMP VOL"), knob(ch, XFADE, "CROSSFADER")
+    enc[7], enc[8], enc[15] = knob(ch, LEVEL, f"T{track} LEVEL"), knob(ch, AMPVOL, f"T{track} AMP VOL"), fader(ch)
     for row, page in enumerate(("PB", "AMP", "LFO")):
         for s in range(6):
             enc[33 + 8 * row + s] = knob(ch, PAGE1[page] + s, f"T{track} {page} {s+1}")
@@ -142,9 +158,13 @@ def bcl(name, enc, btn, store=None):
                 f"  .default {min(e['default'], e['hi'])}"]
     for n in sorted(btn):
         b = btn[n]
-        out += [f"$button {n} ; {b['label']}",
-                f"  .easypar CC {b['ch']} {b['cc']} 127 0 toggleon",
-                "  .showvalue on", "  .default 0"]
+        if "step" in b:      # one press = next value, wrapping at the count
+            par, mode, dflt = f"{b['step'][0]} {b['step'][1]} increment 1", "", b["step"][0]
+        elif "shot" in b:    # one fixed value on press
+            par, mode, dflt = f"{b['shot']} {b['shot']} toggleoff", "  .mode down", b["shot"]
+        else:
+            par, mode, dflt = "127 0 toggleon", "", 0
+        out += [f"$button {n} ; {b['label']}", f"  .easypar CC {b['ch']} {b['cc']} {par}"] + ([mode] if mode else []) + ["  .showvalue on", f"  .default {dflt}"]
     if store:
         out.append(f"$store {store}")
     out.append("$end")
