@@ -283,6 +283,13 @@ def main():
                 sys.exit(f"line {i} {ln!r}: error {err} ({ERRORS.get(err, '?')}) "
                          + " ".join("%02x" % x for x in raw))
         print(f"{lines[2].strip()}: {len(lines)} lines accepted" + (f", stored ({lines[-2]})" if a.store else ", edit buffer only"))
+    if a.store and len(docs) > 1:
+        # a store leaves the unit on the preset stored last; put it back on the first one
+        for i, ln in enumerate(["$rev R1", f"$recall {a.store}", "$end"]):
+            err, raw = unit.line(i, ln, a.timeout)
+            if raw is None or err:
+                sys.exit(f"recall {a.store}: {'no reply' if raw is None else ERRORS.get(err, err)}")
+        print(f"recalled preset {a.store}")
 
 
 if __name__ == "__main__":
