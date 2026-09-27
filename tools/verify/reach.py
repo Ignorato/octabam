@@ -24,6 +24,15 @@ module gates that build their own image: once) and a `make check-remix
 REMIX=<r>` each (its build, cycles, dirty state, init regs, DRAM boot,
 labels, its own module gates, menu, the set under the port, USB). One
 remix stays `make check`. The two halves together are `make check`.
+
+`make accept` runs both halves itself (the shared half once for every
+remix it is given), so with STRESS_SOURCE set a remix that reaches
+accept has no separate check line and the accept remixes are one `make
+accept REMIXES="..."`; without it the check lines stay, and the accept
+line is listed as blocked. `--run --keep-going` runs every gate and
+prints one table instead of stopping at the first failure; `--run --jobs
+N` runs the check-remix lines through `check_shards.py`, N worktrees at a
+time.
 """
 import argparse
 import fnmatch
@@ -31,6 +40,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
 
@@ -46,6 +56,10 @@ def cmd_check(remix):
 
 def cmd_accept(remix):
     return ("accept", f"make accept REMIX={remix} STRESS_SOURCE=${{STRESS_SOURCE}}")
+
+
+def accept_remix(command):
+    return command.split("REMIX=")[1].split()[0]
 
 
 CMD = {
@@ -175,15 +189,32 @@ def classify(paths, ctx):
     return out
 
 
-def plan(rows):
+def plan(rows, accept_runs_check=True):
     """The commands in run order, each once, with the paths that put it
     there. Two or more remixes to check become ONE `make check-shared`
     (the remix-independent gates, once) and a `make check-remix` each; a
-    single remix stays `make check`."""
+    single remix stays `make check`. Two or more remixes to accept become
+    ONE `make accept REMIXES="..."` (the runner runs the shared half once),
+    and with `accept_runs_check` (STRESS_SOURCE is set, so the accept
+    line will run) a remix that is accepted is not checked separately:
+    accept runs both halves of its check itself."""
     by_cmd = {}
     for path, gates, _ in rows:
         for kind, command in gates:
             by_cmd.setdefault((kind, command), []).append(path)
+    accepts = {k: v for k, v in by_cmd.items() if k[0] == "accept"}
+    if accepts:
+        names = sorted(accept_remix(c) for _, c in accepts)
+        paths = sorted({p for v in accepts.values() for p in v})
+        for k in accepts:
+            del by_cmd[k]
+        if len(names) > 1:
+            by_cmd[("accept", f'make accept REMIXES="{" ".join(names)}" STRESS_SOURCE=${{STRESS_SOURCE}}')] = paths
+        else:
+            by_cmd[cmd_accept(names[0])] = paths
+        if accept_runs_check:
+            for k in [k for k in by_cmd if k[0] == "check" and accept_remix(k[1]) in names]:
+                del by_cmd[k]
     checks = {k: v for k, v in by_cmd.items() if k[0] == "check"}
     if len(checks) > 1:
         names = sorted(c.split("REMIX=")[1] for _, c in checks)
@@ -228,6 +259,9 @@ def main(argv=None):
     ap.add_argument("--base", default="origin/main")
     ap.add_argument("--paths", nargs="*", help="classify these paths instead of the diff")
     ap.add_argument("--run", action="store_true", help="run the commands, in order, stopping at the first failure")
+    ap.add_argument("--keep-going", action="store_true", help="with --run: run every command, then one table")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="with --run: the check-remix lines through check_shards.py, N worktrees at a time")
     a = ap.parse_args(argv)
     if a.paths is not None:
         merge_base, paths = None, sorted(set(a.paths))
@@ -244,27 +278,64 @@ def main(argv=None):
         return 0
     print("\nremixes reached: " + (", ".join(remixes_reached(rows)) or "none"))
     print("\ngates, in order:")
-    items = plan(rows)
+    stress = os.environ.get("STRESS_SOURCE")
+    items = plan(rows, accept_runs_check=bool(stress))
+    if a.jobs > 1:
+        items = sharded(items, a.jobs)
     for kind, command, from_paths in items:
         why = from_paths[0] + (f" +{len(from_paths) - 1}" if len(from_paths) > 1 else "")
         print(f"  {command:56}  # {why}")
-    if any(k == "accept" for k, _, _ in items) and not os.environ.get("STRESS_SOURCE"):
-        print("\nSTRESS_SOURCE is unset: point it at a local project (never committed) for the accept lines.")
+    if any(k == "accept" for k, _, _ in items) and not stress:
+        print("\nSTRESS_SOURCE is unset: point it at a local project (never committed) for the accept line"
+              " (it then runs the accepted remixes' checks itself).")
     if not a.run:
         return 0
     print()
+    results = []
     for kind, command, _ in items:
-        cmd = command.replace("${STRESS_SOURCE}", os.environ.get("STRESS_SOURCE", ""))
-        if kind == "accept" and not os.environ.get("STRESS_SOURCE"):
+        cmd = command.replace("${STRESS_SOURCE}", stress or "")
+        if kind == "accept" and not stress:
             print(f"reach: BLOCKED {command}: STRESS_SOURCE is unset")
-            return 2
+            if not a.keep_going:
+                return 2
+            results.append((command, "BLOCKED", 0.0))
+            continue
         print(f"reach: running {cmd}", flush=True)
+        t0 = time.monotonic()
         r = subprocess.run(cmd, shell=True, cwd=ROOT)
+        results.append((command, "ok" if r.returncode == 0 else f"FAILED ({r.returncode})", time.monotonic() - t0))
         if r.returncode:
             print(f"reach: FAILED ({r.returncode}) {cmd}")
-            return 1
+            if not a.keep_going:
+                return 1
+    if a.keep_going:
+        print("\nreach: results")
+        for command, status, seconds in results:
+            print(f"  {status:12} {seconds:7.0f} s  {command}")
+    bad = [r for r in results if r[1] != "ok"]
+    if bad:
+        print(f"reach: {len(bad)} of {len(results)} gates did not pass")
+        return 2 if all(r[1] == "BLOCKED" for r in bad) else 1
     print("reach: every gate passed")
     return 0
+
+
+def sharded(items, jobs):
+    """The check-remix lines as one `check_shards.py --jobs N` line, in
+    the first one's place: each remix's half in its own worktree, N at a
+    time (the halves all write out/mainos_bus.bin, so one tree runs one)."""
+    remixes = [c.split("REMIX=")[1] for k, c, _ in items if k == "check-remix"]
+    if len(remixes) < 2:
+        return items
+    out, done = [], False
+    for kind, command, paths in items:
+        if kind != "check-remix":
+            out.append((kind, command, paths))
+        elif not done:
+            all_paths = sorted({p for k, _, ps in items if k == "check-remix" for p in ps})
+            out.append(("check-remix", f"python3 tools/verify/check_shards.py --jobs {jobs} " + " ".join(remixes), all_paths))
+            done = True
+    return out
 
 
 if __name__ == "__main__":

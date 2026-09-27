@@ -20,8 +20,8 @@ EVERY = ['make check-shared REMIXES="bamsep26 miniverb usb"',
          "make check-remix REMIX=bamsep26", "make check-remix REMIX=miniverb", "make check-remix REMIX=usb"]
 
 
-def commands(paths):
-    return [c for _, c, _ in reach.plan(reach.classify(paths, ctx()))]
+def commands(paths, accept_runs_check=False):
+    return [c for _, c, _ in reach.plan(reach.classify(paths, ctx()), accept_runs_check)]
 
 
 class ClassifyTests(unittest.TestCase):
@@ -29,8 +29,29 @@ class ClassifyTests(unittest.TestCase):
         cmds = commands(["modules/character/engine.asm"])
         self.assertEqual(cmds, ['make check-shared REMIXES="bamsep26 usb"',
                                 "make check-remix REMIX=bamsep26", "make check-remix REMIX=usb",
-                                "make accept REMIX=bamsep26 STRESS_SOURCE=${STRESS_SOURCE}",
-                                "make accept REMIX=usb STRESS_SOURCE=${STRESS_SOURCE}"])
+                                'make accept REMIXES="bamsep26 usb" STRESS_SOURCE=${STRESS_SOURCE}'])
+
+    def test_accept_runs_the_checks_of_the_remixes_it_accepts(self):
+        # STRESS_SOURCE set: the accept line runs check-shared once and
+        # check-remix per remix itself, so no separate check lines
+        self.assertEqual(commands(["modules/character/engine.asm"], accept_runs_check=True),
+                         ['make accept REMIXES="bamsep26 usb" STRESS_SOURCE=${STRESS_SOURCE}'])
+        # a remix reached by check only keeps its line beside the accept
+        cmds = commands(["modules/character/engine.asm", "remixes/miniverb/remix.py",
+                         "tools/verify/verify_menu.py"], accept_runs_check=True)
+        self.assertEqual(cmds, ['make accept REMIXES="bamsep26 miniverb usb" STRESS_SOURCE=${STRESS_SOURCE}'])
+        cmds = commands(["modules/miniverb/a.asm", "tools/verify/verify_character.py"], accept_runs_check=True)
+        self.assertEqual(cmds, ['make check-shared REMIXES="bamsep26 usb"',
+                                "make check-remix REMIX=bamsep26", "make check-remix REMIX=usb",
+                                "make accept REMIX=miniverb STRESS_SOURCE=${STRESS_SOURCE}"])
+
+    def test_sharded_collapses_the_check_remix_lines(self):
+        items = reach.plan(reach.classify(["tools/verify/verify_menu.py"], ctx()))
+        cmds = [c for _, c, _ in reach.sharded(items, 4)]
+        self.assertEqual(cmds, ['make check-shared REMIXES="bamsep26 miniverb usb"',
+                                "python3 tools/verify/check_shards.py --jobs 4 bamsep26 miniverb usb"])
+        one = reach.plan(reach.classify(["remixes/miniverb/remix.py"], ctx()))
+        self.assertEqual(reach.sharded(one, 4), one)
 
     def test_submodule_pin_is_the_module(self):
         self.assertEqual(commands(["modules/miniverb/upstream"]),

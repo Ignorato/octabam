@@ -7,6 +7,21 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The gate run, once each (28 Sep 2026): `make accept REMIXES="a b c"`
+  runs the remix-independent half of `make check` once and `make
+  check-remix` per remix (report v2: gates `check_shared` and
+  `check_remix` where v1 had `check`, reports at `<out>/<remix>/` with
+  `summary.json`); it had run the whole `make check` per remix, so a
+  `make reach RUN=1` over N remixes ran the shared half N+1 times and the
+  per-remix half twice. `make reach` lists one accept line for the
+  accepted remixes and, with `STRESS_SOURCE` set, no separate check lines
+  for them; `KEEP=1` runs every gate and prints one table; `JOBS=n` runs
+  the check-remix lines through `tools/verify/check_shards.py` (`make
+  check-remixes`), n detached worktrees of the tree with their own port
+  builds, remixes handed out from one queue. `pressure.py render` renders
+  its 20 layouts `--jobs` at a time (the cores, at most 8) with both
+  payloads dumped once and handed to `rig_render --mem/--memB`; it was
+  serial, 9 to 22 minutes of every accept.
 - The port's load runs until the engine is idle (28 Sep 2026): LOAD
   PROJECT entered and the engine back at its queue receive with nothing
   queued, reported as `LOAD PROJECT handled, N ms after the post`;

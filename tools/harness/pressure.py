@@ -192,7 +192,12 @@ def render(a):
     if not any(stems.glob("T*.wav")):
         sys.exit(f"no stems in {stems} -- `python3 scripts/make_test_audio.py` and copy/rename to T1..T8.wav, or --stems")
     OUT.mkdir(parents=True, exist_ok=True)
-    report = []
+    # Both payloads dumped ONCE and handed to every rig_render: its own dump
+    # rewrites out/dsp/mem_<remix>_<A|B>.mem, which renders running side by
+    # side would race on. Everything else rig_render writes is PID-tagged.
+    import send_probe
+    mems = {tag: str(send_probe.dump_mem(image, OUT / f"{remix.name}_{tag}.mem", tag)) for tag in ("A", "B")}
+    jobs = []
     for n, (core, cyc, verdict, layout) in enumerate(picks):
         tracks, sets = [], []
         for t, slot in zip(LETTER_TRACKS[core], layout.split(" | ")):
@@ -208,50 +213,28 @@ def render(a):
                 tracks.append(f"T{t}={fallback_of(mods)}")
         outdir = OUT / f"render_{remix.name}_c{core}_{n:03d}"
         cmd = [sys.executable, str(ROOT / "tools/harness/rig_render.py"), "--image", str(image), "--remix", remix.name,
+               "--mem", mems["A"], "--memB", mems["B"],
                "--tracks", ",".join(tracks), "--stems", str(stems), "--seconds", str(a.seconds), "--tail", "0.5",
                "--frames", "16", "--extra=-guard -dirty 0x5a", "-v", "--out", str(outdir)] + sets
+        jobs.append((n, core, cyc, verdict, layout, outdir, cmd))
+
+    def run_one(job):
+        n, core, cyc, verdict, layout, outdir, cmd = job
         r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
         text = r.stdout + r.stderr
         (outdir.parent / f"{outdir.name}.log").write_text(text)
-        meter = {}
-        for line in text.splitlines():
-            if "meter:" in line:
-                c = int(line.split("core")[1].split()[0]); mx = int(line.split("max")[1].split()[0])
-                per = float(line.split("(")[1].split("/sample")[0])
-                meter[c] = (mx, per)
-        # What is a red: a HANG, a CLOBBER of a loaded module, or a STRAY
-        # write from a NON-server instance. A server writes the bus scratch
-        # and (the reverb) its relocated buffers outside its own window by
-        # design, so its strays are expected and listed, not failed. A
-        # clipped mix.wav is the fixture (every knob at its dearest), not the
-        # DSP -- reported, not failed.
-        flags, notes = [], []
-        inst_kind = {}
-        for l in text.splitlines():
-            m_ = re.match(r"\s+T(\d) FX(\d) (\S+(?: \S+)?)\s+core", l)
-            if m_:
-                inst_kind[len(inst_kind)] = m_.group(3).strip()
-            if "HANG" in l:
-                flags.append(l.strip())
-            elif "clipped samples" in l:
-                notes.append(l.strip().split("!!")[1].split("(")[0].strip())
-            m_ = re.search(r"instance (\d+): .* (\d+) stray write regions, (\d+) CLOBBERING", l)
-            if m_:
-                k, stray, clob = int(m_.group(1)), int(m_.group(2)), int(m_.group(3))
-                who = inst_kind.get(k, "?")
-                if clob:
-                    flags.append(f"instance {k} ({who}) CLOBBERS a loaded module ({clob} regions)")
-                elif stray and who not in servers:
-                    flags.append(f"instance {k} ({who}) writes {stray} stray regions outside its window")
-                elif stray:
-                    notes.append(f"{who} {stray} strays (bus scratch/relocated buffers: expected)")
-        failed = r.returncode != 0 or bool(flags)
-        report.append(dict(n=n, core=core, static=cyc, verdict=verdict, layout=layout, rc=r.returncode,
-                           meter=meter, flags=flags[:8], notes=notes[:8]))
-        m = meter.get(core, (0, 0.0))
-        print(f"[{n:03d}] core {core} static {cyc:5d} {verdict:4}  meter {m[1]:7.1f}/sample  "
-              f"{'RED ' + ('; '.join(flags[:2]) or f'rc {r.returncode}') if failed else 'memory clean'}"
-              f"{'  (' + '; '.join(notes[:2]) + ')' if notes else ''}   {layout}")
+        return r.returncode, text
+
+    # The layouts are independent (one dsp_host each, its own --out); run
+    # --jobs at a time and report them in pick order. The meter is an
+    # instruction count, so a loaded machine does not change a result.
+    from concurrent.futures import ThreadPoolExecutor
+    report = []
+    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
+        futures = [pool.submit(run_one, job) for job in jobs]
+        for (n, core, cyc, verdict, layout, outdir, cmd), fut in zip(jobs, futures):
+            rc, text = fut.result()
+            report.append(_verdict(n, core, cyc, verdict, layout, rc, text, servers))
     (OUT / f"{remix.name}_render.json").write_text(json.dumps(report, indent=1))
     bad = [r for r in report if r["rc"] != 0 or r["flags"]]
     over = [r for r in report if r["verdict"] != "ok"]
@@ -259,6 +242,50 @@ def render(a):
           f" {len(over)} of them price OVER the wall and rendered anyway -- the emulator has no cliff."
           f"\nMemory is what this pass can prove; cycles are the burn sweep's (CHIP.md s2).")
     return 1 if bad else 0
+
+
+def _verdict(n, core, cyc, verdict, layout, rc, text, servers):
+    """One rendered layout's row: the meter, the flags that make it a red,
+    the notes that do not; the line printed as it lands."""
+    meter = {}
+    for line in text.splitlines():
+        if "meter:" in line:
+            c = int(line.split("core")[1].split()[0]); mx = int(line.split("max")[1].split()[0])
+            per = float(line.split("(")[1].split("/sample")[0])
+            meter[c] = (mx, per)
+    # What is a red: a HANG, a CLOBBER of a loaded module, or a STRAY
+    # write from a NON-server instance. A server writes the bus scratch
+    # and (the reverb) its relocated buffers outside its own window by
+    # design, so its strays are expected and listed, not failed. A
+    # clipped mix.wav is the fixture (every knob at its dearest), not the
+    # DSP -- reported, not failed.
+    flags, notes = [], []
+    inst_kind = {}
+    for l in text.splitlines():
+        m_ = re.match(r"\s+T(\d) FX(\d) (\S+(?: \S+)?)\s+core", l)
+        if m_:
+            inst_kind[len(inst_kind)] = m_.group(3).strip()
+        if "HANG" in l:
+            flags.append(l.strip())
+        elif "clipped samples" in l:
+            notes.append(l.strip().split("!!")[1].split("(")[0].strip())
+        m_ = re.search(r"instance (\d+): .* (\d+) stray write regions, (\d+) CLOBBERING", l)
+        if m_:
+            k, stray, clob = int(m_.group(1)), int(m_.group(2)), int(m_.group(3))
+            who = inst_kind.get(k, "?")
+            if clob:
+                flags.append(f"instance {k} ({who}) CLOBBERS a loaded module ({clob} regions)")
+            elif stray and who not in servers:
+                flags.append(f"instance {k} ({who}) writes {stray} stray regions outside its window")
+            elif stray:
+                notes.append(f"{who} {stray} strays (bus scratch/relocated buffers: expected)")
+    failed = rc != 0 or bool(flags)
+    m = meter.get(core, (0, 0.0))
+    print(f"[{n:03d}] core {core} static {cyc:5d} {verdict:4}  meter {m[1]:7.1f}/sample  "
+          f"{'RED ' + ('; '.join(flags[:2]) or f'rc {rc}') if failed else 'memory clean'}"
+          f"{'  (' + '; '.join(notes[:2]) + ')' if notes else ''}   {layout}", flush=True)
+    return dict(n=n, core=core, static=cyc, verdict=verdict, layout=layout, rc=rc,
+                meter=meter, flags=flags[:8], notes=notes[:8])
 
 
 # ---- A3: the documented soft failures ---------------------------------------
@@ -349,6 +376,8 @@ def main():
     r.add_argument("--seed", type=int, default=1)
     r.add_argument("--seconds", type=float, default=2.0)
     r.add_argument("--stems", default="out/test_audio/rig")
+    r.add_argument("--jobs", type=int, default=min(8, os.cpu_count() or 1),
+                   help="layouts rendered side by side (default: the cores, at most 8)")
     o = sub.add_parser("oddities")
     o.add_argument("--remix", default=os.environ.get("REMIX"))
     o.add_argument("--image", default="out/mainos_bus.bin")
