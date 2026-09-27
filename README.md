@@ -20,7 +20,8 @@ Issues are disabled and there is no request queue. The licence is MIT; a
 fork that takes requests and tracks issues is allowed.
 
 **[docs/remixes/BUILDING.md](docs/remixes/BUILDING.md)** is the step-by-step
-guide from a fresh machine to a flashed unit.
+guide from a fresh machine to a flashed unit; its §8 is how to write a
+remix of your own.
 **[docs/remixes/README.md](docs/remixes/README.md)** lists every remix with
 its contents and how far it has been proven; each remix's own README is
 beside its selection in `remixes/<name>/`.

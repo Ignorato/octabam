@@ -1,6 +1,6 @@
 # Remixes
 
-A remix is a named selection of modules; `make image REMIX=<name>` builds it into a card-flashable image from your own OS 1.40C. [BUILDING.md](BUILDING.md) is the step-by-step guide. Each remix is a directory, `remixes/<name>/`: `remix.py` is the selection and `README.md` says what is in it and where it has run. This index is rendered from the selections (`make docs`).
+A remix is a named selection of modules; `make image REMIX=<name>` builds it into a card-flashable image from your own OS 1.40C. [BUILDING.md](BUILDING.md) is the step-by-step guide. Each remix is a directory, `remixes/<name>/`: `remix.py` is the selection and `README.md` says what is in it and where it has run. This index is rendered from the selections (`make docs`). BUILDING.md §8 says how to write one.
 
 ## The rig
 
@@ -46,5 +46,12 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 | remix | contains | proof |
 |---|---|---|
 | [`restock`](../../remixes/restock/README.md) | every stock FX2 effect, all fourteen: put my unit back. | `make check` |
+
+## Probes
+
+| remix | contains | proof |
+|---|---|---|
+| [`cfmeter`](../../remixes/cfmeter/README.md) | octatrick-usb + CF METER on T8's FX2: ColdFire idle time and frame-interrupt duration, over USB. | port-gated: the readout chain under the port |
+| [`cfmeter-port`](../../remixes/cfmeter-port/README.md) | cfmeter without the idle loop: the port gate for the readout chain and the interrupt timing. | port-gated: the readout chain under the port |
 
 Never share a built image: it contains Elektron's OS.

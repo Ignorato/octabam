@@ -417,7 +417,7 @@ dsp=DspSection(
   spelled `$30000`, and the literal is censused.
 - **`ptable`**: a tuple of words the build parks in the stock curve bank
   (X:0x4840) and points the source's `$fab1e0` literal at.
-- **Program space is per core.** `make bus` prints the live ledger.
+- **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
 
 ## Declaring a ColdFire module
 
@@ -807,7 +807,7 @@ catches each collision it claims to.
   the gates the branch's diff reaches; `RUN=1` runs them.
 - Your gates and your `dear` settings go in the manifest, in the same PR.
 - If you changed the build rather than a module: `scripts/refhash.sh save`
-  on a tree you trust, make the change, `scripts/refhash.sh check`; 26
+  on a tree you trust, make the change, `scripts/refhash.sh check`; 24
   configurations, artifacts and build reports, bit-identical.
 - Voicing is judged by ear, level-matched, A/B/A/B, wet-only
   (`docs/history/VOICING.md`). Render locally rather than flashing.

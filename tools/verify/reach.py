@@ -126,6 +126,9 @@ def classify(paths, ctx):
                 gates = [CMD["verify_docs"]]
             else:
                 gates = [cmd_check(name), cmd_accept(name)]
+        elif path.endswith(".md"):
+            # A README anywhere under tools/ or scripts/ is a doc, not the tool.
+            gates = [CMD["verify_docs"]]
         elif path == "tools/verify/reach.py" or path.startswith("tools/verify/tests/"):
             # The classifier and its tests change what is PRINTED, not what
             # any gate runs; their own tests are the gate.
@@ -161,7 +164,7 @@ def classify(paths, ctx):
             gates = ctx.every() + [CMD["ci"]]
         elif path.startswith(".github/"):
             gates = [CMD["ci"]]
-        elif path.endswith(".md") or path.startswith("docs/"):
+        elif path.startswith("docs/"):
             gates = [CMD["verify_docs"]]
         elif path in ("pyproject.toml", "uv.lock", "LICENSE", ".gitignore", ".gitmodules"):
             gates = ctx.every()

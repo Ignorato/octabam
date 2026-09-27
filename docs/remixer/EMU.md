@@ -8,8 +8,8 @@ Two ways to run the Octatrack's OS without a flash:
   emu-live`. Everything from "Build" to "Speed" below.
 - **Tier-0** (`tools/emu/emu_bringup.py`, Unicorn): boots to the RTOS
   handoff and calls the firmware's draw and formatter code directly. The
-  label gates in `make verify` (`verify_labels`, `verify_modenames`,
-  `verify_hidden`, `verify_ccmap`), `verify_repitch_ui`,
+  label gates in `make check` (`verify_labels`, `verify_modenames`,
+  `verify_hidden`; CC MAP's `verify_ccmap`), REPITCH's `verify_repitch_ui`,
   `tools/build/stock_labels.py` and the remixer's UNIT pane use it.
 
 Route A (`emu_rtos.py`: the firmware's scheduler run by hand on Unicorn,
@@ -275,8 +275,8 @@ read-back bank swap -- octemu's open hypothesis for its mid-stream clicks
 under the port: its trampoline hooks `fs_card_detect_poll` (`0x4003f174`),
 the firmware routine the card-detect GPIO poll reaches, and the port mounts
 the card by posting the mount message directly, so that routine never runs
-(0 hits on a PC watch across a 800-frame run). The modules `usbmidi` and
-`usbaudio` carry the same code on octabam's loader instead, and
+(0 hits on a PC watch across a 800-frame run). The modules `usb-midi` and
+`usb-audio-*` carry the same code on octabam's loader instead, and
 `verify_usb` streams from them: the bench polls an isochronous endpoint
 on the endpoint's own schedule in DEVICE time (`isoPoll`, `isoPollHz`:
 250 us at high speed for bInterval 2, 1 ms at full speed), which is what a

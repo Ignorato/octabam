@@ -28,15 +28,16 @@ modules/*/*.asm (+ dsp/ probes)
 
 ```bash
 make reverb IN=loop.wav ARGS='--wet --mode all'   # hear BusVerb
-make render                                       # the full bus, SEND → REVERB
-make render-delay                                 # BusDelay via the DEV hatch
-make render-rig                                   # eight tracks on both cores
-python3 tools/harness/send_probe.py --mem out/dsp/mem_dev_A.mem --direct --pick W   # an insert on its own track
+make render REMIX=<name>                          # the full bus, SEND → REVERB
+make render-delay REMIX=<name>                    # BusDelay via the DEV hatch
+make render-rig REMIX=<name>                      # eight tracks on both cores
+python3 tools/harness/send_probe.py --mem out/dsp/mem_dev_A.mem --direct --pick 2   # an insert (Character) on its own track
 ```
 
 An insert has no bus accumulator, so `send_probe` refuses a layout of
-nothing but inserts; `--direct` renders it on its own track. The letter is
-the module's `harness.layout_char`; build a DEV image for a remix that
+nothing but inserts; `--direct` renders it on its own track. The letter (a
+digit for the stations) is the module's `harness.layout_char`; build a DEV
+image for a remix that
 contains it first (`REMIX=<name> DEV=1 XBUS=1 SPEC=1 python3
 tools/build/build_bus.py`).
 

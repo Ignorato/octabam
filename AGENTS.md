@@ -32,7 +32,7 @@ rewriting; run their build against the shared stock image first.
 
 **If you change the BUILD rather than a module, prove it changed nothing:**
 `scripts/refhash.sh save` on a tree you trust, then `scripts/refhash.sh check`
-— 26 configurations, artifacts and build reports, bit-identical. Every step
+— 24 configurations, artifacts and build reports, bit-identical. Every step
 of the DRAM platform landed under that gate. (Since 10 Sep 2026 the report
 prints tool paths; a path change is a report change and needs a re-save
 after the artifacts are shown identical.)
@@ -48,7 +48,7 @@ make modules                    # the index, the compatibility matrix, the remix
 make check REMIX=<name>         # build + cycles + every gate + boot under the port, no hardware
 OT_PROJECT=<dir> [OT_BANK=2] make check REMIX=<name>   # + that project on the image under the port: ids, page-2 delivery, chain audio, main out
 make bus REMIX=<name>           # THE build (XBUS=1 SPEC=1) -> out/mainos_bus.bin
-make render                     # hear the bus locally, ~6x real time
+make render REMIX=<name>        # hear the bus locally, ~6x real time
 make reverb IN=loop.wav ARGS='--wet --mode all'
 ```
 

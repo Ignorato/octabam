@@ -81,6 +81,7 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(commands(["tools/patches/dsp56300.patch"])[0], "make ci-dsp")
         self.assertIn("make ci-emu", commands(["tools/emu/ot_emu/machine.h"]))
         self.assertEqual(commands(["docs/remixer/MODULES.md", "README.md"]), ["python3 tools/verify/verify_docs.py"])
+        self.assertEqual(commands(["tools/panel/README.md", "tools/harness/STRESS_PROJECT.md"]), ["python3 tools/verify/verify_docs.py"])
         self.assertEqual(commands([".github/workflows/ci.yml"]), ["make ci"])
         self.assertEqual(commands(["Makefile"]), EVERY + ["make ci"])
 

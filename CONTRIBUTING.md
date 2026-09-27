@@ -60,10 +60,12 @@ README.md       what it is, what was MEASURED, what is INFERRED, what is open
 ```
 
 plus a remix that carries it (`remixes/<name>/remix.py` and a `README.md`
-beside it: what is in it, where it has run) and, for anything with
-behaviour worth pinning, a gate (`tools/verify/verify_<name>.py`, added to
-`make verify`). Nothing else registers it: the registry discovers every
-`modules/*/manifest.py`, and refuses two modules on one key or one FX2 id.
+beside it: what is in it, where it has run; `docs/remixes/BUILDING.md`
+§8) and, for anything with behaviour worth pinning, a gate
+(`tools/verify/verify_<name>.py`, named in the manifest's `gates`, run by
+`make check` for every remix that carries the module). Nothing else
+registers it: the registry discovers every `modules/*/manifest.py`, and
+refuses two modules on one key or one FX2 id.
 
 The manifest's `category`, `author`, `author_url`, `proof` and `proof_note`
 are the README's module table (`make docs` renders it and the remix index
@@ -71,7 +73,7 @@ from the manifests and the selections; the selftest refuses a module
 without them, `verify_docs` a stale copy). `proof` is one of `CHECK`,
 `RENDER`, `PORT`, `HARDWARE`; the note names the unit, image and date, or
 the gate. A remix declares `family` (`rig`, `effects`, `mods`,
-`reference`) and the same `proof` pair.
+`reference`, `probes`) and the same `proof` pair.
 
 Settings a module keeps on the card (a checkbox, a profile) go in the
 shared OTX store once it exists, not in a file of the module's own;
@@ -174,7 +176,7 @@ report fields, coverage and hardware limitations.
 
 **If you changed the build rather than a module, prove it changed
 nothing**: `scripts/refhash.sh save` on a tree you trust, then
-`scripts/refhash.sh check` — 26 configurations, artifacts *and* build
+`scripts/refhash.sh check` — 24 configurations, artifacts *and* build
 reports, bit-identical. Every step of the DRAM platform landed under it.
 
 **Say what was measured and what was inferred**, in the README, with what
