@@ -124,6 +124,37 @@ nothing reaches TX0 under the port). ~80 s. On the image before PR #271
 it fails T1 and T5 (the tempo cave); on it, 18 checks pass (OCTABAM88
 bank B, 15 Sep 2026).
 
+### Two things the port's load and play do not reproduce (measured 27 Sep 2026)
+
+- **Octakit beside MIDI SCENES halts at LOAD** (`mods`, `ok-ms`, `rig-mods`:
+  `load run ended: ILLEGAL -- unimplemented opcode 4afc at 45d173e4` =
+  `gk_lifecycle_activation_publication_report_fatal`). At 56.84 s of the
+  load the engine task writes its current part (`0x80001829 <- 1`, pc
+  `0x400090b6`); 6 ms later the sys task writes the UI's part and its
+  mirror to 0 (`0x100b14cf`, `0x80000003`, pc `0x40062142`): the port's
+  own "sys applied the engine's reset-time 'select bank 0' after the
+  BANK= parse" (saved_bank 2, final bank 0 in the load line). Stock
+  tolerates the disagreement; Octakit's `gk_ui_transition_prepare`
+  compares the three bytes and returns corrupt, and MIDI SCENES' bank and
+  part hooks route the load through that check (`kits`, Octakit alone,
+  loads). `ok-ms` ran on a unit (OKMS2). The fix is in
+  `Rtos::loadProjectLive`'s ordering, against every set gate calibrated to
+  the current one; `--poke-early` applies before a `--call`, not before
+  the load. One `--watch-mem` range per run: the last flag wins.
+- **No card-sample voice has started under the port on this machine.**
+  `verify_repitch`'s and `verify_euclid`'s playback fixtures (FLEX and
+  STATIC, two source projects, stored banks synced or not, MIDI sync off)
+  render silence: the sequencer steps (`0x4009d1e8` per step, at the
+  pattern's 1/2X), the sample loads (30,558 ATA reads, no FLEX error in
+  the card's LOG), a MIDI note-on writes trig words, and the voice END
+  write `0x40001612` never runs while the frame builder runs 8 per frame
+  and every voice slot zero-fills. `verify_set`'s audio comes from THRU
+  tracks fed by `--audio-in` and `--poke-trig`, never from a card sample.
+  The runs that heard FLEX under the port (the mixer model, the SOS
+  recorder work) used fixtures not on this machine; the projects here
+  reference 115 samples, none on disk. A positive control needs a project
+  with its samples present.
+
 ## The screen itself (the port, 17 Sep 2026)
 
 `ot_emu --lcd FILE` writes the firmware's own 1-bpp plane (`0x46c7e0ea`,
