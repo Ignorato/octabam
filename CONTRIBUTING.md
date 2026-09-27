@@ -155,7 +155,12 @@ assembled.
 the gates it reaches: a module's remixes from the selections, a
 verifier's owners, refhash for the build, `make ci-dsp`/`ci-emu` for the
 toolchains. `make reach RUN=1` runs them in order. It refuses a tree that
-is not rebased onto the base.
+is not rebased onto the base. Two or more remixes are printed as one
+`make check-shared REMIXES="..."` (the ledger selftest, the knob census
+and the isolated module gates that build their own image, once) and a
+`make check-remix REMIX=<r>` each (its build, cycles, dirty state, init
+regs, DRAM boot, labels, its own module gates, menu, the set under the
+port, USB); `make check` is the two halves for one remix.
 
 For acceptance evidence, use `make accept REMIX=<name>` with
 `STRESS_SOURCE=<a local project>` (the fixture is generated for the

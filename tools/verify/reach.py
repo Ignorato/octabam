@@ -17,6 +17,13 @@ It refuses a tree that is not rebased onto the base (the base must be an
 ancestor of HEAD): gates run before a rebase are not a result (PR #396).
 CI runs the dry form on every pull request so the expected local gates are
 in the job log; it has no firmware, so it runs none of them.
+
+Two or more remixes to check are printed as one `make check-shared
+REMIXES="..."` (the ledger selftest, the knob census and the isolated
+module gates that build their own image: once) and a `make check-remix
+REMIX=<r>` each (its build, cycles, dirty state, init regs, DRAM boot,
+labels, its own module gates, menu, the set under the port, USB). One
+remix stays `make check`. The two halves together are `make check`.
 """
 import argparse
 import fnmatch
@@ -30,7 +37,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 # One command per gate; the order is the order they run in.
-ORDER = ("verify_docs", "selftest", "test-acceptance", "ci-dsp", "ci-emu", "emu-cf", "refhash", "check", "accept", "ci")
+ORDER = ("verify_docs", "selftest", "test-acceptance", "ci-dsp", "ci-emu", "emu-cf", "refhash", "check-shared", "check", "check-remix", "accept", "ci")
 
 
 def cmd_check(remix):
@@ -155,11 +162,23 @@ def classify(paths, ctx):
 
 
 def plan(rows):
-    """The commands in run order, each once, with the paths that put it there."""
+    """The commands in run order, each once, with the paths that put it
+    there. Two or more remixes to check become ONE `make check-shared`
+    (the remix-independent gates, once) and a `make check-remix` each; a
+    single remix stays `make check`."""
     by_cmd = {}
     for path, gates, _ in rows:
         for kind, command in gates:
             by_cmd.setdefault((kind, command), []).append(path)
+    checks = {k: v for k, v in by_cmd.items() if k[0] == "check"}
+    if len(checks) > 1:
+        names = sorted(c.split("REMIX=")[1] for _, c in checks)
+        paths = sorted({p for v in checks.values() for p in v})
+        for k in checks:
+            del by_cmd[k]
+        by_cmd[("check-shared", f'make check-shared REMIXES="{" ".join(names)}"')] = paths
+        for (_, c), v in checks.items():
+            by_cmd[("check-remix", c.replace("make check ", "make check-remix "))] = v
     keyed = sorted(by_cmd.items(), key=lambda kv: (ORDER.index(kv[0][0]), kv[0][1]))
     return [(kind, command, paths) for (kind, command), paths in keyed]
 

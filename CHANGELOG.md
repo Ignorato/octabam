@@ -7,6 +7,13 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- `make check` is two halves (27 Sep 2026): `make check-shared
+  REMIXES="a b"` runs the gates that do not depend on the remix (the
+  ledger selftest, the knob census, the isolated module gates with
+  `remix_arg=False`, once for the union of the modules) and `make
+  check-remix REMIX=<r>` the rest; `make reach RUN=1` prints and runs the
+  shared half once and the per-remix half per reached remix. Running every
+  remix on #482 repeated the shared half 25 times.
 - The gates follow the modules (27 Sep 2026): a manifest names its own
   verifiers (`schema.Gate`) and its dearest knob settings
   (`Module.dear`, checked against its knobs at load); `make verify` runs
