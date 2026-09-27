@@ -74,6 +74,8 @@ def clean_env():
     env = dict(os.environ)
     for var in ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES"):
         env.pop(var, None)
+    # every shard builds from this tree's memo (tools/remix/runtime_build.CACHE)
+    env.setdefault("OCTABAM_CACHE", str(ROOT / "out/cache"))
     return env
 
 

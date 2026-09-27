@@ -13,7 +13,11 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           T1's voice record (0x80000110, both pings): at fader 64 MODE must
           snap to the A side (1) and TIME lerp to 60; at fader 0 the B side
           alone: MODE the knob (measured by a run with the pool's count 0),
-          TIME 20.
+          TIME 20. The three runs are three boots side by side (each is one
+          LOAD PROJECT, ~32 s under Octakit): a pool poked once the
+          transport has started never reaches the live lane, with or
+          without a transport restart (measured 28 Sep 2026), so they
+          cannot share one boot.
   editor  calls the FX2 page-2 editor `0x4003a9dc(5, 2 ticks)` on T1 with
           scene A held (0x460d169c = 1): the Part byte and the live lane
           must not move; the pool in the Part DB's part-0 window and its
@@ -29,6 +33,7 @@ Sep 2026 the port's load runs to completion, so she is (before, the fixed
 and fader checks run under every remix.
 """
 import argparse, os, pathlib, shutil, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
 from remix import registry  # noqa: E402
@@ -138,20 +143,26 @@ def main():
                       "--poke-trig", "2", "--poke", ";".join(common + weights(xf)),
                       "--mem-dump", f"{RECORDS:#x},1024={dump}"]
         text = run(cmd, log)
-        check(f"{tag}: 120 frames ran", "frames run : 120" in text)
         rec = dump.read_bytes()
-        return [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)]
+        return ("frames run : 120" in text, [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)])
 
     # the knob alone: the same run with the pool's count 0, so what fader 0
     # (the B side, which holds no MODE lock) must read is measured from the
     # project: T1's MODE is 1 in the stress fixture's part 0 and 0 in
     # OCTABAM89_setgate's (a literal 0 failed `make accept`, 26 Sep 2026)
-    knob = frames("knob", pool[:2] + [0] + pool[3:], 0)
+    with ThreadPoolExecutor(3) as pool_:
+        runs = {tag: pool_.submit(frames, tag, pl, xf)
+                for tag, pl, xf in (("knob", pool[:2] + [0] + pool[3:], 0), ("fader 64", pool, 64), ("fader 0", pool, 0))}
+        results = {tag: f.result() for tag, f in runs.items()}
+    for tag, (ran, _) in results.items():
+        check(f"{tag}: 120 frames ran", ran)
+    recs = {tag: r for tag, (_, r) in results.items()}
+    knob = recs["knob"]
     knob_mode = knob[0][48]
     check(f"knob alone: both pings read T1 MODE {knob_mode}", knob[1][48] == knob_mode)
     for xf, want_mode, want_time, why in ((64, 1, 60, "the A side, a select snaps"),
                                           (0, knob_mode, 20, "the knob, B alone")):
-        for ping, r in enumerate(frames(f"fader {xf}", pool, xf)):
+        for ping, r in enumerate(recs[f"fader {xf}"]):
             check(f"fader {xf}: ping {ping} T1 MODE (hw 24 hi) = {r[48]} (want {want_mode}: {why})",
                   r[48] == want_mode)
             check(f"fader {xf}: ping {ping} T1 TIME (hw 26 lo) = {r[53]} (want {want_time})", r[53] == want_time)
