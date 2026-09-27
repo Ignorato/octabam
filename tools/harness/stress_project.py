@@ -110,7 +110,7 @@ def part_values(mods, track, part):
         extra = {"MIX": 95, "RATE": 72, "DPTH": 90, "FDBK": 75, "LOFI": 35}
         extra["MODE"] = modes[(part + track) % 4]
     elif key == "SPECTRUM":
-        extra = {"MODE": (0, 2, 4, 1)[(part + track) % 4], "FREQ": 72, "RES": 85,
+        extra = {"MODE": (0, 1, 3, 1)[(part + track) % 4], "FREQ": 72, "RES": 85,   # LADR SEM VOWL SEM (BP was 2: SEM at SHPE 70 now)
                  "LDP": 75, "SHPE": 70}
     else:
         extra = {"SAT": (0, 1, 2, 1)[(track - 4 + part) % 4], "DRV": 72,

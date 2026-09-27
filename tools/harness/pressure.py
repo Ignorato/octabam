@@ -143,7 +143,7 @@ def fmt(combo):
 DEAR = {
     # (the knob sets follow the manifests of 26 Sep 2026; rig_render refuses a name it does not know)
     "CHARACTER": {"DRV": 127, "FOLD": 127, "COMP": 127, "MIX": 127, "WDTH": 127, "SAT": 0},
-    "SPECTRUM": {"RES": 127, "MODE": 4, "ENV": 127, "LDP": 127},
+    "SPECTRUM": {"RES": 127, "MODE": 3, "ENV": 127, "LDP": 127},   # MODE 3 = VOWL (4 until 27 Sep 2026)
     "MODULATION": {"MIX": 127, "FDBK": 127, "DPTH": 127, "MODE": 4, "LOFI": 127},   # MODE 4 = PHSR, the dearest loop
     "DELAY SERVER": {"DEL": 100, "FDBK": 100, "MODE": 1, "SCTR": 127, "DENS": 127, "WET": 127},
     "REVERB SERVER": {"REV": 100, "MODE": 2, "SHMR": 127, "DIFF": 127, "GATE": 0, "WET": 127},
