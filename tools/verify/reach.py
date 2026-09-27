@@ -63,11 +63,12 @@ CMD = {
 class Context:
     """What the classifier needs from the registry, so tests can fake it."""
 
-    def __init__(self, module_key, remixes_of, gate_owners, remixes):
+    def __init__(self, module_key, remixes_of, gate_owners, remixes, exists=None):
         self.module_key = module_key        # module directory -> key
         self.remixes_of = remixes_of        # key -> sorted remix names carrying it
         self.gate_owners = gate_owners      # verifier path -> keys whose manifests name it
         self.remixes = remixes              # every remix: the floor, since nothing is the default
+        self.exists = exists or (lambda path: (ROOT / path).exists())
 
     def every(self):
         return [cmd_check(r) for r in self.remixes]
@@ -109,6 +110,13 @@ def classify(paths, ctx):
                 else:
                     note = f"{key}: no remix carries it (the selftest refuses this)"
                     gates = [CMD["selftest"]]
+            elif not ctx.exists(f"modules/{d}"):
+                # A removed (or renamed) module: the registry no longer knows
+                # it, and the remixes that carried it changed their remix.py
+                # in the same diff (the selftest refuses an unknown module),
+                # which routes their checks. Nothing more to run for the
+                # directory itself.
+                note = "removed module directory: its remixes' selections are in the diff"
             else:
                 note = "unknown module directory"
                 gates = ctx.every()
@@ -118,9 +126,12 @@ def classify(paths, ctx):
                 gates = [CMD["verify_docs"]]
             else:
                 gates = [cmd_check(name), cmd_accept(name)]
-        elif path in ("tools/verify/acceptance.py", "tools/verify/reach.py",
-                      "tools/verify/module_gates.py", "tools/harness/stress_project.py",
-                      "tools/harness/pressure.py") or path.startswith("tools/verify/tests/"):
+        elif path == "tools/verify/reach.py" or path.startswith("tools/verify/tests/"):
+            # The classifier and its tests change what is PRINTED, not what
+            # any gate runs; their own tests are the gate.
+            gates = [CMD["test-acceptance"]]
+        elif path in ("tools/verify/acceptance.py", "tools/verify/module_gates.py",
+                      "tools/harness/stress_project.py", "tools/harness/pressure.py"):
             gates = [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes]
             note = "the acceptance machinery: every remix"
         elif path.startswith("tools/verify/"):

@@ -12,7 +12,8 @@ def ctx():
         module_key={"character": "CHARACTER", "miniverb": "MINIVERB", "orphan": "ORPHAN"},
         remixes_of={"CHARACTER": ["bamsep26", "usb"], "MINIVERB": ["miniverb"], "ORPHAN": []},
         gate_owners={"tools/verify/verify_character.py": ["CHARACTER"]},
-        remixes=["bamsep26", "miniverb", "usb"])
+        remixes=["bamsep26", "miniverb", "usb"],
+        exists=lambda path: path != "modules/gone")
 
 
 EVERY = ['make check-shared REMIXES="bamsep26 miniverb usb"',
@@ -40,6 +41,14 @@ class ClassifyTests(unittest.TestCase):
         self.assertIn("no remix carries", rows[0][2])
         self.assertEqual(commands(["modules/orphan/manifest.py"]), ["python3 tools/remix/selftest.py"])
 
+    def test_removed_module_directory_runs_nothing_and_says_so(self):
+        rows = reach.classify(["modules/gone/manifest.py"], ctx())
+        self.assertIn("removed module directory", rows[0][2])
+        self.assertEqual(commands(["modules/gone/manifest.py"]), [])
+
+    def test_unknown_but_present_module_directory_is_the_floor(self):
+        self.assertEqual(commands(["modules/mystery/manifest.py"]), EVERY)
+
     def test_template_runs_nothing(self):
         self.assertEqual(commands(["modules/_template/manifest.py"]), [])
 
@@ -62,6 +71,11 @@ class ClassifyTests(unittest.TestCase):
     def test_runner_changes_need_the_runner_tests(self):
         for p in ("tools/verify/acceptance.py", "tools/verify/tests/test_x.py", "tools/harness/pressure.py"):
             self.assertIn("make test-acceptance", commands([p]), p)
+
+    def test_the_classifier_itself_reaches_only_its_tests(self):
+        self.assertEqual(commands(["tools/verify/reach.py"]), ["make test-acceptance"])
+        self.assertEqual(commands(["tools/verify/tests/test_reach.py"]), ["make test-acceptance"])
+        self.assertIn('make check-shared REMIXES="bamsep26 miniverb usb"', commands(["tools/verify/module_gates.py"]))
 
     def test_toolchain_port_docs_ci(self):
         self.assertEqual(commands(["tools/patches/dsp56300.patch"])[0], "make ci-dsp")
