@@ -561,8 +561,7 @@ namespace ot
 
 		void writeGoldenJson(const std::string& _path) const;
 
-		// The M6c facts, in the same shape route A's `--sequencer --golden`
-		// writes them, for `tools/emu/ot_emu/oracle.py`: the trig log with frame
+		// The M6c facts as JSON (oracle.sh byte-compares them): the trig log with frame
 		// numbers relative to the transport start, the tick count, the frames
 		// run, and the four bank/pattern bytes.
 		struct M6c { uint64_t frame0 = 0, ticks0 = 0, frames = 0, ticks = 0;

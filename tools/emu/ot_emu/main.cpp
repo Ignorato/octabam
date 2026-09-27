@@ -1121,7 +1121,7 @@ int main(int _argc, char** _argv)
 	int pokeTrig = 0;			// with --sequencer: set a trig on track 1 at this step (1-64)
 	bool internalClock = false;	// with --sequencer: clear CLOCK RECEIVE
 	int bankOverride = -1;		// with --sequencer: switch to this bank (default: the file's saved bank)
-	std::string m6cGolden;		// the M6c facts as JSON, for tools/emu/ot_emu/oracle.py
+	std::string m6cGolden;		// the M6c facts as JSON (oracle.sh byte-compares them)
 	std::string watchMem;		// ADDR,LEN -- log every write into that range (route A's own flag)
 	std::string watchRead;		// ADDR,LEN -- log the first 64 data READS of that range, with the reading PC
 	std::string watchPc;		// comma-separated addresses -- log registers there (route A's own flag)
