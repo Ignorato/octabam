@@ -51,5 +51,5 @@ only (the port does not model SCM or XBS registers).
 
 | what | where |
 |---|---|
-| code | DRAM unit `usbxbar`, 10 instructions |
+| code | DRAM unit `usbcrossbar`, 10 instructions |
 | hook | `0x4001e030`, the USB controller init's `movel #0x08000000,%d0`, replayed |

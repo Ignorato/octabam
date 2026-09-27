@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""USB AUDIO IN under the ColdFire port: the host's stereo pair on EP3 OUT
-reaches core 0's RX blocks as inputs A and B, C and D stay the jacks', and
-closing the stream gives A/B back to the jacks.
+"""USB AUDIO IN under the ColdFire port: the host's channels on EP3 OUT reach
+core 0's RX blocks as the module's inputs (AB, CD or ABCD), the other inputs
+stay the jacks', and closing the stream gives them all back to the jacks.
 
 The bench plays the host: it enumerates, opens interface 4 alt 1 (the input
 stream, the implicit-feedback source) and interface 5 alt 1, then each poll
@@ -12,17 +12,17 @@ microframe does: issued one after the other, each costs the bench a slot of
 device time, the device runs two frames' worth per host packet, and both
 rings fail for the bench's reasons (measured 26 Sep 2026: 1.39 state-7
 visits per poll against 0.692 pipelined; the unit runs 0.689). Every OUT
-sample is coded: v = ch << 20 | frame (ch 0/1 = host channels 1/2 = inputs
-A/B, frame = a running count), so a DSP word says which channel and which
-frame it came from. The IN poll's frame size is the remix's USB AUDIO
-layout's (verify_usb.LAYOUTS): 16 B with USB AUDIO MC, 64 with FULL, 80
-with EXTENDED.
+sample is coded: v = ch << 20 | frame (ch = the host channel - 1, frame = a
+running count), so a DSP word says which channel and which frame it came
+from. The IN poll's frame size is the remix's USB AUDIO
+layout's (verify_usb.LAYOUTS): 16 B with USB AUDIO OUT MAIN CUE, 64 with OUT TRACKS,
+80 with OUT TRACKS MAIN CUE, 8 with OUT MAIN.
 
   run 1 (streaming): hang up while the stream is running; the RX ring's
-    completed blocks must hold the coded samples in slots 2/3 (A/B),
-    bit-exact (default GAIN = unity, gate open), consecutive frames, with
-    slots 0/1 (C/D) untouched -- silence under the port -- and so must the
-    recorder's input ring.
+    completed blocks must hold the coded samples in the module's slots
+    (2/3 = A/B, 0/1 = C/D), bit-exact (default GAIN = unity, gate open),
+    consecutive frames, with the other slots untouched -- silence under the
+    port -- and so must the recorder's input ring.
   run 2 (closed): alt 0 on interface 5, then keep EP3 IN's stream running;
     word 0 of the transfer must be clear and the RX blocks the jacks'
     (silence under the port).
@@ -50,9 +50,13 @@ ELF = ROOT / "out/platform/runtime/runtime.elf"
 COUNTERS = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns",
             "overruns", "reprimes", "bad", "frames", "seconds", "minfill", "maxfill",
             "err", "partial")
-CHANNELS = 2                    # host channels 1/2 -> inputs A/B
-SLOT_CH = {2: 0, 3: 1}          # RX block slot -> host channel (slots 0/1 = C/D, the jacks)
-FRAME_B = 4 * CHANNELS
+# RX block slot -> host channel (0-based) per IN module; a slot not listed
+# is a jack and must read zero under the port
+IN_SLOTS = {"USB AUDIO IN AB": {2: 0, 3: 1},
+            "USB AUDIO IN CD": {0: 0, 1: 1},
+            "USB AUDIO IN ABCD": {2: 0, 3: 1, 0: 2, 1: 3}}
+SLOT_CH = IN_SLOTS["USB AUDIO IN AB"]      # main() sets it from the remix
+CHANNELS = 2
 fails = []
 
 
@@ -73,7 +77,7 @@ def coded(ch, frame):
 
 
 def packet(frame0, n):
-    """n frames from frame0, the stereo pair, 24 bits in the top of 4-byte LE subslots."""
+    """n frames from frame0, CHANNELS channels, 24 bits in the top of 4-byte LE subslots."""
     b = bytearray()
     for f in range(frame0, frame0 + n):
         for ch in range(CHANNELS):
@@ -122,7 +126,7 @@ def run(tag, sym, packets, close_first, in_frame):
     try:
         b = usb_host.Bench(sock, timeout=120.0)
         usb_host.enumerate_device(b, hs=True)
-        b.ctrl_nodata(0x01, 0x0b, 1, 4)                 # SET_INTERFACE 4 alt 1: EP3 IN (USB AUDIO MC/FULL/EXTENDED)
+        b.ctrl_nodata(0x01, 0x0b, 1, 4)                 # SET_INTERFACE 4 alt 1: EP3 IN (the remix's 250 us out layout)
         b.ctrl_nodata(0x01, 0x0b, 1, 5)                 # SET_INTERFACE 5 alt 1: EP3 OUT (USB AUDIO IN)
         frame, sizes, empty, last_n = 0, set(), 0, 11
         snaps = []
@@ -163,32 +167,35 @@ def run(tag, sym, packets, close_first, in_frame):
 
 
 def block_frame(words):
-    """The first frame of a 64-word RX block if slots 2/3 hold the coded
-    samples for A/B in consecutive frames and slots 0/1 are zero (the jacks,
-    silent under the port), else None."""
-    f0 = words[2] & 0xFFFFF                             # slot 2 = channel A (0), sample 0
+    """The first frame of a 64-word RX block if the module's slots hold the
+    coded samples in consecutive frames and the other slots are zero (the
+    jacks, silent under the port), else None."""
+    s0 = next(s for s, ch in SLOT_CH.items() if ch == 0)
+    f0 = words[s0] & 0xFFFFF                            # host channel 1, sample 0
     for smp in range(16):
         w = words[4 * smp:4 * smp + 4]
-        if w[0] != 0 or w[1] != 0:
-            return None
-        if w[2] != coded(0, f0 + smp) or w[3] != coded(1, f0 + smp):
-            return None
+        for slot in range(4):
+            want = coded(SLOT_CH[slot], f0 + smp) if slot in SLOT_CH else 0
+            if w[slot] != want:
+                return None
     return f0
 
 
 def recorder_frame(w):
     """The first frame of one 64-long recorder block (slots 0/1 in the first
     32 longs, 2/3 in the second, samples in the top 24 bits) if it carries
-    the coded pair on 2/3 and zero on 0/1, else None."""
-    f0 = (w[32] >> 8) & 0xFFFFF                         # slot 2 = A, sample 0
-    ok = all((w[2 * smp] >> 8) == 0 and (w[2 * smp + 1] >> 8) == 0 and
-             (w[32 + 2 * smp] >> 8) == coded(0, f0 + smp) and
-             (w[32 + 2 * smp + 1] >> 8) == coded(1, f0 + smp)
-             for smp in range(16))
+    the coded samples on the module's slots and zero on the others, else None."""
+    def at(slot, smp):
+        return w[(32 if slot >= 2 else 0) + 2 * smp + (slot & 1)] >> 8
+    s0 = next(s for s, ch in SLOT_CH.items() if ch == 0)
+    f0 = at(s0, 0) & 0xFFFFF
+    ok = all(at(slot, smp) == (coded(SLOT_CH[slot], f0 + smp) if slot in SLOT_CH else 0)
+             for smp in range(16) for slot in range(4))
     return f0 if ok else None
 
 
 def main():
+    global SLOT_CH, CHANNELS
     if not EMU.is_file():
         print("  [SKIP] verify_usb_in: the port is not built (make emu-cf)")
         return 0
@@ -200,9 +207,16 @@ def main():
         print("  [FAIL] verify_usb_in: the runtime has no USB AUDIO IN unit")
         return 1
     remix = registry.remix(os.environ.get("REMIX"))
+    ain = next((k for k in IN_SLOTS if k in remix.modules), None)
+    if ain is None:
+        print("  [FAIL] verify_usb_in: the remix carries no USB AUDIO IN module")
+        return 1
+    SLOT_CH = IN_SLOTS[ain]
+    CHANNELS = len(SLOT_CH)
+    print(f"  {ain}: {CHANNELS} host channels -> RX slots {sorted(SLOT_CH)}")
     audio = next((k for k in LAYOUTS if k in remix.modules), None)
     if audio is None or LAYOUTS[audio][2] != 2:
-        print(f"  [FAIL] verify_usb_in: needs a 250 us USB AUDIO layout (MC, FULL or EXTENDED) beside it, not {audio}")
+        print(f"  [FAIL] verify_usb_in: needs a 250 us USB AUDIO OUT layout (MAIN CUE, MAIN, TRACKS or TRACKS MAIN CUE) beside it, not {audio}")
         return 1
     in_frame = 4 * LAYOUTS[audio][0]
     print(f"  EP3 IN (the feedback source): {audio}, {in_frame} B a frame")
@@ -247,7 +261,7 @@ def main():
             blk = (cb - back) % 9
             got.append(block_frame(r["rx"][blk * 64:(blk + 1) * 64]))
         print(f"  RX blocks before the one under the pen, newest first: first frames {got}")
-        check("the 7 completed RX blocks hold the host's pair on slots 2/3 (A/B), slots 0/1 (C/D) untouched, bit-exact",
+        check(f"the 7 completed RX blocks hold the host's channels on slots {sorted(SLOT_CH)}, the other slots untouched, bit-exact",
               all(g is not None for g in got), str(got))
         ok = all(g is not None for g in got) and all(a - b == 16 for a, b in zip(got, got[1:]))
         check("... in consecutive frames (no drop, no repeat)", ok)
@@ -255,7 +269,7 @@ def main():
         check("the port printed the RX ring", False)
     rf = [recorder_frame(struct.unpack(">64i", r["ring"][fr * 256:(fr + 1) * 256])) for fr in range(8)]
     print(f"  recorder input ring frames: {rf}")
-    check("the recorder's input ring carries the pair on A/B too (8 frames exact)", all(x is not None for x in rf))
+    check("the recorder's input ring carries them on the same inputs (8 frames exact)", all(x is not None for x in rf))
 
     print("== run 2: the host's stream closed ==")
     r2 = run("closed", sym, 2000, close_first=True, in_frame=in_frame)

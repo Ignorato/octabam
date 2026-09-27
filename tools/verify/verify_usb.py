@@ -34,17 +34,18 @@ EMU = ROOT / "out/emu/ot_emu"
 IMAGE = ROOT / "out/mainos_bus.bin"
 MIDI_FIFO_HEAD = 0x46100b80         # midi_rx_fifo_head: +1 per byte midi_rx_enqueue (0x40092bbc) takes
 
-# The three USB audio modules (one source, modules/usb-audio-extended/usbaudio.s):
+# The three USB audio modules (one source, modules/usb-audio-out-tracks-main-cue/usbaudio.s):
 # high-speed channels, packet cap, bInterval (2 = 250 us, 4 = 1 ms), and what each channel
 # carries as (source, L/R): source 0-7 = track 1-8's read-back words, 8 =
 # MAIN, 9 = CUE.
 LAYOUTS = {
-    "USB AUDIO EXTENDED": (20, 960, 2, [(t, c) for t in range(8) for c in (0, 1)] + [(8, 0), (8, 1), (9, 0), (9, 1)]),
-    "USB AUDIO FULL": (16, 768, 2, [(t, c) for t in range(8) for c in (0, 1)]),
-    "USB AUDIO MASTER": (2, 360, 4, [(7, 0), (7, 1)]),
-    "USB AUDIO MC": (4, 192, 2, [(8, 0), (8, 1), (9, 0), (9, 1)]),
+    "USB AUDIO OUT TRACKS MAIN CUE": (20, 960, 2, [(t, c) for t in range(8) for c in (0, 1)] + [(8, 0), (8, 1), (9, 0), (9, 1)]),
+    "USB AUDIO OUT TRACKS": (16, 768, 2, [(t, c) for t in range(8) for c in (0, 1)]),
+    "USB AUDIO OUT MASTER": (2, 360, 4, [(7, 0), (7, 1)]),
+    "USB AUDIO OUT MAIN CUE": (4, 192, 2, [(8, 0), (8, 1), (9, 0), (9, 1)]),
+    "USB AUDIO OUT MAIN": (2, 96, 2, [(8, 0), (8, 1)]),
 }
-RB_BASE, MC_BASE = 0x80003190, 0x80005e60   # the tracks' read-back arena (2 banks) and MAIN/CUE (usbaudio.s)
+RB_BASE, MAIN_CUE_BASE = 0x80003190, 0x80005e60   # the tracks' read-back arena (2 banks) and MAIN/CUE (usbaudio.s)
 
 
 def tap_word(src, lr, frame):
@@ -67,7 +68,9 @@ def main():
     remix = registry.remix(os.environ.get("REMIX"))
     midi = "USB MIDI" in remix.modules
     audio = next((k for k in LAYOUTS if k in remix.modules), None)
-    ain = "USB AUDIO IN" in remix.modules      # + AudioStreaming 5, EP3 OUT (implicit feedback)
+    IN_LAYOUT = {"USB AUDIO IN AB": 2, "USB AUDIO IN CD": 2, "USB AUDIO IN ABCD": 4}
+    ain = next((k for k in IN_LAYOUT if k in remix.modules), None)   # + AudioStreaming 5, EP3 OUT (implicit feedback)
+    in_ch = IN_LAYOUT[ain] if ain else 0
     sock = f"/tmp/ot-usb-{os.getpid()}.sock"     # sun_path is 104 bytes on macOS; the scratch dirs are longer
     log = ROOT / "out/verify_usb.log"
     with open(log, "w") as lf:
@@ -135,17 +138,17 @@ def main():
                 check(f"{audio}: EP 0x83 marked implicit-feedback data (USB AUDIO IN's feedback source)",
                       len(iso) == 1 and (iso[0][3] >> 4 & 3) == 2, str([hex(d[3]) for d in iso]))
                 ison = [d for d in eps if d[2] == 0x03]
-                check("USB AUDIO IN: EP 0x03 isochronous asynchronous data, 96 bytes, bInterval 2",
-                      len(ison) == 1 and (ison[0][3], ison[0][4] | ison[0][5] << 8, ison[0][6]) == (0x05, 96, 2),
+                check(f"{ain}: EP 0x03 isochronous asynchronous data, {12 * 4 * in_ch} bytes, bInterval 2",
+                      len(ison) == 1 and (ison[0][3], ison[0][4] | ison[0][5] << 8, ison[0][6]) == (0x05, 12 * 4 * in_ch, 2),
                       str([(d[3], d[4] | d[5] << 8, d[6]) for d in ison]))
                 asg_i = cfg.find(bytes([16, 0x24, 1, 0x13]))     # AS_GENERAL linked to the host -> device input terminal
-                check("USB AUDIO IN: AS_GENERAL declares 2 channels, front left + front right",
-                      asg_i >= 0 and cfg[asg_i + 10] == 2 and cfg[asg_i + 11] == 3,
+                check(f"{ain}: AS_GENERAL declares {in_ch} channels" + (", front left + front right" if in_ch == 2 else ""),
+                      asg_i >= 0 and cfg[asg_i + 10] == in_ch and cfg[asg_i + 11] == (3 if in_ch == 2 else 0),
                       f"bNrChannels {cfg[asg_i + 10] if asg_i >= 0 else None}")
                 # the full-speed configuration (served as OTHER_SPEED at high
                 # speed) carries no interface 5: the unit serves it at high speed only
                 ocfg = b.ctrl_in(0x80, 6, 0x0700, 0, 512)
-                check("USB AUDIO IN: no interface 5 in the other-speed (full-speed) configuration",
+                check(f"{ain}: no interface 5 in the other-speed (full-speed) configuration",
                       len(ocfg) >= 9 and ocfg[4] == 5 and bytes([16, 0x24, 1, 0x13]) not in ocfg,
                       f"bNumInterfaces {ocfg[4] if len(ocfg) >= 9 else None}")
             asg = cfg.find(bytes([16, 0x24, 1]))                 # CS AS_GENERAL: bNrChannels at +10, bmChannelConfig +11
@@ -186,7 +189,7 @@ def main():
             tapped = []
             for _ in range(1200):
                 b.poke(RB_BASE, TAP_RB)
-                b.poke(MC_BASE, TAP_MC)
+                b.poke(MAIN_CUE_BASE, TAP_MC)
                 tapped.append(b.ep_in(3, 1024))
             tw = [int.from_bytes(w[i:i + 4], "little") for w in tapped[-400:] for i in range(0, len(w), 4)]
             seen, wrong = [0] * nch, []
@@ -204,7 +207,7 @@ def main():
             after = [len(b.ep_in(3, 1024)) for _ in range(8)]
             check("USB AUDIO: alt 0 stops the stream (empty polls)", all(a == 0 for a in after[2:]), str(after))
             # Full speed: the same device re-enumerated. The stereo sum of the
-            # tracks (EXTENDED, FULL) or track 8's L/R (MASTER) in 44/45-frame
+            # tracks (OUT TRACKS MAIN CUE, OUT TRACKS) or track 8's L/R (OUT MASTER) in 44/45-frame
             # 1 ms packets of 8-byte frames.
             usb_host.enumerate_device(b, hs=False)
             b.iso_hz(0)                                          # bInterval 1 at full speed: 1 ms
@@ -227,7 +230,8 @@ def main():
                             fseen[i % 2] += 1
                         else:
                             fwrong.append((i % 2, f"{w:08x}"))
-                check(f"{audio}: full speed: channels 1/2 carry T8 L/R, its own words only",
+                _src = {7: "T8", 8: "MAIN"}.get(taps[0][0], f"source {taps[0][0]}")
+                check(f"{audio}: full speed: channels 1/2 carry {_src} L/R, its own words only",
                       not fwrong and all(n >= 100 for n in fseen), f"per-channel hits {fseen}; wrong {fwrong[:6]}")
             b.ctrl_nodata(0x01, 0x0b, 0, 4)
     except Exception as e:  # noqa: BLE001 -- a hang or a stall is the finding

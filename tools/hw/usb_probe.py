@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A hardware probe for USB AUDIO IN (the host's stereo pair into inputs A/B)
+"""A hardware probe for USB AUDIO IN (the host's channels into inputs A/B, C/D or A-D)
 and the USB AUDIO stream it rides on, for anyone with an Octatrack on
 `usb-io` to run against their own unit. Bryan T, 27 Sep 2026 (PR #492), for
 a report from an MKI (nordseele, USB_AUDIO_PR468_REVIEW.md): macOS
@@ -71,7 +71,8 @@ IN_RING_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns
 # USB AUDIO's counters (0x55), the EP3 IN ring: usbaudio.s
 AUDIO_NAMES = ("consumed", "acc", "overruns", "underruns", "lastn", "lastfill", "lastbank",
                "bankdup", "lastsamp", "srcjump", "reprimes", "produced")
-HOST_CHANNELS = 2               # the stream's channels: host 1 = input A, 2 = input B
+# the host -> unit stream's channel count is read from the CoreAudio device
+# (2 with USB AUDIO IN AB or IN CD, 4 with IN ABCD)
 
 EXPECTED_RATE = 44100.0
 
@@ -146,6 +147,7 @@ def list_devices():
 
 
 def find_output_device(name_substr):
+    """(device index, its output channel count)."""
     import sounddevice as sd
     devs = sd.query_devices()
     matches = [i for i, d in enumerate(devs) if name_substr.lower() in d["name"].lower() and d["max_output_channels"] > 0]
@@ -153,7 +155,7 @@ def find_output_device(name_substr):
         sys.exit(f"no CoreAudio output device matching {name_substr!r}; run --list-devices")
     if len(matches) > 1:
         sys.exit(f"{len(matches)} devices match {name_substr!r}: {[devs[i]['name'] for i in matches]}; be more specific")
-    return matches[0]
+    return matches[0], devs[matches[0]]["max_output_channels"]
 
 
 def make_tone(duration, freq, level_dbfs, channel, n_channels, fs):
@@ -166,7 +168,7 @@ def make_tone(duration, freq, level_dbfs, channel, n_channels, fs):
     return buf
 
 
-def run_sustained(device, duration, freq, level_dbfs, channel, fs=44100, n_channels=HOST_CHANNELS):
+def run_sustained(device, duration, freq, level_dbfs, channel, n_channels, fs=44100):
     import sounddevice as sd
     buf = make_tone(duration, freq, level_dbfs, channel, n_channels, fs)
     wall0 = time.monotonic()
@@ -175,7 +177,7 @@ def run_sustained(device, duration, freq, level_dbfs, channel, fs=44100, n_chann
             "t_end": time.monotonic()}
 
 
-def run_churn(device, cycles, on_s, off_s, freq, level_dbfs, channel, fs=44100, n_channels=HOST_CHANNELS):
+def run_churn(device, cycles, on_s, off_s, freq, level_dbfs, channel, n_channels, fs=44100):
     import sounddevice as sd
     buf = make_tone(on_s, freq, level_dbfs, channel, n_channels, fs)
     wall0 = time.monotonic()
@@ -279,7 +281,7 @@ def main():
     ap.add_argument("--churn-off", type=float, default=0.1, help="churn mode: silent pause between cycles")
     ap.add_argument("--freq", type=float, default=440.0, help="tone frequency, Hz")
     ap.add_argument("--level", type=float, default=-20.0, help="tone level, dBFS")
-    ap.add_argument("--channel", type=int, default=1, choices=(1, 2), help="host output channel (1 = input A, 2 = input B); the other silent")
+    ap.add_argument("--channel", type=int, default=1, help="host output channel, 1..n (the unit's input in the IN module's order); the others silent")
     ap.add_argument("--poll-interval", type=float, default=0.1, help="seconds between counter polls")
     ap.add_argument("--device", default="Octatrack", help="substring matching the CoreAudio device name")
     ap.add_argument("--unit", choices=("mki", "mkii", "unknown"), default="unknown",
@@ -294,18 +296,20 @@ def main():
         return 0
 
     dev = find_device()
-    device = find_output_device(args.device)
+    device, n_channels = find_output_device(args.device)
+    if not 1 <= args.channel <= n_channels:
+        sys.exit(f"--channel {args.channel}: the device has {n_channels} output channel(s)")
 
     poller = Poller(dev, args.poll_interval)
     poller.start()
     if args.mode == "sustained":
         print(f"[sustained] {args.freq} Hz at {args.level} dBFS on channel {args.channel}, "
               f"requesting {args.duration:.1f} s, polling every {args.poll_interval*1000:.0f} ms ...")
-        play_result = run_sustained(device, args.duration, args.freq, args.level, args.channel)
+        play_result = run_sustained(device, args.duration, args.freq, args.level, args.channel, n_channels)
     else:
         print(f"[churn] {args.churn_cycles} cycles of {args.churn_on}s on / {args.churn_off}s off, "
               f"{args.freq} Hz at {args.level} dBFS on channel {args.channel} ...")
-        play_result = run_churn(device, args.churn_cycles, args.churn_on, args.churn_off, args.freq, args.level, args.channel)
+        play_result = run_churn(device, args.churn_cycles, args.churn_on, args.churn_off, args.freq, args.level, args.channel, n_channels)
     time.sleep(0.3)   # a couple more polls after the close, for at_close
     poller.stop()
     poller.join(timeout=2)

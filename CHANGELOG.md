@@ -26,6 +26,23 @@ flashed image was built from.
   SRAM the dTDs and packet buffers take. `tools/hw/usb_probe.py` (Bryan T's
   PR #492) runs a host session against a unit and reads both rings'
   counters while the stream is open, with EP3 IN's drain rate as the
+  discriminating number for the MKI half-speed report. Remixes `usb-io-<out>-<in>`,
+  twelve: the four 250 us out layouts (tracks, tracks-main-cue, main-cue,
+  main) by the three IN modules (ab, cd, abcd), each stock - SPATIALIZER +
+  USB MIDI + USB CROSSBAR; `usb-out-main-cue` keeps the MAIN + CUE layout. Port only in
+  this form. The USB audio modules are named by direction and content:
+  USB AUDIO OUT TRACKS (was FULL), OUT TRACKS MAIN CUE (was EXTENDED),
+  OUT MASTER (was MASTER), OUT MAIN CUE (was MC), beside USB AUDIO IN;
+  remixes `usb-out-tracks` (was `usb-full`), `usb-out-tracks-main-cue`
+  (`usb-lean`), `usb-out-master` (`usb-master`), `usb-out-main-cue`
+  (`usb-mc`). Earlier entries keep the names of their day. Two more
+  modules: USB AUDIO OUT MAIN (MAIN L/R alone every 250 us, the stereo
+  pairing for the IN modules; remix `usb-out-main`) and the IN module in
+  three widths on one source, USB AUDIO IN AB, IN CD and IN ABCD (host
+  channels onto inputs A/B, C/D or A-D; one per remix, shared detour
+  sites), each with its own placed inject. `tools/harness/usb_align.py`
+  measures MAIN's lag behind the tracks in the twenty-channel stream
+  under the port from the tone project's phases.
   discriminating number for the MKI half-speed report. Remix `usb-io` =
   stock - SPATIALIZER + USB MIDI + USB AUDIO EXTENDED + USB CROSSBAR + USB
   AUDIO IN; `usb-mc` keeps the MAIN + CUE layout. Port only in this form.
