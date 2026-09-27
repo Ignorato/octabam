@@ -40,12 +40,12 @@ import send_probe  # noqa: E402
 OUT = ROOT / "out/dsp"
 SCRATCH = OUT / "_twocore"
 IMAGE = ROOT / "out/mainos_bus.bin"
-PLAIN = registry.fixture("REVERB SERVER", "DELAY SERVER", "SEND")     # the plain two-server image
 DEV_MEM = OUT / "mem_dev_A.mem"
 BLOCKS = 700
 SKEWS = (1, 37, 333, -250)
 
 from remix import registry  # noqa: E402
+PLAIN = registry.fixture("REVERB SERVER", "DELAY SERVER", "SEND")     # the plain two-server image
 
 
 def knobs(key, **kw):
