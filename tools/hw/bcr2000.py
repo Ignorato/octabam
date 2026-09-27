@@ -11,8 +11,8 @@ Presets (`--preset`, default `rig`):
   rig     push-encoder groups 1-4 = DEL send, REV send, LEVEL, AMP VOL per track
           (eight encoders = eight tracks); lower row 1 = BusDelay on T1, row 2 =
           BusVerb on T5, column-aligned: WET TONE TIME, then FDBK/SIZE PING/DIFF
-          SCTR/SHMR DENS/- PTCH/GATE; row 3 = verb DLY (delay feed), scene fader,
-          T8's Character DRV FOLD WDTH COMP TONE MIX (the master, FX1);
+          SCTR/SHMR DENS/DLY PTCH/GATE; row 3 = scene fader, T8's Character SAT
+          DRV FOLD WDTH COMP TONE MIX (the master, FX1; SAT is page 2, CC 68);
           buttons 33-40 MUTE, 41-48 SOLO per track.
   t1..t8  one track: groups 1-4 = FX1 page 1, FX1 page 2, FX2 page 1, FX2 page 2
           (LEVEL, AMP VOL, scene fader on the spare encoders); lower rows =
@@ -56,10 +56,10 @@ LEVEL, AMPVOL, XFADE, MUTE, SOLO = 46, 25, 48, 49, 50
 ROLES = {1: "DELAY SERVER", 5: "REVERB SERVER"}      # the rig's hosts; every other track runs SEND
 STATIONS = ("SPECTRUM", "CHARACTER", "MODULATION")   # FX1; the track's pick is not known here
 # rig lower rows, as slot numbers of the engines' params (busdelay / busverb manifests)
-# MODE, the delay's SIZE and the verb's SHFT are on the user buttons; the verb's DLY (delay feed) sits on row 3
+# MODE, the delay's SIZE and the verb's SHFT are on the user buttons
 DLY_ROW = (5, 3, 11, 2, 4, 7, 8, 10)    # WET TONE TIME FDBK PING SCTR DENS PTCH
-VRB_ROW = (5, 7, 11, 2, 8, 3, None, 9)  # WET TONE TIME SIZE DIFF SHMR (free) GATE; SHFT steps on user button 52
-MASTER_ROW = (0, 1, 2, 3, 4, 5)         # T8 Character: DRV FOLD WDTH COMP TONE MIX
+VRB_ROW = (5, 7, 11, 2, 8, 3, 10, 9)    # WET TONE TIME SIZE DIFF SHMR DLY GATE; SHFT steps on user button 52
+MASTER_ROW = (6, 0, 1, 2, 3, 4, 5)      # T8 Character: SAT (3-way, page 2) DRV FOLD WDTH COMP TONE MIX
 
 # BCL acknowledge codes (BCL revision R1); the code is what the unit said.
 ERRORS = {0: "ok", 1: "unknown token", 2: "data without token", 3: "argument missing",
@@ -120,12 +120,11 @@ def rig_preset(channels):
         enc[33 + i] = param_knob(cd, "FX2", sd, dly[sd], "T1 BDLY")
         if sv is not None:
             enc[41 + i] = param_knob(cv, "FX2", sv, vrb[sv], "T5 BVRB")
-    # row 3: the verb's delay feed, the scene fader, the master track's station (T8 FX1 = CHARACTER, docs/effects/MASTER.md)
-    enc[49] = param_knob(cv, "FX2", 10, vrb[10], "T5 BVRB")
-    enc[50] = fader(channels[0])
+    # row 3: the scene fader, then the master track's station (T8 FX1 = CHARACTER, docs/effects/MASTER.md)
+    enc[49] = fader(channels[0])
     ch8, chr_ = channels[7], mods["CHARACTER"].params
     for i, slot in enumerate(MASTER_ROW):
-        enc[51 + i] = param_knob(ch8, "FX1", slot, chr_[slot], "T8 MASTER")
+        enc[50 + i] = param_knob(ch8, "FX1", slot, chr_[slot], "T8 MASTER")
     return "OCTABAM RIG", enc, mute_solo(channels)
 
 
