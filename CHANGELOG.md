@@ -7,6 +7,14 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- Tape Echo's ColdFire probe (27 Sep 2026): its test vectors are glibc's
+  `random()` sequence on every host (macOS's differed, so a failing vector
+  here never occurred on the author's Linux), and its host oracle is
+  compiled with `-fwrapv`: `modules/tapeecho/cpu.c` lines 251, 303 and
+  305 overflow int32 on a steep negative MIX ramp (UBSan), which clang's
+  optimiser exploited ("tape output mismatch 3/16 (mode 3)") while the
+  ColdFire kernel wraps. The gate is green on this machine; the source
+  fix is the author's.
 - USB AUDIO in three modules over one source (27 Sep 2026):
   `modules/usbaudio` is `modules/usb-audio-extended` (key USB AUDIO
   EXTENDED, the twenty channels, images byte-identical) and `modules/usbmidi`
