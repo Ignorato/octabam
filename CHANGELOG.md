@@ -7,6 +7,21 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The build's memo (28 Sep 2026): `tools/remix/runtime_build.py` keeps the
+  aPLib packer's output by the sha256 of its input and a `Runtime`'s three
+  artifacts (raw, packed, append) plus symbols by the sha256 of the recipe,
+  every source file, the stock image, the compiler version and the skipped
+  guards, under `out/cache/` (`OCTABAM_CACHE=<dir>`, `OCTABAM_NO_CACHE=1`
+  builds cold). A runtime hit is re-verified against the recipe's own
+  identities before use. bottleservice: 9 s cold, 1.7 s warm, image and
+  report byte-identical; `scripts/refhash.sh check` 24/24 cold and warm.
+  Every `make check-remix` builds its image about eight times (the recipe,
+  the DRAM boot, the set, the three select probes, the burn) and the
+  selftest and `verify_replaces` build every remix; all of it was the same
+  bytes. `verify_scenesp2` runs its three boots side by side (83 s wall,
+  was 220 s under Octakit; verdicts identical): a pool poked once the
+  transport has started never reaches the live lane, with or without a
+  transport restart (measured), so the three cannot share a boot.
 - The gate run, once each (28 Sep 2026): `make accept REMIXES="a b c"`
   runs the remix-independent half of `make check` once and `make
   check-remix` per remix (report v2: gates `check_shared` and

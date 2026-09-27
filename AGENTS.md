@@ -82,6 +82,9 @@ symlink `out/emu`**: its CMake cache names the main checkout's sources,
 so `cmake --build` there compiles THEIR `tools/emu/ot_emu`, not yours
 (14 Sep 2026: a port edit "built" fine and the binary did not have it).
 Build the port into the worktree: `make emu-cf` (a fresh cache, ~1 min).
+`out/cache/` is the build's memo (the packed runtimes, keyed by the sha256
+of their inputs; `tools/remix/runtime_build.py`), per worktree and safe to
+delete; `OCTABAM_NO_CACHE=1` builds cold when a build result is in doubt.
 **The same holds for `dsp_host` and `dsp_asm`:** `scripts/setup.sh` builds
 them from a COPY staged into `vendor/dsp56300/source/dsp_host/`, so in a
 worktree the shared binary is the main checkout's, whatever the branch's
