@@ -78,9 +78,9 @@ lines persist.
 ## Measured
 
 - **27 Sep 2026, the cycle pass** (PR: mod-cycles): pricer per loop LINE
-  404 → 354, PHSR 397 → 301, COMB 339 → 329 words/sample; the rig's priced
-  worst core 2,837 → 2,649 (four Characters beside the reverb now bound it;
-  four JUNO + reverb + 3 sends 2,837 → 2,637), payload A FREE 34 → 85.
+  404 → 354, PHSR 394 → 298, COMB 339 → 329 words/sample; the rig's priced
+  worst core 2,781 → 2,585 (four Characters beside the reverb now bound it;
+  four JUNO + reverb + 3 sends 2,781 → 2,581), payload A FREE 87 → 138.
   Exact (13/13 `verify-ident` settings bit-identical): the walk pointers by
   `lua`, `mo_itap`/`mo_herm` read and step back in one move
   (`y:(r5)-n5,b`, a stock form), limited values moved straight into `y1`,

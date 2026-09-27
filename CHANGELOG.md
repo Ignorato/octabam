@@ -38,8 +38,8 @@ flashed image was built from.
   into the one-word displacement range to keep the RIG BURN probe's words
   (payload A at 23 free). Unheard.
 
-- Modulation cycle pass (27 Sep 2026): LINE 404 → 354, PHSR 397 → 301,
-  COMB 339 → 329 words/sample; the rig's priced worst core 2,837 → 2,649.
+- Modulation cycle pass (27 Sep 2026): LINE 404 → 354, PHSR 394 → 298,
+  COMB 339 → 329 words/sample; the rig's priced worst core 2,781 → 2,585.
   Image 88 on hardware overran at the fourth Modulation beside the reverb
   (three fit). Exact rewrites plus two within the reference bars (the
   one-poles as two products, PHSR's stages rolled): LINE renders differ from
