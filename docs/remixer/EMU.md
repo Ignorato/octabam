@@ -317,7 +317,7 @@ Stock 1.40C, the rig project, `--sequencer --internal-clock --dsp`:
 | phase | emulated | wall | ratio |
 |---|---|---|---|
 | boot to the handoff | 205 ms, 10.2 M instructions | 3.5 s | 17× |
-| load (`--load-ms 90000`, DSPs stepping through the idle skips) | 20 s | ~35 s | 1.7× |
+| load (a fixed `--load-ms 20000` then; since 28 Sep 2026 it ends when the engine is idle: 14.9 s stock, 31.7 s under Octakit, `--load-ms 90000` the ceiling) | 20 s | ~35 s | 1.7× |
 | play (400 → 1200 frames) | 290 ms of audio | ~2.9 s | **~10×** |
 
 The play phase runs 23,946 ColdFire instructions per 16-sample frame =
