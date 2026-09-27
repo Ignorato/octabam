@@ -317,5 +317,5 @@ modedef1:
 | ---- per-engine page-2 value counts, slot2 order (slots 6..11) -----------
 | Must match the engines' manifests (busverb / busdelay page-2 counts);
 | tools/verify/verify_ccmap.py checks them against VERB_COUNTS / DLY_COUNTS.
-VCOUNT: .byte   3, 128, 128, 4, 128, 128  | MODE (blank) DIFF SHFT GATE (blank)
-DCOUNT: .byte   3, 128, 128, 4, 128, 128  | MODE SCTR DENS SIZE PTCH WOW
+VCOUNT: .byte   3, 128, 128, 128, 128, 128  | MODE TONE DIFF GATE DLY TIME
+DCOUNT: .byte   3, 128, 128, 4, 128, 128  | MODE SCTR DENS SIZE PTCH TIME
