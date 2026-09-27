@@ -18,8 +18,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 from remix import ledger, registry, schema, state, stock  # noqa: E402
-from remix.schema import (CavePatch, Claims, DramRegion, DspSection, Kind,  # noqa: E402
-                          Linked, MenuEntry, Module, Param, YBase)
+from remix.schema import (CavePatch, Claims, Detour, DramRegion, DspSection,  # noqa: E402
+                          Kind, Linked, MenuEntry, Module, Param, YBase)
 
 
 def _effect(name, fx2_id, priority=0, reserved=(), buffers=False,
@@ -78,6 +78,14 @@ def _region(name, symbol):
     )
 
 
+def _detour(name, site):
+    return Module(
+        name=name, key=name.upper(), kind=Kind.CF_PATCH, doc="fixture",
+        linked=(Linked(name, "does/not/exist.s", dram=True),),
+        detours=(Detour(site, b"\x4e\x71" * 4, name, "entry"),),
+    )
+
+
 CASES = [
     ("two modules claiming one FX2 id",
      [_effect("alpha", 0x07), _effect("beta", 0x07)], "fx2 id"),
@@ -116,6 +124,15 @@ CASES = [
       _effect("beta", 0x1e, asm=str(_HARD_ASM))], "X:0x4840 curve bank"),
     ("two modules claiming one DRAM region symbol",
      [_region("alpha", "ring"), _region("beta", "ring")], "DRAM region"),
+    # A hook site is a fixed address whether or not its cave floats. Every
+    # hook-based cave upstream floats, and until the ledger registered
+    # their sites, none of them was checked against anything.
+    ("two floating caves hooking the same instruction",
+     [_cave("alpha", None, hook_addr=0x40004d40),
+      _cave("beta", None, hook_addr=0x40004d40)], "hook site"),
+    ("a floating cave's hook and a detour at one site",
+     [_cave("alpha", None, hook_addr=0x40004b12),
+      _detour("beta", 0x40004b12)], "hook site"),
 ]
 
 CLEAN = [_effect("alpha", 0x07, reserved=(0x0905,)),
