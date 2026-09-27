@@ -209,8 +209,8 @@ every-remix sweep skips, by name, a remix this machine can't build
 
 - ✅ `make setup` ran without Homebrew, because binwalk, radare2 and
   `m68k-elf-gcc` were all on PATH, so step 1 had nothing to install.
-- ✅ `make check REMIX=bamsep26` passed: 454 checks, with 13 of 26 remixes
-  skipped and named. Six carry Octakit (its runtime, as above). Seven carry
+- ✅ `make check REMIX=bamsep26` passed at `3cbf6f8` on a clean tree: 478
+  checks, with 13 of 27 remixes skipped and named. Six carry Octakit (its runtime, as above). Seven carry
   USB MIDI, whose linked unit links here to 1,130 bytes that aren't its
   author's (sha256 `b49af01e…`, not `6291d91e…`), so the build refuses it.
 - 🟡 Inferred: that second refusal is the toolchain too, since the same tree

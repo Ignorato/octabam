@@ -6647,7 +6647,8 @@ Sep 2026 (93 of 93).
 (40 on the eight-track project), and every sample still equals its track's
 read-back. The cause is measured, not the module. The same image and the same
 fixture card give 327 frames under `crosscheck`'s port binary and 302 under
-upstream's. A take runs from the arm to a STOP that `--at` schedules from the
+upstream's; on the eight-track card, 342 and 302 (`5baf399`, 27 Sep 2026).
+A take runs from the arm to a STOP that `--at` schedules from the
 port's frame 0, the first frame after its transport start returns. In
 `stream`'s watch-mem log, the arm is at sample 895,711 and the STOP's
 FINISHING at 923,352 on `crosscheck`, and 895,583 and 922,824 on upstream.
@@ -6727,10 +6728,13 @@ offset from the buffer.
 
 ### 14.2 The take checks on FAT32 ✅
 
-Method: `verify_stems.py`'s FAT32 part (`fat32()`, the `--fat32` flag), 27
-Sep 2026, on a 64 MB image with 512-byte clusters and partition type 0x0c
-(`stems_fixture.py --fat32`: the fixture's card, FAT32), under upstream's
-port, on the `stems` image of section 13.
+Method: `verify_stems.py stems --long --fat32` at `5baf399` on a clean tree,
+27 Sep 2026: 163 checks, 0 failures (the 94 of section 13, 4 for the
+20-second take, 65 on FAT32). The FAT32 card is the fixture's card as a
+128 MB FAT32 image, 512-byte clusters, partition type 0x0c, with 65,536
+clusters of filler in the set folder, so the project, AUDIO and every take
+sit above cluster 65,535 (`stems_fixture.py --fat32`), under upstream's port,
+on the `stems` image of section 13.
 
 **The mount.** ✅ The firmware's mount flag (`0x460d1cb8`, the `FW_CARD_READY`
 of `tools/emu/emu_card.py`) reads `00000001` on the FAT16 card, the control,
@@ -6738,16 +6742,20 @@ and on the FAT32 card. It is a 32-bit word: its first byte is 0 either way,
 which is how the check's first form, reading one byte, failed both cards
 while both were mounted.
 
-**The take checks.** ✅ All pass, 43 checks after the two above: the probe
-of the raw routines, `full`, `rowstop`, `stream`, `wrap`, `cap`, `cut`,
-`exists` and `overflow`. Every frame count, size and sample matches the FAT16
-run of section 13: `full` 402 frames, `stream` 1,702 with the task writing
+**The take checks.** ✅ All pass, 62 checks after the two above: the probe
+of the raw routines (10), `full` (11), `rowstop` (11), `stream` (11), `wrap`
+(10), `cap` (2), `cut` (1), `exists` (2) and `overflow` (4). A first run on
+a 64 MB card put the take at cluster 20,699, below the high word; on the
+filled card `full`'s take starts at cluster 86,235, and a 65th check
+requires it above 65,535. Every frame count, size and sample matches the
+FAT16 run of section 13: `full` 402 frames, `stream` 1,702 with the task writing
 during the take, `wrap` wrapped at the ring's end, `cut` a 0-byte `T1.wav`
 after 1,024 frames streamed, `exists` refused with the first take untouched,
 and `overflow` a whole 4 MiB ring written and closed (4,194,348 bytes).
 
-**One value differs, and it is the cluster size.** ✅ The probe's two raw
-writes return `d0` 512 on FAT32 and 2,048 on FAT16 (section 12.1). Those are
+**One value differs, and it is the cluster size.** ✅ The probe's three raw
+writes each return `d0` 512 on FAT32 and 2,048 on FAT16 (section 12.1,
+whose reading of that value this retracts). Those are
 the two cards' cluster sizes, 1 sector and 4. 🟡 Inferred: the raw write
 returns the bytes of one cluster, or its own write unit, not the bytes the
 caller asked for. The probe's other results, and the file it writes, are the
@@ -6759,3 +6767,12 @@ sector, so the file layer crosses one on every write: the hardest case for
 cluster allocation, not the unit's. A FAT32 image with 32 KB clusters needs
 at least 65,525 clusters, about 2 GB, and wasn't run. Flash A is the first
 test on the real card.
+
+**Also measured (27 Sep 2026, a lead from the final review, re-measured on
+the 128 MB run images).** ✅ The FAT's two copies are equal on the fixture
+card and after `full` and `overflow`, so the firmware keeps the mirror on
+FAT32. ✅ FSInfo's free count is right on the fixture card (169,768) and
+stays 169,768 after `full` (real free count 169,716) and after `overflow`
+(161,574): the firmware doesn't update it, which upgrades 14.1's 🟡 to
+measured under the port. A computer reading the card after a take may show
+stale free space until it recounts.
