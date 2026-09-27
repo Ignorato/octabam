@@ -11,15 +11,15 @@ Presets (`--preset`, default `rig`):
   rig     push-encoder groups 1-4 = DEL send, REV send, LEVEL, AMP VOL per track
           (eight encoders = eight tracks); lower row 1 = BusDelay on T1, row 2 =
           BusVerb on T5, column-aligned: WET TONE TIME, then FDBK/SIZE PING/DIFF
-          SCTR/SHMR DENS/SHFT PTCH/GATE (MODE is on the user buttons, delay SIZE
-          is left off); row 3 = verb DLY (delay feed), scene fader, T8's Character
-          DRV FOLD WDTH COMP TONE MIX (the master, FX1);
+          SCTR/SHMR DENS/- PTCH/GATE; row 3 = verb DLY (delay feed), scene fader,
+          T8's Character DRV FOLD WDTH COMP TONE MIX (the master, FX1);
           buttons 33-40 MUTE, 41-48 SOLO per track.
   t1..t8  one track: groups 1-4 = FX1 page 1, FX1 page 2, FX2 page 1, FX2 page 2
           (LEVEL, AMP VOL, scene fader on the spare encoders); lower rows =
           PLAYBACK, AMP, LFO page 1; buttons as `rig`.
-  Both:   user buttons 49-52 = BusDelay MODE step, BusVerb MODE step, scene A, scene B
-          (CC 48 at 127 / 0); the fader encoder runs 127 -> 0 so left is scene A.
+  Both:   user buttons 49-52 = BusDelay MODE step, BusVerb MODE step, and under them
+          BusDelay SIZE step (4-way), BusVerb SHFT step (6-way); the fader encoder
+          runs 127 -> 0 so left is scene A.
   all     rig then t1..t8; `--store N` stores rig at N and t1..t8 at N+1..N+8.
 
 Without `--store` the preset lands in the BCR's edit buffer only.
@@ -56,9 +56,9 @@ LEVEL, AMPVOL, XFADE, MUTE, SOLO = 46, 25, 48, 49, 50
 ROLES = {1: "DELAY SERVER", 5: "REVERB SERVER"}      # the rig's hosts; every other track runs SEND
 STATIONS = ("SPECTRUM", "CHARACTER", "MODULATION")   # FX1; the track's pick is not known here
 # rig lower rows, as slot numbers of the engines' params (busdelay / busverb manifests)
-# MODE is on the user buttons; the delay's SIZE (grain size, 4-way) is left off; the verb's DLY (delay feed) sits on row 3
+# MODE, the delay's SIZE and the verb's SHFT are on the user buttons; the verb's DLY (delay feed) sits on row 3
 DLY_ROW = (5, 3, 11, 2, 4, 7, 8, 10)    # WET TONE TIME FDBK PING SCTR DENS PTCH
-VRB_ROW = (5, 7, 11, 2, 8, 3, 4, 9)     # WET TONE TIME SIZE DIFF SHMR SHFT GATE
+VRB_ROW = (5, 7, 11, 2, 8, 3, None, 9)  # WET TONE TIME SIZE DIFF SHMR (free) GATE; SHFT steps on user button 52
 MASTER_ROW = (0, 1, 2, 3, 4, 5)         # T8 Character: DRV FOLD WDTH COMP TONE MIX
 
 # BCL acknowledge codes (BCL revision R1); the code is what the unit said.
@@ -92,10 +92,11 @@ def fader(ch):
 
 def user_buttons(channels):
     """The four bottom-right buttons, the same on every preset."""
+    # 49/50 the engines' MODE, 51/52 under them: the delay's grain SIZE (4-way) and the verb's shimmer SHFT (6-way)
     return {49: dict(ch=channels[0], cc=PAGE2["FX2"], label="DLY MODE step", step=(0, 2)),
             50: dict(ch=channels[4], cc=PAGE2["FX2"], label="VRB MODE step", step=(0, 2)),
-            51: dict(ch=channels[0], cc=XFADE, label="SCENE A", shot=127),
-            52: dict(ch=channels[0], cc=XFADE, label="SCENE B", shot=0)}
+            51: dict(ch=channels[0], cc=slot_cc("FX2", 9), label="DLY SIZE step", step=(0, 3)),
+            52: dict(ch=channels[4], cc=slot_cc("FX2", 4), label="VRB SHFT step", step=(0, 5))}
 
 
 def param_knob(ch, page, slot, param, tag):
@@ -117,7 +118,8 @@ def rig_preset(channels):
     # SCTR/SHMR, DENS/SHFT (grain beside shimmer), PTCH/GATE
     for i, (sd, sv) in enumerate(zip(DLY_ROW, VRB_ROW)):
         enc[33 + i] = param_knob(cd, "FX2", sd, dly[sd], "T1 BDLY")
-        enc[41 + i] = param_knob(cv, "FX2", sv, vrb[sv], "T5 BVRB")
+        if sv is not None:
+            enc[41 + i] = param_knob(cv, "FX2", sv, vrb[sv], "T5 BVRB")
     # row 3: the verb's delay feed, the scene fader, the master track's station (T8 FX1 = CHARACTER, docs/effects/MASTER.md)
     enc[49] = param_knob(cv, "FX2", 10, vrb[10], "T5 BVRB")
     enc[50] = fader(channels[0])
