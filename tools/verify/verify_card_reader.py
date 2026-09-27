@@ -14,6 +14,7 @@ one byte of it is seen.
 """
 import hashlib
 import pathlib
+import struct
 import sys
 import tempfile
 
@@ -68,6 +69,22 @@ def main():
               not any(p.startswith(EMPTY) for p in got))
         sha = hashlib.sha256(img16).hexdigest()
         check("FAT16: the image is what upstream's builder made", sha == FAT16_SHA, sha)
+        img32 = ec.build_image(str(tree), 64, fat=32)
+        check("FAT32: the partition type is 0x0c", img32[446 + 4] == 0x0C, f"0x{img32[446 + 4]:02x}")
+        part = struct.unpack_from("<I", img32, 446 + 8)[0] * 512
+        check("FAT32: the BPB says FAT32", img32[part + 82:part + 90] == b"FAT32   ",
+              repr(img32[part + 82:part + 90]))
+        got32 = ec.extract_image(img32)
+        for rel, data in FILES.items():
+            check(f"FAT32: /{rel} ({len(data):,} B)", got32.get(rel) == data,
+                  "" if rel in got32 else "missing")
+        check("FAT32: nothing read back that was not written", set(got32) == set(FILES),
+              f"{sorted(set(got32) - set(FILES))}")
+        try:
+            ec.build_image(str(tree), 16, fat=32)
+            check("FAT32: a 16 MB image is refused (too few clusters)", False)
+        except ValueError as e:
+            check("FAT32: a 16 MB image is refused (too few clusters)", "not FAT32" in str(e), str(e))
     return 1 if fails else 0
 
 
