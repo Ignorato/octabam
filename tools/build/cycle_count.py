@@ -64,8 +64,8 @@ def bank_worst(rows, mods, fx1=(), stock_fx1_keys=()):
       * AT MOST ONE SERVER per core. That is the standing design rule and
         what SPEC enforces by placing only one engine per payload -- so the
         legacy `reverb + delay + 2 sends` figure prices a core for two
-        engines no core ever pays, which PLAN.md already flags as a
-        single-core floor rather than a real configuration.
+        engines no core ever pays: a single-core floor rather than a real
+        configuration.
       * INSERTS ARE UNLIMITED. Nothing stops all four tracks selecting the
         same insert, so the worst case is four copies of the dearest one --
         the number that matters for a card of inserts, and the one no
@@ -73,9 +73,8 @@ def bank_worst(rows, mods, fx1=(), stock_fx1_keys=()):
 
     AND FX1 IS A SECOND SET OF FOUR SLOTS on the same four tracks. A module
     the remix lists on FX1 (Remix.fx1) can be selected there as well, on top
-    of whatever that track's FX2 slot is running -- which is why PLAN.md s2
-    puts FX1's real ceiling at "cycles x4". The dearest FX1-listed module is
-    charged four times.
+    of whatever that track's FX2 slot is running, so FX1's ceiling is
+    "cycles x4": the dearest FX1-listed module is charged four times.
 
     Returns (total, [(name, count), ...]).
     """

@@ -7,6 +7,12 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- Removed (27 Sep 2026): `PLAN.md` (status as of 21 Sep; its memory
+  table is `docs/remixer/PLACEMENT.md`'s), `docs/TIMESTRETCH_PIPELINE.md`
+  (every address retracted, superseded by `docs/firmware/REPITCH.md`) and
+  `tools/hw/hw_flash7_liveclaim.py` (claims about the retired one-aux
+  return). The oracle no longer calls the deleted `oracle.py`; the remix
+  READMEs' links follow the directory layout.
 - Parallel-move folding (27 Sep 2026): an adjacent move and ALU op with
   no dependency between them become one instruction (the parallel move
   reads its source before the op writes). Only forms the stock payloads

@@ -89,7 +89,7 @@ def _image():
 #
 # Read from the pristine image rather than written down, so it cannot drift.
 # (Both stock lists open with a NONE row, id 0x00 -- which our rebuilt FX2
-# list drops. Noted from an outside report; see PLAN.)
+# list drops. Noted from an outside report.)
 FX1_CHOOSER, FX2_CHOOSER = 0x400d6060, 0x400d6090
 _fx1_ids: frozenset[int] | None = None
 

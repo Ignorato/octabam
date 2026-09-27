@@ -47,7 +47,7 @@ candidate's runs are cached.
 
 | check | command (both binaries) | compared |
 |---|---|---|
-| `stock` | `--image <image> --ms 1000 --serial-out --golden` (the ctest `rtos` gate through the CLI) | boot log (paths normalised), `serial.a` / `serial.b` bytes, `golden.json` bytes, plus `tools/emu/ot_emu/oracle.py` on the two goldens |
+| `stock` | `--image <image> --ms 1000 --serial-out --golden` (the ctest `rtos` gate through the CLI) | boot log (paths normalised), `serial.a` / `serial.b` bytes, `golden.json` bytes |
 | `card` | the O14i standard: `--card <card> --mount --set <set> --project <project> --ms 1000 --serial-out --golden` | the same |
 | `render` | the O14k reference: `--card <card2> --mount --set <set> --project <project> --dsp --sequencer --internal-clock --poke-trig 5 --main-level 64 --audio-out <d>/run3 --frames 3000 --pre-roll 200` | `run3_core0.wav` (7,936,292 bytes: 330,677 frames x 8 slots x 24-bit) through `cmp_audio.py` with `--wav-tol`, the batch log |
 | `inter` | `--interactive --card <card> --mount --set <set> --project <project> --internal-clock --rtc 1000000000`, `drive.py`'s sequence: `status`, `frame on`, YES, MIXER, NO, T1 double tap (50 ms down / 150 up / 50 down / 100 up), DOWN, RIGHT, NO, NO, PLAY, 20 x `run 100`, STOP, 5 x `run 100`, `status`, `quit`; `tx` + 9 `peek`s after every step | `ready` line, boot log, every reply (`run` stamps and `wall=`/`idle=` cut out), the UART A byte stream (`tx.bin`, 18.3 KB) and its per-step split, the peeks (sequencer STEP/TICK/TRANSPORT, clock record, UI window, popup record, current track, page kind, PART_PTR, CUR_PATTERN, gain table), the `run` stamps (sample + frame count per run: strict unless `--stamp-tol`/`--frame-tol`) |
@@ -74,7 +74,7 @@ difference, and a SHIFT HINT when B equals A displaced by ±1..3 frames — then
 PASS/FAIL. **Alignment is never tolerated:** the onset frame must be
 identical on both sides (a schedule change may move an LSB, it may not move
 WHEN the audio starts). Byte-identical files short-circuit (no decode).
-Everything else — logs, serial, goldens, `oracle.py`, UART stream, per-step
+Everything else — logs, serial, goldens, UART stream, per-step
 sizes, peeks, replies, `ready` — is always byte-strict, whatever the flags.
 
 **The Phase B contract** (`phase_b.sh`, COLDFIRE_PORT.md O16a):
@@ -129,8 +129,6 @@ redraw, MIXER 1,134, T1 double tap 1,202, PLAY 216, 2 s of play 574, STOP 178).
 
 ## Not covered (say so when a change touches it)
 
-- Route A (`tools/emu/emu_rtos.py`) as the oracle: 100x slower, not in the
-  gate; `tools/emu/ot_emu/oracle.py` is run on the two ports' goldens only.
 - Knobs/encoders (rows 0x30-0x36), FUNC chords, SETUP pages, the file
   browser, the crossfader, audio IN (`--audio-in`), core 1 / `audio start
   cue|all`, `--frame-timer` with `--dsp`, `--boot-logo`, long play (RSS growth),

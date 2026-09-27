@@ -1,10 +1,11 @@
 # Working in this repository
 
-**Read `PLAN.md` first.** It says what octabam is now — a remixer for the
-Octatrack's OS that composes modules, each credited to its author, into
-one image built from the user's own 1.40C — where that
-stands, what is measured about the ground, and the work order.
-`docs/remixer/PLACEMENT.md` is the architecture record for where code goes.
+octabam is a remixer for the Octatrack's OS: it composes modules, each
+credited to its author, into one image built from the user's own 1.40C.
+`README.md` says what each module and remix is and where it has run;
+`CHANGELOG.md` records each flashed image. `docs/remixer/PLACEMENT.md` is
+the architecture record for where code goes and what is measured about
+the memory.
 
 The repo is organised as **modules** (`modules/<name>/manifest.py` declares one
 contribution) composed into **remixes** (`remixes/<name>/remix.py` selects a

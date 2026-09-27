@@ -3,7 +3,7 @@
 
     python3 tools/verify/verify_modenames.py [remix]      (default: bamsep26)
 
-verify_labels' method (PLAN §6), one step further. That file calls each
+verify_labels' method, one step further. That file calls each
 select's formatter on the emulated ColdFire and compares what it PRINTED with
 the manifest, because the words are printed rather than stored. A MODE view
 also REWRITES the descriptor, so this calls the formatter with each mode value

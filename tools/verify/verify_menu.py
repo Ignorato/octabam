@@ -116,7 +116,7 @@ P_FMT1, P_FMT2, P_FMT3 = 0x0ca, 0x0fa, 0x12a
 # uses all-zeros for a plain numeric knob.
 STEPPED_FMT = (0x4003c718, 0x40047254)
 # The ColdFire cave region (docs/firmware/PARAM_PAGES.md section 7): clones, the tempo
-# caves and PLAN §6's label formatters all live in here and nowhere else.
+# caves and the mode-select label formatters all live in here and nowhere else.
 CAVE_LO, CAVE_HI = 0x400d6b20, 0x400d7c3c
 OVF_LO, OVF_HI = 0x400d24d0, 0x400d2ce0
 REG_FMT = {(_c.registers_formatter.module, _c.registers_formatter.slot):
@@ -326,7 +326,7 @@ def main():
                       f"(got 0x{f2:08x}/0x{f3:08x})")
                 continue
             if cnt < 128:
-                # SINCE PLAN §6 the "A" callback may be one of our label
+                # The "A" callback may be one of our label
                 # caves instead of stock's 0x4003c718 -- that is the whole
                 # point: A decides WHAT IS PRINTED, and a select that prints
                 # ROOM/PLATE/BIG rather than 1/2/3 still has to be DRAWN as a
