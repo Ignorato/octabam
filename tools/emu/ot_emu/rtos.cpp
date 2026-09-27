@@ -1573,6 +1573,14 @@ namespace ot
 		}
 		out.handlerEntered = m_machine.pcCount() > 0;
 		m_machine.countPc(1);
+		// Park where the fixed-budget run used to leave the machine: the
+		// engine blocked in its receive and main at its spin, which the
+		// borrowed calls that follow (--call, the sequencer branch) require.
+		if(out.stop == Stop::Gate && runToMainSpin() != Stop::Gate)
+		{
+			out.stop = Stop::Fault;
+			out.stopWhy = m_why;
+		}
 		if(out.stop != Stop::Time && out.stop != Stop::Gate)
 			out.stopWhy = m_why;
 		out.partPtr = m_machine.peek32(g_partPtr);
