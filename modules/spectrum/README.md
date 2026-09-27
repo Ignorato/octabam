@@ -115,8 +115,8 @@ midisc's own build used that run on hardware; in the remixer its
   SEM at SHPE 0 and 127, defaults, zeros and max are bit-identical, and
   SEM at SHPE 64 is bit-identical to main's BP MODE. The SVF loop's two
   channel copies became one body (`do #2`), which paid for the crossfade's
-  words: Spectrum 1,346 → 1,343 words; the SVF loop 132 → 144 words/sample
-  in the pricer (ISO's 263 still prices the station).
+  words: Spectrum 1,338 → 1,337 words (main after #476); the SVF loop
+  127 → 139 words/sample in the pricer (ISO's 262 still prices the station).
 - `verify_labels` calls SHPE's formatter after the MODE formatter in each
   mode: SEM prints 0:LP 32:32 64:BP 96:96 127:HP; LADR, ISO, VOWL print
   the numbers.
