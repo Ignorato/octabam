@@ -3,7 +3,7 @@
 ; zero-delay SEM SVF), ISO (an isolator, Airwindows Capacitor2), VOWL (three
 ; constant-peak-gain formant resonators morphed by FREQ); ENV and LFO onto
 ; the cutoff; mid/side WDTH. Insert
-; contract (modules/ripple/ripple_svf.asm): frames in place at
+; contract: frames in place at
 ; x:(r0)/x:(r0+n0), knobs from r6, state in this instance's r7 block. FX1
 ; only: init reads the allocator base and an FX2 instance runs as a dry pass.
 ; Defaults are a bit-exact passthrough. Every mpy is `mpy x0,y1` but the

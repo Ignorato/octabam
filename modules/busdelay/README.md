@@ -1,7 +1,7 @@
 # BusDelay
 
 A multi-mode delay: CLEAN, GRAIN (a pitched granular cloud over the delay
-lines: Nimbus's grain readers, four per line, one continuous pitch) and
+lines: four grain readers per line, one continuous pitch) and
 REVERSE, with a tape wow on the loop tap in every mode. Hosted
 on payload B (core 1), which serves tracks 1–4. Stage 1 of the one aux bus:
 its output goes on to BusVerb; the repeats come out on the host track.

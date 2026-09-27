@@ -1364,7 +1364,7 @@ def main():
         print(f"    poke 0x{_p.addr:08x}: {_p.expect.hex()} -> {_p.write.hex()}  {_p.note}")
 
     # ---- PLAN §6: the mode selects print their WORDS ---------------------
-    # Every stepped select drew as a bare number -- WarpFold's MODE as `1 2 3`
+    # Every stepped select drew as a bare number -- a MODE select as `1 2 3`
     # where the manifest has said FOLD RING BOTH all along -- because
     # Param.labels was authored, schema-checked against count, and then never
     # read. This is the pass that makes it load-bearing.

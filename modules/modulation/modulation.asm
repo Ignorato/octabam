@@ -4,7 +4,7 @@
 ; (docs/effects/PORTS.md), proven against that float reference. Three sample
 ; loops, one chosen per block: LINE (JUNO, DIM and FLNG differ only in five
 ; per-block mix weights bl bd ff kc kb), PHSR, COMB. Insert contract
-; (modules/ripple/ripple_svf.asm). FX1 only: init reads the allocator base
+; (frames in place, knobs from r6, state in the r7 block). FX1 only: init reads the allocator base
 ; (X:0x213 -> this instance's entry, valid at init and nowhere else); a base
 ; >= 0x4000 is an FX2 slot and proc runs the dry path, which writes nothing
 ; to Y. Two 1,024-word lines (L, R) out of the FX1 slot's 3,072; the read

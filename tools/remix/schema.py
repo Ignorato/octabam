@@ -1119,9 +1119,7 @@ class Remix:
     #     ⚠️ This is not theoretical and it is not new -- docs/firmware/DSP.md's "wrong
     #     claim 1" is this exact failure, bisected on hardware: a 16K layout
     #     at an FX1 base "runs to 0x53ff, through the other FX1 buffers and
-    #     into FX2 slot 0". NIMBUS LITE reads the allocator and IS exposed;
-    #     an earlier draft of this comment claimed nothing was, which was
-    #     wrong -- it had checked only the fixed-base modules.
+    #     into FX2 slot 0".
     #   * A module with FIXED buffers in the FX2 region (BusVerb,
     #     BusDelay). An FX1 instance still writes to Y:0x4000 and up, i.e.
     #     into some other track's FX2 buffer. The hazard exists on FX2 too --
@@ -1200,7 +1198,8 @@ class Remix:
     #
     # ⚠️ The two-grain build is the BETTER-CHECKED one: two triangle windows
     # a half period apart sum to exactly 1, so DC in must come back flat --
-    # the gate that caught Nimbus's double-rate window. Four at quarter
+    # the gate that caught a double-rate window (AGENTS.md, the a0 trap).
+    # Four at quarter
     # offsets have no such exact identity.
     grains: int = 4
     fx1: tuple[str, ...] = ()

@@ -677,7 +677,7 @@ delay). Not present after a reboot.
 **Cause (inferred).** An OS upgrade rewrites program memory but does not
 clear DSP state RAM; an engine skips warm-up when its tagged counter holds
 a valid tag at full count (BusVerb `$2c0000` at `r7+$82`, BusDelay
-`$2e0000`, Nimbus `$2d0000`).
+`$2e0000`).
 
 **Fix.** Power-cycle after every upgrade before judging anything.
 

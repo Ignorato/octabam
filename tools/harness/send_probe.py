@@ -198,7 +198,7 @@ def run(mem, dur, tail, rev_params, send_params, verbose=False, amp=0.5,
             # the image dispatches to the fallback (SPEC aliases it to SEND),
             # which renders a PLAUSIBLE DRY PASSTHROUGH -- peak == amp, THD at
             # the noise floor, no error anywhere. Reproduced with
-            # --pick B against a `bus` image (no BodeShift in it). Check
+            # --pick of a module against an image that does not carry it. Check
             # which code the entry actually points at before running it.
             if c != "S" and ep[c] == entry_points(mem, SERVER_ID["S"]):
                 _m = registry.by_id(SERVER_ID[c])

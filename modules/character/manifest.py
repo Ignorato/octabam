@@ -4,7 +4,7 @@ A per-track insert on stock LO-FI's id 0x1c (FX1 only; an FX2 instance runs
 as a dry pass, decided from the allocator base at init). Chain order:
 fold -> saturate -> tilt -> compress -> width.
 
-  * FOLD -- WarpFold's wavefolder at a held level;
+  * FOLD -- a wrap-and-reflect wavefolder at a held level;
   * SAT -- three JClones (MIT) characters: TAPE = TapeHead (a state-variable
     split at TONE, the low and band parts through a cubic smoothstep, the
     top clean), TUBE = DaTube (u - u^P, the negative half driven twice as

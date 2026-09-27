@@ -326,8 +326,8 @@ def check(selected) -> list[str]:
     # ---- the per-core FX2 instance buffer region --------------------------
     # Y:0x4000-0xBFFF is TWO FX2 instance slots of 16,384 words, per core and
     # not per instance in any sense a module can rely on: BusVerb hardcodes
-    # its tank there, and a second module with fixed buffers there (Nimbus,
-    # until 27 Sep 2026) writes over it. Each works perfectly alone.
+    # its tank there, and a second module with fixed buffers there writes
+    # over it. Each works perfectly alone.
     # Declared rather than scanned -- see Claims.owns_fx2_buffers for why a
     # scan cannot tell an address from a mask.
     # Per CORE: two owners on DIFFERENT payloads never meet (BusVerb's tank

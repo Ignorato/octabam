@@ -120,7 +120,7 @@ def titlecase(s: str) -> str:
         if w.upper() in _ACRONYMS:
             return w.upper()
         if not w.isupper() and any(c.isupper() for c in w[1:]):
-            return w                      # BusDelay, BusVerb, WarpFold
+            return w                      # BusDelay, BusVerb
         return w[:1].upper() + w[1:].lower()
     parts = re.split(r"([ \-/]+)", s)
     return "".join(word(p) if i % 2 == 0 else p
@@ -129,7 +129,7 @@ def titlecase(s: str) -> str:
 
 def disp(mod) -> str:
     """What to CALL a module on screen: the name the panel shows, not the
-    directory slug. `warpfold` is a path; `WarpFold` is what the operator
+    directory slug. `busverb` is a path; `BusVerb` is what the operator
     reads on the unit."""
     if mod.menu is not None:
         return titlecase(mod.menu.fullname.decode("latin1") or mod.name)
@@ -409,7 +409,7 @@ PLATE, SPRING and DARK REV's code IS the donor region, so the `held by` line is 
 You CAN keep them. The build takes only the reverbs your modules actually reach, and the pane says which went (`— Plate Rev  donor, taken`). `remixes/restock.py` is thirteen stock effects plus SEND: the smallest buildable image, costing only PLATE. (Until 2 Sep 2026 all three were nulled unconditionally and the honest answer here was "you cannot, ever". That is no longer true.)
 
 [bold]there is one FX2 buffer per track[/]
-"Free" there means "no module has pinned it", not "unused": a track whose buffer no module claims still HAS that buffer, ready for whatever is selected on it. Only a MODULE claims one for the life of the image. BusVerb holds all four of its core's, BusDelay two of its core's, Nimbus two of whichever core hosts it — and they go in PAIRS, so "4 free" is two pairs, not four independent slots.
+"Free" there means "no module has pinned it", not "unused": a track whose buffer no module claims still HAS that buffer, ready for whatever is selected on it. Only a MODULE claims one for the life of the image. BusVerb holds all four of its core's, BusDelay two of its core's — and they go in PAIRS, so "4 free" is two pairs, not four independent slots.
 
 A stock effect never appears in that row: it takes a slot from the allocator at runtime, per effect per block, only while it is selected on that track — which no image can reserve. That runtime contest is why the ledger refuses an allocating stock effect beside a pinner, and it is what the ⚠ is asking you to remove. FLANGER, CHORUS, SPATIALIZER and COMB FILTER keep their FX1 rows and still work; the three reverbs were FX2-only in stock and are lost outright.
 
@@ -1858,7 +1858,7 @@ class RemixerScreen(Screen):
         more room" and "put it in the strip" pull opposite ways.
 
         Clearing is what is left, and it is the right half of the old
-        behaviour: an action message ("added Nimbus · added Send as the
+        behaviour: an action message ("added BusVerb · added Send as the
         fallback") is context for the moment it happened, so it must not
         still be sitting there describing a row you have since left.
         """
@@ -2214,11 +2214,11 @@ class RemixerScreen(Screen):
             if gone:
                 # NAME THE CULPRIT AND COUNT THEM. Listing seven effects
                 # took four lines of the pane and still did not say WHY or
-                # WHICH module was doing it -- "why did adding nimbus remove
+                # WHICH module was doing it -- "why did adding a module remove
                 # so many?" is the question it produced. The list is one
                 # keystroke away and the reason is what is actually wanted.
                 # BOTH: the cause AND the names. Listing seven names alone
-                # produced "why did adding nimbus remove so many?"; replacing
+                # produced "why did adding a module remove so many?"; replacing
                 # them with a count alone produced "it's worse now that it
                 # doesn't show which ones". The reason belongs first because
                 # it is the question, and the list belongs after it because
