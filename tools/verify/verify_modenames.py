@@ -38,7 +38,7 @@ NAME_LEN = 6
 def main():
     from remix import registry
     import mode_names
-    name = sys.argv[1] if len(sys.argv) > 1 else "bamsep26"
+    name = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REMIX")
     env = {**os.environ, "REMIX": name, "XBUS": "1", "SPEC": "1"}
     r = subprocess.run([sys.executable, "tools/build/build_bus.py"],
                        capture_output=True, text=True, env=env)

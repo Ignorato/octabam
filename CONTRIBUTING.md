@@ -140,7 +140,10 @@ because the author keeps developing where they are:
 ## Gates
 
 **`make check REMIX=<name>` is the floor**, for every remix the change
-reaches. It builds, prices cycles, runs the shared gates (the ledger
+reaches. There is no default remix: every target that builds or checks an
+image takes `REMIX=<name>` and refuses without it (`make modules` lists
+them); a gate that needs a particular image asks the registry for the
+smallest remix carrying what it needs (`registry.fixture`). It builds, prices cycles, runs the shared gates (the ledger
 selftest, the menu, the dirty-state render, the docs, a project under the
 ColdFire port) and then every gate the selected modules declare in their
 manifests (`schema.Gate`, run by `tools/verify/module_gates.py`). A remix
@@ -199,14 +202,14 @@ What `make reach` lists, by what changed:
 |---|---|
 | `modules/<name>/` (a pin bump too) | `make check` and `make accept` for every remix that carries the module |
 | `remixes/<name>/remix.py` | `make check`, `make accept` for that remix |
-| `tools/verify/verify_<x>.py` | `make check` for the remixes of the modules whose manifests name it; the default remix for a shared gate |
-| `tools/build/`, `tools/remix/`, `dsp/` | `scripts/refhash.sh check` (save the baseline on main first), `make check` on the default remix and on `bus`, `make test-acceptance` |
-| `tools/harness/dsp_host/`, `tools/patches/` | `make ci-dsp`, then `make check` (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
-| `tools/emu/` | `make ci-emu`, `make emu-cf`, `make check` with OT_PROJECT |
-| the acceptance runner, the stress generator, `pressure.py` | `make test-acceptance`, `make check`, `make accept` |
+| `tools/verify/verify_<x>.py` | `make check` for the remixes of the modules whose manifests name it; every remix for a shared gate |
+| `tools/build/`, `tools/remix/`, `dsp/` | `scripts/refhash.sh check` (save the baseline on main first), `make test-acceptance`, `make check` on every remix |
+| `tools/harness/dsp_host/`, `tools/patches/` | `make ci-dsp`, then `make check` on every remix (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
+| `tools/emu/` | `make ci-emu`, `make emu-cf`, `make check` on every remix, with OT_PROJECT |
+| the acceptance runner, the stress generator, `pressure.py` | `make test-acceptance`, `make check` and `make accept` on every remix |
 | `docs/`, `*.md` | `python3 tools/verify/verify_docs.py` |
-| `Makefile`, `.github/` | `make check`, `make ci` |
-| anything else | `make check` on the default remix, named as unclassified |
+| `Makefile`, `.github/` | `make check` on every remix, `make ci` |
+| anything else | `make check` on every remix, named as unclassified |
 
 A remix with a DSP module that declares no `dear` makes `make accept`
 report `blocked` with the module's name; say so in the PR. List each

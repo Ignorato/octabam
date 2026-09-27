@@ -92,7 +92,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", required=True, help="project dir (copied; never written)")
     ap.add_argument("--image", default=str(STOCK), help="the image the PORT boots (a built out/mainos_bus.bin, or stock)")
-    ap.add_argument("--remix", default="bus", help="which remix that image is (rig_render resolves ids by it; stock ids always resolve)")
+    ap.add_argument("--remix", default=os.environ.get("REMIX"), help="which remix that image is (rig_render resolves ids by it; stock ids always resolve)")
     ap.add_argument("--set-name", default="OCTABAM")
     ap.add_argument("--name", default="RIG", help="the project's name on the card")
     ap.add_argument("--bank", type=int, default=1)

@@ -54,7 +54,7 @@ def command(gate, remix_name, root=ROOT):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX") or registry.DEFAULT_REMIX)
+    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX"))
     ap.add_argument("--stage", choices=("isolated", "image"), default="isolated")
     ap.add_argument("--list", action="store_true", help="print the commands, run nothing")
     a = ap.parse_args(argv)

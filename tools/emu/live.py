@@ -27,7 +27,7 @@ OUT = ROOT / "out/live"
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX", "bamsep26"))
+    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX"))
     ap.add_argument("--project", default=os.environ.get("OT_PROJECT", ""))
     ap.add_argument("--bank", type=int, default=int(os.environ.get("OT_BANK", "0") or 0))
     ap.add_argument("--image", default="", help="a built image instead of building the remix")

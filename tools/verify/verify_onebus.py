@@ -52,7 +52,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 import send_probe  # noqa: E402
 from remix import registry  # noqa: E402
 
-REMIX = "bamsep26"
+REMIX = registry.fixture("REVERB SERVER", "DELAY SERVER", "SEND", "SPECTRUM", "CHARACTER", "MODULATION", "RIG HOSTS")   # the one-aux rig
 OUT = ROOT / "out/dsp"
 SCRATCH = OUT / "_onebus"
 IMAGE = ROOT / "out/mainos_bus.bin"

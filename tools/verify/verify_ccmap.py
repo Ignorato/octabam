@@ -36,7 +36,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 CAVE_AT = 0x40300000            # a fresh RWX page, away from the OS image
 STOCK_CC = 0x4000e79c
 MSG_AT = 0x47e00000            # scratch for the 3-byte MIDI message
-FIXTURE_REMIX = "bamsep26"     # carries cc-map, BusVerb, BusDelay and Character; no DRAM platform
+from remix import registry  # noqa: E402
+# CC MAP on the two hosts and a station, under unicorn: no DRAM runtime.
+FIXTURE_REMIX = registry.fixture("CC MAP", "REVERB SERVER", "DELAY SERVER", "CHARACTER", without_runtime=True)
 
 
 def _build(remix):

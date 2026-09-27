@@ -152,7 +152,7 @@ def stage(pdir, part, set_name, name, tree, image_mb, bank, card):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("remix", nargs="?", default=registry.DEFAULT_REMIX)
+    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX"))
     ap.add_argument("--project", default=os.environ.get("OT_PROJECT", ""))
     ap.add_argument("--bank", type=int, default=int(os.environ.get("OT_BANK", "0")),
                     help="1-based (or OT_BANK); default: the project's saved bank")

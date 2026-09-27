@@ -68,7 +68,7 @@ def run(cmd, log):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("remix", nargs="?", default=registry.DEFAULT_REMIX)
+    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX"))
     ap.add_argument("--project", default=os.environ.get("OT_PROJECT", ""))
     ap.add_argument("--set-name", default="OCTABAM")
     ap.add_argument("--name", default="SCENESP2")

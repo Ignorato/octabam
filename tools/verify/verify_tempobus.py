@@ -67,7 +67,7 @@ def png(path, w, h, px, scale=4):
 
 
 def main():
-    remix = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REMIX", "bamsep26")
+    remix = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REMIX")
     mods = registry.remix(remix).modules
     if "TEMPO BUS" not in mods:
         print(f"  [SKIP] verify_tempobus: {remix} does not carry TEMPO BUS")

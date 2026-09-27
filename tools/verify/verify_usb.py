@@ -42,7 +42,7 @@ def main():
     if not IMAGE.is_file():
         print("  [FAIL] verify_usb: no out/mainos_bus.bin (make bus)")
         return 1
-    remix = registry.remix(os.environ.get("REMIX") or registry.DEFAULT_REMIX)
+    remix = registry.remix(os.environ.get("REMIX"))
     midi = "USB MIDI" in remix.modules
     audio = "USB AUDIO" in remix.modules
     sock = f"/tmp/ot-usb-{os.getpid()}.sock"     # sun_path is 104 bytes on macOS; the scratch dirs are longer

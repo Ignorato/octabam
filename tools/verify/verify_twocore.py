@@ -40,6 +40,7 @@ import send_probe  # noqa: E402
 OUT = ROOT / "out/dsp"
 SCRATCH = OUT / "_twocore"
 IMAGE = ROOT / "out/mainos_bus.bin"
+PLAIN = registry.fixture("REVERB SERVER", "DELAY SERVER", "SEND")     # the plain two-server image
 DEV_MEM = OUT / "mem_dev_A.mem"
 BLOCKS = 700
 SKEWS = (1, 37, 333, -250)
@@ -80,7 +81,7 @@ PICK = {"RS": 0, "DS": 1, "RDS": 0, "SSR": 0}
 
 def build(env, log):
     r = subprocess.run([sys.executable, "tools/build/build_bus.py"], cwd=ROOT,
-                       env={**os.environ, "REMIX": "bus", **env}, capture_output=True, text=True)
+                       env={**os.environ, "REMIX": PLAIN, **env}, capture_output=True, text=True)
     log.write_text(r.stdout + r.stderr)
     if r.returncode != 0:
         sys.exit(f"build failed ({env}): see {log}")

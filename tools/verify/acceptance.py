@@ -194,7 +194,7 @@ def write_report(out, report):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--remix", default=os.environ.get("REMIX", "bamsep26"))
+    ap.add_argument("--remix", default=os.environ.get("REMIX"))
     fixture = ap.add_mutually_exclusive_group()
     fixture.add_argument("--project", type=pathlib.Path)
     fixture.add_argument("--stress-source", type=pathlib.Path,

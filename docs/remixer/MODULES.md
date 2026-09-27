@@ -800,9 +800,9 @@ catches each collision it claims to.
 
 ## Before you open a PR
 
-- `make check` is the floor. Never claim an effect works because it
-  assembled. `make reach` lists the gates the branch's diff reaches;
-  `RUN=1` runs them.
+- `make check REMIX=<name>` is the floor; there is no default remix.
+  Never claim an effect works because it assembled. `make reach` lists
+  the gates the branch's diff reaches; `RUN=1` runs them.
 - Your gates and your `dear` settings go in the manifest, in the same PR.
 - If you changed the build rather than a module: `scripts/refhash.sh save`
   on a tree you trust, make the change, `scripts/refhash.sh check`; 26

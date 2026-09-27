@@ -291,7 +291,7 @@ def describe(fx, probed):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--remix", default=os.environ.get("REMIX", "bamsep26"))
+    ap.add_argument("--remix", default=os.environ.get("REMIX"))
     ap.add_argument("--source", type=pathlib.Path,
                     default=ROOT / "template_project/Drum Template TGM")
     ap.add_argument("--out", type=pathlib.Path,

@@ -48,7 +48,7 @@ WRITER = 0x40054cd8
 
 def main():
     from remix import registry
-    name = sys.argv[1] if len(sys.argv) > 1 else "bamsep26"
+    name = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("REMIX")
     remix = registry.remix(name)
     mods = registry.modules()
     hidden = [k for k in remix.modules

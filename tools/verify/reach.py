@@ -9,8 +9,9 @@ a module's remixes from the selections, a build change's refhash, a
 verifier's callers. This reads the changed paths (committed and not,
 against the merge-base with `--base`) and prints the commands, one line
 each, with the paths that put them there; `--run` runs them in order and
-stops at the first failure. Paths it cannot place get the floor
-(`make check` on the default remix) and are named as unclassified.
+stops at the first failure. There is no default remix: a path
+it cannot place, a shared gate or a build change reaches EVERY remix, and
+an unclassified path is named as such.
 
 It refuses a tree that is not rebased onto the base (the base must be an
 ancestor of HEAD): gates run before a rebase are not a result (PR #396).
@@ -27,11 +28,9 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-DEFAULT = "bamsep26"          # the Makefile's REMIX default: the rig
-REFHASH_SUBJECT = "bus"       # registry.DEFAULT_REMIX, the refhash gate's subject
 
 # One command per gate; the order is the order they run in.
-ORDER = ("verify_docs", "test-acceptance", "ci-dsp", "ci-emu", "emu-cf", "refhash", "check", "accept", "ci")
+ORDER = ("verify_docs", "selftest", "test-acceptance", "ci-dsp", "ci-emu", "emu-cf", "refhash", "check", "accept", "ci")
 
 
 def cmd_check(remix):
@@ -44,6 +43,7 @@ def cmd_accept(remix):
 
 CMD = {
     "verify_docs": ("verify_docs", "python3 tools/verify/verify_docs.py"),
+    "selftest": ("selftest", "python3 tools/remix/selftest.py"),
     "test-acceptance": ("test-acceptance", "make test-acceptance"),
     "ci-dsp": ("ci-dsp", "make ci-dsp"),
     "ci-emu": ("ci-emu", "make ci-emu"),
@@ -56,11 +56,14 @@ CMD = {
 class Context:
     """What the classifier needs from the registry, so tests can fake it."""
 
-    def __init__(self, module_key, remixes_of, gate_owners, default=DEFAULT):
+    def __init__(self, module_key, remixes_of, gate_owners, remixes):
         self.module_key = module_key        # module directory -> key
         self.remixes_of = remixes_of        # key -> sorted remix names carrying it
         self.gate_owners = gate_owners      # verifier path -> keys whose manifests name it
-        self.default = default
+        self.remixes = remixes              # every remix: the floor, since nothing is the default
+
+    def every(self):
+        return [cmd_check(r) for r in self.remixes]
 
     @classmethod
     def from_registry(cls):
@@ -75,7 +78,8 @@ class Context:
         for m in mods.values():
             for g in getattr(m, "gates", ()):
                 gate_owners.setdefault(g.script, []).append(m.key)
-        return cls(module_key, {k: sorted(v) for k, v in remixes_of.items()}, gate_owners)
+        return cls(module_key, {k: sorted(v) for k, v in remixes_of.items()}, gate_owners,
+                   registry.remix_names())
 
 
 def classify(paths, ctx):
@@ -96,11 +100,11 @@ def classify(paths, ctx):
                     gates = [cmd_check(r) for r in remixes] + [cmd_accept(r) for r in remixes]
                     note = f"{key} -> " + ", ".join(remixes)
                 else:
-                    note = f"{key}: no remix carries it"
-                    gates = [cmd_check(ctx.default)]
+                    note = f"{key}: no remix carries it (the selftest refuses this)"
+                    gates = [CMD["selftest"]]
             else:
                 note = "unknown module directory"
-                gates = [cmd_check(ctx.default)]
+                gates = ctx.every()
         elif top == "remixes" and len(parts) >= 2:
             name = parts[1][:-3] if parts[1].endswith(".py") else parts[1]
             if parts[-1] == "README.md":
@@ -110,7 +114,8 @@ def classify(paths, ctx):
         elif path in ("tools/verify/acceptance.py", "tools/verify/reach.py",
                       "tools/verify/module_gates.py", "tools/harness/stress_project.py",
                       "tools/harness/pressure.py") or path.startswith("tools/verify/tests/"):
-            gates = [CMD["test-acceptance"], cmd_check(ctx.default), cmd_accept(ctx.default)]
+            gates = [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes]
+            note = "the acceptance machinery: every remix"
         elif path.startswith("tools/verify/"):
             owners = ctx.gate_owners.get(path, [])
             remixes = sorted({r for k in owners for r in ctx.remixes_of.get(k, [])})
@@ -118,33 +123,33 @@ def classify(paths, ctx):
                 gates = [cmd_check(r) for r in remixes]
                 note = "a gate of " + ", ".join(owners)
             else:
-                gates = [cmd_check(ctx.default)]
-                note = "a shared gate"
+                gates = ctx.every()
+                note = "a shared gate: every remix"
         elif path.startswith(("tools/remix/", "tools/build/", "dsp/")):
-            gates = [CMD["refhash"], cmd_check(ctx.default), cmd_check(REFHASH_SUBJECT), CMD["test-acceptance"]]
-            note = "the build: reaches every remix; refhash proves the artifacts and reports identical"
+            gates = [CMD["refhash"], CMD["test-acceptance"]] + ctx.every()
+            note = "the build: every remix; refhash proves the artifacts and reports identical"
         elif path.startswith(("tools/harness/dsp_host/", "tools/patches/")) or path in (
                 "scripts/setup.sh", "scripts/vendor.sh"):
-            gates = [CMD["ci-dsp"], cmd_check(ctx.default)]
+            gates = [CMD["ci-dsp"]] + ctx.every()
             note = "the DSP toolchain: rebuild it first (scripts/setup.sh; a dsp_host change in an isolated tree, AGENTS.md)"
         elif path.startswith("tools/emu/"):
-            gates = [CMD["ci-emu"], CMD["emu-cf"], cmd_check(ctx.default)]
+            gates = [CMD["ci-emu"], CMD["emu-cf"]] + ctx.every()
             note = "the ColdFire port: the set gates need OT_PROJECT"
         elif path.startswith(("tools/harness/", "tools/hw/", "tools/panel/", "scripts/")):
-            gates = [cmd_check(ctx.default)]
+            gates = ctx.every()
             if path == "scripts/refhash.sh":
                 gates = [CMD["refhash"]]
         elif path == "Makefile":
-            gates = [cmd_check(ctx.default), CMD["ci"]]
+            gates = ctx.every() + [CMD["ci"]]
         elif path.startswith(".github/"):
             gates = [CMD["ci"]]
         elif path.endswith(".md") or path.startswith("docs/"):
             gates = [CMD["verify_docs"]]
         elif path in ("pyproject.toml", "uv.lock", "LICENSE", ".gitignore", ".gitmodules"):
-            gates = [cmd_check(ctx.default)]
+            gates = ctx.every()
         else:
-            gates = [cmd_check(ctx.default)]
-            note = "unclassified: the floor"
+            gates = ctx.every()
+            note = "unclassified: every remix"
         out.append((path, gates, note))
     return out
 

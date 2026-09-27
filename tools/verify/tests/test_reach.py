@@ -12,7 +12,10 @@ def ctx():
         module_key={"character": "CHARACTER", "miniverb": "MINIVERB", "orphan": "ORPHAN"},
         remixes_of={"CHARACTER": ["bamsep26", "usb"], "MINIVERB": ["miniverb"], "ORPHAN": []},
         gate_owners={"tools/verify/verify_character.py": ["CHARACTER"]},
-        default="bamsep26")
+        remixes=["bamsep26", "miniverb", "usb"])
+
+
+EVERY = ["make check REMIX=bamsep26", "make check REMIX=miniverb", "make check REMIX=usb"]
 
 
 def commands(paths):
@@ -30,10 +33,10 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(commands(["modules/miniverb/upstream"]),
                          ["make check REMIX=miniverb", "make accept REMIX=miniverb STRESS_SOURCE=${STRESS_SOURCE}"])
 
-    def test_module_no_remix_carries_gets_the_floor_and_a_note(self):
+    def test_module_no_remix_carries_is_the_selftests_refusal(self):
         rows = reach.classify(["modules/orphan/manifest.py"], ctx())
         self.assertIn("no remix carries", rows[0][2])
-        self.assertEqual(commands(["modules/orphan/manifest.py"]), ["make check REMIX=bamsep26"])
+        self.assertEqual(commands(["modules/orphan/manifest.py"]), ["python3 tools/remix/selftest.py"])
 
     def test_template_runs_nothing(self):
         self.assertEqual(commands(["modules/_template/manifest.py"]), [])
@@ -46,13 +49,12 @@ class ClassifyTests(unittest.TestCase):
     def test_verifier_reaches_its_owners_remixes(self):
         self.assertEqual(commands(["tools/verify/verify_character.py"]),
                          ["make check REMIX=bamsep26", "make check REMIX=usb"])
-        self.assertEqual(commands(["tools/verify/verify_menu.py"]), ["make check REMIX=bamsep26"])
+        self.assertEqual(commands(["tools/verify/verify_menu.py"]), EVERY)
 
     def test_build_change_needs_refhash(self):
         cmds = commands(["tools/build/build_bus.py"])
-        self.assertEqual(cmds[:1], ["make test-acceptance"])
-        self.assertIn("scripts/refhash.sh check", cmds)
-        self.assertIn("make check REMIX=bus", cmds)
+        self.assertEqual(cmds[:2], ["make test-acceptance", "scripts/refhash.sh check"])
+        self.assertEqual(cmds[2:], EVERY)
 
     def test_runner_changes_need_the_runner_tests(self):
         for p in ("tools/verify/acceptance.py", "tools/verify/tests/test_x.py", "tools/harness/pressure.py"):
@@ -63,11 +65,12 @@ class ClassifyTests(unittest.TestCase):
         self.assertIn("make ci-emu", commands(["tools/emu/ot_emu/machine.h"]))
         self.assertEqual(commands(["docs/remixer/MODULES.md", "README.md"]), ["python3 tools/verify/verify_docs.py"])
         self.assertEqual(commands([".github/workflows/ci.yml"]), ["make ci"])
+        self.assertEqual(commands(["Makefile"]), EVERY + ["make ci"])
 
-    def test_unclassified_gets_the_floor_and_says_so(self):
+    def test_unclassified_reaches_every_remix_and_says_so(self):
         rows = reach.classify(["mystery.bin"], ctx())
         self.assertIn("unclassified", rows[0][2])
-        self.assertEqual(commands(["mystery.bin"]), ["make check REMIX=bamsep26"])
+        self.assertEqual(commands(["mystery.bin"]), EVERY)
 
     def test_order_is_fixed_and_each_command_once(self):
         cmds = commands(["docs/x.md", "modules/character/a.asm", "tools/build/b.py", "modules/character/b.asm"])
