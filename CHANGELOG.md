@@ -7,6 +7,18 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The port's load runs until the engine is idle (28 Sep 2026): LOAD
+  PROJECT entered and the engine back at its queue receive with nothing
+  queued, reported as `LOAD PROJECT handled, N ms after the post`;
+  `--load-ms` is a ceiling (90 s in every harness, was a fixed 20 s run).
+  Under Octakit the handler and the command sys queues behind it take
+  ~32 s emulated (her persistence work on a fresh card); the fixed run
+  started the transport inside it and her page-1 wrapper dropped every CC
+  as busy (bottleservice's set gate). ATA latency 8 samples (~180 us per
+  data sector, `--ata-latency`) instead of 1: sys consumes the engine's
+  reset-time "select bank 0" before the BANK= parse (RTOS_FORK section 7),
+  so mods, ok-ms and rig-mods (Octakit + MIDI SCENES) load instead of
+  halting in Octakit's activation lifecycle. `docs/remixer/EMU.md`.
 - Tape Echo's ColdFire probe (27 Sep 2026): its test vectors are glibc's
   `random()` sequence on every host (macOS's differed, so a failing vector
   here never occurred on the author's Linux), and its host oracle is

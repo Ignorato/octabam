@@ -53,7 +53,7 @@ def expect_view(mod, mode):
 
 def run_port(image, card, set_name, name, track, call, dump, log):
     cmd = [str(EMU), "--image", str(image), "--card", str(card), "--set", set_name, "--project", name,
-           "--mount", "--load-ms", "20000",
+           "--mount", "--load-ms", "90000",
            # both current-track bytes, as a track key moves them: Octakit's editor
            # wrapper halts when the engine's (0x80000000) and the UI's (0x100b14cc) differ
            "--poke-early", f"0x80000000={track};0x100b14cc={track}", "--call", call,
@@ -189,7 +189,7 @@ def main():
             midi.write_text(f"40 B{chan:X} {cc:02X} {want_mode:02X}\n")
             dump, log = OUT / f"cc_{kind}_lanes.bin", OUT / f"cc_{kind}_port.txt"
             cmd = [str(EMU), "--image", str(image), "--card", str(card), "--set", a.set_name, "--project", a.name,
-                   "--mount", "--load-ms", "20000", "--sequencer", "--internal-clock", "--frames", "120",
+                   "--mount", "--load-ms", "90000", "--sequencer", "--internal-clock", "--frames", "120",
                    "--midi", str(midi), "--mem-dump", f"{LANES:#x},576={dump}"]
             with open(log, "w") as f:
                 f.write(" ".join(cmd) + "\n"); f.flush()

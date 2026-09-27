@@ -158,7 +158,7 @@ def main():
                     help="1-based (or OT_BANK); default: the project's saved bank")
     ap.add_argument("--frames", type=int, default=900,
                     help="after the transport start; the delay and the reverb each warm up 256 blocks, in series")
-    ap.add_argument("--load-ms", type=int, default=20000)
+    ap.add_argument("--load-ms", type=int, default=90000, help="ceiling for the load (the port ends it when the engine's queue is idle; bottleservice needs ~32 s)")
     ap.add_argument("--set-name", default="OCTABAM")
     ap.add_argument("--name", default="RIG")
     ap.add_argument("--image-mb", type=int, default=64)

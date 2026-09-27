@@ -91,7 +91,7 @@ def main():
     dump, lanes, rom, log = work / "ram.bin", work / "lanes.bin", work / "rom.bin", OUT / "port.txt"
     tmp = work / "tempo.bin"
     cmd = [str(EMU), "--image", str(image), "--card", str(run_card), "--set", setname,
-           "--project", name, "--load-ms", "20000", "--live", str(fifo),
+           "--project", name, "--load-ms", "90000", "--live", str(fifo),
            "--mem-dump", f"{DUMP_BASE:#x},{DUMP_LEN:#x}={dump};{LIVEB:#x},0x240={lanes};{TEMPO:#x},8={tmp};"
                          f"{ROM_BASE:#x},{ROM_LEN:#x}={rom}"]
     with open(log, "w") as lf:

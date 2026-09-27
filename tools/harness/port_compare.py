@@ -99,7 +99,7 @@ def main():
     ap.add_argument("--part", type=int, default=1)
     ap.add_argument("--tone", default=str(TONE), help="8-channel wav onto RX0 slots 0..7")
     ap.add_argument("--frames", type=int, default=400, help="sequencer frames to run under the port")
-    ap.add_argument("--load-ms", type=int, default=20000)
+    ap.add_argument("--load-ms", type=int, default=90000)
     ap.add_argument("--main-level", type=int, default=64)
     ap.add_argument("--tracks", default="", help="1,2,5 (default: every track whose chain input is not silent)")
     ap.add_argument("--master-off", dest="master_off", action="store_true", default=True)

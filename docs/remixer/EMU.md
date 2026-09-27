@@ -55,8 +55,8 @@ Hastie's) and `git show 3ceba41:docs/history/COLDFIRE_PORT.md` (O1-O14).
 .venv/bin/python3 tools/emu/ot_emu/stage_card.py PROJECT_DIR OCTABAM RIG --out out/card.img \
     [--audio "SRC.wav:RIG/name.wav" --audio "SRC.ot:RIG/name.ot"]   # a sample the part plays
 out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --project RIG \
-    --sequencer --internal-clock --frames 600 --load-ms 20000 --dsp --main-level 64 \
-    [--poke-trig 2] [--audio-in tone.wav] [--block-dump F] [--audio-out PREFIX]
+    --sequencer --internal-clock --frames 600 --load-ms 90000 --dsp --main-level 64 \
+    [--poke-trig 2] [--audio-in tone.wav] [--block-dump F] [--audio-out PREFIX] [--ata-latency SAMPLES]
 ```
 
 - The project's `[STATES] BANK=` is the bank that plays; `--bank N` selects
@@ -124,23 +124,45 @@ nothing reaches TX0 under the port). ~80 s. On the image before PR #271
 it fails T1 and T5 (the tempo cave); on it, 18 checks pass (OCTABAM88
 bank B, 15 Sep 2026).
 
-### Two things the port's load and play do not reproduce (measured 27 Sep 2026)
+### The port's load order and the voice silence (measured 27-28 Sep 2026)
 
-- **Octakit beside MIDI SCENES halts at LOAD** (`mods`, `ok-ms`, `rig-mods`:
-  `load run ended: ILLEGAL -- unimplemented opcode 4afc at 45d173e4` =
-  `gk_lifecycle_activation_publication_report_fatal`). At 56.84 s of the
-  load the engine task writes its current part (`0x80001829 <- 1`, pc
-  `0x400090b6`); 6 ms later the sys task writes the UI's part and its
-  mirror to 0 (`0x100b14cf`, `0x80000003`, pc `0x40062142`): the port's
-  own "sys applied the engine's reset-time 'select bank 0' after the
-  BANK= parse" (saved_bank 2, final bank 0 in the load line). Stock
-  tolerates the disagreement; Octakit's `gk_ui_transition_prepare`
-  compares the three bytes and returns corrupt, and MIDI SCENES' bank and
-  part hooks route the load through that check (`kits`, Octakit alone,
-  loads). `ok-ms` ran on a unit (OKMS2). The fix is in
-  `Rtos::loadProjectLive`'s ordering, against every set gate calibrated to
-  the current one; `--poke-early` applies before a `--call`, not before
-  the load. One `--watch-mem` range per run: the last flag wins.
+- **The load runs until the engine is idle (28 Sep 2026).** Before,
+  `loadProjectLive` ran LOAD PROJECT for a fixed `--load-ms` (20 s in every
+  harness) and moved on. Under Octakit the handler carries her post-load
+  persistence work (`gk_stock_banks_load_work`'s load-or-migrate: 2.7 G
+  instructions, 13,682 sectors written on a fresh card) and `sys` queues a
+  second engine command behind it while it runs (her background banks-load
+  path, ~360 M instructions more, the hosts muted throughout). With the
+  20 s budget the transport started inside that work: her lifecycle state
+  was still QUIESCED and her page-1 wrapper (`gk_stock_track_parameter_absolute`)
+  returned busy for every CC (bottleservice's set gate: CC 40/41 never
+  reached the hosts). The port now counts the handler's entry
+  (`0x40085336`) from before the post and runs until the engine is at its
+  queue receive (`0x4008484e`) with the queue's count (`4(0x460d17ce)`,
+  what the receive tests before blocking) zero, and prints
+  `load run ended: LOAD PROJECT handled, N ms after the post` or
+  `STILL RUNNING at the budget (raise --load-ms)`. bottleservice on
+  OCTABAM89_setgate: handled 31.7 s after the post. `--load-ms` is a
+  ceiling now, 90 s by default in every harness; a run that hits it is
+  reported, not silently cut short.
+- **The load ends on the saved bank since 27 Sep 2026** (`saved_bank 2,
+  final bank 2`), because the port's ATA latency is 8 samples (~180 us
+  per data sector; `--ata-latency` overrides it). At the old 1 sample
+  `sys` consumed the engine's own reset-time "select bank 0" AFTER the
+  BANK= parse on the ok-ms image (RTOS_FORK section 7: the unit does not,
+  measured 6 Sep 2026), so that load ended on bank A and the sequencer
+  branch re-selected the saved bank afterwards. With Octakit's lifecycle
+  checks in the image the late select was fatal: `mods`, `ok-ms` and
+  `rig-mods` halted at LOAD (`illegal` at `0x45d173e4` =
+  `gk_lifecycle_activation_publication_report_fatal`) because the engine
+  had written its part (`0x80001829 <- 1`) 6 ms before `sys` wrote the
+  UI's part and mirror to 0 (`0x100b14cf`, `0x80000003`), and
+  `gk_ui_transition_prepare` compares the three. At 8 samples no `sys`
+  write to `0x80000002` follows the parse and those remixes load (ok-ms's
+  set gate: 0 failures at 8 and at 32). Why the latency changes the order
+  is inferred (the engine blocks longer per sector, so `sys` drains its
+  queue earlier), not traced. One `--watch-mem` range per run: the last
+  flag wins.
 - **No card-sample voice has started under the port on this machine.**
   `verify_repitch`'s and `verify_euclid`'s playback fixtures (FLEX and
   STATIC, two source projects, stored banks synced or not, MIDI sync off)
@@ -179,7 +201,7 @@ framing (`docs/firmware/PANEL.md` §4b), and MIDI over UART0:
 ```
 mkfifo out/panel.fifo
 ./out/emu/ot_emu --image out/raw/section_3_MAIN_OS.bin --card out/card.img --set OCTABAM --project RIG \
-    --load-ms 20000 --dsp --lcd out/lcd.bin --live out/panel.fifo
+    --load-ms 90000 --dsp --lcd out/lcd.bin --live out/panel.fifo
 .venv/bin/python3 tools/emu/lcd_view.py out/lcd.bin --panel out/panel.fifo     # other terminal
 ```
 
@@ -295,7 +317,7 @@ Stock 1.40C, the rig project, `--sequencer --internal-clock --dsp`:
 | phase | emulated | wall | ratio |
 |---|---|---|---|
 | boot to the handoff | 205 ms, 10.2 M instructions | 3.5 s | 17× |
-| load (`--load-ms 20000`, DSPs stepping through the idle skips) | 20 s | ~35 s | 1.7× |
+| load (a fixed `--load-ms 20000` then; since 28 Sep 2026 it ends when the engine is idle: 14.9 s stock, 31.7 s under Octakit, `--load-ms 90000` the ceiling) | 20 s | ~35 s | 1.7× |
 | play (400 → 1200 frames) | 290 ms of audio | ~2.9 s | **~10×** |
 
 The play phase runs 23,946 ColdFire instructions per 16-sample frame =
