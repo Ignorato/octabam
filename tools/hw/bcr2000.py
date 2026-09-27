@@ -30,9 +30,10 @@ treats as "on" is not measured here.
 
 The OT: PROJECT > MIDI > CONTROL > AUDIO CC IN on; each track's trig channel
 set (T1-8 = 1-8 is the default, `--channels` follows the project).
-The BCR: mode U-1 for USB (hold EDIT, press STORE for the global setup);
-a preset stored over USB survives a switch to S-1 for a DIN cable OUT A ->
-the OT's MIDI IN, which is the route without the Mac.
+The BCR's mode (hold EDIT, press STORE; encoder 1; EXIT): U-1 over its own USB
+(DIN ports off); S-4 over a DIN interface (`--port UM-ONE`: interface OUT ->
+BCR IN, BCR OUT A -> interface IN). Playing the OT: S-4, BCR OUT A -> OT MIDI
+IN, no Mac.
 
 SysEx: F0 00 20 32 <dev> <model> 20 <idx hi> <idx lo> <ascii line> F7 per
 BCL line, dev/model 7F = any; the ack is ... 21 <idx hi> <idx lo> <err> F7,
@@ -214,7 +215,7 @@ def main():
     if a.cmd == "ping":
         err, raw = BCR(a.port).line(0, "$rev R1", a.timeout)
         if raw is None:
-            sys.exit(f"no reply within {a.timeout}s (unit off, not in U-1, or its USB is not answering)")
+            sys.exit(f"no reply within {a.timeout}s (USB needs mode U-1; a DIN interface needs S-4 with its OUT on the BCR's IN and the BCR's OUT A on its IN)")
         print("ack", " ".join("%02x" % x for x in raw), "->", err, ERRORS.get(err, "?"))
         return
 
