@@ -32,7 +32,7 @@ python3 tools/emu/ot_emu/stage_card.py out/stress-project OCTABAM STRESS \
   --audio out/stress-project/AUDIO/STRESS_LOOP.wav:STRESS/AUDIO/STRESS_LOOP.wav
 out/emu/ot_emu --image out/mainos_bus.bin --card out/stress-run/card.img \
   --set OCTABAM --project STRESS --sequencer --internal-clock \
-  --frames 2500 --load-ms 20000 --dsp --main-level 64 \
+  --frames 2500 --load-ms 90000 --dsp --main-level 64 \
   --audio-out out/stress-run/smoke
 ```
 

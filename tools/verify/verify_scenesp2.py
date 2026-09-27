@@ -110,7 +110,7 @@ def main():
     if r.returncode:
         sys.exit(f"verify_scenesp2: stage_card failed:\n{r.stdout[-1000:]}{r.stderr[-1000:]}")
     base = [str(EMU), "--image", str(image), "--card", str(card), "--set", a.set_name, "--project", a.name,
-            "--load-ms", "20000"]
+            "--load-ms", "90000"]
     fails = 0
 
     def check(msg, ok):

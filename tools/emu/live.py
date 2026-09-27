@@ -73,7 +73,7 @@ def main():
     fifo, lcd, log = work / "panel", OUT / "lcd.bin", OUT / "port.txt"
     os.mkfifo(fifo)
     cmd = [str(EMU), "--image", str(image), "--card", str(card), "--set", a.set_name,
-           "--project", a.name, "--load-ms", "20000", "--live", str(fifo), "--lcd", str(lcd)]
+           "--project", a.name, "--load-ms", "90000", "--live", str(fifo), "--lcd", str(lcd)]
     if not a.mki:
         cmd.append("--mkii")
     print("emu-live: booting (the screen appears once the project has loaded; ~30 s)")

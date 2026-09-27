@@ -61,6 +61,24 @@ namespace ot
 	inline constexpr uint32_t g_projectName = 0x100f8378;	// current PROJECT folder
 	inline constexpr uint32_t g_postLoad    = 0x40023c7c;	// (name*) -> posts engine command 4
 	inline constexpr uint32_t g_partPtr     = 0x46c82456;	// null until a project loads
+	// The engine's command loop: a queue receive (`pea 0x460d17ce / jsr
+	// 0x40000d00` at 0x4008484e) and a `jmp` through the 45-entry table at
+	// 0x40084870; every handler ends by jumping back to the receive. LOAD
+	// Measured 28 Sep 2026:
+	// Octakit's post-load persistence work (her banks-load wrapper's
+	// load-or-migrate, 2.7 G instructions of card writes on a fresh card)
+	// runs inside that handler, and a fixed load budget left it running
+	// into the transport, her lifecycle QUIESCED and every page-1 write
+	// dropped as busy (bottleservice's CC 40/41 at --ata-latency 8).
+	// PROJECT is entry 4 = 0x40085336. The receive blocks when the queue's
+	// count (`tstl 4(queue)` at 0x40000d1c) is zero, so the load is COMPLETE
+	// when the engine has entered the handler and is next at the receive
+	// with an empty queue: the handler's own return is followed at once by
+	// a second command sys posted while it ran (Octakit's background
+	// banks-load path, ~360 M instructions, the hosts muted throughout).
+	inline constexpr uint32_t g_engineQueue   = 0x460d17ce;
+	inline constexpr uint32_t g_engineReceive = 0x4008484e;
+	inline constexpr uint32_t g_loadHandler   = 0x40085336;
 
 	// ✅ O7b, 8 Sep 2026. `sys`'s media case reloads the current project when
 	// one is named: `0x4006203a` calls `0x40056744` and, if it answers ZERO,
@@ -379,7 +397,11 @@ namespace ot
 			// How the load's own run ENDED. Time is the ordinary case (the
 			// budget ran out); Fault/Illegal say the machine stopped, which
 			// the ATA counts alone cannot distinguish from a stall.
-			Stop stop = Stop::Time; std::string stopWhy; };
+			// Gate = the LOAD PROJECT handler was entered and the engine is back
+			// at its queue receive (the load is complete); Time = the budget ran
+			// out first (`handlerEntered` says how far it got).
+			Stop stop = Stop::Time; std::string stopWhy;
+			bool handlerEntered = false; double handledMs = 0; uint64_t handledInstr = 0; };
 		// ⚠️ `_namesEarly` DECIDES WHETHER THE PROJECT LOADS ONCE OR TWICE, and
 		// it is a property of the HARNESS, not of the firmware. See
 		// `g_mediaCaseJoin`: with the name already written when `sys` runs its
