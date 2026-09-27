@@ -6656,3 +6656,63 @@ Its sector count, the part that shows STEM REC's behavior, is unchanged.
 frames into play" is `crosscheck`'s port. 🟡 On upstream's port it lands
 about 2 frames into play: inferred from frame 0's shift above, not measured
 on its own.
+
+## 14. FAT32
+
+Every take before this section ran on a FAT16 image. The unit's card is
+FAT32.
+
+### 14.1 The mount, read from the image ✅
+
+Method: `scripts/disasm.sh emac` over `0x400168e8` (512 bytes),
+`0x40017ad4` (768 bytes, then 176 more from `0x40017dd0`) and `0x40017250`
+(512 bytes), and a search of the image for literals, 27 Sep 2026. Image
+SHA-256 `164f31224bf61181e3f50e7dec40df9afcae5b16dbf6e4c0d0cc5e986af0a84e`.
+The two `.short 0x02c0` forms in these listings are `byterev`, which the
+disassembler doesn't know; they turn the card's little-endian fields around.
+
+**The partition types.** ✅ The mount (`0x400168e8`) reads sector 0 into
+`0x4ece3000` and refuses it without `0x55aa` at offset 0x1fe (`-37`). With
+an MBR, it reads the first partition's type byte (offset 0x1c2). It takes
+6, 0x0e and 4 at `0x40016982`..`0x40016996`, and 0x0b and 0x0c through
+`(type - 11) <= 1` at `0x40016998`..`0x400169a4`; any other type is `-38`.
+So FAT32's two types are accepted. The header of `tools/emu/emu_card.py`,
+which lists 4, 6 and 0x0e, is incomplete. The partition's start and size
+(offsets 0x1c6 and 0x1ca) go to `0x460bac10` and `0x460bac14`.
+
+**A card with no MBR.** ✅ When sector 0 begins `EB 58 90` (`0x4001693c`),
+the jump a FAT32 boot sector carries, the mount takes sector 0 as the boot
+sector (start 0) and calls `0x4001765c`, which must return 2 or 3. 🟡 That
+routine isn't read; what it tests is open.
+
+**The boot sector.** ✅ The check (`0x40017ad4`) reads the partition's first
+sector and requires `0x55aa` (`-35`) and 512-byte sectors (offset 0x0b,
+`-36`). It takes the total sectors from offset 0x13, or 0x20 when that is 0,
+and the FAT size from offset 0x16, or from FAT32's offset 0x24 when that is
+0 (`0x40017b82`..`0x40017b9c`).
+
+**The FAT-size limit applies to FAT32.** ✅ The FAT size, from either field,
+must be at most 16,384 sectors (`0x40017ba8`, `-34`). The mount reads the
+whole FAT into DRAM at `0x4eceb400`, 256 sectors at a time
+(`0x40017d80`..`0x40017db0` for FAT32), and 16,384 sectors fill that cache
+to `0x4f4eb400` exactly: 8 MiB. 🟡 Inferred from the arithmetic, a card of
+"64 GB" (64 × 10^9 bytes) formatted with 32 KB clusters has about 1.95
+million clusters and a FAT of about 15,260 sectors, which fits. A FAT32
+card much above 68 GB with 32 KB clusters would not.
+
+**The cluster count decides the type.** ✅ Clusters are (total sectors −
+FATs × FAT size − reserved sectors − root entries / 16) / sectors per
+cluster (`0x40017be4`..`0x40017bf8`; the `remsl` there has one register for
+quotient and remainder, so it keeps the quotient). 4,084 or fewer: `-38`,
+refused. Up to 65,524: FAT16. More: the FAT32 path at `0x40017d12`.
+
+**The FAT32 path.** ✅ It sets a FAT32 flag (`0x46107991` := 1), takes the
+root directory's first cluster from offset 0x2c (`0x40017d32`) and computes
+its sector from it, reads the whole FAT, then reads the FSInfo sector
+(offset 0x30) into `0x4f4eb400`, the buffer just past the FAT cache, and
+calls `0x40017250`. That routine walks the cached FAT from entry 2 and builds
+the free-cluster map itself. ✅ The image holds `0x4f4eb400` as a literal
+once, at that read (`0x40017dc6`), and never `0x4f4eb5e8` or `0x4f4eb5ec`,
+FSInfo's free count and next-free hint. 🟡 So the firmware neither uses nor
+updates them. Falsifier: code reaching those fields through a register
+offset from the buffer.
