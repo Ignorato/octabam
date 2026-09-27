@@ -265,6 +265,14 @@ verify: ## Verify the ColdFire menu edits, module ledger (+ burn probe when it f
 	@# the page-2 editor with a scene held writing the pool; SKIPs without
 	@# OT_PROJECT (above).
 	python3 tools/verify/verify_scenesp2.py $(REMIX)
+	@# STEM REC: its row, hooks and DRAM regions in the built image, then
+	@# (with the port built and tools/verify/stems_fixture.py's cards on
+	@# disk) its takes under the port; a remix without it is a one-line pass.
+	@# The card reader's round trip first: every take is read back through it.
+	@if [ -x .venv/bin/python3 ]; then \
+	  .venv/bin/python3 tools/verify/verify_card_reader.py && \
+	  .venv/bin/python3 tools/verify/verify_stems.py $(REMIX); \
+	else echo "  [SKIP] card reader / STEM REC: no .venv (make emu-setup)"; fi
 
 .PHONY: verify-roll
 verify-roll: ## Prove an alternate REVERB engine is bit-identical: make verify-roll CAND=cand.asm [REF=modules/busverb/reverb_server.asm]
