@@ -15,7 +15,8 @@ def ctx():
         remixes=["bamsep26", "miniverb", "usb"])
 
 
-EVERY = ["make check REMIX=bamsep26", "make check REMIX=miniverb", "make check REMIX=usb"]
+EVERY = ['make check-shared REMIXES="bamsep26 miniverb usb"',
+         "make check-remix REMIX=bamsep26", "make check-remix REMIX=miniverb", "make check-remix REMIX=usb"]
 
 
 def commands(paths):
@@ -25,7 +26,8 @@ def commands(paths):
 class ClassifyTests(unittest.TestCase):
     def test_module_reaches_every_remix_that_carries_it(self):
         cmds = commands(["modules/character/engine.asm"])
-        self.assertEqual(cmds, ["make check REMIX=bamsep26", "make check REMIX=usb",
+        self.assertEqual(cmds, ['make check-shared REMIXES="bamsep26 usb"',
+                                "make check-remix REMIX=bamsep26", "make check-remix REMIX=usb",
                                 "make accept REMIX=bamsep26 STRESS_SOURCE=${STRESS_SOURCE}",
                                 "make accept REMIX=usb STRESS_SOURCE=${STRESS_SOURCE}"])
 
@@ -48,7 +50,8 @@ class ClassifyTests(unittest.TestCase):
 
     def test_verifier_reaches_its_owners_remixes(self):
         self.assertEqual(commands(["tools/verify/verify_character.py"]),
-                         ["make check REMIX=bamsep26", "make check REMIX=usb"])
+                         ['make check-shared REMIXES="bamsep26 usb"',
+                          "make check-remix REMIX=bamsep26", "make check-remix REMIX=usb"])
         self.assertEqual(commands(["tools/verify/verify_menu.py"]), EVERY)
 
     def test_build_change_needs_refhash(self):
@@ -76,7 +79,11 @@ class ClassifyTests(unittest.TestCase):
         cmds = commands(["docs/x.md", "modules/character/a.asm", "tools/build/b.py", "modules/character/b.asm"])
         self.assertEqual(cmds[0], "python3 tools/verify/verify_docs.py")
         self.assertEqual(len(cmds), len(set(cmds)))
-        self.assertLess(cmds.index("scripts/refhash.sh check"), cmds.index("make check REMIX=bamsep26"))
+        self.assertLess(cmds.index("scripts/refhash.sh check"), cmds.index('make check-shared REMIXES="bamsep26 miniverb usb"'))
+        self.assertLess(cmds.index('make check-shared REMIXES="bamsep26 miniverb usb"'), cmds.index("make check-remix REMIX=bamsep26"))
+
+    def test_one_remix_stays_make_check(self):
+        self.assertEqual(commands(["remixes/miniverb/remix.py"])[0], "make check REMIX=miniverb")
 
     def test_remixes_reached(self):
         rows = reach.classify(["modules/character/a.asm", "remixes/miniverb/remix.py"], ctx())
