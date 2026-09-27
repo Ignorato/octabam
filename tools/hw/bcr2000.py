@@ -11,8 +11,8 @@ Presets (`--preset`, default `rig`):
   rig     push-encoder groups 1-4 = DEL send, REV send, LEVEL, AMP VOL per track
           (eight encoders = eight tracks); lower row 1 = BusDelay on T1, row 2 =
           BusVerb on T5, column-aligned: WET TONE TIME, then FDBK/SIZE PING/DIFF
-          SCTR/SHMR DENS/DLY PTCH/GATE; row 3 = scene fader, T8's Character SAT
-          DRV FOLD WDTH COMP TONE MIX (the master, FX1; SAT is page 2, CC 68);
+          SCTR/SHMR DENS/DLY PTCH/GATE; row 3 = T8's Character SAT DRV FOLD WDTH
+          COMP TONE MIX (the master, FX1; SAT is page 2, CC 68), then the scene fader;
           buttons 33-40 MUTE, 41-48 SOLO per track.
   t1..t8  one track: groups 1-4 = FX1 page 1, FX1 page 2, FX2 page 1, FX2 page 2
           (LEVEL, AMP VOL, scene fader on the spare encoders); lower rows =
@@ -120,11 +120,11 @@ def rig_preset(channels):
         enc[33 + i] = param_knob(cd, "FX2", sd, dly[sd], "T1 BDLY")
         if sv is not None:
             enc[41 + i] = param_knob(cv, "FX2", sv, vrb[sv], "T5 BVRB")
-    # row 3: the scene fader, then the master track's station (T8 FX1 = CHARACTER, docs/effects/MASTER.md)
-    enc[49] = fader(channels[0])
+    # row 3: the master track's station (T8 FX1 = CHARACTER, docs/effects/MASTER.md), then the scene fader
     ch8, chr_ = channels[7], mods["CHARACTER"].params
     for i, slot in enumerate(MASTER_ROW):
-        enc[50 + i] = param_knob(ch8, "FX1", slot, chr_[slot], "T8 MASTER")
+        enc[49 + i] = param_knob(ch8, "FX1", slot, chr_[slot], "T8 MASTER")
+    enc[56] = fader(channels[0])
     return "OCTABAM RIG", enc, mute_solo(channels)
 
 
