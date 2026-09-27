@@ -124,7 +124,7 @@ def rig_preset(channels):
     ch8, chr_ = channels[7], mods["CHARACTER"].params
     for i, slot in enumerate(MASTER_ROW):
         enc[49 + i] = param_knob(ch8, "FX1", slot, chr_[slot], "T8 MASTER")
-    enc[56] = fader(channels[7])     # the crossfader is global; sent on T8's channel
+    enc[56] = fader(channels[0])
     return "OCTABAM RIG", enc, mute_solo(channels)
 
 
@@ -149,7 +149,7 @@ def track_preset(track, channels):
         default = st[0][s].default
         enc[1 + s + 2 * (s // 6)] = knob(ch, slot_cc("FX1", s), f"T{track} FX1 {'/'.join(sorted(names)) or '-'}", count, default)
         enc[17 + s + 2 * (s // 6)] = param_knob(ch, "FX2", s, fx2[s], f"T{track} FX2")
-    enc[7], enc[8], enc[15] = knob(ch, LEVEL, f"T{track} LEVEL"), knob(ch, AMPVOL, f"T{track} AMP VOL"), fader(channels[7])
+    enc[7], enc[8], enc[15] = knob(ch, LEVEL, f"T{track} LEVEL"), knob(ch, AMPVOL, f"T{track} AMP VOL"), fader(ch)
     for row, page in enumerate(("PB", "AMP", "LFO")):
         for s in range(6):
             enc[33 + 8 * row + s] = knob(ch, PAGE1[page] + s, f"T{track} {page} {s+1}")
