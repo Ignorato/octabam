@@ -13,9 +13,10 @@ The variant is Sam Banks's (27 Sep 2026):
   as EXTENDED's channels 15/16, the same 24-bit format) and writes one
   8-byte slot per frame into a 1,024-frame ring. No other track, no
   MAIN/CUE, no stereo sum.
-- **Both speeds send the same ring.** High speed: 11/12 frames, at most
-  96 bytes, every 250 µs. Full speed: 44/45 frames, at most 360 bytes,
-  every 1 ms.
+- **Both speeds send the same ring, one packet a millisecond.** 44.1
+  frames × 8 bytes is 353 bytes, one transaction, so high speed polls every
+  1 ms (bInterval 4) as full speed does: 44/45 frames, at most 360 bytes.
+  EXTENDED and FULL poll every 250 µs at high speed.
 - **Descriptors.** USB MIDI's descriptor unit declares a two-channel input
   with bmChannelConfig front left + front right (`0x3`, the standard stereo
   cluster) in the input terminal and AS_GENERAL, at both speeds; 24-bit
@@ -28,21 +29,29 @@ The variant is Sam Banks's (27 Sep 2026):
 `verify_usb` with `REMIX=usb-master` and `REMIX=bottleservice`
 (27 Sep 2026):
 
-- EP `0x83` isochronous, 96 bytes, bInterval 2; AS_GENERAL 2 channels,
+- EP `0x83` isochronous, 360 bytes, bInterval 4; AS_GENERAL 2 channels,
   bmChannelConfig `0x3`.
-- 88/96-byte packets, none empty after the first ten; every subslot's low
-  byte zero; counters: 0 overruns, 0 underruns.
+- 352/360-byte packets at high speed, none empty after the first ten;
+  every subslot's low byte zero; counters: 0 overruns, 0 underruns.
 - Taps: with the read-back arena re-poked before every poll with words that
   name their source, side and frame, channel 1 carries T8 L and channel 2
   T8 R, only those, at high speed and at full speed.
 
-## Per block
+## Per block and per millisecond
 
-Instructions executed per block by the producer at high speed, counted
-from the source: about 180 (10 per frame), against about 2,710 for
-EXTENDED; 32 read-back words read per block against 320. The copy into
-each packet moves 88–96 bytes against 880–960. Not cycles: `modules/cfmeter`
-(CF METER) measures the frame interrupt's duration on a unit.
+Counted from the source, instructions executed (not cycles):
+
+| | EXTENDED | MASTER |
+|---|---|---|
+| producer, per block (16 frames) | ~2,710 | ~180 |
+| read-back words read per block | 320 | 32 |
+| packets built per ms (high speed) | 4 | 1 |
+| bytes copied into packets per ms | ~3,530 | ~353 |
+| packet builder + copy per ms | ~750 | ~250 |
+
+`modules/cfmeter` (CF METER) measures the frame interrupt's duration and
+main's idle time on a unit; the port's `--profile` samples every 64
+instructions and gives no exact count.
 
 ## Not measured
 

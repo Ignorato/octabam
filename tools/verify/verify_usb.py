@@ -35,13 +35,13 @@ IMAGE = ROOT / "out/mainos_bus.bin"
 MIDI_FIFO_HEAD = 0x46100b80         # midi_rx_fifo_head: +1 per byte midi_rx_enqueue (0x40092bbc) takes
 
 # The three USB audio modules (one source, modules/usb-audio-extended/usbaudio.s):
-# high-speed channels, packet cap, bytes per frame, and what each channel
+# high-speed channels, packet cap, bInterval (2 = 250 us, 4 = 1 ms), and what each channel
 # carries as (source, L/R): source 0-7 = track 1-8's read-back words, 8 =
 # MAIN, 9 = CUE.
 LAYOUTS = {
-    "USB AUDIO EXTENDED": (20, 960, [(t, c) for t in range(8) for c in (0, 1)] + [(8, 0), (8, 1), (9, 0), (9, 1)]),
-    "USB AUDIO FULL": (16, 768, [(t, c) for t in range(8) for c in (0, 1)]),
-    "USB AUDIO MASTER": (2, 96, [(7, 0), (7, 1)]),
+    "USB AUDIO EXTENDED": (20, 960, 2, [(t, c) for t in range(8) for c in (0, 1)] + [(8, 0), (8, 1), (9, 0), (9, 1)]),
+    "USB AUDIO FULL": (16, 768, 2, [(t, c) for t in range(8) for c in (0, 1)]),
+    "USB AUDIO MASTER": (2, 360, 4, [(7, 0), (7, 1)]),
 }
 RB_BASE, MC_BASE = 0x80003190, 0x80005e60   # the tracks' read-back arena (2 banks) and MAIN/CUE (usbaudio.s)
 
@@ -119,11 +119,14 @@ def main():
             as_ = [d for d in ifaces if d[5:7] == bytes([1, 2])]
             check("USB AUDIO: a UAC2 AudioStreaming interface 4 with alt 0 and alt 1",
                   sorted((d[2], d[3]) for d in as_) == [(4, 0), (4, 1)], str([(d[2], d[3]) for d in as_]))
-            nch, maxpkt, taps = LAYOUTS[audio]
+            nch, maxpkt, bint, taps = LAYOUTS[audio]
             frame_b = 4 * nch
+            per = (10, 11, 12) if bint == 2 else (43, 44, 45, 46)     # frames per packet the servo can send
             iso = [d for d in eps if d[2] == 0x83]
-            check(f"{audio}: EP 0x83 isochronous, {maxpkt} bytes, bInterval 2",
-                  len(iso) == 1 and (iso[0][3] & 3, iso[0][4] | iso[0][5] << 8, iso[0][6]) == (1, maxpkt, 2),
+            if iso:                                              # poll at the rate the descriptor asks for
+                b.iso_hz(8000 // (1 << (iso[0][6] - 1)))
+            check(f"{audio}: EP 0x83 isochronous, {maxpkt} bytes, bInterval {bint}",
+                  len(iso) == 1 and (iso[0][3] & 3, iso[0][4] | iso[0][5] << 8, iso[0][6]) == (1, maxpkt, bint),
                   str([(d[3], d[4] | d[5] << 8, d[6]) for d in iso]))
             asg = cfg.find(bytes([16, 0x24, 1]))                 # CS AS_GENERAL: bNrChannels at +10, bmChannelConfig +11
             check(f"{audio}: AS_GENERAL declares {nch} channels",
@@ -142,8 +145,8 @@ def main():
             check("USB AUDIO: GET_INTERFACE reports alt 1", alt == b"\x01", alt.hex())
             got = [b.ep_in(3, 1024) for _ in range(800)]        # 200 ms of device time at the 250 us poll
             sizes = sorted({len(g) for g in got[10:]})           # the first polls may land before the first prime
-            check(f"{audio}: 800 polls on EP3 carry 10-12-frame packets of {frame_b} B and none empty after the first ten",
-                  bool(sizes) and all(s in (10 * frame_b, 11 * frame_b, 12 * frame_b) for s in sizes), f"sizes {sizes}")
+            check(f"{audio}: 800 polls on EP3 carry {per[0]}-{per[-1]}-frame packets of {frame_b} B and none empty after the first ten",
+                  bool(sizes) and all(s in [n * frame_b for n in per] for s in sizes), f"sizes {sizes}")
             words = b"".join(got[10:])
             low = sum(1 for i in range(0, len(words), 4) if words[i])
             check("USB AUDIO: every 4-byte subslot's low byte is zero (24 bits, left-justified)",
@@ -184,6 +187,7 @@ def main():
             # tracks (EXTENDED, FULL) or track 8's L/R (MASTER) in 44/45-frame
             # 1 ms packets of 8-byte frames.
             usb_host.enumerate_device(b, hs=False)
+            b.iso_hz(0)                                          # bInterval 1 at full speed: 1 ms
             b.ctrl_nodata(0x01, 0x0b, 1, 4)
             fs = []
             for _ in range(300):

@@ -15,7 +15,10 @@ flashed image was built from.
   (`modules/usb-audio-master`, remix `usb-master`): two channels, track 8's
   L/R post-FX pre-fader at both speeds, a front L/R stereo input.
   `bottleservice` carries USB AUDIO MASTER; every other USB remix USB AUDIO
-  EXTENDED. A remix with two of them is refused by name. Port only.
+  EXTENDED. A remix with two of them is refused by name. USB AUDIO MASTER
+  polls every 1 ms at high speed too (bInterval 4, 44/45-frame packets of
+  at most 360 bytes); the port's USB bench takes `isohz` so a host script
+  polls at the descriptor's rate. Port only.
 
 - `make check` is two halves (27 Sep 2026): `make check-shared
   REMIXES="a b"` runs the gates that do not depend on the remix (the

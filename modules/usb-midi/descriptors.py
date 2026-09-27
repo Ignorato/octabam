@@ -37,8 +37,9 @@ FS_CHANNELS, FS_MAXPKT, FS_BINTERVAL = 2, 45 * 8, 1       # 44/45 stereo frames 
 # per audio module: (channels, max packet) at high speed; full speed is FS_*
 HS_LAYOUT = {"USB AUDIO EXTENDED": (HS_CHANNELS, HS_MAXPKT),
              "USB AUDIO FULL": (16, 12 * 64),                # 11/12 frames x 64 B (16 tracks) every 250 us
-             "USB AUDIO MASTER": (2, 12 * 8)}                # 11/12 frames x 8 B (T8) every 250 us
+             "USB AUDIO MASTER": (2, 45 * 8)}                # 44/45 frames x 8 B (T8) every 1 ms
 FRONT_LR = 0x3                                             # bmChannelConfig: front left, front right (MASTER)
+HS_BINTERVAL_1MS = 4                                       # 2^(4-1) microframes = 1 ms (MASTER at high speed)
 UAC2_AC_IFACE, UAC2_AS_IFACE = 3, 4                        # usbaudio.s .set: the same numbers
 UAC2_CLOCK_ID, UAC2_IT_ID, UAC2_OT_ID = 0x10, 0x11, 0x12
 
@@ -109,7 +110,7 @@ def audio_config(hs, other_speed=False, key="USB AUDIO EXTENDED"):
         bytes([nch]) + struct.pack("<I", chcfg) + bytes([0]) +
         bytes([6, 0x24, 2, 1, SUBSLOT, BITS]) +
         bytes([7, 5, 0x83, 0x05]) + struct.pack("<H", maxpkt) +
-        bytes([HS_BINTERVAL if hs else FS_BINTERVAL]) +
+        bytes([(HS_BINTERVAL_1MS if key == "USB AUDIO MASTER" else HS_BINTERVAL) if hs else FS_BINTERVAL]) +
         bytes([8, 0x25, 1, 0, 0, 0]) + struct.pack("<H", 0))
     ac_midi = bytes([9, 0x24, 1, 0, 1]) + struct.pack("<H", 9) + bytes([1, 2])
     iad_midi = bytes([8, 0x0B, 1, 2, 0x01, 0x00, 0x00, 0])
