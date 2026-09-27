@@ -41,6 +41,22 @@ Voicing rounds up to 16 Sep 2026: `git show 3ceba41:docs/history/VOICING.md`.
   displacement range ($25, $26, $27, $39), bit-identical, and payload A
   sits at 23 free.
   Unheard on hardware.
+- Second slot pass (27 Sep 2026, after the limiter): the sample loop
+  reached 35 slots above $3f, two words per access (`(r7+$68)` assembles
+  to two words; −64..63 to one). Twenty-two of them trade places with
+  per-block slots: thirteen with slots the code addresses by name ($71
+  $4e $5c $5d $64 $78 $79 $52 $53 $54 $55 $40 $5f ↔ $09 $0a $10 $26 $28
+  $2a $2b $31 $33 $34 $35 $36 $37) and nine MODE-table slots with the LFO
+  roll's ($74 $75 $76 $77 $7a $7e $7f $80 $81 ↔ $00..$07 $3e; the
+  manifest's `_MODE_SLOTS` and `build_bus.py`'s `LFOTAB` renumbered with
+  them; the dormant `LFO01` table follows the map too). fb4..fb7 stay: the
+  feedback loops write them through a pointer walk. `rig_render`
+  bit-identical on ROOM, PLATE and BIG at −12 and 0 dBFS sends, T1, T5 and
+  the mix (max difference −200 dBFS); knob-click gate 0 flagged. Static
+  price 1,166 → 1,146 cycles/sample (probe 57: a two-word displaced move
+  costs 3.98 cycles on the chip against 2.00, which the pricer cannot
+  see), payload A 23 → 34 free words. The header's slot map is read through
+  its two swap tables.
 - RT60 (a 50 ms burst, −3..−33 dB slope) at TIME 0 / 32 / 64 / 96 / 127:
   ROOM 0.87 / 1.0 / 1.5 / 2.8 / 3.9 s; PLATE 0.9 → 4.4 s; BIG 1.6 → 11.7 s.
   The tank law is `$1e = a − k_mode·(d_min + d_span·(1−t)²)` (k ROOM 0.5 /

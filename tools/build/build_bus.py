@@ -2505,14 +2505,14 @@ hostquit:
         # them out. Their records come FIRST so one r5 walks straight from
         # record 1 into record 2 and the two loops share their whole setup.
         # [rate const, phase slot, AP int, AP frac, MOD int, MOD frac]
-        LFO01 = [0x7f0000, 0x3e, 0x52, 0x53, 0x21, 0x22,   # line 0  1.000x
-                 0x6cc000, 0x4f, 0x54, 0x55, 0x23, 0x24]   # line 1  1.168x
+        LFO01 = [0x7f0000, 0x81, 0x31, 0x33, 0x21, 0x22,   # line 0  1.000x
+                 0x6cc000, 0x4f, 0x34, 0x35, 0x23, 0x24]   # line 1  1.168x
         LFOTAB = [0x5b0000, 0x50, 0x56, 0x57,   # line 2  0.711x
                   0x4a0000, 0x51, 0x58, 0x59,   # line 3  0.578x
-                  0x760000, 0x47, 0x00, 0x01,   # line 4  0.922x
-                  0x610000, 0x48, 0x02, 0x03,   # line 5  0.758x
-                  0x4d0000, 0x49, 0x04, 0x05,   # line 6  0.602x
-                  0x370000, 0x4a, 0x06, 0x07]   # line 7  0.430x
+                  0x760000, 0x47, 0x74, 0x75,   # line 4  0.922x
+                  0x610000, 0x48, 0x76, 0x77,   # line 5  0.758x
+                  0x4d0000, 0x49, 0x7a, 0x7e,   # line 6  0.602x
+                  0x370000, 0x4a, 0x7f, 0x80]   # line 7  0.430x
         # ⚠️ THE TABLE MUST FOLLOW THE SOURCE. An engine that has not been
         # through the 17 Aug 0-1 roll reads record 2 FIRST, so prefixing the
         # 0/1 records unconditionally would feed line 0's data to line 2 --

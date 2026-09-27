@@ -566,7 +566,7 @@ warmz:
         do      #80,>wshclr
         move    b,y:(r5)+
 wshclr:
-        move    b,x:(r7+$3e)
+        move    b,x:(r7+$81)
         move    b,x:(r7+$2a)            ; wet high-cut states (Round 11): boot
         move    b,x:(r7+$2b)            ; garbage here would click at warm-end
         move    b,x:(r7+$4f)
@@ -777,7 +777,7 @@ mdcpy:
                                             ; An address register is free during
                                             ; setup and move n0,b is 1 word where
                                             ; move #>$1000,b is 2.
-            move    x:(r7+$74),x0           ; this MODE's line 0 fraction
+            move    x:(r7+$00),x0           ; this MODE's line 0 fraction
             mpy     x0,x1,a
             asr     #$a,a,a                 ; back to an integer tap (4096-word lines)
             or      y1,a                    ; force the tap ODD. y1 = 1, hoisted
@@ -791,21 +791,21 @@ mdcpy:
             sub     a,b                     ; 4096 - tap, for the modulated read
             move    b,x:(r7+$45)            ; line 0 (all four lines read
                                             ; through the interpolated path)
-            move    x:(r7+$75),x0           ; this MODE's line 1 fraction
+            move    x:(r7+$01),x0           ; this MODE's line 1 fraction
             mpy     x0,x1,a
             asr     #$a,a,a                 ; back to an integer tap (4096-word lines)
             or      y1,a                    ; force the tap ODD (as line 0)
             move    n0,b
             sub     a,b                     ; 4096 - tap, for the modulated read
             move    b,x:(r7+$78)
-            move    x:(r7+$76),x0           ; this MODE's line 2 fraction
+            move    x:(r7+$02),x0           ; this MODE's line 2 fraction
             mpy     x0,x1,a
             asr     #$a,a,a                 ; back to an integer tap (4096-word lines)
             or      y1,a                    ; force the tap ODD (as line 0)
             move    n0,b
             sub     a,b                     ; 4096 - tap, for the modulated read
             move    b,x:(r7+$79)
-            move    x:(r7+$77),x0           ; this MODE's line 3 fraction
+            move    x:(r7+$03),x0           ; this MODE's line 3 fraction
             mpy     x0,x1,a
             asr     #$a,a,a                 ; back to an integer tap (4096-word lines)
             move    n0,b
@@ -815,28 +815,28 @@ mdcpy:
             move    x:(r7+$6c),y0           ; this MODE's lines 4-7 tap scale
             mpy     x1,y0,a                 ; x1 is dead after this block (the
             move    a,x1                    ; decay block reloads it at ~1300)
-            move    x:(r7+$74),x0           ; this MODE's line 0 fraction, rescaled
+            move    x:(r7+$00),x0           ; this MODE's line 0 fraction, rescaled
             mpy     x0,x1,a
             asr     #$a,a,a                 ; back to an integer tap (4096-word lines)
             or      y1,a                    ; force the tap ODD (y1=1)
             move    n0,b
             sub     a,b                     ; 4096 - tap
             move    b,x:(r7+$08)            ; line 4
-            move    x:(r7+$75),x0           ; this MODE's line 1 fraction, rescaled
+            move    x:(r7+$01),x0           ; this MODE's line 1 fraction, rescaled
             mpy     x0,x1,a
             asr     #$a,a,a
             or      y1,a                    ; force the tap ODD (y1=1)
             move    n0,b
             sub     a,b
             move    b,x:(r7+$71)            ; line 5
-            move    x:(r7+$76),x0           ; this MODE's line 2 fraction, rescaled
+            move    x:(r7+$02),x0           ; this MODE's line 2 fraction, rescaled
             mpy     x0,x1,a
             asr     #$a,a,a
             or      y1,a                    ; force the tap ODD (y1=1)
             move    n0,b
             sub     a,b
             move    b,x:(r7+$4e)            ; line 6
-            move    x:(r7+$77),x0           ; this MODE's line 3 fraction, rescaled
+            move    x:(r7+$03),x0           ; this MODE's line 3 fraction, rescaled
             mpy     x0,x1,a
             asr     #$a,a,a
             move    n0,b
@@ -917,22 +917,22 @@ mdcpy:
         move    x:(r7+$1e),a
         sub     x1,a
         move    a,y1                    ; ($1e - a), group A's multiplier
-        move    x:(r7+$74),x0           ; line 0 fraction (half-scale)
+        move    x:(r7+$00),x0           ; line 0 fraction (half-scale)
         mpy     x0,y1,a                 ; frac*($1e-a) -- plain product
         asl     a                       ; r_0*($1e-a), r_0 = 2*frac_0 = 0.966
         add     x1,a                    ; + a
         move    a,y:(r5)+n5             ; line 0 gain
-        move    x:(r7+$75),x0
+        move    x:(r7+$01),x0
         mpy     x0,y1,a
         asl     a
         add     x1,a
         move    a,y:(r5)+n5             ; line 1 gain
-        move    x:(r7+$76),x0
+        move    x:(r7+$02),x0
         mpy     x0,y1,a
         asl     a
         add     x1,a
         move    a,y:(r5)+n5             ; line 2 gain
-        move    x:(r7+$77),x0
+        move    x:(r7+$03),x0
         mpy     x0,y1,a
         asl     a
         add     x1,a
@@ -943,22 +943,22 @@ mdcpy:
         move    x:(r7+$6c),x0           ; lines 4-7 tap scale (positive)
         mpy     x0,y1,a                 ; scale*($1e-a)
         move    a,y1                    ; group B's multiplier
-        move    x:(r7+$74),x0
+        move    x:(r7+$00),x0
         mpy     x0,y1,a
         asl     a
         add     x1,a
         move    a,y:(r5)+n5             ; line 4 gain
-        move    x:(r7+$75),x0
+        move    x:(r7+$01),x0
         mpy     x0,y1,a
         asl     a
         add     x1,a
         move    a,y:(r5)+n5             ; line 5 gain
-        move    x:(r7+$76),x0
+        move    x:(r7+$02),x0
         mpy     x0,y1,a
         asl     a
         add     x1,a
         move    a,y:(r5)+n5             ; line 6 gain
-        move    x:(r7+$77),x0
+        move    x:(r7+$03),x0
         mpy     x0,y1,a
         asl     a
         add     x1,a
@@ -1168,7 +1168,7 @@ g_st:                                   ; (g_off falls through with a still
 
 ; ---- EIGHT INDEPENDENT LFOs, one per tank line --------------------------
 
-        move    x:(r7+$3e),a            ; line 0  (1.000x) phase
+        move    x:(r7+$81),a            ; line 0  (1.000x) phase
         move    x:(r7+$2f),x0           ; base increment, from RATE
         move    #$7f,y1                    ; rate x0.992
         mpy     x0,y1,b                 ; this line's own rate
@@ -1179,7 +1179,7 @@ g_st:                                   ; (g_off falls through with a still
         move    x:(r7+$14),b            ; call flag: advance once per block,
         tst     b                       ; but USE the advanced value on both
         beq     lf3e
-        move    x0,x:(r7+$3e)
+        move    x0,x:(r7+$81)
 lf3e:
         move    x0,a
         sub     #>$400000,a                
@@ -1401,13 +1401,13 @@ lfrol:
 ; at (line_base + phase + offset), one sample before the block's first
 ; tap, under m5 = $fff -- same modulo the sample loop's tank walk uses.
         move    x:(r7+$08),a            ; -- line 4: (4096 - tap)
-        move    x:(r7+$00),x0           ;    its LFO integer offset
+        move    x:(r7+$74),x0           ;    its LFO integer offset
         sub     x0,a
         move    a,y:(r6)+               ; w0
         move    x1,x0
         sub     x0,a
         move    a,n5                    ; carry seed index (reuses n5)
-        move    x:(r7+$01),a            ; w1: the interpolation fraction
+        move    x:(r7+$75),a            ; w1: the interpolation fraction
         move    a,y:(r6)+
         move    r1,a                    ; line 0 base + phase
         and     #>$fff,a                ; just the phase (m5=$fff wraps it)
@@ -1417,13 +1417,13 @@ lfrol:
         move    y:(r5+n5),a
         move    a,y:(r6)+n6             ; w2: seed the interpolation carry
         move    x:(r7+$71),a            ; -- line 5
-        move    x:(r7+$02),x0
+        move    x:(r7+$76),x0
         sub     x0,a
         move    a,y:(r6)+
         move    x1,x0
         sub     x0,a
         move    a,n5
-        move    x:(r7+$03),a
+        move    x:(r7+$77),a
         move    a,y:(r6)+
         move    r1,a
         and     #>$fff,a
@@ -1433,13 +1433,13 @@ lfrol:
         move    y:(r5+n5),a
         move    a,y:(r6)+n6
         move    x:(r7+$4e),a            ; -- line 6
-        move    x:(r7+$04),x0
+        move    x:(r7+$7a),x0
         sub     x0,a
         move    a,y:(r6)+
         move    x1,x0
         sub     x0,a
         move    a,n5
-        move    x:(r7+$05),a
+        move    x:(r7+$7e),a
         move    a,y:(r6)+
         move    r1,a
         and     #>$fff,a
@@ -1449,13 +1449,13 @@ lfrol:
         move    y:(r5+n5),a
         move    a,y:(r6)+n6
         move    x:(r7+$4b),a            ; -- line 7
-        move    x:(r7+$06),x0
+        move    x:(r7+$7f),x0
         sub     x0,a
         move    a,y:(r6)+
         move    x1,x0
         sub     x0,a
         move    a,n5
-        move    x:(r7+$07),a
+        move    x:(r7+$80),a
         move    a,y:(r6)+
         move    r1,a
         and     #>$fff,a
@@ -1627,7 +1627,7 @@ lfrol:
 ; The four diffusers sit 2048 words apart ($32..$35 = shared+0x2000 +
 ; 0x800 k), so allpasses 1-3 address from allpass 0's r5 + 0x800 each:
 ; apbody leaves r5 where it found it.
-        move    x:(r7+$7e),n5        ; this MODE's allpass 0
+        move    x:(r7+$05),n5        ; this MODE's allpass 0
         move    n0,a                    ; phase   (also spaces the n5 write)
         move    x:(r7+$32),x0            ; base
         add     x0,a
@@ -1637,19 +1637,19 @@ lfrol:
         bsr     apbody                  ; the rolled allpass body: reads $1b,
                                         ; writes $1b and y:(r5)
 
-        move    x:(r7+$7f),n5        ; this MODE's allpass 1
+        move    x:(r7+$06),n5        ; this MODE's allpass 1
         move    r5,a
         add     #>$800,a
         move    a,r5                    ; = write address
         bsr     apbody
 
-        move    x:(r7+$80),n5        ; this MODE's allpass 2
+        move    x:(r7+$07),n5        ; this MODE's allpass 2
         move    r5,a
         add     #>$800,a
         move    a,r5                    ; = write address
         bsr     apbody
 
-        move    x:(r7+$81),n5        ; this MODE's allpass 3
+        move    x:(r7+$3e),n5        ; this MODE's allpass 3
         move    r5,a
         add     #>$800,a
         move    a,r5                    ; = write address
@@ -2389,7 +2389,7 @@ fbB:
         move    x:(r7+$2a),b            ; high-cut state, M channel
         sub     b,a
         move    a,x0
-        move    x:(r7+$7a),y0           ; per-mode wet high-cut coefficient
+        move    x:(r7+$04),y0           ; per-mode wet high-cut coefficient
         mpy     x0,y0,a                 ; c*(x - y)
         add     b,a                     ; y += c*(x - y)
         move    a,x:(r7+$2a)

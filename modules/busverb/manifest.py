@@ -30,14 +30,14 @@ RECIP_WORDS = len(_RECIP)             # 8 -- `move #8,n5` in the engine
 _MODE_SLOTS = (
     0x1e,   # k_mode: the TIME law's mode constant
     0x20,   # wet gain/2 (BIG carries its own -3 dB trim)
-    0x74, 0x75, 0x76, 0x77,   # lines 0-3 taps as fractions of the 4096-word line
+    0x00, 0x01, 0x02, 0x03,   # lines 0-3 taps as fractions of the 4096-word line
     0x6f,   # tap scale: SIZE moves within a character rather than replacing it
     0x3f,   # diffusion offset, added to DIFF's span
     0x72,   # damping scale: multiplies the TONE-derived coefficient; smaller = darker
     0x73,   # mod depth scale: only ever scales down, BIG sits at unity
-    0x7a,   # wet high-cut coefficient
+    0x04,   # wet high-cut coefficient
     0x6c,   # lines 4-7 tap scale, the interleave (not $0c: that is the bus gain)
-    0x7e, 0x7f, 0x80, 0x81,   # input diffuser taps 641/1051/1511/1949 as 2048-tap
+    0x05, 0x06, 0x07, 0x3e,   # input diffuser taps 641/1051/1511/1949 as 2048-tap
     0x2f,   # MODE's LFO RATE scale (1.0 for all three)
 )
 _MODE_ROWS = {
