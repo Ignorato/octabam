@@ -8,7 +8,7 @@ mirror; T1's FX1 and FX2 = SEND; slot 1's TSMODE=0, so "the record IS the
 file" (no timestretch grains to fit around). The kick itself is ours
 (`scripts/make_test_audio.py kick`), never Elektron's.
 
-    python3 tools/verify/stems_fixture.py [--eight | --fat32] [PROJECT_DIR]
+    python3 tools/verify/stems_fixture.py [--eight | --fat32 | --thru] [PROJECT_DIR]
 
 PROJECT_DIR defaults to `out/projects/Ultimate FX 1.5.3`. The template is
 copied into a scratch folder first and only the copy is edited -- the
@@ -49,6 +49,27 @@ CARD32_OUT = ROOT / "out" / "stems_fixture32_card.img"      # --fat32: the same 
 FIXTURE32_JSON = ROOT / "out" / "stems_fixture32.json"
 FILLER_NAME = "FILLER.BIN"          # --fat32: in the set folder, see build()
 FILLER_BYTES = 65536 * 512
+THRU_JSON = ROOT / "out" / "stems_fixture_thru.json"
+THRU_CARD = ROOT / "out" / "stems_fixture_thru_card.img"
+SCRATCH_THRU = ROOT / "out" / "task_thru" / "fixture_src"
+INPUT_WAV = ROOT / "out" / "test_audio" / "stems_in4.wav"
+THRU_MTYPE = 2          # ot_project.MACHINES
+# Each track's THRU inputs: (INAB, INCD), the playback page's first and
+# fourth knobs (docs/firmware/PARAM_PAGES.md: INAB VOL --- INCD VOL ---),
+# written into every part record (THRU_PAGE). Over MIDI CC after the
+# transport start they had no effect under the port (Task 1, 27 Sep 2026).
+# Values, measured under the port (Task 1, 27 Sep 2026; STEM_REC.md 15.1):
+# 0 off; 1 the pair in stereo (A or C left, B or D right); 2 A or C alone,
+# to both sides; 3 B or D alone; 4 the pair summed, to both sides. So T1 A,
+# T2 B, T3 C, T4 D, T5 A|B, T6 C|D, T7 A+C, T8 B+D. `ot_emu --audio-in`'s
+# WAV channels 0-3 are inputs C, D, A, B.
+THRU_INPUTS = {1: (2, 0), 2: (3, 0), 3: (0, 2), 4: (0, 3),
+               5: (1, 0), 6: (0, 1), 7: (2, 2), 8: (3, 3)}
+# A track's THRU page in the part record: part + 0x33 + (track-1)*30 + 12,
+# the bytes INAB, VOL, ---, INCD, VOL. Measured 27 Sep 2026 from the
+# template, whose T1 (INAB 1, VOL 127) and T5 (INCD 1, VOL 127) passed input
+# under the port with nothing else set.
+THRU_PAGE = 0x33 + 12
 KICK_NAME = "kick.wav"
 # Our own staging tree: emu_card.stage_project's default, out/_stage_tree,
 # is verify_set's too, and each call deletes the tree first.
@@ -207,9 +228,80 @@ def build8(project_dir=DEFAULT_PROJECT):
     return result
 
 
+def write_input_wav(path, live=(0, 1, 2, 3), seconds=30, seed=0x57E4):
+    """Four channels of independent seeded noise at -12 dBFS peak, 44.1 kHz,
+    16-bit: inputs A to D through `ot_emu --audio-in`. A channel not in
+    `live` is silent (Task 1's routing probe). Noise never repeats, so a take
+    can match its track only at the true offset."""
+    import array
+    import random
+    import wave
+    rng = [random.Random(seed + c) for c in range(4)]
+    amp = 8192
+    n = 44100 * seconds
+    data = array.array("h", (rng[c].randint(-amp, amp) if c in live else 0
+                             for _ in range(n) for c in range(4)))
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(4)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(data.tobytes())
+
+
+def set_thru_inputs(pdir, inputs):
+    """Each track's THRU inputs and levels, in every part record (current and
+    saved) of banks 1 and 2: INAB and INCD from `inputs`, a selected pair at
+    VOL 127 and an unselected one at the template's 0x40."""
+    for bank in FIXTURE_BANKS:
+        def mut(data):
+            for p in range(ot_project.NPARTS_ALL):
+                off = ot_project.PART_BASE + p * ot_project.PART_STRIDE
+                for t, (inab, incd) in inputs.items():
+                    b = off + THRU_PAGE + (t - 1) * 30
+                    data[b], data[b + 1] = inab, 127 if inab else 0x40
+                    data[b + 3], data[b + 4] = incd, 127 if incd else 0x40
+        ot_project._bank_write(pdir, bank, mut, guard=False)
+
+
+def build_thru(project_dir=DEFAULT_PROJECT, inputs=None):
+    """Every track a THRU machine (every part of banks 1 and 2), a trig on
+    step 1 of every pattern, FX1 and FX2 SEND, each track's inputs in its
+    part records (THRU_INPUTS, or `inputs`); the card and the input WAV."""
+    import shutil
+    if SCRATCH_THRU.exists():
+        shutil.rmtree(SCRATCH_THRU)
+    SCRATCH_THRU.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(project_dir, SCRATCH_THRU)
+    for bank in FIXTURE_BANKS:
+        for part in (1, 2, 3, 4):
+            for t in range(1, 9):
+                ot_project.set_machine_type(SCRATCH_THRU, bank, part, t, THRU_MTYPE, mirror=True, guard=False)
+        for pat in range(16):
+            for t in range(8):
+                ot_project.set_pattern_trig(SCRATCH_THRU, bank, pat, t, 1, guard=False)
+    for t in range(1, 9):
+        ot_project.set_fx(SCRATCH_THRU, "fx1", t, "SEND", guard=False)
+        ot_project.set_fx(SCRATCH_THRU, "fx2", t, "SEND", guard=False)
+    set_thru_inputs(SCRATCH_THRU, inputs or THRU_INPUTS)
+    card_bytes, name = emu_card.stage_project(SCRATCH_THRU, SET_NAME, PROJECT_NAME,
+                                              tree=str(STAGE_TREE))
+    THRU_CARD.write_bytes(card_bytes)
+    write_input_wav(INPUT_WAV)
+    result = {"card": str(THRU_CARD), "set": SET_NAME, "project": name, "staged": [],
+              "audio_in": str(INPUT_WAV)}
+    THRU_JSON.write_text(json.dumps(result, indent=2) + "\n")
+    print(f"card:    {result['card']}")
+    print(f"-> {THRU_JSON}")
+    return result
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--eight":
         build8(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
+    elif len(sys.argv) > 1 and sys.argv[1] == "--thru":
+        build_thru(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
     elif len(sys.argv) > 1 and sys.argv[1] == "--fat32":
         build(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT, fat=32)
     else:

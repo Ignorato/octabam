@@ -150,7 +150,9 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     `--call-before-play` beside `--pre-roll` needs the port fixed on 13 Sep
     2026 (`main.cpp` runs to main's spin before the call; STEM_REC.md 10.1).
     An older port refuses the call, prints the refusal and records nothing,
-    so `tap()` checks the call's own report line before anything else."""
+    so `tap()` checks the call's own report line before anything else.
+
+    A fixture with `audio_in`/`midi` feeds the port's inputs and MIDI IN."""
     tag = f"{tag}{SUFFIX}"
     fx = json.loads(pathlib.Path(fixture or FIXTURE).read_text())
     work = pathlib.Path("out/stems_runs"); work.mkdir(parents=True, exist_ok=True)
@@ -175,6 +177,10 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
             *(["--block-dump", str(dump)] if dump_blocks else []),
             "--call-before-play", ",".join(f"0x{a:x}:0" for a in (calls_before or (s["stems_action"],))),
             "--card-out", str(card), "--mem-dump", dumps, *extra]
+    if fx.get("audio_in"):
+        args += ["--audio-in", fx["audio_in"]]
+    if fx.get("midi"):
+        args += ["--midi", fx["midi"]]
     if at:
         args += ["--at", ",".join(at)]
     if pk:
