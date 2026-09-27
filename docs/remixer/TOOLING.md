@@ -139,7 +139,7 @@ the default m68k core does not decode this CPU.
 
 `tools/build/build_bus.py` is the builder (`make bus` = `XBUS=1 SPEC=1`).
 It builds a remix: a named selection of modules (`make bus REMIX=<name>`,
-default `bamsep26`; `make modules` lists the modules and the remixes,
+no default; `make modules` lists the modules and the remixes,
 `make remix` composes one interactively). Each `modules/<name>/manifest.py`
 declares one contribution against `tools/remix/schema.py`, and
 `tools/remix/ledger.py` refuses a selection whose modules collide.
@@ -186,7 +186,7 @@ Render on the desktop at ~6× real time instead of flashing.
 | `tools/verify/verify_octakit.py`, `verify_midiscenes.py`, `verify_dram_boot.py` | the two ports' oracles; every DRAM remix booted under the port and its window read back |
 | `tools/verify/verify_dirtystate.py`, `verify_initregs.py`, `verify_replaces.py`, `verify_labels.py`, `verify_modenames.py`, `verify_hidden.py`, `verify_grains.py`, `verify_twocore.py`, `verify_onebus.py`, the per-module render gates | every module silent from a garbage block; no init writes r1; no stock effect hijacked; selects print their words on the emulated firmware; the mode formatter renames; hidden engines; the grain lever; both cores; the bus |
 | `tools/remix/selftest.py` | the resource ledger catches every collision it claims to, and every shipped remix is clean (part of `make check`) |
-| `scripts/refhash.sh` | a change to the build (not a module) changed nothing: 26 configurations, artifacts and build reports, bit-identical; save a baseline on a tree you trust first |
+| `scripts/refhash.sh` | a change to the build (not a module) changed nothing: 24 configurations, artifacts and build reports, bit-identical; save a baseline on a tree you trust first |
 
 ## 7. Hardware measurement and control
 
