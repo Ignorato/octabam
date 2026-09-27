@@ -7,6 +7,12 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- BusVerb slot pass (27 Sep 2026): 22 per-sample slots the loop reached
+  with two-word displaced moves swapped into the one-word range against
+  per-block slots (`_MODE_SLOTS` and `LFOTAB` renumbered with them).
+  Bit-identical on every mode, level and track; 1,166 -> 1,146 static
+  cycles/sample; payload A 23 -> 34 free words.
+
 - BusVerb wet limiter (27 Sep 2026): a feedback peak limiter on the wet
   before the x2 makeup, ceiling −2 dBFS, attack x0.9 per sample, hold
   between −4 and −2 dBFS, linear release ~150 ms, stereo-linked (the
