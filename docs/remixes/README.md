@@ -31,7 +31,7 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 | [`recfix`](../../remixes/recfix/README.md) | The recorder loop click: the four ColdFire fixes beside the stock FX2 chooser, no DSP code of our own. | on hardware: with the bus, 12 Sep 2026 (OCTABAM83); RECORDER HOLD and RLEN PLEN port-gated |
 | [`scenes`](../../remixes/scenes/README.md) | All the firmware mods of the MIDI SCENES family, no effects: scenes over MIDI, the LO-FI AMF fix, CC to page 2. | port-gated |
 | [`usb-full`](../../remixes/usb-full/README.md) | stock + USB MIDI + USB AUDIO FULL (16 ch: the tracks). | port-gated |
-| [`usb-io`](../../remixes/usb-io/README.md) | stock - SPATIALIZER + USB MIDI + USB AUDIO MC (4 ch: MAIN + CUE) + USB AUDIO IN (4 ch -> inputs A-D). | on hardware: Bryan T's MKII, build 16, 27 Sep 2026 |
+| [`usb-io`](../../remixes/usb-io/README.md) | stock - SPATIALIZER + USB MIDI + USB AUDIO EXTENDED (20 ch out) + USB CROSSBAR + USB AUDIO IN (stereo -> inputs A/B). | port-gated: `make check` (verify_usb, verify_usb_in) under the port, 28 Sep 2026; not on hardware in this form |
 | [`usb-lean`](../../remixes/usb-lean/README.md) | stock + USB MIDI + USB AUDIO (20 ch: tracks, MAIN, CUE). | port-gated |
 | [`usb-master`](../../remixes/usb-master/README.md) | stock + USB MIDI + USB AUDIO MASTER (2 ch: track 8). | port-gated |
 | [`usb-mc`](../../remixes/usb-mc/README.md) | stock + USB MIDI + USB AUDIO MC (4 ch: MAIN + CUE). | port-gated |

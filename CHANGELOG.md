@@ -7,6 +7,28 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- USB AUDIO IN as a stereo feed, placed (28 Sep 2026): Bryan T's USB AUDIO
+  OUT / IN (PRs #468, #495: four host channels into inputs A-D, its DSP
+  inject poked into SPATIALIZER's stock words) becomes a stereo pair into
+  inputs A/B, C/D on the jacks, with the inject a DSP section the build
+  places in payload A's donor region and reaches by a hook the ledger sees
+  (`schema.DspHook`, `DspSection.hooks`: a section with no chooser row).
+  A rig remix carrying it and a server no longer builds an image whose
+  dispatcher jumps into the reverb; the ledger refuses the hook site. The
+  crossbar setting that cured lost packet tails (SCM BCR, XBS PRS/CRS on
+  the SDRAM and SRAM slaves) is its own module, USB CROSSBAR, written at
+  the USB controller init instead of at stream-up. Interface 5 is in the
+  high-speed configurations only (the unit never served it at full speed);
+  GET_INTERFACE(5) answers the alt in force; SET_INTERFACE(5) STALLs an alt
+  other than 0/1. The unit's diagnostic scan, per-packet counters and the
+  vendor register peek/poke (0x57-0x5b, `usb_reg.py`) are gone; fifteen
+  counters stay on 0x56. `Claims.sram` declares the top 1 KB of on-chip
+  SRAM the dTDs and packet buffers take. `tools/hw/usb_probe.py` (Bryan T's
+  PR #492) runs a host session against a unit and reads both rings'
+  counters while the stream is open, with EP3 IN's drain rate as the
+  discriminating number for the MKI half-speed report. Remix `usb-io` =
+  stock - SPATIALIZER + USB MIDI + USB AUDIO EXTENDED + USB CROSSBAR + USB
+  AUDIO IN; `usb-mc` keeps the MAIN + CUE layout. Port only in this form.
 - CC FEEDBACK (28 Sep 2026, `modules/cc-feedback`): the OT transmits a
   CC for every live knob byte that changes -- a pattern or part change, a
   project load, MODE DEFAULTS, an incoming CC, a page-2 turn -- so a
