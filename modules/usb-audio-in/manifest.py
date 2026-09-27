@@ -1,84 +1,70 @@
-"""USB AUDIO IN -- four channels from the host standing in for inputs A-D.
+"""USB AUDIO IN -- a stereo feed from the host standing in for inputs A/B.
 
 The host streams AudioStreaming interface 5 alt 1 on EP3 OUT: isochronous,
 asynchronous with IMPLICIT feedback (EP3 IN, the input stream, is the
 feedback source: EP1 mass storage, EP2 USB MIDI and EP3 IN leave no endpoint
-for an explicit one), 4 ch x 24-bit in 4-byte subslots, <= 192 B every
-250 us. Host channels 1-4 = inputs A-D.
+for an explicit one), 2 ch x 24-bit in 4-byte subslots, <= 96 B every
+250 us. Host channel 1 = input A, 2 = input B; C and D stay on the jacks.
+High speed only.
 
   Descriptors: USB MIDI's descriptor unit adds the host -> device path when
     this key is in the remix (modules/usb-midi/descriptors.py): USB streaming
-    IT 0x13 -> line OT 0x14 on the one clock, and interface 5. It refuses a
-    remix without a USB AUDIO input layout (the feedback source), and one
-    with USB AUDIO MASTER (a 1 ms input stream; untested).
+    IT 0x13 -> line OT 0x14 on the one clock, and interface 5, in the
+    high-speed configuration alone. It refuses a remix without a 250 us USB
+    AUDIO input layout (the feedback source): USB AUDIO MASTER polls every
+    1 ms, untested beside this.
   ColdFire (DRAM unit `usbaudio_in`, usbaudio_in.s): SET_INTERFACE(5) at
     0x4001dd0a, where usbaudio's shim sends every interface but 4; and state
     7 of the frame transfer machine (0x40004bc0): EP3 OUT up/down, four
     queued dTDs retired into a 1,024-frame ring, and once per frame one more
-    host-port transfer of 128 halfwords to core 0 at $6320 (the idle bank +
-    $320). Bit 8 of the first low halfword is the stream flag.
-  DSP (pokes, payload A only; payload B has no ESAI): P:0x88 -> jsr >$aa8;
-    P:0xaa8.. (SPATIALIZER's first 24 words) = rx_inject.asm, which copies
-    the words over the RX block while the flag is set and otherwise leaves
-    the jacks; dispatch id 5 -> NONE, so a project that selects SPATIALIZER
-    runs NONE. A remix carrying this lists SPATIALIZER on neither chooser.
-  usbaudio.s touches only ENDPTCTRL3's TX half, so EP3 IN's bring-up and
-    teardown do not switch EP3 OUT off.
+    host-port transfer of 96 halfwords to core 0 at $6320 (the idle bank +
+    $320): word 0 = 1 while the stream is open, then the 16 stereo samples.
+    usbaudio.s answers GET_INTERFACE(5) from this unit's in_alt (USB_IN).
+  DSP (rx_inject.asm, payload A, placed by the build in the donor region):
+    P:0x88's `move r2,x:>$204` becomes `jsr >inject` (schema.DspHook); the
+    inject replays it and, while word 0 is set, writes the pair over slots
+    2/3 (inputs A/B) of the current RX block, before every stock reader of
+    the block runs. Payload B has no ESAI.
+  Memory: dTDs and packet buffers in the top 1 KB of on-chip SRAM
+    (Claims.sram), the host-port buffer in the unit's data through the
+    uncached alias.
 
-Needs USB MIDI and one of USB AUDIO EXTENDED, FULL or MC. Bryan T, 26 Sep
-2026, as USB AUDIO OUT on usbin-test; renamed for the unit's point of view.
-README.md.
+Needs USB MIDI, USB CROSSBAR (without it the controller's 16-byte RX FIFO
+loses packet tails under a busy project) and one of USB AUDIO EXTENDED,
+FULL or MC. Bryan T's USB AUDIO OUT (usbin-test, 26 Sep 2026; four
+channels, poked into SPATIALIZER's words) cut to a stereo pair on the
+placed-section path, 28 Sep 2026. README.md.
 """
-from remix.schema import Category, Detour, Gate, Kind, Linked, Module, Poke, Proof
+from remix.schema import (Category, Claims, Detour, DspHook, DspSection, Gate, Kind,
+                          Linked, Module, Proof)
 
 H = bytes.fromhex
 
-# ---- DSP pokes, payload A (the addresses usbin-test verified) --------------
-P_RECORD_40 = 0x400EF680      # P:0x00040, 544 words
-P_RECORD_AA8 = 0x400F1771     # P:0x00aa8, 261 words (SPATIALIZER)
-X_RECORD_215 = 0x400E2345     # X:0x00215, 64 words (init table, proc table)
-
-
-def _w24(v):
-    return bytes((v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF))
-
-
-HOOK_VA = P_RECORD_40 + (0x88 - 0x40) * 3
-HOOK_STOCK = _w24(0x627000) + _w24(0x000204)          # move r2,x:>$204
-HOOK_WRITE = _w24(0x0BF080) + _w24(0x000AA8)          # jsr >$aa8
-
-# dsp_asm -in rx_inject.asm -org aa8 (24 words), audited with dsp56kDisassemble
-INJECT_WORDS = bytes.fromhex(
-    "00706204020000ce22c0400120030000d021de0002c640010001004a100d0e00"
-    "0000f061020200804006be0a0000d856101d0c00852100d856c64001ff000060"
-    "00200059540c0000")
-SPAT_STOCK_HEAD = bytes.fromhex(
-    "00002585070285170200f064130200c53702853f0200e444c40f020c00000300"
-    "200aa40500802f9e3f02c54001a200000314058041011b00208e3f02cf370200"
-    "013d9f0e02a11c0c")   # P:0xaa8..0xabf, stock
-assert len(INJECT_WORDS) == len(SPAT_STOCK_HEAD) == 72
-
 MODULE = Module(
-    name="usb-audio-in", key="USB AUDIO IN", kind=Kind.CF_PATCH,
+    name="usb-audio-in", key="USB AUDIO IN", kind=Kind.HYBRID,
     category=Category.MIDI_USB, author="bryantysinger", author_url="https://github.com/bryantysinger",
-    proof=Proof.HARDWARE, proof_note="Bryan T's MKII, build 16 (usb-io, beside USB AUDIO MC), 27 Sep 2026; `verify_usb_in` under the port",
-    doc="Four channels from the host into inputs A-D (UAC2 EP3 OUT, implicit feedback); the jacks while the stream is closed. Takes SPATIALIZER's words on payload A.",
+    proof=Proof.PORT, proof_note="`verify_usb_in` under the port (28 Sep 2026); the four-channel form ran on Bryan T's MKII as usbin-test build 16 (27 Sep 2026)",
+    doc="A stereo feed from the host into inputs A/B (UAC2 EP3 OUT, implicit feedback); the jacks while the stream is closed. C/D stay on the jacks.",
     linked=(Linked("usbaudio_in", "modules/usb-audio-in/usbaudio_in.s", cpu="5475", dram=True),),
     detours=(
         Detour(0x4001dd0a, H("008000400040"), "usbaudio_in", "in_setiface_shim",
-               "SET_INTERFACE: interface 5 records the alt and ACKs; the rest goes on to stock"),
+               "SET_INTERFACE: interface 5 alt 0/1 records the alt and ACKs, other alts STALL; the rest goes on to stock"),
         Detour(0x40004bc0, H("720113c1fc04801d"), "usbaudio_in", "in_state7_shim",
                "frame transfer state 7: EP3 OUT, the ring, and one more transfer to core 0 at $6320",
                pad_to=8),
         Detour(0x4001de6e, H("23c0fc0b01c0"), "usbaudio_in", "in_ctrl_shim",
                "EP0 stall store: vendor GET 0x56 answers the IN counters instead"),
     ),
-    pokes=(
-        Poke(HOOK_VA, HOOK_STOCK, HOOK_WRITE, "P:0x88 dispatcher -> jsr inject (payload A)"),
-        Poke(P_RECORD_AA8, SPAT_STOCK_HEAD, INJECT_WORDS, "P:0xaa8 inject routine, over SPATIALIZER's first 24 words (payload A)"),
-        Poke(X_RECORD_215 + 0x05 * 3, _w24(0x000AA8), _w24(0x0007C8), "id 0x05 init -> NONE (payload A)"),
-        Poke(X_RECORD_215 + (32 + 0x05) * 3, _w24(0x000AB2), _w24(0x0007C9), "id 0x05 proc -> NONE (payload A)"),
+    dsp=DspSection(
+        asm="modules/usb-audio-in/rx_inject.asm",
+        priority=20,
+        payloads=frozenset({"A"}),          # core 0 receives the ESAI
+        hooks=(DspHook(0x88, (0x627000, 0x000204), "inject",
+                       "frame head: the RX block is written before any reader runs"),),
     ),
-    requires=("USB MIDI",),
+    claims=Claims(sram=((0x80007c00, 0x80, "EP3 OUT dTDs"),
+                        (0x80007c80, 0x180, "EP3 OUT packet buffers"),
+                        (0x80007f80, 0x40, "EP0 reply for vendor 0x56"))),
+    requires=("USB MIDI", "USB CROSSBAR"),
     gates=(Gate("tools/verify/verify_usb_in.py", remix_arg=False, venv=True, stage="image"),),
 )

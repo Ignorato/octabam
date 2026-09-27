@@ -27,10 +27,10 @@
 |                            needed) and writes one 16-byte slot per frame.
 |                            Full speed carries MAIN alone, into aud_sum,
 |                            same as EXTENDED/FULL's stereo sum -- skipped at
-|                            high speed. Pairs with USB AUDIO IN (the host
-|                            -> A-D stream): together they reproduce the
-|                            original AUD_IN4 combination from usbin-test,
-|                            as two independent modules instead of one flag.
+|                            high speed. Pairs with USB AUDIO IN (the host's
+|                            stereo pair -> inputs A/B) as usbin-test's AUD_IN4
+|                            did with its four-channel form, as two
+|                            independent modules instead of one flag.
 | Layouts 1-3 are ours; every USB_LAYOUT = 0 path is the source as it was.
     .include "remix.inc"
 .set LAYOUT_EXT,  0
@@ -263,7 +263,17 @@ audio_getiface_shim:
     bnes    1f
     pea     usbaudio_alt
     jmp     GETIFACE_REJOIN
-1:  pea     GETIFACE_STOCKP
+1:
+.if USB_IN
+    | interface 5 (USB AUDIO IN, EP3 OUT) reports its own unit's alt byte
+    moveq   #UAC2_AS_IFACE+1,%d1
+    cmpl    %d0,%d1
+    bnes    2f
+    pea     in_alt
+    jmp     GETIFACE_REJOIN
+2:
+.endif
+    pea     GETIFACE_STOCKP
     jmp     GETIFACE_REJOIN
 
 | ---- EP0 buffer-page fix (installed at 0x4001d4b2 inside usb_ep0_send) -------

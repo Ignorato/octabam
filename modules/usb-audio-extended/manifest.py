@@ -19,9 +19,13 @@ SOURCE = "modules/usb-audio-extended/usbaudio.s"
 
 def layout_inc(layout):
     """The `remix.inc` usbaudio.s includes: USB_LAYOUT 0 (these twenty
-    channels), 1 (USB AUDIO FULL) or 2 (USB AUDIO MASTER)."""
+    channels), 1 (USB AUDIO FULL), 2 (USB AUDIO MASTER) or 3 (USB AUDIO MC);
+    USB_IN 1 when USB AUDIO IN is in the remix (usbaudio.s then answers
+    GET_INTERFACE(5) from that unit's in_alt)."""
     def inc(modules):
-        return f"| remix.inc -- usbaudio.s's layout\n    .set USB_LAYOUT, {layout}\n"
+        usb_in = int("USB AUDIO IN" in modules)
+        return (f"| remix.inc -- usbaudio.s's layout\n    .set USB_LAYOUT, {layout}\n"
+                f"    .set USB_IN, {usb_in}\n")
     return inc
 
 

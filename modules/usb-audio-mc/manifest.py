@@ -11,10 +11,11 @@ of the four.
 
 This reproduces, as an independent module, the MAIN+CUE-only high-speed
 stream that usbin-test's AUD_IN4 flag forced onto the twenty-channel build
-whenever USB AUDIO IN (the host -> A-D stream) was present. Here the two are
-decoupled: USB AUDIO IN can pair with this, or with FULL or EXTENDED, at
-whatever USB bandwidth budget the remix wants -- only the 4-in/4-out
-combination (this module) has been run on hardware. README.md.
+whenever USB AUDIO IN (then four host channels -> A-D, now a stereo pair ->
+A/B) was present. Here the two are decoupled: USB AUDIO IN can pair with
+this, or with FULL or EXTENDED, at whatever USB bandwidth budget the remix
+wants -- only the four-channel pairing has been run on hardware, as the
+slice. README.md.
 """
 import dataclasses
 import importlib.util

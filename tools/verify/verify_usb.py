@@ -135,12 +135,19 @@ def main():
                 check(f"{audio}: EP 0x83 marked implicit-feedback data (USB AUDIO IN's feedback source)",
                       len(iso) == 1 and (iso[0][3] >> 4 & 3) == 2, str([hex(d[3]) for d in iso]))
                 ison = [d for d in eps if d[2] == 0x03]
-                check("USB AUDIO IN: EP 0x03 isochronous asynchronous data, 192 bytes, bInterval 2",
-                      len(ison) == 1 and (ison[0][3], ison[0][4] | ison[0][5] << 8, ison[0][6]) == (0x05, 192, 2),
+                check("USB AUDIO IN: EP 0x03 isochronous asynchronous data, 96 bytes, bInterval 2",
+                      len(ison) == 1 and (ison[0][3], ison[0][4] | ison[0][5] << 8, ison[0][6]) == (0x05, 96, 2),
                       str([(d[3], d[4] | d[5] << 8, d[6]) for d in ison]))
                 asg_i = cfg.find(bytes([16, 0x24, 1, 0x13]))     # AS_GENERAL linked to the host -> device input terminal
-                check("USB AUDIO IN: AS_GENERAL declares 4 channels",
-                      asg_i >= 0 and cfg[asg_i + 10] == 4, f"bNrChannels {cfg[asg_i + 10] if asg_i >= 0 else None}")
+                check("USB AUDIO IN: AS_GENERAL declares 2 channels, front left + front right",
+                      asg_i >= 0 and cfg[asg_i + 10] == 2 and cfg[asg_i + 11] == 3,
+                      f"bNrChannels {cfg[asg_i + 10] if asg_i >= 0 else None}")
+                # the full-speed configuration (served as OTHER_SPEED at high
+                # speed) carries no interface 5: the unit serves it at high speed only
+                ocfg = b.ctrl_in(0x80, 6, 0x0700, 0, 512)
+                check("USB AUDIO IN: no interface 5 in the other-speed (full-speed) configuration",
+                      len(ocfg) >= 9 and ocfg[4] == 5 and bytes([16, 0x24, 1, 0x13]) not in ocfg,
+                      f"bNumInterfaces {ocfg[4] if len(ocfg) >= 9 else None}")
             asg = cfg.find(bytes([16, 0x24, 1]))                 # CS AS_GENERAL: bNrChannels at +10, bmChannelConfig +11
             check(f"{audio}: AS_GENERAL declares {nch} channels",
                   asg >= 0 and cfg[asg + 10] == nch, f"bNrChannels {cfg[asg + 10] if asg >= 0 else None}")

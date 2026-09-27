@@ -21,10 +21,11 @@ MSC interface byte for byte at the front:
                         speeds, a front-left/front-right cluster; USB
                         AUDIO MC MAIN + CUE, with MAIN at full speed.
                         24-bit samples in 4-byte subslots in every layout.
-  + USB AUDIO IN        the other direction beside it: a USB streaming input
-                        terminal -> line output terminal, and AudioStreaming
-                        interface 5 with EP3 OUT (four channels from the
-                        host, standing in for inputs A-D): six interfaces.
+  + USB AUDIO IN        the other direction beside it, at high speed: a USB
+                        streaming input terminal -> line output terminal,
+                        and AudioStreaming interface 5 with EP3 OUT (a
+                        stereo pair from the host, standing in for inputs
+                        A/B): six interfaces.
 
 `cfg_len` is exported as an absolute symbol: the responder's two clamp
 shims (usbmidi.s) compare wLength against it, since the stock `moveq #32`
@@ -49,18 +50,20 @@ HS_BINTERVAL_1MS = 4                                       # 2^(4-1) microframes
 UAC2_AC_IFACE, UAC2_AS_IFACE = 3, 4                        # usbaudio.s .set: the same numbers
 UAC2_CLOCK_ID, UAC2_IT_ID, UAC2_OT_ID = 0x10, 0x11, 0x12
 
-# USB AUDIO IN (Bryan T, 26 Sep 2026): four channels from the host that
-# stand in for inputs A-D. AudioStreaming interface 5, EP3 OUT (the only
-# free endpoint: EP1 is mass storage, EP2 USB MIDI, EP3 IN the input stream).
-# Asynchronous with IMPLICIT feedback: no endpoint is left for an explicit
-# feedback IN, so EP3 IN is marked as the implicit-feedback data endpoint
-# and the host sizes each OUT packet from EP3 IN's. Same clock source.
-# It needs a USB AUDIO input layout for that feedback, and one that polls
-# every 250 us as this stream does (not MASTER's 1 ms; untested).
+# USB AUDIO IN (Bryan T, 26 Sep 2026; stereo 28 Sep): a stereo pair from
+# the host that stands in for inputs A/B. AudioStreaming interface 5, EP3
+# OUT (the only free endpoint: EP1 is mass storage, EP2 USB MIDI, EP3 IN the
+# input stream). Asynchronous with IMPLICIT feedback: no endpoint is left
+# for an explicit feedback IN, so EP3 IN is marked as the implicit-feedback
+# data endpoint and the host sizes each OUT packet from EP3 IN's. Same
+# clock source. It needs a USB AUDIO input layout for that feedback, one
+# that polls every 250 us as this stream does (not MASTER's 1 ms; untested).
+# HIGH SPEED ONLY: the full-speed configurations carry no interface 5 (the
+# unit does not serve it), so a full-speed host is never offered one.
 USBIN_AS_IFACE = 5
 USBIN_IT_ID, USBIN_OT_ID = 0x13, 0x14
-USBIN_CHANNELS = 4
-USBIN_HS_MAXPKT, USBIN_FS_MAXPKT = 12 * USBIN_CHANNELS * SUBSLOT, 45 * USBIN_CHANNELS * SUBSLOT  # 192 / 720
+USBIN_CHANNELS = 2
+USBIN_HS_MAXPKT = 12 * USBIN_CHANNELS * SUBSLOT           # 96: 11/12 frames x 8 B every 250 us
 
 
 def _ep(addr, pkt):
@@ -108,10 +111,12 @@ def audio_config(hs, other_speed=False, key="USB AUDIO EXTENDED", with_in=False)
     front left / front right (the standard stereo cluster); the other two
     keep bmChannelConfig 0 as his descriptors have it.
 
-    `with_in`: USB AUDIO IN is in the remix -- add the host -> device path
-    (IT 0x13 -> OT 0x14, AudioStreaming interface 5 with EP3 OUT) and mark
-    EP3 IN as its implicit-feedback source.
+    `with_in`: USB AUDIO IN is in the remix -- at high speed, add the host
+    -> device path (IT 0x13 -> OT 0x14, AudioStreaming interface 5 with EP3
+    OUT) and mark EP3 IN as its implicit-feedback source. The full-speed
+    configuration is the one without it.
     """
+    with_in = with_in and hs
     bulk = 512 if hs else 64
     nch, maxpkt = HS_LAYOUT[key] if hs else (FS_CHANNELS, FS_MAXPKT)
     chcfg = FRONT_LR if key == "USB AUDIO MASTER" else 0
@@ -127,7 +132,7 @@ def audio_config(hs, other_speed=False, key="USB AUDIO EXTENDED", with_in=False)
         # host -> device: a USB streaming input terminal feeding a line
         # output terminal, on the same (read-only) clock
         in_path = (bytes([17, 0x24, 0x02, USBIN_IT_ID]) + struct.pack("<H", 0x0101) +
-                   bytes([0, clk, USBIN_CHANNELS]) + struct.pack("<I", 0) +
+                   bytes([0, clk, USBIN_CHANNELS]) + struct.pack("<I", FRONT_LR) +
                    bytes([0]) + struct.pack("<H", 0) + bytes([0]) +
                    bytes([12, 0x24, 0x03, USBIN_OT_ID]) + struct.pack("<H", 0x0603) +
                    bytes([0, USBIN_IT_ID, clk]) + struct.pack("<H", 0) + bytes([0]))
@@ -152,11 +157,11 @@ def audio_config(hs, other_speed=False, key="USB AUDIO EXTENDED", with_in=False)
             bytes([9, 4, ii, 0, 0, 1, 2, 0x20, 0]) +
             bytes([9, 4, ii, 1, 1, 1, 2, 0x20, 0]) +
             bytes([16, 0x24, 1, USBIN_IT_ID, 0, 1]) + struct.pack("<I", 1) +
-            bytes([USBIN_CHANNELS]) + struct.pack("<I", 0) + bytes([0]) +
+            bytes([USBIN_CHANNELS]) + struct.pack("<I", FRONT_LR) + bytes([0]) +
             bytes([6, 0x24, 2, 1, SUBSLOT, BITS]) +
             bytes([7, 5, 0x03, 0x05]) +                      # iso, asynchronous, data
-            struct.pack("<H", USBIN_HS_MAXPKT if hs else USBIN_FS_MAXPKT) +
-            bytes([HS_BINTERVAL if hs else FS_BINTERVAL]) +
+            struct.pack("<H", USBIN_HS_MAXPKT) +
+            bytes([HS_BINTERVAL]) +
             bytes([8, 0x25, 1, 0, 0, 0]) + struct.pack("<H", 0))
     ac_midi = bytes([9, 0x24, 1, 0, 1]) + struct.pack("<H", 9) + bytes([1, 2])
     iad_midi = bytes([8, 0x0B, 1, 2, 0x01, 0x00, 0x00, 0])
@@ -187,8 +192,15 @@ def configs(audio=None, with_in=False):
         f = midi_config
     out = {"cfg_fs": f(False), "cfg_hs": f(True), "cfg_os_fs": f(False, True), "cfg_os_hs": f(True, True)}
     lengths = {len(v) for v in out.values()}
-    assert len(lengths) == 1, "the four configurations must share one length (one clamp)"
-    return out, lengths.pop()
+    # One clamp (cfg_len) serves all four replies: min(wLength, cfg_len). A
+    # host asks for a configuration's wTotalLength, so a table shorter than
+    # cfg_len is sent whole and its zero pad is never requested. Without USB
+    # AUDIO IN the four are one length as they always were; with it the
+    # high-speed pair carries interface 5 and the full-speed pair does not.
+    if not with_in:
+        assert len(lengths) == 1, "the four configurations must share one length (one clamp)"
+    length = max(lengths)
+    return {k: v + bytes(length - len(v)) for k, v in out.items()}, length
 
 
 def remix_inc(modules):

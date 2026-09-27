@@ -24,22 +24,16 @@ that decides whether the clicks are the producer's.
 
 --in reads USB AUDIO IN's counters (0xc0/0x56; modules/usb-audio-in/
 usbaudio_in.s) instead: produced/consumed = frames into and out of its
-ring; minfill/maxfill = the ring's low and high water while consuming
-since the stream came up (the cushion IN_TARGET has to cover);
-underruns = blocks the ring could not supply; overruns = ring laps;
-reprimes = EP3 OUT self-heal primes; bad = odd-length or error packets;
-frames/seconds = the two state-7 visits (equal while running).
-bad = err + partial: err = completions with a dTD error bit, errmask =
-which bits (0x40 halted, 0x20 data buffer, 0x08 transaction), partial =
-lengths that were not whole frames; lasttok/lastslot = the last bad
-completion's token (bytes left in bits 30:16) and dTD slot.
-depth = dTDs still queued at the last bad one; badfr/badfr_prev = FRINDEX
-(microframe count, wraps at 16384) at the last two bad ones; dry = times
-the endpoint's dTD list had run empty; late/maxpass = retire passes that
-found 3+ dTDs done, and the most in one pass.
-good_nz/bad_nz = good/bad packets whose received data was not all zero,
-bad_nzw = non-zero longs summed over the bad ones, last_nzw = in the
-last (build 11; meaningful while the host sends digital silence).
+ring; pkts = OUT packets retired; lastn = frames in the last one; lastfill
+= the ring's fill at the last DSP frame; underruns = blocks the ring could
+not supply; overruns = ring laps; reprimes = EP3 OUT self-heal primes;
+bad = err + partial: err = completions with a dTD error bit (halted, data
+buffer, transaction), partial = lengths that were not whole frames;
+frames/seconds = the two state-7 visits (equal while running);
+minfill/maxfill = the ring's low and high water while consuming since the
+stream came up (the cushion IN_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns", "overruns",
+            "reprimes", "bad", "frames", "seconds", "minfill", "maxfill", "err", "partial")
+TARGET has to cover).
 """
 import argparse
 import struct
@@ -89,12 +83,11 @@ def main():
         last = read(dev, a.host_in)
     except Exception as e:  # noqa: BLE001
         sys.exit(f"the request failed: {e} (a STALL means the image carries no USB AUDIO{' IN' if a.host_in else ''})")
-    print(" ".join(f"{k}={v:#x}" if k in ("errmask", "lasttok") else f"{k}={v}" for k, v in last.items()), flush=True)
+    print(" ".join(f"{k}={v}" for k, v in last.items()), flush=True)
     while a.watch > 0:
         time.sleep(a.watch)
         now = read(dev, a.host_in)
-        print(" ".join(f"{k}={now[k]:#x}" if k in ("errmask", "lasttok") else
-                       f"{k}={now[k]}{'(+%d)' % (now[k] - last[k]) if now[k] != last[k] else ''}" for k in now), flush=True)
+        print(" ".join(f"{k}={now[k]}{'(+%d)' % (now[k] - last[k]) if now[k] != last[k] else ''}" for k in now), flush=True)
         last = now
 
 

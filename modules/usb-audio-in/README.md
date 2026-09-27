@@ -1,252 +1,171 @@
-# USB AUDIO IN: four channels from the host into inputs A–D
+# USB AUDIO IN: a stereo feed from the host into inputs A/B
 
-The Mac sends four 24-bit channels at 44.1 kHz over UAC2 on EP3 OUT, and they
-arrive on the Octatrack's inputs A, B, C and D in place of the jacks. When the
-stream is closed, A–D are the jacks again. Remix `usb-io` =
-USB MIDI + USB AUDIO MC + USB AUDIO IN + the stock effects minus SPATIALIZER.
+The Mac sends a stereo pair, 24-bit at 44.1 kHz, over UAC2 on EP3 OUT, and
+it arrives on the Octatrack's inputs A and B in place of the jacks. Inputs C
+and D stay on the jacks. When the stream is closed, A and B are the jacks
+again. High speed only.
 
-Bryan T, with Claude, 26 Sep 2026, as USB AUDIO OUT on the `usbin-test`
-branch (draft PR #468); ported onto the current layouts and renamed for the
-unit's point of view on 27 Sep 2026. The USB endpoint keeps USB's own
-host-centric name, EP3 OUT.
+Bryan T's USB AUDIO OUT (usbin-test, 26 Sep 2026: four channels into A–D,
+draft PR #468, then PR #495 as USB AUDIO IN) cut to a stereo pair and moved
+onto the build's placed-section path, 28 Sep 2026. The USB endpoint keeps
+USB's own host-centric name, EP3 OUT.
 
 ## How it works
 
 **Descriptors** (`modules/usb-midi/descriptors.py`, `with_in`):
-- AudioStreaming interface 5, alt 0/1, with EP3 OUT: 4 ch × 24-bit in 4-byte
-  subslots, 192 B every 250 µs at high speed. It is iso asynchronous and fed
-  by IT `0x13` → OT `0x14`.
+- AudioStreaming interface 5, alt 0/1, with EP3 OUT: 2 ch × 24-bit in 4-byte
+  subslots, front left / front right, 96 B every 250 µs. Iso asynchronous,
+  fed by IT `0x13` → OT `0x14` on the one clock.
 - EP3 OUT is the only free endpoint (EP1 mass storage, EP2 MIDI, EP3 IN
   audio), so there is none for explicit feedback. EP3 IN is marked as the
   **implicit-feedback** data endpoint (`bmAttributes 0x25`), and the host
   sizes each OUT packet from the IN stream's.
-- It needs a USB AUDIO layout beside it for that feedback: **USB AUDIO MC**
-  (MAIN L/R + CUE L/R, the four channels usbin-test forced with `AUD_IN4`),
-  FULL or EXTENDED. The descriptor unit refuses a remix without one, and one
-  with MASTER (a 1 ms input stream; this stream's feedback was built and
-  measured against 250 µs). With MC, all four configuration descriptors are
-  byte-identical to the ones usbin-test's `usb-io` served on Bryan T's MKII
-  (both generators run side by side, 27 Sep 2026). Without this module they
-  are byte-identical to main's.
+- It needs a 250 µs USB AUDIO layout beside it for that feedback: EXTENDED,
+  FULL or MC. The descriptor unit refuses a remix without one, and one with
+  MASTER (a 1 ms input stream, untested here).
+- The full-speed configurations carry no interface 5: the unit serves the
+  stream at high speed only, so a full-speed host is never offered one. One
+  clamp (`cfg_len`) covers all four replies: a host asks for a
+  configuration's own `wTotalLength`, so the shorter tables' zero pad is
+  never requested.
 
 **ColdFire** (`usbaudio_in.s`, a DRAM unit):
 - `in_setiface_shim`, a detour after usbaudio's SET_INTERFACE shim:
-  interface 5 records the alt setting and ACKs.
+  interface 5 alt 0 or 1 records the alt setting and ACKs; any other alt
+  STALLs. usbaudio.s answers GET_INTERFACE(5) from the same byte
+  (`USB_IN` in its `remix.inc`).
 - `in_state7_shim`, a detour on the frame-transfer state machine's state 7
   (`0x40004bc0`). It is the one owner of EP3 OUT:
   - brings it up and down;
   - retires completed dTDs into a 1,024-frame ring;
   - self-heals the queue;
-  - then runs a **second eDMA transfer** per DSP frame to core 0: 16 frames
-    to `$6320` in the idle bank, in DSP slot order C, D, A, B, with a stream
-    flag in bit 8 of the first low halfword.
+  - then runs a **second eDMA transfer** per DSP frame to core 0: 96
+    halfwords to `$6320` in the idle bank. Word 0 is 1 while the stream is
+    open, then 16 × (A hi, A lo, B hi, B lo), hi = sample[23:8], lo =
+    sample[7:0].
 
-  The stock frame-IRQ unmask runs on the second visit.
+  The stock frame-IRQ unmask runs on the second visit, our transfer's
+  completion.
 - Cushion `IN_TARGET` = 384 frames (8.7 ms).
 - The **dTDs and packet buffers are in on-chip SRAM** at `0x80007c00`, and
-  the EP0 reply buffer at `0x80007f80`; see *SRAM*.
+  the EP0 reply buffer at `0x80007f80`, declared as `Claims.sram`; see
+  *SRAM*.
 - `in_ctrl_shim`, a detour on the EP0 stall store (`0x4001de6e`), answers
-  the diagnostic vendor requests.
+  vendor request `0x56` with the fifteen counters.
 
-**DSP** (`rx_inject.asm`, 24 words in SPATIALIZER's space on payload A,
-hooked at `P:0x88`):
-- If the host word at `$320` of the bank carries the flag, it copies the 64
-  words over the last completed RX block (`X:$202`).
-- Every instruction form has a stock precedent.
+**DSP** (`rx_inject.asm`, 33 words on payload A):
+- Placed by the build in the donor region like any effect, with no dispatch
+  entry: P:`0x88`'s `move r2,x:>$204` becomes `jsr >inject`
+  (`schema.DspHook`) and the inject replays it. The ledger refuses a second
+  section on the site.
+- While word 0 is set it writes the pair over slots 2/3 (inputs A/B) of the
+  current RX block (`X:$202`); slots 0/1 (C/D) are not touched. Every stock
+  reader of the block, the core 0 → core 1 handoff and the read-back the
+  recorder takes included, runs after P:`0x88` in the frame, so one inject
+  serves both cores and the recorder (`out/dsp/payload_A.asm`).
+- Every instruction form has a stock site in payload A, or ran on Bryan T's
+  unit in the four-channel inject; the source lists them.
 
-## The click bug and its fix (the finding that matters for usbaudio too)
-
-**Symptom.** At first, about 1 OUT packet in 2,000 idle, and 1 in 200 under a
-busy project:
-- completed with the dTD transaction-error bit;
-- 2–12 bytes short, at the end only;
-- each one dropped a frame, heard as a click on all channels at once.
-
-**Cause** (MCF54455RM, NXP's public reference manual: ch. 10 USB, 14 SCM,
-15 XBS).
-- In device mode the controller has **one 16-byte RX FIFO** (10.4.3), about
-  270 ns of slack at 480 Mbit/s.
-- **SCM BCR (`0xfc040024`), which enables USB bursting over the crossbar,
-  resets to 0**, and nothing sets it: the unit read 0 on stock boot.
-- So the FIFO was emptied one beat at a time. Under load it overflowed near
-  the end of a packet, and the controller flagged a CRC error. For ISO RX,
-  transaction error = CRC or fulfillment. The data before the cut was clean,
-  checked under digital silence.
-- Stock's USB traffic is bulk and retried, so it never shows.
-
-**Fix**, in `in_up`:
-- BCR = `0x3ff`.
-- On SDRAM (XBS slave 2) and the SRAM backdoor (slave 4), USB first under
-  fixed priority: PRS = `0x60504321`, CRS = `0x10`. Stock is PRS
-  `0x65403210`, USB at level 6 of 7, and CRS `0x110`, round robin.
-
-**Measured on the unit, same busy project:**
-
-| Setting | Bad packets |
-|---|---|
-| Stock | 1,189 / min |
-| BCR on | 5–11 / min |
-| BCR on + USB first | **0 in 10 min**, no audible or UI change |
-
-EP3 IN (the stream to the Mac) and DISK MODE very likely benefit too.
-Arguably these settings belong in usbaudio or the platform rather than here.
-
-**Ruled out on the way:**
-- The cable and the port.
-- Queue and service timing (`dry`/`late` 0).
-- USBMODE.SDIS.
-- RXPBURST 1–8 (16 exceeds the FIFO and fails every packet).
-- Buffers in SRAM alone.
-- A 4-channel EP3 IN stream alone.
-- Bit errors.
-- dQH Mult 0 (Linux's ISO RX choice), which kills the stream: this
-  controller needs Mult ≥ 1.
+**USB CROSSBAR** is required: without it the controller's 16-byte RX FIFO
+loses packet tails under a busy project (`modules/usb-crossbar/README.md`
+has the measurement).
 
 ## SRAM
 
-`0x80007c00`–`0x80007fff` (1 KB) holds the dTDs, the buffers and the EP0
-reply. Evidence that it is free:
+`0x80007c00`–`0x80007dff` holds the four dTDs and their 96-byte packet
+buffers, `0x80007f80`–`0x80007fbf` the EP0 reply. Evidence that the top
+1 KB is free (Bryan T, 26 Sep 2026):
 - The stock image's highest static SRAM use is the 768-byte buffer at
   `0x80007574` (`0x40098890`), ending `0x80007874`.
 - No module touches anything above `0x80006907`.
 - Under the port, nothing touches `0x80007874`–`0x80007fff`: boot, frames
-  and USB streaming, and Bryan's busy project via
-  `tools/verify/verify_set.py --extra "--touch-map 0x80000000,0x8000=…"`
-  plus `tools/verify/sram_census.py`.
+  and USB streaming, and a busy project via `tools/verify/verify_set.py
+  --extra "--touch-map 0x80000000,0x8000=…"` plus
+  `tools/verify/sram_census.py`.
 - RAMBAR1 is `0x80000235`, so the backdoor is on for bus masters.
 
-SRAM is not cached, so no alias is needed.
+SRAM is not cached, so no alias is needed. Packet buffers in SDRAM through
+the uncached alias (usbaudio's pattern) with USB CROSSBAR on has not been
+measured; SRAM alone did not cure the lost tails, the crossbar setting did.
 
-## Diagnostics (debug tools; strip or gate before shipping)
+## Counters
 
-**EP0 vendor requests:**
-- `0x56` GET: USB AUDIO IN's 28 counters (`tools/hw/usb_counters.py --in`):
-  fill watermarks, underruns, and `err`/`partial`/`errmask`/`lasttok` for bad
-  completions.
-- `0x57` GET: read any long in `0xfc000000..`.
-- `0x58`/`0x59` OUT: write the low/high half of an allowlisted register.
-- `0x5b`/`0x5a` OUT: stage a high half, then write the whole long in one
-  store. The XBS PRS registers bus-error on any intermediate value with two
-  masters on one level.
-
-**`tools/hw/usb_reg.py`** drives these: `show`, `peek`, `poke`, `poke32`,
-`usbprio on|off` and `sdis`. It checks PRS values before sending.
-
-`0x57` can read any peripheral address. A read with no register behind it can
-take an access error.
+Vendor request `0xc0`/`0x56` returns fifteen big-endian longs:
+produced, consumed, pkts, lastn, lastfill, underruns, overruns, reprimes,
+bad, frames, seconds, minfill, maxfill, err, partial.
+`tools/hw/usb_counters.py --in` reads them from a unit; `verify_usb_in`
+reads them under the port. `tools/hw/usb_probe.py` reads both rings'
+counters through a host session and prints a verdict.
 
 ## Verification
 
-- **Under the port:**
-  - `tools/verify/verify_usb_in.py`, this module's gate (`make check` runs it
-    for any remix that carries it): bit-exact C D A B in the RX blocks and
-    the recorder ring (which the DSP copies only while it sees the flag), the
-    counters over `0x56`, and the flag clear and the jacks back after alt 0. EP3 IN's frame size comes from the remix's layout, so the
-    same gate runs beside MC, FULL or EXTENDED. The port does not model
-    SCM/XBS, so the click fix itself is measured on the unit only.
-  - `verify_usb` for `usb-io`: the six-interface configuration, EP3 IN marked
-    as implicit-feedback data, EP 0x03 and interface 5's four channels.
-- **Results, 27 Sep 2026** (`usb-io`, beside USB AUDIO MC, Bryan T's Mac):
-  `make check` passes. `verify_usb_in` passed eight runs in a row, one of
-  them `POLLS=40000` (10 s of device time): every packet whole, 0 underruns,
-  bit-exact C D A B on the RX blocks and the recorder ring; ring fill 343-388
-  frames against the 384 target. The first run on this port failed one
-  check, "the stream flag is set", and so did the `make accept` run of
-  `usb-io`: the gate read the flag from a snapshot of `in_tx` taken at
-  whatever instruction the port stopped on, and inside `in_build` the first
-  sample is rewritten before the flag is set (`2157001b`: a valid coded
-  sample without bit 8), while the RX blocks in the same run carried the
-  host's samples, i.e. the DSP saw the flag. On the unit the DMA to the DSP
-  starts only after `in_build` returns. The gate now proves the flag through
-  the RX blocks and checks the snapshot only after the stream closes, where
-  it is a constant zero. (A guess recorded here before the line was caught,
-  pacing or underruns, was wrong.)
-  The port's fill band says nothing about hardware headroom: its host is
-  locked to the device, where the unit's EP3 IN servo lets the fill wander
-  +-128 frames. `IN_TARGET` comes down from the unit's `minfill`, not this.
-- **On hardware:** as USB AUDIO OUT with `AUD_IN4`, builds 12-15 on Bryan T's
-  MKII (26 Sep 2026): the numbers above. This port, as `usb-io` build 16 on
-  the same unit and Mac (27 Sep 2026):
-  - macOS lists the Octatrack as 4 in / 4 out; MAIN and CUE reach the Mac on
-    channels 1-4; the host's channels 1-4 arrive on inputs A-D; the jacks
-    return when the host's stream closes.
-  - About 5 million EP3 OUT packets over the session: `bad`, `err`,
-    `partial`, underruns, overruns and re-primes all 0.
-  - `usb_hw_probe.py` (PR #492), sustained and churn, both CLEAN in a running
-    session. Its later "EP3 IN overruns" verdicts, after a USB re-plug and
-    after DISK MODE, are overruns counted when macOS closed the stream (see
-    *Latency* below): an artifact of where the probe takes its last reading.
-  - DISK MODE: the card mounts and reads on the Mac, ejects, the unit leaves
-    disk mode, and the stream comes back (`bad` 0).
+- **Under the port:** `tools/verify/verify_usb_in.py`, this module's gate
+  (`make check` runs it for any remix that carries it): the host's coded
+  samples bit-exact on slots 2/3 of the RX blocks with slots 0/1 zero, in
+  consecutive frames, and on the recorder's input ring; the counters over
+  `0x56`; word 0 clear and the jacks back after alt 0. EP3 IN's frame size
+  comes from the remix's layout, so the gate runs beside MC, FULL or
+  EXTENDED. `verify_usb` checks the six-interface high-speed configuration
+  and the five-interface full-speed one. The port does not model SCM or XBS,
+  so USB CROSSBAR is measured on a unit only.
+- **On hardware:** this stereo form has not been flashed. The four-channel
+  form ran on Bryan T's MKII as usbin-test builds 12–16 (26–27 Sep 2026):
+  about 5 million packets with `bad`, underruns and overruns 0 after the
+  crossbar setting, DISK MODE in and out with the stream back afterwards.
+  nordseele's MKI (`OCTABAM94`, the same build) enumerated and lit input A
+  from host channel 1, with CoreAudio restarting the IO context hundreds of
+  times and playback at about half nominal speed (his review, 27 Sep 2026);
+  not reproduced on the MKII. `tools/hw/usb_probe.py` is the instrument:
+  its EP3 IN drain rate (`consumed` per second) is the number that
+  discriminates.
 
-## Latency, measured on the unit (build 16, 27 Sep 2026)
+## Latency, measured on Bryan T's unit (usbin-test build 16, 27 Sep 2026)
 
 Both rings' `lastfill` over the vendor requests (`0x55`, `0x56`), read
 once a second:
 
 - **The sum of the two fills is conserved while the streams run**: 1,353 to
-  1,360 second by second through a fresh session, and about 1,355 from
-  (not simultaneous) reads in an earlier one. With implicit feedback the
-  host sends as many frames as it reads, and the DSP's frame clock produces
-  into EP3 IN's ring and consumes from this one, so every frame EP3 IN's
-  ring loses, this ring gains. The sum is the round trip through the unit:
-  1,355 frames is about 31 ms, before the host's own buffers.
-- **Where it comes from**: at the first read of a fresh session EP3 IN's
-  fill was already 884, not its 512 start, and this ring 443. Within a
-  second usbaudio's servo had EP3 IN at the top of its band (632) and this
-  ring at 726. So the sum is `AUD_TARGET` + `IN_TARGET` (896) plus about 460
+  1,360 second by second through a fresh session, about 1,355 in another.
+  With implicit feedback the host sends as many frames as it reads, and the
+  DSP's frame clock produces into EP3 IN's ring and consumes from this one.
+  1,355 frames is about 31 ms, the round trip through the unit before the
+  host's own buffers.
+- **Where it comes from**: `AUD_TARGET` + `IN_TARGET` (896) plus about 460
   frames EP3 IN gains between the stream starting and macOS polling it
-  steadily. (INFERRED from the two sessions: the mechanism fits both, the
-  460 has been seen twice.)
-- **How the sum splits drifts**: this Mac's clock against the unit's moves
-  about 0.5 frames a second (11 ppm) from EP3 IN's ring to this one, until
-  EP3 IN reaches the bottom of its band. In a long session this ring rose
-  about 0.5 frames a second to a plateau of 969 as EP3 IN settled at 390;
-  in the fresh session it began near 725.
-- **EP3 IN overruns happen at stream close**, not while running: the count
-  held through start-up and 10 s of streaming and rose by 4 when the host's
-  playback ended, then froze (the host stops polling EP3 IN before it sends
-  alt 0). The next open restarts both rings, so they do not carry over.
+  steadily (INFERRED from two sessions).
+- **The split drifts** about 0.5 frames a second (11 ppm, that Mac against
+  the unit) from EP3 IN's ring to this one until EP3 IN reaches the bottom
+  of its band; this ring plateaued at 969 of 1,024.
+- **EP3 IN overruns happen at stream close**, not while running: the host
+  stops polling EP3 IN before it sends alt 0. Both rings restart on the
+  next open.
 
-So `IN_TARGET` alone does not set this stream's latency. The levers, in
-order: start usbaudio's consumer at the host's first IN poll rather than at
+So `IN_TARGET` alone does not set the latency. The levers, in order: start
+usbaudio's consumer at the host's first IN poll rather than at
 SET_INTERFACE (removes the ~460), then lower `AUD_TARGET`, `IN_TARGET` and
-`AUD_BAND` together, keeping `IN_TARGET - AUD_BAND` (this ring's floor)
-above the jitter the unit shows. Both are usbaudio.s or this module's
-constants, for a follow-up. A risk the arithmetic shows: with the sum at
-1,355 and EP3 IN at its floor, this ring sits about 55 frames under its
-1,024-frame capacity (969 seen); a host that starts ~55 frames slower
-would overrun it, an audible jump. Not seen.
-
-## What the port changed (27 Sep 2026)
-
-- Names: the key, folder, unit, symbols (`out_*` -> `in_*`) and constants
-  (`OUT_TARGET` -> `IN_TARGET`, ...). `usbaudio_in.s` reverses to
-  usbin-test's `usbaudio_out.s` (at `f1432c9`) exactly under that renaming,
-  except four comment lines. The DSP pokes and detour sites are byte-identical.
-- `AUD_IN4` is gone: MAIN + CUE is USB AUDIO MC, a layout of its own.
-- usbaudio.s's EP3 bring-up and teardown write only ENDPTCTRL3's TX half,
-  as on usbin-test. For every layout without this module the RX half is
-  never set, so the register values are unchanged.
+`AUD_BAND` together, keeping `IN_TARGET − AUD_BAND` (this ring's floor)
+above the jitter the unit shows. Both are in `usbaudio.s`, for a follow-up.
 
 ## Open
 
-- **Beside FULL or EXTENDED: not measured.** Before the crossbar fix, the
-  twenty-channel EP3 IN stream beside EP3 OUT lost EP3 OUT packet tails
-  under load (images 97-99), which is why usbin-test forced four channels.
-  The fix (build 14) is what cured the tails, and a four-channel EP3 IN
-  stream alone did not, so the larger pairings are plausible; they have not
-  been run since. Count bad packets with `usb_counters.py --in` first.
-- **A remix with this module and DSP modules** could have the placer pack a
-  module into SPATIALIZER's words, over the inject. No remix does that yet.
-  Whether the build refuses it (each poke asserts stock bytes first) or
-  the inject is overwritten depends on the order it applies pokes and
-  placement; not traced, not tested.
-- Latency: the follow-up in *Latency* above.
-- The session's start and close on other hosts: macOS's start-up delay
-  sets the latency, and nordseele's report (PR #468) came from a host
-  that restarted its IO context repeatedly.
-- The full-speed alt of interface 5 is declared but not served.
-- GET_INTERFACE(5) returns stock `00`.
-- The diagnostic vendor requests (`0x57`-`0x5b`) are debug tools; strip or
-  gate before this ships to anyone else.
+- This stereo form on a unit: `tools/hw/usb_probe.py` sustained and churn,
+  then a host → A/B → recorder take.
+- The MKI report above: half-speed playback and CoreAudio restarts, the
+  drain rate under `usb_probe.py` on that unit.
+- Beside FULL or EXTENDED on hardware: before the crossbar setting the
+  twenty-channel EP3 IN stream beside EP3 OUT lost packet tails under load;
+  the setting cured them with the four-channel pairing and the larger
+  pairings have not been run since. `usb-io` pairs with EXTENDED.
+- Packet buffers in SDRAM through the alias with USB CROSSBAR on.
+- The latency follow-up above.
+
+## Ground
+
+| what | where |
+|---|---|
+| code | DRAM unit `usbaudio_in`; DSP section `rx_inject.asm`, payload A's donor region, 33 words |
+| hooks | `0x4001dd0a` SET_INTERFACE (after usbaudio's), `0x40004bc0` frame transfer state 7, `0x4001de6e` EP0 stall store; DSP P:`0x88` (`DspHook`) |
+| ring | 1,024 × 8 B, the unit's data |
+| DMA memory | dTDs `0x80007c00` (128 B), packet buffers `0x80007c80` (384 B), EP0 reply `0x80007f80` (64 B): `Claims.sram` |
+| host-port buffer | `in_tx`, 192 B, through the uncached alias (+`0x08000000`) → core 0 X bank +`$320`..+`$380` |
+| descriptors | USB MIDI's `usbmidi_cfg` unit, interface 5 in the high-speed configurations |
