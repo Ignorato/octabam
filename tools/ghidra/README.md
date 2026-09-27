@@ -1,9 +1,10 @@
 # Ghidra: the MAIN OS and both DSP payloads, one project
 
 ```bash
-make ghidra GHIDRA=~/ghidra_12.x          # or GHIDRA_INSTALL_DIR=... make ghidra
-python3 tools/ghidra/ot_ghidra.py import --ghidra DIR [--project DIR] [--only DSP_A,DSP_B] [--no-analysis]
-python3 tools/ghidra/ot_ghidra.py layout  # the memory images + layout files only, no Ghidra
+make ghidra-install GHIDRA=~/ghidra_12.1.4_PUBLIC   # once: a copy with the processor modules below
+make ghidra GHIDRA=out/ghidra/ghidra_12.1.4_PUBLIC-octabam [IMAGE=out/mainos_bus.bin]
+python3 tools/ghidra/ot_ghidra.py import --ghidra DIR [--project DIR] [--only DSP_A,DSP_B] [--image [PATH]] [--no-analysis]
+python3 tools/ghidra/ot_ghidra.py layout [--image [PATH]]  # the memory images + layout files only, no Ghidra
 ```
 
 Needs `out/raw/section_3_MAIN_OS.bin` (`make os && make recon`) and a
@@ -17,6 +18,7 @@ output and lists every layout directive as it is applied.
 |---|---|---|
 | `MAIN_OS` | `68000:BE:32:Coldfire_EMAC_frac`, else `68000:BE:32:Coldfire` | the image at `0x40000400`; the board map (`ARCHITECTURE.md` §7) as blocks, including `0x48000000`, the uncached view of SDRAM, as an empty block of its own (a byte-mapped copy doubled the analysis); the peripheral registers the docs read; the interrupt handlers (`KERNEL.md`); the DSP boot routines; the four DSP blobs marked as data; every stock address a module names with `.set`/`.equ` (the source file is in a repeatable comment) |
 | `DSP_A`, `DSP_B` | `DSP56300:LE:24:default` | P/X/Y as the ColdFire uploads them (`dsp_modmap.py`), each load record's source address commented; internal memory to the default map's extents (P 8K, X 36K, Y 48K words, `CHIP.md` §3); the shared window `0x30000`–`0x3FFFF` with both bootstraps and payload A's shared records, X and Y mapped onto P there (they alias on the chip); the X/Y I/O registers; the vectors; both dispatch tables with every effect's init and process named (`DSP.md` §5); payload A's named routines |
+| `REMIX` (with `--image`/`IMAGE=`) | as `MAIN_OS` | a built image (default `out/mainos_bus.bin`) under `MAIN_OS`'s layout; the bytes the build appends after the OS are one data block (`build_appended`), and each runtime in the loader's table is unpacked (`depack.py`) into its own block `DRAM_RUNTIME_n` at the address the loader copies it to, so a module's calls into stock (and the stock callers it detours) are in one listing |
 
 Nothing from the image is committed. The tool reads your image, writes
 `out/ghidra/load/`, and `OtLayout.java` applies the layout as
@@ -28,35 +30,71 @@ tables in `ot_ghidra.py` and re-import.
 ## The processor modules
 
 Stock Ghidra has no DSP56300 and decodes the ColdFire's EMAC wrongly. Both
-are fixed on branches of a Ghidra fork, each with a PR on
-`roblg/ghidra` (#1–#3) being prepared for upstream:
+are here, in the form they are offered to Ghidra upstream (`roblg/ghidra`
+#3 and #2):
 
-| branch of `roblg/ghidra` | what it adds |
+| here | what it adds |
 |---|---|
-| `ot-dsp56300` | the DSP56300 processor: P/X/Y word spaces, parallel moves, hardware loops, a loop-end analyzer |
-| `ot-coldfire-fixes` | ColdFire ISA_C and EMAC decoding and semantics, and the `Coldfire_EMAC_frac` variant (`MACSR` fractional, as this firmware runs it) |
-| `decomp-space-qualifier` | the decompiler prints `__Y(*p)` for a dereference outside the default data space; without it, X and Y reads print as plain `*p` |
+| `processors/DSP56300/` | the DSP56300 processor: P/X/Y word spaces, parallel moves, hardware loops, a loop-end analyzer; languages `DSP56300:LE:24:default` (linear AGU, what the import uses) and `DSP56300:LE:24:modulo` (every address update through the user op `agu_modulo`) |
+| `patches/coldfire-emac.patch` | ColdFire ISA_C and EMAC decoding and semantics in `Ghidra/Processors/68000`, and the `68000:BE:32:Coldfire_EMAC_frac` variant (`MACSR` fractional, as this firmware runs it) |
 
-Build a distribution from a merge of the branches you want (`gradle
-buildGhidra`). Alternatively, copy `Ghidra/Processors/DSP56300` and the
-68000 language files into an installed Ghidra and run `support/sleigh -a`
-on each `data/languages`. With stock Ghidra the MAIN OS still imports, as
-`68000:BE:32:Coldfire`, and the DSP programs are skipped with a message.
+`make ghidra-install GHIDRA=<stock install>` (`install.sh`) never touches
+the stock install. It copies it to `out/ghidra/<name>-octabam`
+(`GHIDRA_DEST=` to choose), applies the patch, adds the module without its
+`build.gradle` (the distribution's `support/gradle` includes every
+directory holding one, and the module's needs a source tree), compiles
+both processors' SLEIGH with the release's own compiler and the loop-end
+analyzer against the release's jars (`lib/DSP56300.jar`), and builds the
+native decompiler with the release's gradle wrapper
+(`support/gradle/gradlew buildNatives`) when the release has none for the
+machine. The 12.1.4 release ships them for `linux_x86_64` and
+`win_x86_64` only; without one no DSP function decompiles and MAIN_OS
+drops to 2,147 functions / 181,378 instructions, two of the three callers
+of `0x40054cd8` missing (measured without one in
+sambanks/octabam#483). That build needs
+a C++ toolchain (Xcode's command line tools on macOS) and the network for
+gradle, and takes about two minutes. It needs a JDK 21+ (`JAVA_HOME`).
+`DEBUG=1` streams every step; otherwise the output goes to
+`<dest>.install.log`.
+
+It is written against the 12.1.4 release, whose `68000.sinc` and
+`68000.ldefs` are byte-identical to the patch's base; another version is
+attempted only if the patch applies. With a stock Ghidra the MAIN OS still
+imports, as `68000:BE:32:Coldfire`, and the DSP programs are skipped with a
+message.
+
+Not here: the decompiler printing `__Y(*p)` for a dereference outside the
+default data space (`roblg/ghidra` #1, `decomp-space-qualifier`). It changes
+the native decompiler, so it waits for upstream; without it X and Y reads
+print as plain `*p`.
 
 ## What the import prints
 
-With the processor modules above and OS 1.40C, each program reports
-0 layout warnings. The error bookmarks are flows into memory the image
-does not hold:
+With `make ghidra-install` on Ghidra 12.1.4 and OS 1.40C, each program
+reports 0 layout warnings. The error bookmarks are flows into memory the
+image does not hold:
 
 | program | functions | instructions | error bookmarks |
 |---|---|---|---|
-| `MAIN_OS` | 2,175 | 190,956 | 9: calls into flash (`jsr 0x0000eae0`) and into `0x40000000`, below the image |
+| `MAIN_OS` | 2,176 | 191,064 | 9: calls into flash (`jsr 0x0000eae0`) and into `0x40000000`, below the image |
 | `DSP_A` | 109 | 6,921 | 1: `P:0`'s `jmp $fff000`, the boot ROM |
 | `DSP_B` | 102 | 6,377 | 1: the same |
 
-Measured 26 Sep 2026 with the three branches below merged into Ghidra
-12.3-DEV. Every DSP function decompiles (108 in A, 101 in B, 20 s timeout each).
+Measured 26 Sep 2026, macOS arm64, Ghidra 12.1.4 (the release zip, the
+decompiler built by `install.sh`). Every non-thunk function decompiles
+(20 s timeout each): 107 in DSP_A, 100 in DSP_B, 2,171 in MAIN_OS. The same
+programs on Ghidra 12.3-DEV with the `roblg/ghidra` branches merged
+(26 Sep 2026): MAIN_OS 2,175 / 190,956 / 9, DSP_A 109 / 6,921 / 1, DSP_B
+102 / 6,377 / 1.
+
+`IMAGE=out/mainos_bus.bin` after `make check` (the shipping build,
+`bamsep26` BUILD 79) adds `REMIX`: 2,228 functions, 192,175 instructions,
+the same 9 error bookmarks as MAIN_OS, 0 layout warnings. Its one DRAM
+runtime (2,612 bytes at `0x40a955e0`, where scenes-p2's detour at
+`0x4000cf40` jumps) holds 18 functions / 497 instructions. The page-1
+writer `0x40054cd8` has the three stock callers (`0x40062530`,
+`0x400625aa`, `0x400a15f0`) and a fourth, `0x400d75d6`, in the ColdFire
+cave the build fills (`0x400d6b00`..`0x400d7c3c`, `tools/remix/state.py`).
 
 ## Reading the DSP programs
 

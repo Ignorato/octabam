@@ -2,8 +2,9 @@
 """Load the Octatrack OS into Ghidra: the ColdFire MAIN OS and both DSP payloads.
 
     python3 tools/ghidra/ot_ghidra.py layout             # -> out/ghidra/load/: memory images + layouts
-    python3 tools/ghidra/ot_ghidra.py import [--ghidra DIR] [--project DIR] [--only MAIN_OS,DSP_A]
-    make ghidra [GHIDRA=<install dir>]                   # both steps
+    python3 tools/ghidra/ot_ghidra.py import [--ghidra DIR] [--project DIR] [--only MAIN_OS,DSP_A] [--image [PATH]]
+    make ghidra [GHIDRA=<install dir>] [IMAGE=out/mainos_bus.bin]   # both steps
+    make ghidra-install GHIDRA=<stock 12.1.4>            # the Ghidra to point GHIDRA at (install.sh)
 
 Three programs in one Ghidra project (default out/ghidra/octatrack.gpr):
 
@@ -19,6 +20,10 @@ Three programs in one Ghidra project (default out/ghidra/octatrack.gpr):
            section 3), the I/O registers under the names dsp56kDisassemble
            prints, the vectors, and both effect dispatch tables with every
            entry named (DSP.md section 5).
+  REMIX    with --image: a built image (default out/mainos_bus.bin) under
+           MAIN_OS's layout, the build's appended payloads unpacked to the
+           DRAM addresses the loader copies them to, so module code and its
+           calls into stock are in one listing.
 
 Everything is derived from YOUR out/raw/section_3_MAIN_OS.bin at run time;
 nothing from the image is stored in the repo. The layout files are plain
@@ -73,6 +78,7 @@ CF_BLOCKS = [
 ]
 SDRAM_END = 0x48000000                                  # 128 MB
 UNCACHED = 0x48000000                                   # the same SDRAM, uncached
+UNCACHED_ALIAS = UNCACHED - 0x40000000                  # the loader writes DRAM through the uncached view
 
 # On-chip peripherals: bases and the registers the docs read. (address, name, comment)
 CF_IO = [
@@ -184,14 +190,78 @@ def module_names():
     return out
 
 
-def cf_layout(img):
+def dram_runtimes(built, stock_len):
+    """[(run address, bytes, blob address, blob length)]: every GKA3 payload
+    the build appends after the OS, unpacked.
+
+    The loader's table (tools/remix/platform_build.py) holds, per payload,
+    (blob, len, phash, stage, dst, rawlen, rhash, backup); a blob is found
+    by its GKA3 stream and its entry by the pointer to it."""
+    import depack
+    app, out = built[stock_len:], []
+    for m in re.finditer(b"GKA3", app):
+        g, at = m.start(), BASE + stock_len + m.start()
+        # The table entry pointing at this blob (signature + stream, or the
+        # stream itself); the loader's own `cmpi.l #'GKA3'` has none.
+        entries = []
+        for start in (g - 4, g):
+            ptr = (BASE + stock_len + start).to_bytes(4, "big")
+            i = app.find(ptr)
+            while 0 <= i <= len(app) - 32:
+                entries.append([int.from_bytes(app[i + 4 * k:i + 4 * k + 4], "big") for k in range(8)])
+                i = app.find(ptr, i + 1)
+        if not entries:
+            log(f"GKA3 at 0x{at:08x}: nothing points at it; not a payload")
+            continue
+        try:
+            raw = depack.depack(app[g:])
+        except (ValueError, IndexError) as e:
+            print(f"[ghidra] warning: the payload at 0x{at:08x} does not unpack ({e})")
+            continue
+        entry = next((e for e in entries if e[5] == len(raw)), None)
+        if entry is None:
+            print(f"[ghidra] warning: no loader table entry for the payload at 0x{at:08x} ({len(raw)} bytes unpacked)")
+            continue
+        run = entry[4] - UNCACHED_ALIAS if entry[4] >= BASE + UNCACHED_ALIAS else entry[4]
+        log(f"DRAM runtime: {len(raw)} bytes to 0x{run:08x}")
+        out.append((run, raw, entry[0], entry[1]))
+    return out
+
+
+def cf_layout(img, prog="MAIN_OS", stock_len=None, dram=()):
+    """MAIN_OS's layout; for a built image, `stock_len` is where the build's
+    appended bytes start and `dram` is [(run address, length, file, blob
+    address, blob length)]."""
     end = BASE + len(img)
-    lines = [f"# MAIN_OS: ColdFire MCF54454, image {len(img):,} bytes at 0x{BASE:08x}",
+    what = "image" if stock_len is None else "built image"
+    lines = [f"# {prog}: ColdFire MCF54454, {what} {len(img):,} bytes at 0x{BASE:08x}",
              f"rename ram:0x{BASE:08x} OS_IMAGE rwx"]
     for name, start, ln, fl in CF_BLOCKS:
-        if name == "SDRAM":
-            start, ln = end, SDRAM_END - end
-        lines.append(f"block {name} ram:0x{start:08x} 0x{ln:x} {fl}")
+        if name != "SDRAM":
+            lines.append(f"block {name} ram:0x{start:08x} 0x{ln:x} {fl}")
+            continue
+        # Image end .. SDRAM end, less the runtimes the loader unpacks there.
+        at = end
+        for i, (run, n, f, _blob, _bn) in enumerate(sorted(dram)):
+            if run < at or run + n > SDRAM_END:
+                sys.exit(f"{prog}: runtime {i} at 0x{run:08x} (+0x{n:x}) is not in free SDRAM above the image")
+            if run > at:
+                lines.append(f"block SDRAM_{i} ram:0x{at:08x} 0x{run - at:x} {fl}")
+            lines += [f"file DRAM_RUNTIME_{i} ram:0x{run:08x} {f} rwx",
+                      f"label ram:0x{run:08x} dram_runtime_{i}",
+                      f"comment ram:0x{run:08x} plate DRAM runtime {i}: {n:,} bytes the loader unpacks here at boot"]
+            at = run + n
+        lines.append(f"block SDRAM ram:0x{at:08x} 0x{SDRAM_END - at:x} {fl}")
+    if stock_len is not None and stock_len < len(img):
+        # The loader is code (the boot detour lands in it); the packed blobs
+        # are data to it.
+        a = BASE + stock_len
+        lines += [f"label ram:0x{a:08x} build_appended",
+                  f"comment ram:0x{a:08x} plate appended by the build: {len(img) - stock_len:,} bytes "
+                  f"(the loader, its table and the packed runtimes, tools/remix/platform_build.py)"]
+        for i, (run, n, f, blob, bn) in enumerate(sorted(dram)):
+            lines += [f"label ram:0x{blob:08x} dram_runtime_{i}_packed", f"data ram:0x{blob:08x} byte {bn}",
+                      f"comment ram:0x{blob:08x} plate DRAM runtime {i}, packed: unpacked to 0x{run:08x} (DRAM_RUNTIME_{i})"]
     # Not byte-mapped onto SDRAM: analysis follows flow into a mapped copy and
     # disassembles the image twice (measured: 168K of 359K instructions).
     lines += [f"block SDRAM_UNCACHED ram:0x{UNCACHED:08x} 0x8000000 rw",
@@ -225,7 +295,7 @@ def cf_layout(img):
         if a not in named:
             srcs = ", ".join(sorted({f"{nm} ({s})" for nm, s, _ in names}))
             lines.append(f"comment ram:0x{a:08x} repeatable named by {srcs}")
-    log(f"MAIN_OS: {n} module names")
+    log(f"{prog}: {n} module names")
     return lines
 
 
@@ -414,7 +484,7 @@ def dsp_layout(tag, mem, recs, entry, other_entry):
 
 # ------------------------------------------------------------------ commands --
 
-def cmd_layout(_args):
+def cmd_layout(args):
     if not IMG.exists():
         sys.exit(f"missing {IMG}: run `make os && make recon` first")
     img = IMG.read_bytes()
@@ -422,6 +492,21 @@ def cmd_layout(_args):
     load.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(IMG, load / "MAIN_OS")
     (load / "MAIN_OS.layout").write_text("\n".join(cf_layout(img)) + "\n")
+    progs = ["MAIN_OS", "DSP_A", "DSP_B"]
+    if getattr(args, "image", None):
+        image = pathlib.Path(args.image).expanduser()
+        if not image.exists():
+            sys.exit(f"no built image at {image}: run `make bus REMIX=<name>` first")
+        built = image.read_bytes()
+        if len(built) < len(img):
+            sys.exit(f"{image} is shorter than the stock image: not a build of this OS")
+        dram = []
+        for i, (run, raw, blob, bn) in enumerate(dram_runtimes(built, len(img))):
+            (load / f"REMIX.dram{i}").write_bytes(raw)
+            dram.append((run, len(raw), f"REMIX.dram{i}", blob, bn))
+        shutil.copyfile(image, load / "REMIX")
+        (load / "REMIX.layout").write_text("\n".join(cf_layout(built, "REMIX", len(img), dram)) + "\n")
+        progs.append(f"REMIX ({image.name}, {len(dram)} DRAM runtimes)")
     cores, shared = dsp_images(img)
     (load / "SHARED.bin").write_bytes(words_bytes(shared))
     for tag, (mem, recs, entry) in cores.items():
@@ -430,7 +515,7 @@ def cmd_layout(_args):
         (load / f"DSP_{tag}.Y.bin").write_bytes(words_bytes(mem["Y"]))
         other = cores["B"][2] if tag == "A" else None
         (load / f"DSP_{tag}.layout").write_text("\n".join(dsp_layout(tag, mem, recs, entry, other)) + "\n")
-    print(f"layout: MAIN_OS, DSP_A, DSP_B -> {load.relative_to(ROOT) if load.is_relative_to(ROOT) else load}")
+    print(f"layout: {', '.join(progs)} -> {load.relative_to(ROOT) if load.is_relative_to(ROOT) else load}")
 
 
 def find_ghidra(arg):
@@ -469,9 +554,11 @@ def cmd_import(args):
         proj = pathlib.Path(os.environ.get("TMPDIR", "/tmp")).resolve() / f"octabam-ghidra-{os.getuid()}"
         print(f"[ghidra] {OUT} is under a hidden directory; the project goes to {proj} (--project to choose)")
     proj.mkdir(parents=True, exist_ok=True)
-    only = set(args.only.split(",")) if args.only else {"MAIN_OS", "DSP_A", "DSP_B"}
+    only = set(args.only.split(",")) if args.only else {"MAIN_OS", "DSP_A", "DSP_B", "REMIX"}
     load = OUT / "load"
     plan = [("MAIN_OS", cf, "0x40000400")]
+    if args.image:
+        plan.append(("REMIX", cf, "0x40000400"))
     if dsp:
         plan += [("DSP_A", dsp, "0x0"), ("DSP_B", dsp, "0x0")]
     else:
@@ -519,12 +606,15 @@ def cmd_import(args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("layout", help="write out/ghidra/load/ (memory images + layouts); no Ghidra needed")
+    img_help = f"also a built image as program REMIX (default {ROOT / 'out/mainos_bus.bin'})"
+    lo = sub.add_parser("layout", help="write out/ghidra/load/ (memory images + layouts); no Ghidra needed")
+    lo.add_argument("--image", nargs="?", const=str(ROOT / "out/mainos_bus.bin"), help=img_help)
     im = sub.add_parser("import", help="layout, then import and analyse every program headless")
     im.add_argument("--ghidra", help="Ghidra install directory (default $GHIDRA_INSTALL_DIR)")
     im.add_argument("--project", help="project directory (default out/ghidra)")
     im.add_argument("--name", default="octatrack", help="project name (default octatrack)")
-    im.add_argument("--only", help="comma-separated subset of MAIN_OS,DSP_A,DSP_B")
+    im.add_argument("--only", help="comma-separated subset of MAIN_OS,DSP_A,DSP_B,REMIX")
+    im.add_argument("--image", nargs="?", const=str(ROOT / "out/mainos_bus.bin"), help=img_help)
     im.add_argument("--no-analysis", action="store_true", help="import and lay out only; analyse later in the GUI")
     args = ap.parse_args()
     {"layout": cmd_layout, "import": cmd_import}[args.cmd](args)

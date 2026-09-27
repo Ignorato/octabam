@@ -425,8 +425,13 @@ disasm: ## Open radare2 on the decompressed ColdFire MAIN OS
 	scripts/disasm.sh
 
 .PHONY: ghidra
-ghidra: ## One Ghidra project: the MAIN OS and both DSP payloads (out/ghidra). GHIDRA=<install dir>; tools/ghidra/README.md
-	python3 tools/ghidra/ot_ghidra.py import $(if $(GHIDRA),--ghidra $(GHIDRA))
+ghidra: ## One Ghidra project: the MAIN OS and both DSP payloads (out/ghidra). GHIDRA=<install dir> [IMAGE=out/mainos_bus.bin]; tools/ghidra/README.md
+	python3 tools/ghidra/ot_ghidra.py import $(if $(GHIDRA),--ghidra $(GHIDRA)) $(if $(IMAGE),--image $(IMAGE))
+
+.PHONY: ghidra-install
+ghidra-install: ## A copy of a stock Ghidra 12.1.4 with the DSP56300 module and the ColdFire EMAC patch. GHIDRA=<stock install> [GHIDRA_DEST=dir]
+	@test -n "$(GHIDRA)" || { echo "usage: make ghidra-install GHIDRA=<stock Ghidra 12.1.4 install> [GHIDRA_DEST=dir]"; exit 1; }
+	tools/ghidra/install.sh $(GHIDRA) $(GHIDRA_DEST)
 
 .PHONY: where
 where: ## Every doc paragraph citing one ColdFire address + a disasm window. make where A=0x40004d40 [N=128]

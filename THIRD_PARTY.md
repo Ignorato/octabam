@@ -56,6 +56,16 @@ Portions of the firmware analysis tooling originate from
 https://github.com/mxldyn/octamax, Copyright (c) 2025-2026 Maxolydian, MIT
 (`LICENSE`).
 
+`tools/ghidra/processors/DSP56300/` (the DSP56300 processor module) and
+`tools/ghidra/patches/coldfire-emac.patch` (ColdFire ISA_C/EMAC in Ghidra's
+68000 module) were written for this repository by Robert Gay and are offered
+to Ghidra upstream as `roblg/ghidra` #3 and #2. They carry Ghidra's
+licence, Apache-2.0, in each file's header so they can go upstream as they
+are; the patch is a diff against Ghidra 12.1.4's
+`Ghidra/Processors/68000` (Apache-2.0, National Security Agency).
+`make ghidra-install` adds both to a copy of your own Ghidra release; no
+Ghidra file is committed.
+
 ## Fetched by `make setup`, never committed (`vendor/`, gitignored)
 
 | what | licence | note |
