@@ -11,7 +11,8 @@ Presets (`--preset`, default `rig`):
   rig     push-encoder groups 1-4 = DEL send, REV send, LEVEL, AMP VOL per track
           (eight encoders = eight tracks); lower row 1 = BusDelay on T1 (slots
           2-9), row 2 = BusVerb on T5 (slots 2-9), row 3 = delay PTCH TIME, verb
-          DLY TIME, crossfader; buttons 33-40 MUTE, 41-48 SOLO per track.
+          DLY TIME, scene fader, T8's Character DRV COMP TONE (the master, FX1);
+          buttons 33-40 MUTE, 41-48 SOLO per track.
   t1..t8  one track: groups 1-4 = FX1 page 1, FX1 page 2, FX2 page 1, FX2 page 2
           (LEVEL, AMP VOL, scene fader on the spare encoders); lower rows =
           PLAYBACK, AMP, LFO page 1; buttons as `rig`.
@@ -113,6 +114,10 @@ def rig_preset(channels):
     enc[51] = param_knob(cv, "FX2", 10, vrb[10], "T5 BVRB")
     enc[52] = param_knob(cv, "FX2", 11, vrb[11], "T5 BVRB")
     enc[53] = fader(channels[0])
+    # 54-56: the master track's station (T8 FX1 = CHARACTER in the rig, docs/effects/MASTER.md): DRV, COMP, TONE
+    ch8, chr_ = channels[7], mods["CHARACTER"].params
+    for n, slot in ((54, 0), (55, 3), (56, 4)):
+        enc[n] = param_knob(ch8, "FX1", slot, chr_[slot], "T8 MASTER")
     return "OCTABAM RIG", enc, mute_solo(channels)
 
 
