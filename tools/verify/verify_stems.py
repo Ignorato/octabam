@@ -229,6 +229,22 @@ def card_files(card_path):
     return ec.extract_image(pathlib.Path(card_path).read_bytes())
 
 
+def first_clusters(card_path):
+    """Every file's first cluster on a card image, {path: cluster}."""
+    import emu_card as ec
+    clusters = {}
+    ec.extract_image(pathlib.Path(card_path).read_bytes(), clusters=clusters)
+    return clusters
+
+
+def take_clusters(card_path):
+    """The first cluster of each take's T1.wav under <set>/AUDIO, {path: cluster}."""
+    fx = json.loads(FIXTURE.read_text())
+    audio = f"{fx['set']}/AUDIO/".lower()
+    return {p: c for p, c in first_clusters(card_path).items()
+            if p.lower().startswith(audio) and p.lower().endswith("/t1.wav")}
+
+
 def card_get(files, path):
     """The file at `path` (case-insensitive, leading slash optional), or None."""
     want = path.lstrip("/").lower()
@@ -702,6 +718,12 @@ def fat32(s):
         cut(s)
         exists(s)
         overflow(s)
+        # The unit's 64 GB card allocates above cluster 65,535, where FAT32
+        # needs a cluster number's high word; the fixture's filler puts the
+        # take there (stems_fixture.py --fat32).
+        takes = take_clusters(run_path("full", "img"))
+        check("fat32: the take starts above cluster 65,535 (FAT32's high word in use)",
+              bool(takes) and min(takes.values()) > 0xFFFF, f"{takes}")
     finally:
         FIXTURE, SUFFIX = saved, ""
 

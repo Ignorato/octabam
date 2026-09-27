@@ -371,11 +371,12 @@ def stage_project(project, set_name, name, tree="out/_stage_tree",
         shutil.copy2(f, out)
     return build_image(str(tree), image_mb, fat=fat), name
 
-def extract_image(img, out_dir=None):
+def extract_image(img, out_dir=None, clusters=None):
     """Read a card image back (the one `ot_emu --card-out` writes after a
     run): {path: bytes} for every file, long names reconstructed from the
     VFAT entries, and the tree written under `out_dir` when given. Reads
-    the BPB, so an image the firmware re-formatted still parses."""
+    the BPB, so an image the firmware re-formatted still parses. `clusters`,
+    when a dict, gets every file's first cluster by path."""
     part_start = struct.unpack_from("<I", img, 446 + 8)[0]
     bpb = img[part_start * SECTOR:part_start * SECTOR + SECTOR]
     bps, spc, reserved, nfats, root_entries, total16, _, spf = struct.unpack_from("<HBHBHHBH", bpb, 11)
@@ -434,6 +435,8 @@ def extract_image(img, out_dir=None):
                 continue                                   # the volume label
             else:
                 files[path] = cluster_bytes(first)[:size] if first else b""
+                if clusters is not None:
+                    clusters[path] = first
 
     walk(cluster_bytes(root_cluster) if fat32 else img[root_off:data_off], "")
     if out_dir is not None:

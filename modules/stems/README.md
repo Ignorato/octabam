@@ -34,7 +34,7 @@ each track's finished audio back to the main processor. The runs cover:
 
 Under the port the fixture's sounds play only their first four frames, so
 most of each take is silence. A lost or repeated sector in a silent
-stretch wouldn't show. The first flash's 60-second take (FLASH.md) is the
+stretch wouldn't show. A flash's 60-second take (crosscheck's plan: FLASH.md) is the
 first test with sound throughout.
 
 `--long` adds a 20-second take whose file must equal the ring byte for

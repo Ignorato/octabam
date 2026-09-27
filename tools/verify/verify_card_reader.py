@@ -35,6 +35,14 @@ FILES = {
     "big.bin": _bytes(300_000),
 }
 EMPTY = "PRESETS/AUDIO/250910-1433"
+# A filler inside PRESETS that sorts first there, so the builder allocates it
+# before the rest of PRESETS: 65,536 clusters of 512 bytes put everything
+# after it above cluster 65,535, where a cluster number needs its high word.
+# The unit's 64 GB card allocates up there; a 64 MB image never does. Inside
+# PRESETS, not at the root, so PRESETS's own cluster is guessed below 65,536
+# and allocated above it: the case where a '.' entry's high word goes stale.
+FILLER = "PRESETS/A_FILLER.bin"
+FILLER_BYTES = 65536 * 512
 # The 16 MB image of build_tree(), from upstream's builder (27 Sep 2026, 68af650).
 FAT16_SHA = "5c36bdd8bebdeaa519f2358f9e359f9144ced5d8ce161a1783d68da88919a853"
 
@@ -80,6 +88,30 @@ def main():
                   "" if rel in got32 else "missing")
         check("FAT32: nothing read back that was not written", set(got32) == set(FILES),
               f"{sorted(set(got32) - set(FILES))}")
+        tree_hi = pathlib.Path(t) / "tree_hi"
+        build_tree(tree_hi)
+        (tree_hi / FILLER).write_bytes(bytes(FILLER_BYTES))
+        clusters = {}
+        got_hi = ec.extract_image(ec.build_image(str(tree_hi), 128, fat=32), clusters=clusters)
+        check("FAT32 high: every file reads back",
+              all(got_hi.get(r) == d for r, d in FILES.items())
+              and len(got_hi.get(FILLER, b"")) == FILLER_BYTES)
+        low = min(clusters[r] for r, d in FILES.items() if d and r.startswith("PRESETS/"))
+        check("FAT32 high: the files in PRESETS start above cluster 65,535", low > 0xFFFF,
+              f"lowest first cluster {low}")
+        fs = ec._Fat32(128 * 2048 - 2048, 1, 2048)       # build_image(..., 128, fat=32)'s volume
+        log = []
+        fs.build_dir(str(tree_hi), 0, True, log)
+        dirs = [(n, c) for n, _, c, _ in log if n.endswith("/")]
+        bad = []
+        for n, c in dirs:
+            dot = fs.data[(c - 2) * fs.cluster_bytes:(c - 2) * fs.cluster_bytes + 32]
+            got = struct.unpack_from("<H", dot, 26)[0] | (struct.unpack_from("<H", dot, 20)[0] << 16)
+            if dot[:11] != b".          " or got != c:
+                bad.append((n, c, got))
+        check("FAT32 high: every folder's '.' entry names its own cluster",
+              bool(dirs) and not bad and min(c for _, c in dirs) > 0xFFFF,
+              f"{len(dirs)} folders, lowest {min((c for _, c in dirs), default=None)}, wrong {bad}")
         try:
             ec.build_image(str(tree), 16, fat=32)
             check("FAT32: a 16 MB image is refused (too few clusters)", False)

@@ -47,6 +47,8 @@ CARD_OUT = ROOT / "out" / "stems_fixture_card.img"
 FIXTURE_JSON = ROOT / "out" / "stems_fixture.json"
 CARD32_OUT = ROOT / "out" / "stems_fixture32_card.img"      # --fat32: the same card, FAT32
 FIXTURE32_JSON = ROOT / "out" / "stems_fixture32.json"
+FILLER_NAME = "FILLER.BIN"          # --fat32: in the set folder, see build()
+FILLER_BYTES = 65536 * 512
 KICK_NAME = "kick.wav"
 # Our own staging tree: emu_card.stage_project's default, out/_stage_tree,
 # is verify_set's too, and each call deletes the tree first.
@@ -132,9 +134,22 @@ def build(project_dir=DEFAULT_PROJECT, fat=16):
     if not kick_src.is_file():
         sys.exit(f"make_test_audio.py did not produce {kick_src}")
 
+    audio = [f"{kick_src}:AUDIO/{KICK_NAME}"]
+    image_mb = 64
+    if fat == 32:
+        # 65,536 clusters of zeros in the set folder, allocated before the
+        # set's subfolders: the project, AUDIO and every take land above
+        # cluster 65,535, where FAT32 needs a cluster number's high word,
+        # as on the unit's 64 GB card. 128 MB keeps the FAT at about 2,000
+        # sectors, far below the firmware's 16,384 (STEM_REC.md 14.1).
+        filler = ROOT / "out" / "stems_fat32_filler.bin"
+        if not filler.is_file() or filler.stat().st_size != FILLER_BYTES:
+            filler.write_bytes(bytes(FILLER_BYTES))
+        audio.append(f"{filler}:{FILLER_NAME}")
+        image_mb = 128
     card_bytes, name = emu_card.stage_project(
         SCRATCH, SET_NAME, PROJECT_NAME, tree=str(STAGE_TREE),
-        audio=[f"{kick_src}:AUDIO/{KICK_NAME}"], fat=fat)
+        audio=audio, image_mb=image_mb, fat=fat)
     card_out, fixture_json = (CARD32_OUT, FIXTURE32_JSON) if fat == 32 else (CARD_OUT, FIXTURE_JSON)
     card_out.write_bytes(card_bytes)
 

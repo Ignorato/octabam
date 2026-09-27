@@ -6500,6 +6500,14 @@ consistent; read as a sector or byte count written, none of them are. Not
 settled past that: the falsifier is a write that crosses a second cluster
 boundary, which this probe does not exercise.
 
+❌ **Retracted (27 Sep 2026): "bytes now allocated, rounded up to the
+cluster".** On FAT32 with 512-byte clusters (section 14.2) that reading
+predicts 1,536 for the 3-sector write, and all three writes returned 512.
+The value both cards agree on is one cluster's bytes: 2,048 on FAT16 (4
+sectors) and 512 on FAT32 (1 sector), for every write. 🟡 What the routine
+means by it is still open. `stems.s` tests only the sign (`tst.l d0; bmi`),
+so the module does not depend on it.
+
 ### 12.2 The hook's cost, and a take past 15 s ✅
 
 Instructions per recording frame, from `--coverage` over the hook
@@ -6632,7 +6640,7 @@ Sep 2026 (93 of 93).
 | `cardfail` sectors written | 23 | 23 | Same ✅ |
 | `cardfail` polls at `0x40014cf4` | 3,562,923 | 3,521,744 | The port's timing (1.2% fewer) 🟡 |
 | The writer's stack peak | 1,052 bytes | 1,052 bytes | Same ✅ |
-| The hook, 1 track, 400 frames, tail left out | 52,397 | 52,400 | 3 hits on the three odd-count addresses of 12.2 ✅ |
+| The hook, 1 track, 400 frames, tail left out | 52,397 | 52,400 | 3 hits in 400 frames; 🟡 on the three odd-count addresses of 12.2 (572, 542 and 486 hits here), whose counts 12.2 itself only infers |
 | The hook, 8 tracks, 400 frames, tail left out | 296,000 | 296,000 | Same ✅ |
 
 **The transport start.** Every take on `stem-rec-v2` is 25 frames shorter
@@ -6676,8 +6684,8 @@ disassembler doesn't know; they turn the card's little-endian fields around.
 an MBR, it reads the first partition's type byte (offset 0x1c2). It takes
 6, 0x0e and 4 at `0x40016982`..`0x40016996`, and 0x0b and 0x0c through
 `(type - 11) <= 1` at `0x40016998`..`0x400169a4`; any other type is `-38`.
-So FAT32's two types are accepted. The header of `tools/emu/emu_card.py`,
-which lists 4, 6 and 0x0e, is incomplete. The partition's start and size
+So FAT32's two types are accepted. The header of `tools/emu/emu_card.py`
+listed only 4, 6 and 0x0e; it names all five since `eb74b74`. The partition's start and size
 (offsets 0x1c6 and 0x1ca) go to `0x460bac10` and `0x460bac14`.
 
 **A card with no MBR.** ✅ When sector 0 begins `EB 58 90` (`0x4001693c`),

@@ -8,7 +8,7 @@ One ColdFire module and nothing else. For recording what the tracks play to the 
 
 ## Status
 
-Never flashed. Measured under the ColdFire port: `python3 tools/verify/verify_stems.py stems` records takes and checks every sample against the track's own audio. The first flash's plan is `modules/stems/FLASH.md`. The stock facts it stands on are in `docs/firmware/STEM_REC.md`.
+Never flashed. Measured under the ColdFire port: `python3 tools/verify/verify_stems.py stems` records takes and checks every sample against the track's own audio. Crosscheck's flash plan is carried as a record in `modules/stems/FLASH.md`; flash A gets its own. The stock facts STEM REC stands on are in `docs/firmware/STEM_REC.md`.
 
 ## Build
 
