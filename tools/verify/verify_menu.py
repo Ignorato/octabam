@@ -119,6 +119,7 @@ STEPPED_FMT = (0x4003c718, 0x40047254)
 # caves and the mode-select label formatters all live in here and nowhere else.
 CAVE_LO, CAVE_HI = 0x400d6b20, 0x400d7c3c
 OVF_LO, OVF_HI = 0x400d24d0, 0x400d2ce0
+ISL_LO, ISL_HI = 0x400c45b0, 0x400c4702    # the 338 B zero run (Spectrum's SHPE formatter)
 REG_FMT = {(_c.registers_formatter.module, _c.registers_formatter.slot):
            (_c.pinned, _c.registers_formatter.offset)
            for _k in REMIX.modules for _c in _MODS[_k].cf_patches
@@ -349,7 +350,8 @@ def main():
                       f"enumerated formatter or a label cave "
                       f"(got 0x{f1:08x}/0x{f2:08x}/0x{f3:08x})")
             elif ((name, i) in REG_FMT
-                  and (CAVE_LO <= f1 < CAVE_HI or OVF_LO <= f1 < OVF_HI)
+                  and (CAVE_LO <= f1 < CAVE_HI or OVF_LO <= f1 < OVF_HI
+                       or ISL_LO <= f1 < ISL_HI)
                   and img[f1 - REG_FMT[(name, i)][1] - BASE:
                           f1 - REG_FMT[(name, i)][1] - BASE
                           + len(REG_FMT[(name, i)][0])]

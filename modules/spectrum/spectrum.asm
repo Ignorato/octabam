@@ -1,12 +1,13 @@
 ; ---------------------------------------------------------------------------
-; SPECTRUM -- a filter pedal: LADR (the zero-delay Moog ladder), LP / BP (the
-; zero-delay SEM SVF), ISO (an isolator, Airwindows Capacitor2), VOWL (three
+; SPECTRUM -- a filter pedal: LADR (the zero-delay Moog ladder), SEM (the
+; zero-delay SEM SVF, LP -> BP -> HP by SHPE), ISO (an isolator, Airwindows Capacitor2), VOWL (three
 ; constant-peak-gain formant resonators morphed by FREQ); ENV and LFO onto
 ; the cutoff; mid/side WDTH. Insert
 ; contract: frames in place at
 ; x:(r0)/x:(r0+n0), knobs from r6, state in this instance's r7 block. FX1
 ; only: init reads the allocator base and an FX2 instance runs as a dry pass.
-; Defaults are a bit-exact passthrough. Every mpy is `mpy x0,y1` but the
+; Defaults are a bit-exact passthrough. Every mpy is `mpy x0,y1` (fs_qs's
+; `mpy y0,x0` is the other audited-signed order) but the
 ; VOWL decode's `mpy x1,y1,b` (audited: R' > 0; build_bus.MPYSU_AUDITED);
 ; every clip is the store limiter; every Tcc reads the one compare above it
 ; with nothing but moves between.
@@ -24,7 +25,7 @@
 ;   $1e       the block's input peak (the follower's; written after the loop)
 ;   $1f $20 $21  c4, g2 (this block's target), R
 ;   $22       CAP's rotation count (persistent)
-;   $23 $24 $25  kLP kBP kHP
+;   $23 $24 $25  kLP kBP kHP (SHPE's crossfade, per block)
 ;   $26 $27   CAP lpBase (persistent chase), $27 free
 ;   $2c       WDTH's side gain / 2
 ;   $2d       the mode flag: 0 SVF 1 VOWL 2 LADR 3 CAP
@@ -36,7 +37,7 @@
 ;   $40..$45  CAP's rotation table 3 4 5 3 4 5 (init)
 ;   $46 $47   ENV fall, LFO inc; $48 vg/8 (VOWL); $49 lfo, then VOWL's frac
 ;   $4e $4f   the P table's base, FREQm
-;   $50..$5b  the SVF stream (dg, c4 d kLP kHP kBP x2, WDTH)
+;   $50..$56  the SVF stream (dg, c4 d kLP kHP kBP, WDTH); its steps $76..$7a
 ;   $5c..$5f  CAP's constants ring (gn/16 hpBase lpBase trim/2; m2 = 3)
 ;   $60..$69  the LADR stream (G' dG G^3(1-G) G^2(1-G) G(1-G) 1-G k/4 d/2 M/4 WDTH)
 ;   $68..$75  the VOWL stream (b0 m1 a2 gain x3, vg/8, WDTH; overlaps LADR's:
@@ -261,35 +262,54 @@ fs_msame:
         move    a,x:(r7+$25)
         move    #>$7fffff,x0
         move    x:(r6+$c),a             ; MODE, slot 6 = $c's knob field
-        and     #>$ff0000,a             ; 0 LADR, 1 SEM, 2 BP, 3 ISO, 4 VOWL
+        and     #>$ff0000,a             ; 0 LADR, 1 SEM, 2 ISO, 3 VOWL
         beq     fs_mladr
         cmp     #>$20000,a
-        beq     fs_mbp
-        cmp     #>$30000,a
         beq     fs_mcap
-        cmp     #>$40000,a
+        cmp     #>$30000,a
         beq     fs_mvowl
-; SEM (and anything unexpected): SHPE, slot 7 in $c's companion field, is
-; the SEM's mode pot -- 0 LP, 64 notch (LP + HP), 127 HP (23 Sep 2026):
-; kHP = min(1, k/64), kLP = min(1, (127 - k)/63): both exactly 1 at 64; the
-; stores limit.
+; SEM (and anything unexpected): SHPE, slot 7 in $c's companion field,
+; sweeps LP -> BP -> HP (27 Sep 2026; 0 LP, 64 notch, 127 HP from 23 Sep):
+; d = (k - 64)/64 below 64, (k - 64)/63 above, and an equal-power crossfade
+; between neighbours, kHP = max(0, s(d)), kLP = max(0, -s(d)),
+; kBP = s(1 - |d|), s ~ sin(pi x/2) (fs_qs). Each is exactly 1 at its own
+; stop and exactly 0 at the others: s(1) > 1 and the stores limit it; 127's
+; d rounds up past 1, and kBP's argument is 3 LSB short of 1 - |d|, so it
+; floors to 0 at both ends. At the cutoff the three taps are equal in size
+; and LP/BP, BP/HP in quadrature, so the sum keeps its level across a fade.
         move    x:(r6+$c),a
         and     #>$7f00,a               ; k<<8
         move    a1,x0
         move    x0,a                    ; A2-clean (AND cleans A1 only)
-        asl     #$9,a,a                 ; k<<17 = k/64 as Q23
-        move    a,x:(r7+$25)            ; kHP
-        move    #>$7f00,b
-        sub     x0,b                    ; (127 - k)<<8
-        asl     #$8,b,b                 ; (127 - k)/128 as Q23
-        move    b,x0
-        move    #>$410410,y1            ; (128/63)/4
-        mpy     x0,y1,b
-        asl     #$2,b,b                 ; (127 - k)/63
-        move    b,x:(r7+$23)            ; kLP
-        bra     fs_mdone
-fs_mbp:
-        move    x0,x:(r7+$24)
+        move    #>$4000,x0
+        sub     x0,a                    ; (k - 64)<<8: its sign picks the half
+        move    #>$400000,b             ; below 64: x 1/2, x 4 below = 1/64
+        move    #>$410411,y0            ; above: (128/63)/4, rounded up
+        tgt     y0,b                    ; nothing but moves since the sub
+        move    b,y1
+        asl     #$8,a,a                 ; (k - 64)/128
+        move    a,x0
+        mpy     x0,y1,a
+        asl     #$2,a,a                 ; d, -1 .. 1.0000002
+        move    a,x0                    ; limited: 127's d lands on 1 - 2^-23
+        move    x0,x1                   ; d, kept (fs_qs leaves x1)
+        bsr     fs_qs                   ; a = s(d), odd
+        move    a,b
+        move    #$0,x0
+        tst     a
+        tmi     x0,a                    ; kHP = max(0, s(d))
+        move    a,x:(r7+$25)
+        neg     b
+        tmi     x0,b                    ; kLP = max(0, -s(d))
+        move    b,x:(r7+$23)
+        move    x1,a
+        abs     a
+        neg     a
+        add     #>$7ffffd,a             ; 1 - |d| - 3 LSB
+        tmi     x0,a                    ; floored at 0: the ends
+        move    a,x0
+        bsr     fs_qs
+        move    a,x:(r7+$24)            ; kBP = s(1 - |d|)
         bra     fs_mdone
 fs_mcap:
 ; ---- ISO: Airwindows Capacitor2 (Chris Johnson, MIT), the
@@ -546,7 +566,7 @@ fs_live:
         bra     fs_cap
 
 ; ---------------------------------------------------------------------------
-; SVF: the SEM zero-delay SVF, SEM (LP..notch..HP by SHPE) and BP
+; SVF: the SEM zero-delay SVF, LP -> BP -> HP by SHPE
 ; ---------------------------------------------------------------------------
 fs_svf:
 ; the stream at $50 on r4 (r1 walks a copy per sample): dg, then c4 d kLP
@@ -571,8 +591,8 @@ fs_svf:
         bsr     fs_rset
         move    x:(r7+$25),y1           ; kHP
         bsr     fs_rset
-        move    x:(r7+$24),x0           ; kBP (fixed per mode)
-        move    x0,x:(r1)+
+        move    x:(r7+$24),y1           ; kBP
+        bsr     fs_rset
         move    x:(r7+$2c),x0           ; WDTH's side gain / 2
         move    x0,x:(r1)+
         move    #>$1,x0
@@ -601,17 +621,25 @@ fs_svf:
         move    a,x:(r7+$2e)            ; g2run (never past the rail: the
                                         ; target is <= 0.91 and the ramp
                                         ; stops at it)
-; ---- the stream's ramps: c4 d kLP kHP, one step each (r3 walks the steps)
+; ---- the stream's ramps: c4 d kLP kHP kBP, one step each (r3 walks the steps)
         move    n3,r3
         bsr     fs_r3                   ; c4 d kLP
         move    x:(r3)+,x0
         move    x:(r1),a
-        add     x0,a
+        add     x0,a    x:(r3)+,x0
         move    a,x:(r1)+               ; kHP
+        move    x:(r1),a
+        add     x0,a
+        move    a,x:(r1)+               ; kBP
+; ---- channels L then R: one body (27 Sep 2026; two copies before), the same
+; five stream words for both, the states walked on by r2; r3 (spent by the
+; ramps above) walks the frame. It paid for SHPE's crossfade in words; the
+; SVF loop is Spectrum's cheapest, and ISO's prices the station.
+        move    r0,r3
+        do      #2,>fs_sch
         move    r4,r1
-        move    (r1)+                   ; back on c4
-; ===================== channel L =====================
-        move    x:(r0),x1               ; x
+        move    (r1)+                   ; on c4
+        move    x:(r3),x1               ; x
         move    x:(r2)+,x0              ; s0
         move    x0,y0                   ; s0, kept for bp
         move    x:(r1)+,y1              ; c4 = (R + g2)/2
@@ -647,47 +675,9 @@ fs_svf:
         mac     x0,y1,a     y0,x0       ; bp
         move    x:(r1)+,y1              ; kBP
         mac     x0,y1,a
-        move    a,x:(r0)                ; out (limited)
-; ===================== channel R =====================
-        move    r4,r1
-        move    (r1)+                   ; the same five words as L
-        move    x:(r0+n0),x1            ; x
-        move    x:(r2)+,x0              ; s0
-        move    x0,y0                   ; s0, kept for bp
-        move    x:(r1)+,y1              ; c4 = (R + g2)/2
-        mpy     x0,y1,a
-        asl     #$2,a,a                 ; (2R + g) * s0
-        move    x:(r2)-,x0              ; s1 (r2 back on s0)
-        add     x0,a  x1,b              ; b = x
-        sub     a,b                     ; t
-        asr     #$3,b,b
-        move    b,x0                    ; t8, |t8| <= 0.63
-        move    x:(r1)+,y1              ; d
-        mpy     x0,y1,a
-        asl     #$3,a,a
-        move    a,x0                    ; hp, limited -- the resonance clamp
-        move    a,x1                    ; hp, kept for the tap (x is spent)
-        move    x:(r7+$2e),y1           ; g2 = g2run this sample
-        mpy     x0,y1,b
-        asl     b  y0,a                 ; p = g*hp; a = s0
-        add     b,a                     ; bp
-        add     b,a  a,y0               ; s0'; y0 = bp, limited, kept for the tap
-        move    a,x:(r2)+               ; s0' (r2 -> s1)
-        move    y0,x0
-        mpy     x0,y1,b                 ; y1 is still g2
-        asl     #$1,b,b                 ; q = g*bp
-        move    x:(r2),a                ; s1
-        add     b,a                     ; lp
-        add     b,a  a,x0               ; s1'; x0 = lp, limited, for the tap
-        move    a,x:(r2)+               ; s1'
-; wetA = kLP*lp + kHP*hp + kBP*bp (exact in the accumulator, any order)
-        move    x:(r1)+,y1              ; kLP
-        mpy     x0,y1,a     x1,x0       ; hp
-        move    x:(r1)+,y1              ; kHP
-        mac     x0,y1,a     y0,x0       ; bp
-        move    x:(r1)+,y1              ; kBP
-        mac     x0,y1,a
-        move    a,x:(r0+n0)             ; out (limited)
+        move    a,x:(r3)+               ; out (limited)
+fs_sch:
+        nop
 ; WIDTH
         move    x:(r0),a                ; L
         move    x:(r0+n0),x0            ; R
@@ -1266,6 +1256,25 @@ fs_rset:
         teq     y1,b                    ; a step of 0: at the target
         move    a,x:(r3)+
         move    b,x:(r1)+
+        rts
+
+; ---------------------------------------------------------------------------
+; fs_qs -- s(x) = x (A - B x^2), a quarter sine (sin(pi x/2) within 0.006,
+; s(x)^2 + s(1 - x)^2 within 0.05 dB of 1 on 0..1), odd; A - B = 1.00001, so
+; s(1) lands past 1 and a store limits it onto 1. The SHPE crossfade's law.
+; In: x0 = x. Out: a = s(x), unlimited. Clobbers x0, y0, y1 (x1 is kept).
+; ---------------------------------------------------------------------------
+fs_qs:
+        move    x0,y1
+        mpy     x0,y1,a                 ; x^2
+        move    a,x0
+        move    #>$22c3a0,y0            ; B/2 = 0.271595
+        mpy     y0,x0,a                 ; B/2 x^2 (y0,x0: the signed order)
+        neg     a
+        add     #>$62c3ca,a             ; A/2 = 0.7716
+        move    a,x0
+        mpy     x0,y1,a                 ; s/2 (x0,y1: x may be negative)
+        asl     #$1,a,a
         rts
 
 ; ---------------------------------------------------------------------------

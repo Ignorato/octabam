@@ -7,6 +7,16 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- Spectrum BP into SEM (27 Sep 2026): MODE is LADR SEM ISO VOWL; SEM's SHPE
+  sweeps LP (0) -> BP (64) -> HP (127), an equal-power crossfade (a tone at
+  the cutoff holds its level within 0.1 dB across the sweep; the notch at
+  64 is gone). SHPE draws LP / BP / HP at its stops and the number
+  elsewhere (a 89 B formatter cave at 0x400c45b0). SEM at SHPE 64 is
+  bit-identical to the old BP; every other mode, and SEM at SHPE 0 and
+  127, bit-identical. Saved parts: once per project before play,
+  `ot_project.py remap-slot <project> SPECTRUM MODE 2:1,3:2,4:3` (BP ->
+  SEM, ISO and VOWL down one; SHPE keeps its value).
+
 - Removed (27 Sep 2026): `PLAN.md` (status as of 21 Sep; its memory
   table is `docs/remixer/PLACEMENT.md`'s), `docs/TIMESTRETCH_PIPELINE.md`
   (every address retracted, superseded by `docs/firmware/REPITCH.md`) and

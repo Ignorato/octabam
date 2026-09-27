@@ -20,6 +20,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 BASE = 0x40000400
 CLONE_BASE, CLONE_STRIDE = 0x400d6b20, 0x1a0
 P_FMT_A = 0x0ca
+STOPS = {("SPECTRUM", 7): {0: "LP", 32: "32", 64: "BP", 96: "96", 127: "HP"}}
 BUF = 0x47f00800                 # stock_labels' scratch: above the detour stack
 IMAGE = pathlib.Path("out/mainos_bus.bin")
 
@@ -83,6 +84,37 @@ def main():
                 continue
             print(f"  [PASS] {key:13} slot {i:<2} "
                   f"{p.name.decode('latin1'):<5} prints {' | '.join(got)}")
+    # A registered formatter on a 0..127 knob that prints words at some
+    # values and the number elsewhere (Spectrum SHPE, 27 Sep 2026). The MODE
+    # formatter is called first with each mode, so its rename cave sets the
+    # slot's name as the panel would: the named modes print the words, a
+    # mode that names the slot "---" prints the number.
+    for (key, slot), want in STOPS.items():
+        if key not in cloned or key in remix.blanked:
+            continue
+        m = mods[key]
+        P = CLONE_BASE + cloned.index(key) * CLONE_STRIDE
+        fmt = rd32(P + P_FMT_A + slot * 4)
+        mode_fmt = rd32(P + P_FMT_A + m.mode_slot * 4)
+        for mode in range(m.params[m.mode_slot].count):
+            view = m.view_for(mode)
+            hidden = view is not None and view.names.get(slot) == b"---"
+            table = {v: str(v) for v in want} if hidden else want
+            uc.mem_write(BUF, b"\0" * 32)
+            emu._call(uc, mode_fmt, (BUF, mode))
+            mname = emu._cstr(uc, BUF, 16)
+            got = {}
+            for v in table:
+                uc.mem_write(BUF, b"\0" * 32)
+                emu._call(uc, fmt, (BUF, v))
+                got[v] = emu._cstr(uc, BUF, 16)
+            checked += 1
+            if got != table:
+                fails.append(f"{key} slot {slot} in MODE {mname}: firmware prints "
+                             f"{got}, want {table}")
+            else:
+                print(f"  [PASS] {key:13} slot {slot:<2} in {mname:<5} prints "
+                      + " | ".join(f"{v}:{t}" for v, t in got.items()))
     for f in fails:
         print(f"  [FAIL] {f}")
     if not checked:
