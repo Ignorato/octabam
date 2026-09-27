@@ -1721,12 +1721,10 @@ lfrol:
 ; carried value is never overwritten. Seeded one sample further back before
 ; the loop, so sample 0 is exact too.
         move    y:(r6),a                ; w2: d1 = last sample's d0
-        move    b,y:(r6)+               ; carry forward
-        sub     b,a                     ; d1 - d0
+        sub     b,a         b,y:(r6)+   ; carry forward ; d1 - d0
         move    a,x0
         mpy     x0,y1,a                 ; f*(d1-d0)
-        add     b,a                     ; + d0 -> the interpolated tap
-        move    y:(r6),b                ; w3: damping state
+        add     b,a         y:(r6),b    ; + d0 -> the interpolated tap ; w3: damping state
         sub     b,a
         move    a,x0
         mpy     x0,y0,a                 ; y0 = DAMP, held across every line
@@ -1785,19 +1783,13 @@ tankend:
         move    x:(r7+$08),b            ; the bloom, pre-filter
         asr     #$3,b,b
         move    x:(r4)+,a               ; line 0
-        add     b,a
-        move    x:(r4)+,x0              ; line 1
-        sub     x0,a
-        move    x:(r4)+,x0              ; line 2
-        add     x0,a
-        move    x:(r4)+,b               ; line 3 (driven)
+        add     b,a         x:(r4)+,x0  ; line 1
+        sub     x0,a        x:(r4)+,x0  ; line 2
+        add     x0,a        x:(r4)+,b   ; line 3 (driven)
         asr     #$1,b,b
-        add     b,a
-        move    x:(r5)+,x0              ; line 4
-        add     x0,a
-        move    x:(r5)+,x0              ; line 5
-        sub     x0,a
-        move    x:(r5)+,x0              ; line 6
+        add     b,a         x:(r5)+,x0  ; line 4
+        add     x0,a        x:(r5)+,x0  ; line 5
+        sub     x0,a        x:(r5)+,x0  ; line 6
         add     x0,a
         move    a,x:(r7+$2d)            ; wet L
         lua     (r7+$16),r4
@@ -1805,18 +1797,12 @@ tankend:
         move    x:(r7+$08),b            ; the bloom again
         asr     #$3,b,b
         move    x:(r4)+,a               ; line 0
-        add     b,a
-        move    x:(r4)+,x0              ; line 1
-        add     x0,a
-        move    x:(r4)+,x0              ; line 2
-        sub     x0,a
-        move    x:(r5)+,x0              ; line 4
-        add     x0,a
-        move    x:(r5)+,x0              ; line 5
-        add     x0,a
-        move    x:(r5)+,x0              ; line 6
-        sub     x0,a
-        move    x:(r5)+,b               ; line 7 (driven), R side
+        add     b,a         x:(r4)+,x0  ; line 1
+        add     x0,a        x:(r4)+,x0  ; line 2
+        sub     x0,a        x:(r5)+,x0  ; line 4
+        add     x0,a        x:(r5)+,x0  ; line 5
+        add     x0,a        x:(r5)+,x0  ; line 6
+        sub     x0,a        x:(r5)+,b   ; line 7 (driven), R side
         asr     #$1,b,b
         add     b,a
         move    a,x:(r7+$2e)            ; wet R
@@ -1832,15 +1818,13 @@ tankend:
         move    x:(r4)+,x0              ; d1
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r5)+               ; u0 = d0+d1
+        sub     x0,b        a,x:(r5)+   ; u0 = d0+d1
         move    b,x:(r5)+               ; u1 = d0-d1
         move    x:(r4)+,a               ; d2
         move    x:(r4)+,x0              ; d3
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r5)+               ; u2 = d2+d3
+        sub     x0,b        a,x:(r5)+   ; u2 = d2+d3
         move    b,x:(r5)+               ; u3 = d2-d3
 
         lua     (r7+$3a),r4
@@ -1849,15 +1833,13 @@ tankend:
         move    x:(r4)+,x0              ; d5
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r5)+               ; u4 = d4+d5
+        sub     x0,b        a,x:(r5)+   ; u4 = d4+d5
         move    b,x:(r5)+               ; u5 = d4-d5
         move    x:(r4)+,a               ; d6
         move    x:(r4)+,x0              ; d7
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r5)+               ; u6 = d6+d7
+        sub     x0,b        a,x:(r5)+   ; u6 = d6+d7
         move    b,x:(r5)+               ; u7 = d6-d7
 
         lua     (r7+$16),r4
@@ -1868,15 +1850,13 @@ tankend:
         move    a,b
         add     x0,a                    ; u0+u2
         neg     b
-        add     x0,b                    ; u0-u2
-        move    a,x:(r5)+               ; u0' = u0+u2
+        add     x0,b        a,x:(r5)+   ; u0-u2 ; u0' = u0+u2
         move    b,y0                    ; u2' = u0-u2, parked
         move    x:(r4)+,a               ; u3
         move    a,b
         add     x1,a                    ; u1+u3
         neg     b
-        add     x1,b                    ; u1-u3
-        move    a,x:(r5)+               ; u1' = u1+u3
+        add     x1,b        a,x:(r5)+   ; u1-u3 ; u1' = u1+u3
         move    y0,x:(r5)+              ; u2'
         move    b,x:(r5)+               ; u3' = u1-u3
 
@@ -1888,15 +1868,13 @@ tankend:
         move    a,b
         add     x0,a
         neg     b
-        add     x0,b
-        move    a,x:(r5)+               ; u4' = u4+u6
+        add     x0,b        a,x:(r5)+   ; u4' = u4+u6
         move    b,y0                    ; u6' = u4-u6, parked
         move    x:(r4)+,a               ; u7
         move    a,b
         add     x1,a
         neg     b
-        add     x1,b
-        move    a,x:(r5)+               ; u5' = u5+u7
+        add     x1,b        a,x:(r5)+   ; u5' = u5+u7
         move    y0,x:(r5)+              ; u6'
         move    b,x:(r5)+               ; u7' = u5-u7
 
@@ -1907,29 +1885,25 @@ tankend:
         move    x:(r5),x0               ; u4
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r6)+               ; u0' = u0+u4
+        sub     x0,b        a,x:(r6)+   ; u0' = u0+u4
         move    b,x:(r5)+               ; u4' = u0-u4
         move    x:(r4)+,a               ; u1
         move    x:(r5),x0               ; u5
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r6)+               ; u1' = u1+u5
+        sub     x0,b        a,x:(r6)+   ; u1' = u1+u5
         move    b,x:(r5)+               ; u5' = u1-u5
         move    x:(r4)+,a               ; u2
         move    x:(r5),x0               ; u6
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r6)+               ; u2' = u2+u6
+        sub     x0,b        a,x:(r6)+   ; u2' = u2+u6
         move    b,x:(r5)+               ; u6' = u2-u6
         move    x:(r4)+,a               ; u3
         move    x:(r5),x0               ; u7
         move    a,b
         add     x0,a
-        sub     x0,b
-        move    a,x:(r6)+               ; u3' = u3+u7
+        sub     x0,b        a,x:(r6)+   ; u3' = u3+u7
         move    b,x:(r5)+               ; u7' = u3-u7
 
 ; ⚠️ The marker below said "excised unless SHIMMER=1" until 30 Aug 2026.
@@ -2232,8 +2206,7 @@ shd1:
         nop
         do      #4,>fbA
         move    y:(r6)+,x0             ; weight[k]
-        mpy     x0,y1,b                ; input * weight[k]
-        move    x:(r4)+,a              ; u[k]
+        mpy     x0,y1,b     x:(r4)+,a   ; input * weight[k] ; u[k]
         move    a,x0
         move    y:(r6)+,y0             ; gain[k]: the read that used to be
                                        ; discarded is the live per-line gain.
@@ -2257,8 +2230,7 @@ fbA:
                                         ; instructions into the loop
         do      #4,>fbB
         move    y:(r6)+,x0             ; weight[k]
-        mpy     x0,y1,b                ; input * weight[k] (y1 from group A)
-        move    x:(r4)+,a              ; u[k]
+        mpy     x0,y1,b     x:(r4)+,a   ; input * weight[k] (y1 from group A) ; u[k]
         move    a,x0
         move    y:(r6)+,y0             ; gain[k], as in fbA
         mpy     x0,y0,a                ; u[k] * G_k
@@ -2296,8 +2268,7 @@ fbB:
         add     b,a                     ; + d0 -> interpolated tap
         move    a,b
         move    b,x0
-        mpy     y0,x0,a                 ; g*d, signed (y0,x0)
-        move    x1,x0
+        mpy     y0,x0,a     x1,x0       ; g*d, signed (y0,x0)
         add     x0,a                    ; v = x + g*d
         move    a,x0                    ; x0 = v, limited as the store was
         mpy     y0,x0,a                 ; g*v
@@ -2328,8 +2299,7 @@ fbB:
         add     b,a                     ; + d0 -> interpolated tap
         move    a,b
         move    b,x0
-        mpy     y0,x0,a                 ; g*d (y0 = g from line 0)
-        move    x1,x0
+        mpy     y0,x0,a     x1,x0       ; g*d (y0 = g from line 0)
         add     x0,a                    ; v = x + g*d
         move    a,x0                    ; x0 = v, limited as the store was
         mpy     y0,x0,a                 ; g*v
@@ -2344,24 +2314,19 @@ fbB:
         move    n1,x0                   ; line stride, hoisted
         move    r5,b                    ; b carries the ADDRESS from here down
         move    x:(r7+$1c),a            ; fb2
-        move    a,y:(r5)                ; write to line 2
-        add     x0,b
+        add     x0,b        a,y:(r5)    ; write to line 2
         move    b,r5                    ; -> line 3
         move    x:(r7+$1d),a            ; fb3
-        move    a,y:(r5)                ; write to line 3
-        add     x0,b
+        add     x0,b        a,y:(r5)    ; write to line 3
         move    b,r5                    ; -> line 4
         move    x:(r7+$41),a            ; fb4
-        move    a,y:(r5)
-        add     x0,b
+        add     x0,b        a,y:(r5)
         move    b,r5                    ; -> line 5
         move    x:(r7+$42),a            ; fb5
-        move    a,y:(r5)
-        add     x0,b
+        add     x0,b        a,y:(r5)
         move    b,r5                    ; -> line 6
         move    x:(r7+$43),a            ; fb6
-        move    a,y:(r5)
-        add     x0,b
+        add     x0,b        a,y:(r5)
         move    b,r5                    ; -> line 7
         move    x:(r7+$44),a            ; fb7
         move    a,y:(r5)             ; write to line 7
@@ -2444,8 +2409,7 @@ fbB:
         mpy     y0,x0,a                 ; y = wet * g, signed (y0,x0)
         move    a,x:(r7+$12)            ; parked
         move    #$73,y0                 ; 0.9 (a gentler 0.953 flagged SHMR
-        mpy     y0,x0,b                 ; b = g * 0.9, the attack candidate  ; on the knob-click gate as well)
-        move    x0,a
+        mpy     y0,x0,b     x0,a        ; b = g * 0.9, the attack candidate  ; on the knob-click gate as well)
         add     #>$000080,a             ; a = g + 2^-16, the release
         move    a,y0
         move    x:(r7+$12),a
