@@ -7,6 +7,19 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- USB AUDIO in three modules over one source (27 Sep 2026):
+  `modules/usbaudio` is `modules/usb-audio-extended` (key USB AUDIO
+  EXTENDED, the twenty channels, images byte-identical) and `modules/usbmidi`
+  is `modules/usb-midi`. USB AUDIO FULL (`modules/usb-audio-full`, remix
+  `usb-full`): the sixteen track channels. USB AUDIO MASTER
+  (`modules/usb-audio-master`, remix `usb-master`): two channels, track 8's
+  L/R post-FX pre-fader at both speeds, a front L/R stereo input.
+  `bottleservice` carries USB AUDIO MASTER; every other USB remix USB AUDIO
+  EXTENDED. A remix with two of them is refused by name. USB AUDIO MASTER
+  polls every 1 ms at high speed too (bInterval 4, 44/45-frame packets of
+  at most 360 bytes); the port's USB bench takes `isohz` so a host script
+  polls at the descriptor's rate. Port only.
+
 - `make check` is two halves (27 Sep 2026): `make check-shared
   REMIXES="a b"` runs the gates that do not depend on the remix (the
   ledger selftest, the knob census, the isolated module gates with
@@ -275,7 +288,7 @@ flashed image was built from.
   `tools/hw/usb_counters.py`, the bench's `counters`, checked by
   `verify_usb`), `tools/harness/click_scan.py`, and image 64 packed from
   `usb-audio` for the first hardware run (the protocol in
-  `modules/usbaudio/README.md`). Unflashed.
+  `modules/usb-audio-extended/README.md`). Unflashed.
 - USB MIDI and USB AUDIO (25 Sep 2026, markandrus/octemu's work on the
   DRAM platform; remixes `usb` and `usb-audio`): class-compliant USB-MIDI
   mirroring DIN, and a UAC2 sixteen-channel input of the tracks (post-FX

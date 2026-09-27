@@ -6,7 +6,7 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 
 | remix | contains | proof |
 |---|---|---|
-| [`bottleservice`](../../remixes/bottleservice/README.md) | The rig + USB MIDI + USB AUDIO + Octakit. | port-gated: `make check` with the stress project; Kit save, reload and copy measured |
+| [`bottleservice`](../../remixes/bottleservice/README.md) | The rig + USB MIDI + USB AUDIO MASTER (T8 over USB) + Octakit. | port-gated: `make check` with the stress project; Kit save, reload and copy measured |
 | [`rig-kits`](../../remixes/rig-kits/README.md) | The rig + Octakit. | `make check` |
 | [`rig-mods`](../../remixes/rig-mods/README.md) | The rig + MIDI SCENES + Octakit, bridged. | `make check` |
 | [`rig-scenes`](../../remixes/rig-scenes/README.md) | The rig + MIDI SCENES. | `make check` |
@@ -37,7 +37,9 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 | [`recfix`](../../remixes/recfix/README.md) | The recorder loop click: the four ColdFire fixes beside the stock FX2 chooser, no DSP code of our own. | on hardware: with the bus, 12 Sep 2026 (OCTABAM83); RECORDER HOLD and RLEN PLEN port-gated |
 | [`repitch`](../../remixes/repitch/README.md) | stock effects with variable-speed REPITCH in the TSTR selector. | on hardware: repeat98's MKII, 16 Sep 2026 (OCTABAM81) |
 | [`scenes`](../../remixes/scenes/README.md) | All the firmware mods of the MIDI SCENES family, no effects: scenes over MIDI, the LO-FI AMF fix, CC to page 2. | port-gated |
+| [`usb-full`](../../remixes/usb-full/README.md) | stock + USB MIDI + USB AUDIO FULL (16 ch: the tracks). | port-gated |
 | [`usb-lean`](../../remixes/usb-lean/README.md) | stock + USB MIDI + USB AUDIO (20 ch: tracks, MAIN, CUE). | port-gated |
+| [`usb-master`](../../remixes/usb-master/README.md) | stock + USB MIDI + USB AUDIO MASTER (2 ch: track 8). | port-gated |
 
 ## Reference
 
