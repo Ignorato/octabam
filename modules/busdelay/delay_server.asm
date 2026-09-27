@@ -1476,8 +1476,7 @@ rskipr:
         move    x:(r7+$32),x0           ; fL
         mac     x0,y1,a                 ; fbIntoR = fR*(1-P) + fL*P
         move    x:(r7+$37),y1           ; 1-PING
-        mac     x0,y1,b                 ; fbIntoL = fR*P + fL*(1-P)
-        move    a,y0                    ; fbIntoR, parked
+        mac     x0,y1,b     a,y0        ; fbIntoL = fR*P + fL*(1-P) ; fbIntoR, parked
 
 ; ---- write both lines: LineL takes x_in in full, LineR scaled by 1-PING.
 ; Each write is a limiting store (the sum can exceed full scale and a raw
