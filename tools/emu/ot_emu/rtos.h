@@ -660,7 +660,17 @@ namespace ot
 		// PHYSICAL behaviour and route A's is the artefact.
 		bool m_ataIrq = false;
 		double m_ataIrqDue = 0.0;			// 0 = nothing pending
-		double m_ataLatency = 1.0;			// samples; ~23 us at 44.1 kHz
+		// Samples between an ATA data sector and its interrupt. 8 (~180 us)
+		// since 27 Sep 2026: at 1 the engine raced through the load's card
+		// reads and `sys` consumed the engine's own reset-time "select bank
+		// 0" AFTER the BANK= parse (RTOS_FORK section 7: the unit does not,
+		// measured 6 Sep 2026), so the load ended on bank A instead of the
+		// saved bank and, with Octakit's lifecycle checks in the image
+		// (mods, ok-ms, rig-mods), halted at gk_lifecycle_activation
+		// (engine part 1 vs UI part 0). At 8 sys drains its queue inside the
+		// engine's card waits, the load ends on the saved bank unaided and
+		// those remixes load. --ata-latency overrides it.
+		double m_ataLatency = 8.0;
 		uint64_t m_ataInterrupts = 0;
 		std::vector<std::string> m_ataTrace;
 		bool m_ataTraceOn = false;

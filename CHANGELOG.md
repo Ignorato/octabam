@@ -7,6 +7,13 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The port's load ends on the saved bank (27 Sep 2026): ATA latency 8
+  samples (~180 us per data sector, `--ata-latency` to override) instead
+  of 1, so `sys` consumes the engine's reset-time "select bank 0" before
+  the BANK= parse, as the unit does (RTOS_FORK section 7, measured 6 Sep).
+  mods, ok-ms and rig-mods (Octakit + MIDI SCENES) load under the port
+  again instead of halting in Octakit's activation lifecycle on an engine
+  part / UI part disagreement.
 - Tape Echo's ColdFire probe (27 Sep 2026): its test vectors are glibc's
   `random()` sequence on every host (macOS's differed, so a failing vector
   here never occurred on the author's Linux), and its host oracle is
