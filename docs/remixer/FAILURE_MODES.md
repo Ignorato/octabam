@@ -1008,3 +1008,175 @@ The right channels hold the tone in runs 124–380 frames off phase. Each
 USB frame carries a track's L and R in adjacent subslots of one packet, so
 a device-side packet swap would move both; a right-only reorder points at
 the host's assembly of the stream (inferred, not measured).
+
+## STEM REC (`modules/stems`, remix `stems`): what the first flash could hit 🔮
+
+None of these has been seen on hardware: STEM REC is unflashed as of 13 Sep
+2026. Each entry is predicted from the port or known by design, and says
+which. Move an entry out of this block, with its **Seen** line, the moment
+it happens on the unit. Background for all of them:
+`docs/firmware/STEM_REC.md` sections 10 and 11, and `modules/stems/README.md`.
+
+### No file after a take
+
+**Symptom.** A take was made, and no `YYMMDD-HHMM` folder with a `T1.wav`
+appears in the set's AUDIO folder.
+
+**Cause.** Predicted. The unit shows no error, but the module keeps one in
+its status word: 1 overflow, 2 path (no set mounted, or the set path is too
+long), 3 open, 4 the file exists, 5 write, 6 seek, 7 close, 8 task. The likeliest
+on a working card is 4: a second take in the same minute is refused by
+design, and the first take is left intact.
+
+**First check.** Was there an earlier take in the same minute? Is a set
+mounted, with its AUDIO folder present? Then reproduce under the port with
+the same project and read the status word from `--mem-dump` of
+`stems_state` (the second of the six words): its value names the step that
+failed.
+
+### The unit hangs when STEM REC is selected
+
+**Symptom.** Selecting MAIN MENU › CONTROL › STEM REC freezes the unit.
+
+**Cause.** Predicted, and untested on the unit. The first select creates the
+writer task (STEM_REC.md section 3), and every select changes the state with
+interrupts masked for a few instructions. Under the port both run and
+return (STEM_REC.md 11.1).
+
+**First check.** Does it happen on the first select after power-on only?
+Then it is task creation. Run the same image under the port with the same
+project and `--call-before-play` of `stems_action`, and look for a fault or
+a hang in the port's report.
+
+### Audio drops or clicks while recording
+
+**Symptom.** Dropouts or clicks in the unit's own output while a take runs.
+
+**Cause.** Predicted, unmeasured on the unit. The frame hook runs 130
+instructions per frame while recording T1, and 739 for eight tracks, in the
+audio interrupt (STEM_REC.md 12.2). Its time on the unit isn't measured.
+The streaming build also writes to the card during the take, from the
+writer task at priority 1. Whether those writes disturb the audio isn't
+measured either.
+
+**First check.** Does it happen only while RECORDING, and not while ARMED
+(17 instructions) or IDLE (2)? Compare with the same project in the stock
+OS.
+
+### The take never appears, and card access stops working
+
+**Symptom.** After a take, its file never appears. Loading or saving
+anything on the card afterwards does not finish. Audio already playing
+continues.
+
+**Cause.** Predicted from the port (STEM_REC.md 11.4). If the card aborts a
+write command, the stock card driver waits for it forever, with no error
+check and no timeout, inside the writer task, which holds the file layer's
+lock. Main, at priority 0, never runs again. It is a stock limitation: the
+stock sample save goes through the same routine. Whether a real card ever
+aborts a write this way is not measured.
+
+**Fix.** Power cycle. Then check the card on a computer, and do not use it
+for STEM REC again until it passes.
+
+### The whole unit freezes while a take is written
+
+**Symptom.** During a take, or after it stops, the unit freezes: the
+audio stops or sticks, and the screen and the keys stop answering. The take
+never appears.
+
+**Cause.** Seen under the port before the module's fix, and not expected
+since (STEM_REC.md 11.7). The stock PIO card write updates the card
+handler's data pointer and sector count only after it has sent a write's
+first sector. An interrupt landing in between left the handler one sector
+short of the card, waiting forever at level 5, so no audio frame was
+taken again. The module patches the routine to update both first. If this
+is seen on the unit, either the patch did not take, or the card uses the
+stock DMA write path, which the patch does not touch and which is not
+analysed.
+
+**First check.** Does `0x40014cfe` in the flashed image hold `jmp
+stems_ata_first` (`verify_stems.py` checks it)? Does the card report DMA?
+Then power cycle, and try the same take with another card.
+
+### A take plays with a repeated or missing 512-byte block
+
+**Symptom.** A take has one 512-byte stretch, about 3 ms, repeated, or the
+audio after some point is shifted by 512 bytes, with no error reported.
+
+**Cause.** The other outcome of the same stock race (STEM_REC.md 11.7),
+possible only on a write command of more than one sector: if the interrupt
+lands before the routine has updated the pointer, the handler sends the
+first sector twice. Under the port, 3 of a 15-second take's 2,656 write
+commands had more than one sector. On a single sector, the same race is the
+freeze above. The fix covers both, and under the port the 15-second take's
+file equals the ring byte for byte. Not expected on the unit, for the same
+reasons as the freeze.
+
+**First check.** Where in the file is the repeat? A write command starts on
+a sector boundary, so the repeat starts at a multiple of 512 bytes from
+the start of the file.
+
+### A take with foreign bytes in it, or a bank that loads wrong after a take
+
+**Retired for STEM REC's streaming build** (22 Sep 2026): STEM REC no
+longer uses the shared buffer. Kept for the tag 27 image and for stock's
+own saves.
+
+**Symptom.** A take has a stretch of noise or non-audio data, or after a
+take a bank (not the current one) loads with wrong or garbled content.
+
+**Cause.** Predicted from the code, not seen (STEM_REC.md 7.5a). The file
+layer stages every buffered read and write through one unlocked buffer,
+`0x4ecd3000`. About 1 s after every STOP, stock saves each dirty bank other
+than the current one through that layer, on the engine task. STEM REC
+writes its take at STOP, on its own task at the same priority. If the two
+overlap, either file can get the other's bytes. The trigger is a bank other
+than the current one having been edited since it was last saved.
+
+**First check.** Was a bank other than the current one edited before the
+take? Compare the damaged bank's `.work` with a backup: audio-like bytes
+in it point here. Then reproduce under the port with a second bank dirty
+and a write watch on `0x4ecd3000`.
+
+### A take ends early with no error shown
+
+**Symptom.** A take stops by itself before STEM REC or the sequencer
+stopped it. Its files play but are shorter than the performance.
+
+**Cause.** Predicted. The card fell behind and the 4 MiB ring filled, so
+the take stopped at the last whole frame (status 1, overflow), or the take
+reached the 60-minute cap (status 0). Streaming spec, section 1.
+
+**First check.** The status word under the port, or the take's length: 60
+minutes is the cap. A slow or nearly full card is the likely cause of an
+overflow.
+
+### After a power cut or a card pull, a take's files are empty
+
+**Symptom.** A take's `Tn.wav` files exist but have zero length.
+
+**Cause.** Measured under the port (STEM_REC.md 12.3). The audio is
+streamed while recording, but each file's length is set only at the end,
+with its real header. A take cut off before the end leaves a 0-byte file:
+under the port, 1,024 frames streamed and the directory entry still said
+0 bytes. The streamed sectors are on the card, but no file reaches them.
+
+**Fix.** None in this build. Wait at least 5 seconds after the stop
+before you pull the card or power off. Setting the length every few
+chunks would keep a cut-off take playable; it isn't built.
+
+### A take on a nearly full card
+
+**Symptom.** A take on a nearly full card is shorter than the performance,
+won't open, or reports more data than it plays.
+
+**Cause.** Not analysed. When the card runs out of space, the raw write's
+answer is unknown: STEM_REC.md 12.1 found its return value isn't a sector
+or byte count, and the writer checks only its sign. If a write that found
+no space still returns a non-negative value, the header can claim data
+that isn't there.
+
+**First check.** The card's free space against the take's length: a T1
+take needs about 10.6 MB a minute. Reproduce under the port on a small
+card image.

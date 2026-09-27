@@ -366,6 +366,7 @@ reach: ## The gates this branch's changes reach (the diff against BASE=origin/ma
 modules: ## List the module index and the available remixes
 	python3 tools/remix/index.py
 
+.PHONY: docs
 docs: ## Render README.md's module table and docs/remixes/README.md from the manifests and the selections
 	python3 tools/remix/index.py --write
 

@@ -37,6 +37,7 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 | [`recfix`](../../remixes/recfix/README.md) | The recorder loop click: the four ColdFire fixes beside the stock FX2 chooser, no DSP code of our own. | on hardware: with the bus, 12 Sep 2026 (OCTABAM83); RECORDER HOLD and RLEN PLEN port-gated |
 | [`repitch`](../../remixes/repitch/README.md) | stock effects with variable-speed REPITCH in the TSTR selector. | on hardware: repeat98's MKII, 16 Sep 2026 (OCTABAM81) |
 | [`scenes`](../../remixes/scenes/README.md) | All the firmware mods of the MIDI SCENES family, no effects: scenes over MIDI, the LO-FI AMF fix, CC to page 2. | port-gated |
+| [`stems`](../../remixes/stems/README.md) | STEM REC alone: T1 to the card while the sequencer plays, streamed. | port-gated: `verify_stems` under the ColdFire port; never flashed |
 | [`usb-full`](../../remixes/usb-full/README.md) | stock + USB MIDI + USB AUDIO FULL (16 ch: the tracks). | port-gated |
 | [`usb-lean`](../../remixes/usb-lean/README.md) | stock + USB MIDI + USB AUDIO (20 ch: tracks, MAIN, CUE). | port-gated |
 | [`usb-master`](../../remixes/usb-master/README.md) | stock + USB MIDI + USB AUDIO MASTER (2 ch: track 8). | port-gated |
