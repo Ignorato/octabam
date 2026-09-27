@@ -6716,3 +6716,38 @@ once, at that read (`0x40017dc6`), and never `0x4f4eb5e8` or `0x4f4eb5ec`,
 FSInfo's free count and next-free hint. 🟡 So the firmware neither uses nor
 updates them. Falsifier: code reaching those fields through a register
 offset from the buffer.
+
+### 14.2 The take checks on FAT32 ✅
+
+Method: `verify_stems.py`'s FAT32 part (`fat32()`, the `--fat32` flag), 27
+Sep 2026, on a 64 MB image with 512-byte clusters and partition type 0x0c
+(`stems_fixture.py --fat32`: the fixture's card, FAT32), under upstream's
+port, on the `stems` image of section 13.
+
+**The mount.** ✅ The firmware's mount flag (`0x460d1cb8`, the `FW_CARD_READY`
+of `tools/emu/emu_card.py`) reads `00000001` on the FAT16 card, the control,
+and on the FAT32 card. It is a 32-bit word: its first byte is 0 either way,
+which is how the check's first form, reading one byte, failed both cards
+while both were mounted.
+
+**The take checks.** ✅ All pass, 43 checks after the two above: the probe
+of the raw routines, `full`, `rowstop`, `stream`, `wrap`, `cap`, `cut`,
+`exists` and `overflow`. Every frame count, size and sample matches the FAT16
+run of section 13: `full` 402 frames, `stream` 1,702 with the task writing
+during the take, `wrap` wrapped at the ring's end, `cut` a 0-byte `T1.wav`
+after 1,024 frames streamed, `exists` refused with the first take untouched,
+and `overflow` a whole 4 MiB ring written and closed (4,194,348 bytes).
+
+**One value differs, and it is the cluster size.** ✅ The probe's two raw
+writes return `d0` 512 on FAT32 and 2,048 on FAT16 (section 12.1). Those are
+the two cards' cluster sizes, 1 sector and 4. 🟡 Inferred: the raw write
+returns the bytes of one cluster, or its own write unit, not the bytes the
+caller asked for. The probe's other results, and the file it writes, are the
+same on both.
+
+**The gap.** The unit's 64 GB card uses 32 KB clusters, 64 sectors each.
+This image uses 512-byte clusters, which put a cluster boundary after every
+sector, so the file layer crosses one on every write: the hardest case for
+cluster allocation, not the unit's. A FAT32 image with 32 KB clusters needs
+at least 65,525 clusters, about 2 GB, and wasn't run. Flash A is the first
+test on the real card.

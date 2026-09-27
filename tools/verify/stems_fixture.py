@@ -8,7 +8,7 @@ mirror; T1's FX1 and FX2 = SEND; slot 1's TSMODE=0, so "the record IS the
 file" (no timestretch grains to fit around). The kick itself is ours
 (`scripts/make_test_audio.py kick`), never Elektron's.
 
-    python3 tools/verify/stems_fixture.py [PROJECT_DIR]
+    python3 tools/verify/stems_fixture.py [--eight | --fat32] [PROJECT_DIR]
 
 PROJECT_DIR defaults to `out/projects/Ultimate FX 1.5.3`. The template is
 copied into a scratch folder first and only the copy is edited -- the
@@ -45,6 +45,8 @@ PROJECT_NAME = "ULTFX"
 SCRATCH = ROOT / "out" / "task11" / "fixture_src"
 CARD_OUT = ROOT / "out" / "stems_fixture_card.img"
 FIXTURE_JSON = ROOT / "out" / "stems_fixture.json"
+CARD32_OUT = ROOT / "out" / "stems_fixture32_card.img"      # --fat32: the same card, FAT32
+FIXTURE32_JSON = ROOT / "out" / "stems_fixture32.json"
 KICK_NAME = "kick.wav"
 # Our own staging tree: emu_card.stage_project's default, out/_stage_tree,
 # is verify_set's too, and each call deletes the tree first.
@@ -88,7 +90,7 @@ def _add_sample_slot(project_work, slot, name):
     project_work.write_bytes(raw[:idx] + entry + raw[idx:])
 
 
-def build(project_dir=DEFAULT_PROJECT):
+def build(project_dir=DEFAULT_PROJECT, fat=16):
     project_dir = pathlib.Path(project_dir)
     if not project_dir.is_dir():
         sys.exit(f"no project at {project_dir}")
@@ -132,17 +134,18 @@ def build(project_dir=DEFAULT_PROJECT):
 
     card_bytes, name = emu_card.stage_project(
         SCRATCH, SET_NAME, PROJECT_NAME, tree=str(STAGE_TREE),
-        audio=[f"{kick_src}:AUDIO/{KICK_NAME}"])
-    CARD_OUT.write_bytes(card_bytes)
+        audio=[f"{kick_src}:AUDIO/{KICK_NAME}"], fat=fat)
+    card_out, fixture_json = (CARD32_OUT, FIXTURE32_JSON) if fat == 32 else (CARD_OUT, FIXTURE_JSON)
+    card_out.write_bytes(card_bytes)
 
-    result = {"card": str(CARD_OUT), "set": SET_NAME, "project": name,
+    result = {"card": str(card_out), "set": SET_NAME, "project": name,
               "staged": [KICK_NAME]}
-    FIXTURE_JSON.write_text(json.dumps(result, indent=2) + "\n")
+    fixture_json.write_text(json.dumps(result, indent=2) + "\n")
     print(f"card:    {result['card']}")
     print(f"set:     {result['set']}")
     print(f"project: {result['project']}")
     print(f"staged:  {result['staged']}")
-    print(f"-> {FIXTURE_JSON}")
+    print(f"-> {fixture_json}")
     return result
 
 
@@ -192,5 +195,7 @@ def build8(project_dir=DEFAULT_PROJECT):
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--eight":
         build8(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
+    elif len(sys.argv) > 1 and sys.argv[1] == "--fat32":
+        build(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT, fat=32)
     else:
         build(sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PROJECT)

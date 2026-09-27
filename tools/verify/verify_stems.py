@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """STEM REC -- the row, the tap and the file, checked without hardware.
 
-    python3 tools/verify/verify_stems.py [remix] [--long]   (default: stems)
+    python3 tools/verify/verify_stems.py [remix] [--long] [--fat32]   (default: stems)
 
 Static, from the built image: CONTROL has seven rows, the six stock ones
 byte for byte, the seventh labelled STEM REC with the module's action and
@@ -10,7 +10,9 @@ top of the platform reserve, above the runtime's stage. Then, when the
 port is built and the fixture exists (tools/verify/stems_fixture.py), the
 port runs of the proof of concept and of the streaming plan. `--long` adds
 a 20-second take, which takes about 20 minutes under the port and stays
-out of `make check`.
+out of `make check`. `--fat32` runs the take checks again on a FAT32 card
+(`stems_fixture.py --fat32`), after checking the firmware mounted it; it
+stays out of `make check` too.
 """
 import json
 import os
@@ -149,6 +151,7 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     2026 (`main.cpp` runs to main's spin before the call; STEM_REC.md 10.1).
     An older port refuses the call, prints the refusal and records nothing,
     so `tap()` checks the call's own report line before anything else."""
+    tag = f"{tag}{SUFFIX}"
     fx = json.loads(pathlib.Path(fixture or FIXTURE).read_text())
     work = pathlib.Path("out/stems_runs"); work.mkdir(parents=True, exist_ok=True)
     dump, card = work / f"{tag}.dump", work / f"{tag}.img"
@@ -289,7 +292,7 @@ def full(s):
     the take."""
     log, dump, card, words, _ = port(s, 700, stop_at=400, tag="full", stack=True)
     st, status, made, wr, rd, nfr = words
-    raw = pathlib.Path("out/stems_runs/full.stack")
+    raw = run_path("full", "stack")
     if raw.exists():
         longs = [int.from_bytes(raw.read_bytes()[i:i + 4], "big") for i in range(0, STACK_SIZE, 4)]
         untouched = next((i for i, w in enumerate(longs) if w != STACK_FILL), len(longs))
@@ -349,7 +352,7 @@ def wrap(s):
     st, status, _, wr, rd, nfr = words
     check("wrap: the task finished (state IDLE, no error)", st == ST_IDLE and status == 0,
           f"state {st}, status {status}")
-    raw = pathlib.Path("out/stems_runs/wrap.offs")
+    raw = run_path("wrap", "offs")
     offs = raw.read_bytes() if raw.exists() else b"\0" * 8
     wr_off, rd_off = int.from_bytes(offs[:4], "big"), int.from_bytes(offs[4:], "big")
     want = (off + 64 * nfr) % RING_SIZE_T1
@@ -392,6 +395,14 @@ def cut(s):
 
 
 FIXTURE8 = pathlib.Path("out/stems_fixture8.json")   # tools/verify/stems_fixture.py --eight
+FIXTURE32 = pathlib.Path("out/stems_fixture32.json")   # tools/verify/stems_fixture.py --fat32
+CARD_READY = 0x460d1cb8     # emu_card.FW_CARD_READY: := 1 after the firmware's card init and mount
+SUFFIX = ""                 # appended to every run's tag: "32" while the FAT32 checks run
+
+
+def run_path(tag, ext):
+    """A file a run wrote: out/stems_runs/<tag><SUFFIX>.<ext>."""
+    return pathlib.Path("out/stems_runs") / f"{tag}{SUFFIX}.{ext}"
 
 
 def take_files(card_path, fixture=FIXTURE):
@@ -547,7 +558,7 @@ def exists(s):
     """A second take on the first take's card, in the same minute: refused,
     and the first take is untouched. Every port take is 000000-0000 (the
     port's clock reads 0, STEM_REC.md 11.2), so the minute is the same."""
-    first = pathlib.Path("out/stems_runs/full.img")
+    first = run_path("full", "img")
     if not first.exists():
         print("  [SKIP] exists: needs the full run's card")
         return
@@ -633,8 +644,8 @@ def probe(s):
     log, _, card, _, _ = port(s, 300, tag="probe", pokes=pokes, dump_blocks=False,
                               mems=((res, 28, "res"),),
                               calls_before=(s["stems_action"], s["stems_action"]))
-    raw = (pathlib.Path("out/stems_runs") / "probe.res").read_bytes() if \
-        (pathlib.Path("out/stems_runs") / "probe.res").exists() else b"\0" * 28
+    raw = run_path("probe", "res").read_bytes() if \
+        run_path("probe", "res").exists() else b"\0" * 28
     r = [int.from_bytes(raw[i:i + 4], "big", signed=True) for i in range(0, 28, 4)]
     check("probe: raw open returned a handle", 1 <= r[0] <= 511, f"d0 {r[0]}")
     check("probe: raw write of 3 sectors", r[1] >= 0, f"d0 {r[1]}")
@@ -652,6 +663,47 @@ def probe(s):
               f"first bytes {data[:4].hex()}")
         check("probe: sector 1 survived the rewrite, and the position advanced",
               data[512:1000] == b"\xaa" * 488, f"bytes 512.. {data[512:516].hex()}")
+
+
+def fat32(s):
+    """The take checks on a FAT32 card (the unit's card is FAT32; every take
+    before this ran on FAT16). First the mount byte, on the FAT16 card as a
+    control and then on the FAT32 card: if the firmware did not mount the
+    card, one check says so and no take check runs, since each would fail on
+    'no new recording' for that one reason."""
+    global FIXTURE, SUFFIX
+    if not FIXTURE32.exists():
+        check("fat32: the FAT32 fixture exists (stems_fixture.py --fat32)", False)
+        return
+    ready = {}
+    for fixture, tag in ((FIXTURE, "mount16"), (FIXTURE32, "mount32")):
+        port(s, 50, tag=tag, dump_blocks=False, fixture=fixture, mems=((CARD_READY, 4, "ready"),))
+        raw = run_path(tag, "ready")
+        ready[tag] = raw.read_bytes() if raw.exists() else b""
+    # The flag is a 32-bit word (big-endian), 1 once mounted: its first
+    # byte is 0 either way (27 Sep 2026, both cards read 00000001).
+    word = {t: int.from_bytes(b[:4], "big") if len(b) >= 4 else None for t, b in ready.items()}
+    check("fat32: control -- the FAT16 card reads as mounted", word["mount16"] == 1,
+          ready["mount16"].hex())
+    mounted = word["mount32"] == 1
+    check("fat32: the firmware mounted the FAT32 card", mounted, ready["mount32"].hex())
+    if not (mounted and word["mount16"] == 1):
+        return
+    saved = FIXTURE
+    FIXTURE, SUFFIX = FIXTURE32, "32"
+    try:
+        print("  -- the take checks on FAT32 --")
+        probe(s)
+        full(s)
+        rowstop(s)
+        stream(s)
+        wrap(s)
+        cap(s)
+        cut(s)
+        exists(s)
+        overflow(s)
+    finally:
+        FIXTURE, SUFFIX = saved, ""
 
 
 def main():
@@ -686,6 +738,8 @@ def main():
         cardfail(s)
         if "--long" in sys.argv:
             limit(s)
+        if "--fat32" in sys.argv:
+            fat32(s)
     else:
         print("  [SKIP] port runs: build the port (make emu-cf) and the fixture "
               "(python3 tools/verify/stems_fixture.py)")
