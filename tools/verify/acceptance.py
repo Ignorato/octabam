@@ -155,11 +155,18 @@ def budget_result(data):
     return "failed" if data["worst_core"] > data["usable"] else "passed"
 
 
+def _effect(m):
+    """A DSP module the fixture can put on a track and the pricer can meter:
+    one with a chooser row. A DspSection reached by a hook alone (menu None,
+    USB AUDIO IN's RX inject) is placed by the build but is no effect."""
+    return m.dsp is not None and getattr(m, "menu", 1) is not None
+
+
 def pressure_profile(modules):
     """Ready when every DSP module of the selection declares its dearest
     settings (schema.Module.dear); blocked, by name, when one does not. A
     module is never rendered at default knobs and called covered."""
-    dsp = [m for m in modules if m.dsp is not None and getattr(m, "menu", None) is not None]
+    dsp = [m for m in modules if _effect(m)]
     if not dsp:
         return "not_applicable", "remix has no DSP modules"
     missing = sorted(m.key for m in dsp
@@ -272,7 +279,7 @@ def preflight(r, args, provenance_data):
     # remix's check evidence, and says by name why it is blocked.
     required = [ROOT / "out/raw/section_3_MAIN_OS.bin",
                 ROOT / "out/emu/ot_emu", ROOT / ".venv/bin/python3"]
-    if any(m.dsp is not None and getattr(m, "menu", None) is not None for m in modules):
+    if any(_effect(m) for m in modules):
         required += [ROOT / "vendor/dsp56300/build/source/dsp_host/dsp_host",
                      ROOT / "vendor/dsp56300/build/source/dsp_host/dsp_asm"]
     problems += [f"missing prerequisite: {p}" for p in required if not p.is_file()]
