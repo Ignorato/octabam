@@ -12,7 +12,7 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 
 | remix | contains | proof |
 |---|---|---|
-| [`mods`](../../remixes/mods/README.md) | Every ColdFire mod in one image on the stock effects: MIDI SCENES, Octakit, the recorder fixes, REPITCH, octatrick's three, USB MIDI + AUDIO. | port-gated |
+| [`mods`](../../remixes/mods/README.md) | Every ColdFire mod in one image on the stock effects: MIDI SCENES, Octakit, the recorder fixes, REPITCH, USB MIDI + AUDIO (octatrick's three cannot join it). | port-gated |
 | [`octatrick`](../../remixes/octatrick/README.md) | SYNTH MACHINE + SCALE QUANTIZER + DIRECT JUMP on the stock effects. | `make check` |
 | [`octatrick-usb`](../../remixes/octatrick-usb/README.md) | SYNTH MACHINE + SCALE QUANTIZER + DIRECT JUMP + USB MIDI + USB AUDIO on the stock effects. | on hardware: Tim's MKI, 26 Sep 2026 (OCTATRICK9), USB audio on all 20 channels |
 | [`ok-ms`](../../remixes/ok-ms/README.md) | Octakit + MIDI SCENES on the stock effects: the two mods alone. | on hardware: midisc's author's unit, 14 Sep 2026 (OKMS2) |
