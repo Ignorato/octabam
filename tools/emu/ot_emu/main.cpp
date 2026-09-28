@@ -1159,6 +1159,7 @@ int main(int _argc, char** _argv)
 	std::string callSpec;		// "addr[,arg,...]": a firmware routine called AS MAIN after the load (a menu action the port has no panel for -- Part Reload, 14 Sep 2026)
 	int callAt = -1;			// with --sequencer: make that call this many frames AFTER the transport start instead (a panel edit while playing: the transport start re-applies the part over the live lane, so an edit made before it is gone)
 	std::vector<std::string> steps;	// 28 Sep 2026: --step "FRAME:call:addr[,arg..]" | "FRAME:poke:addr=byte[;..]" | "FRAME:dump:addr,len=path[;..]", repeatable, in order. FRAME "-" = after the load, before the transport (in the order given); a number = that many frames after the transport start (with --sequencer). One boot carries a gate's whole script instead of one boot per call (an Octakit load is ~32 s emulated)
+	std::string liveScript;		// 28 Sep 2026: a file of "<emulated ms> <live line>" (key/enc/pot/midi/quit, as --live takes), applied at those emulated times from the start of the live phase, transport stopped: a panel script without wall-clock sleeps, the same on a loaded machine as on a quiet one
 	std::string livePath;		// a FIFO (or file) of panel events, read while the RTOS runs: "key <code> down|up", "enc <n> <delta>", "pot <0..255>", "midi <hex>...", "quit" -- tools/emu/lcd_view.py --panel writes it
 	std::string midiOut;		// MIDI OUT: UART0's transmit bytes, raw, to FILE at the very end (the firmware's CC echo and CC FEEDBACK's dumps; a summary line counts them)
 	std::string midiFile;		// with --sequencer: MIDI IN bytes onto UART0, one event per line: "<frames after the transport start> <hex byte>..." (e.g. "20 B0 28 7F" = CC 40 to 127 on channel 1) or "pre <hex byte>..." before the transport start ("pre C0 10" = program change 16 while stopped)
@@ -1244,6 +1245,7 @@ int main(int _argc, char** _argv)
 		else if(a == "--call" && i + 1 < _argc)		callSpec = _argv[++i];
 		else if(a == "--call-at" && i + 1 < _argc)	callAt = std::atoi(_argv[++i]);
 		else if(a == "--step" && i + 1 < _argc)		steps.emplace_back(_argv[++i]);
+		else if(a == "--live-script" && i + 1 < _argc)	liveScript = _argv[++i];
 		else if(a == "--midi" && i + 1 < _argc)		midiFile = _argv[++i];
 		else if(a == "--midi-out" && i + 1 < _argc)	midiOut = _argv[++i];
 		else if(a == "--live" && i + 1 < _argc)		livePath = _argv[++i];
@@ -1261,12 +1263,13 @@ int main(int _argc, char** _argv)
 			"              [--golden FILE] [--ms N] [--boot-logo]\n"
 			"              [--usb-host SOCKET] [--usb-notify FILE] [--usb-fs]   the USB device controller + a scripted host (usb.h)\n"
 			"              [--interactive] [--rtc host|off|EPOCH] [--dsp-rt]    the line protocol on stdin/stdout (tools/panel)\n"
-			"              [--step FRAME:call|poke|dump:SPEC]...              a gate's whole script on one boot: FRAME '-' = after the load, N = N frames after the transport start\n");
+			"              [--step FRAME:call|poke|dump:SPEC]...              a gate's whole script on one boot: FRAME '-' = after the load, N = N frames after the transport start\n"
+			"              [--live-script FILE]                              '<emulated ms> key|enc|pot|midi|quit ...' lines, transport stopped, no wall-clock pacing\n");
 			return 2;
 		}
 	}
 
-	if(sequencer || !livePath.empty())
+	if(sequencer || !livePath.empty() || !liveScript.empty())
 		mount = true;			// M6c needs the card mounted and the project loaded; so does a panel
 	if(dspRt && !interactive)
 	{
@@ -2059,7 +2062,45 @@ int main(int _argc, char** _argv)
 						live.buf.erase(0, nl + 1);
 					}
 				}, 256);
-			if(!livePath.empty() && !sequencer)
+			if(!liveScript.empty() && !sequencer)
+			{
+				// A panel script at emulated times: the frame engine runs and
+				// each line is applied when the frame count reaches its time.
+				rtos.setFrame(true);
+				pokeBytes(pokeAfterLoad, "after the load");
+				std::ifstream in(liveScript);
+				if(!in)
+				{
+					std::printf("live script: cannot open %s\n", liveScript.c_str());
+					return 1;
+				}
+				const auto f0 = rtos.frameCount();
+				std::string line;
+				size_t n = 0;
+				bool early = false;
+				while(std::getline(in, line) && !live.quit)
+				{
+					std::istringstream is(line);
+					double ms = 0;
+					if(!(is >> ms))
+						continue;
+					std::string rest;
+					std::getline(is, rest);
+					const auto at = f0 + static_cast<uint64_t>(ms / 1000.0 * ot::g_sampleHz / ot::g_framePeriod);
+					if(rtos.runUntil(ms * 5 + 60000.0, [&] { return rtos.frameCount() >= at; }, ot::Rtos::Changes::OnEvent) != ot::Rtos::Stop::Gate)
+					{
+						std::printf("live script: stopped before %.0f ms -- %s\n", ms, rtos.why().c_str());
+						early = true;
+						break;
+					}
+					liveLine(rest);
+					++n;
+				}
+				std::printf("live script: %zu line(s) from %s over %llu frames, ended %s -- %s\n", n, liveScript.c_str(),
+					static_cast<unsigned long long>(rtos.frameCount() - f0), early ? "early" : (live.quit ? "on quit" : "at the end"),
+					rtos.why().c_str());
+			}
+			else if(!livePath.empty() && !sequencer)
 			{
 				// The transport is the user's: PLAY is a key. The frame engine
 				// runs from here, as on the unit after boot.

@@ -75,7 +75,11 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
   at `-` = after the load before the transport or at frame N after the
   transport start, so one boot carries a gate's whole script;
   `verify_modedefaults` runs its two editor calls, their lane dumps and its
-  MIDI case on one Octakit load since 28 Sep 2026, three before) and `--call-at N` (the same call N frames after
+  MIDI case on one Octakit load since 28 Sep 2026, three before), `--live-script FILE`
+  (lines of `<emulated ms> key|enc|pot|midi|quit ...`, the `--live` vocabulary,
+  applied at those emulated times with the transport stopped: a panel script
+  that runs the same on a loaded machine as on a quiet one; `verify_tempobus`
+  since 28 Sep 2026) and `--call-at N` (the same call N frames after
   the transport start, so the part re-apply does not erase an edit).
   `--poke` writes after the load, before the frames.
 - MIDI IN: `--midi FILE`, one event per line, `<frames after the
