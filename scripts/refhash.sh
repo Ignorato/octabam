@@ -35,6 +35,21 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# The subject is the plain two-server selection (REVERB SERVER + DELAY
+# SERVER + SEND + TEMPO SYNC), written here as a scratch remix: it is the one
+# selection that builds in every configuration below (bottleservice overruns
+# payload A without SPEC), and it stopped being a checked-in remix (`bus`) on
+# 28 Sep 2026. A leading underscore keeps it out of the registry's listing.
+SUBJECT=_refhash
+cat > "remixes/$SUBJECT.py" <<'PY'
+from remix.schema import Proof, Remix
+REMIX = Remix(name="_refhash", family="effects", proof=Proof.CHECK,
+              doc="refhash's subject: the plain two-server image.",
+              modules=("REVERB SERVER", "DELAY SERVER", "SEND", "TEMPO SYNC"),
+              fallback="SEND")
+PY
+trap 'rm -f "remixes/$SUBJECT.py" remixes/__pycache__/$SUBJECT*' EXIT
+
 CASES=(
   "bus|XBUS=1 SPEC=1"
   "plain|"
@@ -109,7 +124,7 @@ run_matrix() {
           out/mainos_bus_delayprobe_*.bin out/dsp/mem_dev_A.mem
     local log="$outdir/$name.log" rc=0
     # shellcheck disable=SC2086 -- word splitting of $envs is the point
-    env REMIX=bottleservice $envs python3 tools/build/build_bus.py > "$log" 2>&1 || rc=$?
+    env REMIX="$SUBJECT" $envs python3 tools/build/build_bus.py > "$log" 2>&1 || rc=$?
     normalise "$log"
     {
       echo "case $name rc=$rc"
@@ -125,7 +140,7 @@ run_matrix() {
 
 restore() {
   # Leave the shipping artifact on disk, the way `make check` does.
-  REMIX=bottleservice XBUS=1 SPEC=1 python3 tools/build/build_bus.py > /dev/null 2>&1 || true
+  REMIX="$SUBJECT" XBUS=1 SPEC=1 python3 tools/build/build_bus.py > /dev/null 2>&1 || true
 }
 
 case "${1:-}" in
