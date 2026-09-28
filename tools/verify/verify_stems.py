@@ -9,10 +9,13 @@ id 0; the frame site jumps to the hook; the ring and the stack sit at the
 top of the platform reserve, above the runtime's stage. Then, when the
 port is built, the fixtures are built from the project template
 (tools/verify/stems_fixture.py; STEMS_TEMPLATE=<dir>, default
-out/projects/Ultimate FX 1.5.3) and the port runs of the proof of concept
-and of the streaming plan follow. `--long` adds
-a 20-second take, which takes about 20 minutes under the port and stays
-out of `make check`. `--fat32` runs the take checks again on a FAT32 card
+out/projects/Ultimate FX 1.5.3) and the port runs of the proof of concept,
+of the streaming plan and of the eight-track plan follow: the mask takes
+on the THRU fixture (1, 2, 4 and 8 tracks, and 0xA5). `--long` adds a
+20-second take, which takes about 20 minutes under the port, the masks of
+3, 5, 6 and 7 tracks and T8 alone, the mask latched at the start, an
+eight-track wrap and an eight-track overflow; it stays out of
+`make check`. `--fat32` runs the take checks again on a FAT32 card
 (`stems_fixture.py --fat32`), after checking the firmware mounted it; it
 stays out of `make check` too.
 """
@@ -553,7 +556,8 @@ def watched(s, extra=(), span=8):
 
 def writes(s, log, span=8):
     """(sample, word, value) for every watched write: word 0 = state,
-    1 = status, 3 = stems_wr, 5 = stems_frames."""
+    1 = status, 3 = stems_wr, 4 = stems_rd, 5 = stems_frames, and 6 =
+    stems_peak once the span is 28."""
     out = []
     for l in log.splitlines():
         if "] <- " not in l or "[0x" not in l:
@@ -868,6 +872,51 @@ def mask_take(s, mask, tag, stop_at=THRU_STOP, frames=THRU_FRAMES, pokes=()):
           f"stems_peak {peak}, rebuilt {rebuilt_peak(ws)}")
 
 
+def latch(s):
+    """The mask poked to 0xFF while a T1 take records (a --poke lands about
+    25 frames into play): the take keeps the mask it latched at its start."""
+    pokes = [(s["stems_tracks"] + 3, 0xFF)]
+    mask_take(s, 0x01, "latch", pokes=pokes)
+
+
+def wrap8(s):
+    """An eight-track take past the ring's 8,192 frames: the ring wraps, and
+    every file still equals its track."""
+    mask_take(s, 0xFF, "wrap8", stop_at=9000, frames=10500)
+
+
+RING_FRAMES_8 = 0x400000 // 512      # 8,192
+
+
+def overflow8(s):
+    """The overflow check at eight tracks: the writer held, the ring made to
+    look nearly full; the guard trips at 100 frames, eight complete files
+    are written and closed, and the largest value the hook ever wrote to
+    stems_peak is the ring's capacity (the watch log, span 28)."""
+    used = RING_FRAMES_8 - 100
+    rd = (-used) & 0xffffffff
+    rd_off = 100 * 512
+    pokes = [(s["stems_hold"] + 3, 1)]
+    pokes += [(s["stems_rd"] + i, (rd >> (24 - 8 * i)) & 0xff) for i in range(4)]
+    pokes += [(s["stems_rd_off"] + i, (rd_off >> (24 - 8 * i)) & 0xff) for i in range(4)]
+    log, _, card, words, _ = port(s, 9200, stop_at=OVERFLOW_STOP, tag="overflow8", mask=0xFF,
+                                  fixture=FIXTURE_THRU, pokes=pokes, dump_blocks=False,
+                                  calls=((9000, s["stems_action"]),), extra=watched(s, span=28))
+    st, status, _, wr, rd_end, _ = words
+    ws = writes(s, log, span=28)
+    statuses = [val for x, w, val in ws if w == 1]
+    peaks = [val for x, w, val in ws if w == 6]
+    check("overflow8: the hook stopped with ERR_OVERFLOW", ERR_OVERFLOW in statuses, f"status writes {statuses}")
+    check("overflow8: stems_peak reached the ring's capacity", max(peaks, default=0) == RING_FRAMES_8,
+          f"largest stems_peak write {max(peaks, default=0)} of {RING_FRAMES_8}")
+    files = take_files(card, FIXTURE_THRU)
+    sizes = [len(d) for _, d in files]
+    check("overflow8: eight files, each the whole ring's share",
+          len(files) == 8 and all(sz == 44 + RING_FRAMES_8 * 64 for sz in sizes), f"{sizes}")
+    check("overflow8: the task went IDLE and the row armed again", st == ST_ARMED,
+          f"state {st}, state writes {[val for x, w, val in ws if w == 0]}")
+
+
 def fixtures():
     """The four fixture cards, built from TEMPLATE at the start of every
     run: a fresh tree has none, and a card left by an older stems_fixture.py
@@ -931,6 +980,11 @@ def main():
         cardfail(s)
         if "--long" in sys.argv:
             limit(s)
+            for mask in (0x07, 0x1F, 0x3F, 0x7F, 0x80):
+                mask_take(s, mask, f"mask{mask:02x}")
+            latch(s)
+            wrap8(s)
+            overflow8(s)
         if "--fat32" in sys.argv:
             fat32(s)
     return 1 if fails else 0
