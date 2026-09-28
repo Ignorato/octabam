@@ -133,7 +133,7 @@ silent tracks. It checks:
 - AS_GENERAL has 20 channels; FORMAT_TYPE_I has subslot 4 and 24 bits.
 - A second open with the first poll held back 600 frames: `anchor` within
   that gap and `lastfill` at 512 ± 64; over the next 400 polls the fill
-  stays in the servo band (368–656) with no underrun.
+  holds the servo band's floor (384) with no underrun.
 - Taps: with the read-back arena and MAIN/CUE re-poked before every poll
   with words that name their source, side and frame, channel N carries
   only its own source (tracks 1–8 L/R, MAIN L/R, CUE L/R), each seen.
