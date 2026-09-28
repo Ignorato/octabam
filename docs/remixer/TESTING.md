@@ -142,7 +142,7 @@ rebase are not a result.
 
 | changed | reaches |
 |---|---|
-| `modules/<name>/` | `make check` and `make accept` for every remix that carries the module |
+| `modules/<name>/` | `make check` and `make accept` for every remix that carries the module; its README alone reaches `verify_docs` |
 | `remixes/<name>/remix.py` | `make check` and `make accept` for that remix; its README alone reaches `verify_docs` |
 | the build (`build_bus.py`, `cycle_count.py`, `dsp/`) or anything it imports | `scripts/refhash.sh check`, `make identity`, `make test-acceptance`, `make check-shared` for the cover |
 | a gate script of the shared half | one `make check-shared` for the cover |

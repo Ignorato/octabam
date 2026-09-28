@@ -118,6 +118,7 @@ class ModuleAndRemixTests(unittest.TestCase):
         self.assertEqual(commands(["remixes/miniverb/remix.py"]),
                          ["make check REMIX=miniverb", "make accept REMIX=miniverb STRESS_SOURCE=${STRESS_SOURCE}"])
         self.assertEqual(commands(["remixes/miniverb/README.md"]), ["python3 tools/verify/verify_docs.py"])
+        self.assertEqual(commands(["modules/miniverb/README.md"]), ["python3 tools/verify/verify_docs.py"])
 
     def test_one_remix_stays_make_check(self):
         self.assertEqual(commands(["remixes/miniverb/remix.py"])[0], "make check REMIX=miniverb")
