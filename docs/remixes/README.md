@@ -6,7 +6,7 @@ A remix is a named selection of modules; `make image REMIX=<name>` builds it int
 
 | remix | contains | proof |
 |---|---|---|
-| [`bottleservice`](../../remixes/bottleservice/README.md) | The rig + USB MIDI + USB AUDIO MASTER (T8 over USB) + Octakit. | port-gated: `make check` with the stress project; Kit save, reload and copy measured |
+| [`bottleservice`](../../remixes/bottleservice/README.md) | The rig + USB MIDI + USB AUDIO MASTER (T8 over USB) + Octakit. | on hardware: Sam's MKII, image 88, 27 Sep 2026 |
 | [`rig-kits`](../../remixes/rig-kits/README.md) | The rig + Octakit. | `make check` |
 | [`rig-mods`](../../remixes/rig-mods/README.md) | The rig + MIDI SCENES + Octakit, bridged. | `make check` |
 | [`rig-scenes`](../../remixes/rig-scenes/README.md) | The rig + MIDI SCENES. | `make check` |
