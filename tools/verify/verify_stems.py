@@ -107,6 +107,28 @@ def regions(s):
           f"stage end 0x{lay['stage_end']:08x}")
 
 
+def runtime_long(s, name):
+    """A long of the linked runtime as built (out/platform/runtime.raw), by symbol."""
+    from remix import platform_build
+    lay = json.loads((LAYOUT_DIR / platform_build.LAYOUT).read_text())
+    raw = (LAYOUT_DIR / "runtime.raw").read_bytes()
+    off = s[name] - lay["base"]
+    return int.from_bytes(raw[off:off + 4], "big")
+
+
+def rebuilt_peak(ws):
+    """The largest ring fill the hook saw, from the watch log: each write
+    of stems_wr (word 3) less the last write of stems_rd (word 4). The hook
+    runs at IPL 5, so stems_rd can't change inside it."""
+    rd, peak = 0, 0
+    for _, w, val in ws:
+        if w == 4:
+            rd = val
+        elif w == 3 and val:
+            peak = max(peak, val - rd)
+    return peak
+
+
 def t1_frames(dump_path):
     """T1's 16-bit stereo frames from a --block-dump, in frame order: the even
     words of T1's 64-word block in each read-back. One entry per frame, each
@@ -356,7 +378,8 @@ def stream(s):
     """A take long enough to cross three chunks: the task must write while
     the take runs. The write watch logs the state words; a write to rd
     (word 4) before the first FINISHING is a write during the take."""
-    log, dump, card, words, _ = port(s, 1900, stop_at=1700, tag="stream", extra=watched(s, span=24))
+    mems = ((s["stems_peak"], 4, "peak"),) if "stems_peak" in s else ()
+    log, dump, card, words, _ = port(s, 1900, stop_at=1700, tag="stream", extra=watched(s, span=24), mems=mems)
     st, status, _, wr, rd, nfr = words
     ws = writes(s, log, span=24)
     fin = next((x for x, w, v in ws if w == 0 and v == ST_FINISHING), None)
@@ -367,6 +390,11 @@ def stream(s):
     check("stream: the task drained every frame", nfr > 3 * CHUNK_FRAMES and rd == wr,
           f"rd {rd}, wr {wr}, frames {nfr}")
     wav_check(card, nfr, dump, "stream")
+    if "stems_peak" in s:
+        raw = run_path("stream", "peak")
+        peak = int.from_bytes(raw.read_bytes(), "big") if raw.exists() else None
+        check("stream: stems_peak is the largest fill the hook saw", peak == rebuilt_peak(ws),
+              f"stems_peak {peak}, rebuilt {rebuilt_peak(ws)}")
 
 
 def wrap(s):
@@ -636,7 +664,8 @@ def overflow(s):
     log, _, card, words, _ = port(s, OVERFLOW_FRAMES, stop_at=OVERFLOW_STOP, tag="overflow",
                                   pokes=pokes, dump_blocks=False,
                                   calls=((OVERFLOW_FRAMES - 200, s["stems_action"]),),
-                                  extra=watched(s, span=24))
+                                  extra=watched(s, span=24),
+                                  mems=((s["stems_peak"], 4, "peak"),) if "stems_peak" in s else ())
     st, status, _, wr, rd_end, _ = words
     ws = writes(s, log, span=24)
     statuses = [v for x, w, v in ws if w == 1]
@@ -651,6 +680,10 @@ def overflow(s):
           f"{len(data)} bytes")
     check("overflow: the task wrote and went IDLE, and the row armed again",
           states[-2:] == [ST_IDLE, ST_ARMED] and st == ST_ARMED, f"state writes {states}, state {st}")
+    if "stems_peak" in s:
+        raw = run_path("overflow", "peak")
+        peak = int.from_bytes(raw.read_bytes(), "big") if raw.exists() else None
+        check("overflow: the re-arm reset stems_peak to 0", peak == 0, f"stems_peak {peak}")
 
 
 def cardfail(s):
@@ -822,6 +855,9 @@ def main():
     regions(s)
     check("the card-out parse reads upstream's line and refuses crosscheck's",
           card_out_sectors(CARD_OUT_UPSTREAM) == 23 and card_out_sectors(CARD_OUT_CROSSCHECK) is None)
+    check("the build records all eight tracks by default", runtime_long(s, "stems_tracks") == 0xFF,
+          f"0x{runtime_long(s, 'stems_tracks'):02x}")
+    check("stems_peak is in the runtime, 0 at boot", "stems_peak" in s and runtime_long(s, "stems_peak") == 0)
     if not EMU.exists():
         print("  [SKIP] port runs: build the port (make emu-cf)")
     elif not TEMPLATE.is_dir():

@@ -1,4 +1,5 @@
-| STEM REC -- the enabled tracks to the card while the sequencer plays.
+| STEM REC -- the enabled tracks to the card while the sequencer plays. The
+| build records all eight by default (stems_tracks = 0xFF).
 |
 | Design: docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md
 | (streaming), over docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md.
@@ -85,15 +86,16 @@
 | ---- state -----------------------------------------------------------------
 | The first six words are read as one 24-byte dump by verify_stems.py.
         .balign 4
-        .global stems_state, stems_status, stems_task_made, stems_wr, stems_rd, stems_frames
+        .global stems_state, stems_status, stems_task_made, stems_wr, stems_rd, stems_frames, stems_peak
 stems_state:     .long   ST_IDLE
 stems_status:    .long   0          | the last error, 0 = none
 stems_task_made: .long   0
 stems_wr:        .long   0          | frames the hook has put in the ring
 stems_rd:        .long   0          | frames the task has taken out
 stems_frames:    .long   0          | frames recorded (= stems_wr)
+stems_peak:      .long   0          | the take's largest ring fill, frames; reset at the arm
         .global stems_tracks, stems_hold, stems_wr_off, stems_rd_off, stems_probe, stems_probe_res
-stems_tracks:    .long   0x01       | the track mask, bit k = track k+1; latched at the start
+stems_tracks:    .long   0xFF       | the track mask, bit k = track k+1; latched at the start
 stems_hold:      .long   0          | test seam: non-zero pauses the writer while RECORDING
 stems_mask:      .long   0          | the latched mask
 stems_nt:        .long   0          | its bit count
@@ -175,6 +177,7 @@ stems_action:
         clr.l   stems_wr            | IDLE: a fresh take
         clr.l   stems_rd
         clr.l   stems_frames
+        clr.l   stems_peak
         clr.l   stems_status
         clr.l   stems_wr_off
         clr.l   stems_rd_off
@@ -243,6 +246,11 @@ stems_frame_hook:
         move.l  %d0,stems_state
         bra.w   .Lh_out
 .Lh_room:
+        addq.l  #1,%d0              | frames in the ring with this one
+        cmp.l   stems_peak,%d0
+        bls.s   .Lh_nopeak
+        move.l  %d0,stems_peak      | the take's largest fill (the menu's status row)
+.Lh_nopeak:
         move.l  PING,%d4            | the half holding this frame (Task 3)
         eori.l  #PING_XOR,%d4
         moveq   #1,%d5
