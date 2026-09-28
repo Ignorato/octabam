@@ -57,7 +57,7 @@ MODULE = Module(
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.HARDWARE, proof_note="Sam's MKII",
-    doc="BamSep26 station: fold, saturation, tilt, compressor, width.",
+    doc="FX1 station: fold, saturation, tilt, compressor, width.",
     menu=MenuEntry(
         fx2_id=0x1c,
         replaces="LO-FI",

@@ -172,13 +172,15 @@ Render on the desktop at ~6× real time instead of flashing.
 
 ## 6. Verifying
 
-`make check` is the floor for any change. The family, and what each proves:
+`make check` is the floor for any change; `docs/remixer/TESTING.md` is the
+mechanism (the two halves, module gates, `make reach`, shards, `make accept`,
+CI). The family, and what each proves:
 
 | tool | proves |
 |---|---|
 | `tools/build/cycle_count.py` (`make cycles`) | static per-sample cycle count of every module in the selected remix, plus the worst load one core can be asked for |
 | `tools/verify/verify_roll.py` / `verify_delay.py` | an alternate reverb / delay engine is bit-identical to the shipping one |
-| `tools/verify/verify_bus.py` (`make verify-bus`) | a bus-layout change is behaviour-preserving: 21 layouts, stamp-edit-compare (`docs/effects/XBUS.md`) |
+| `tools/verify/verify_bus.py` (`make verify-bus`) | a bus-layout change is behaviour-preserving over its case list (34 layouts on 28 Sep 2026), stamp-edit-compare (`docs/effects/XBUS.md`) |
 | `tools/verify/verify_menu.py` | the built choosers and descriptor clones against the chooser mechanism decompiled from the firmware, including formatter vs count and the name-field lengths |
 | `tools/verify/verify_slots.py` | static dead-store check on the reverb's r7 state block |
 | `tools/verify/verify_midi.py` | the note→PITCH interval path, locally, via a build override |
@@ -196,6 +198,9 @@ last section), the hardware rig — protocol in `docs/history/CAPTURE_18AUG.md`:
 | tool | what it does |
 |---|---|
 | `tools/hw/capture_hw.py` | records the unit through an audio interface and analyses the capture numerically |
+| `tools/hw/usb_counters.py` | USB AUDIO's ring counters (`--in`: USB AUDIO IN's) over their vendor requests, once or `--watch` |
+| `tools/hw/usb_probe.py` | a host session (sustained tone or open/close churn) against a unit on `usb-io`, both rings' counters polled while the stream is open, a verdict and a JSON report |
+| `tools/harness/usb_align.py` | the twenty-channel stream's MAIN-to-track alignment under the port: the tone project on a staged card, EP3 IN drained once the sequencer plays, the lag from each tone's phase in its track channel and in MAIN |
 | `tools/hw/rec.swift` | drop-free CoreAudio HAL recorder (compiled on demand); the ffmpeg/avfoundation path drops samples |
 | `tools/hw/ot_midi.py` | drives the Octatrack over CoreMIDI from the CLI: CC, notes, raw bytes |
 | `tools/hw/bcr2000.py` | programs a Behringer BCR2000 for the rig: BCL from the manifests (page-1 CCs + CC MAP's page 2), sent over SysEx with per-line acks or written for BC Manager |

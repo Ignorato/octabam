@@ -1,6 +1,8 @@
 # SCALE QUANTIZER
 
-A SCALE row and a GLIDE row in PROJECT > CONTROL > SEQUENCER, built from
+The PTCH knob and the chromatic trig keys snap to a scale, and the synth
+gets a glide time: a SCALE row and a GLIDE row in PROJECT > CONTROL >
+SEQUENCER, built from
 [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules)
 (submodule `upstream/`, pinned to `v9.1`). `Kind.CF_PATCH`: four ROM units
 (`glide.s`, `keys.s`, `quantizer.s`, `scale.s`), detours, pokes and a

@@ -13,7 +13,7 @@ a DRAM unit in the platform reserve (10 MB off the audio page arena); the
 page, the quantizer and direct-jump caves are ROM.
 
 The fourteen stock effects are listed as modules with fallback NONE, the
-way usb-lean keeps a stock chooser: both DSP payloads, their dispatch and
+way usb-out-tracks-main-cue keeps a stock chooser: both DSP payloads, their dispatch and
 the chooser's rows stay stock (the list is rebuilt at the long-list address
 with the same fifteen rows), so every stock effect stays selectable and
 every existing project plays as it did. Build with `make image

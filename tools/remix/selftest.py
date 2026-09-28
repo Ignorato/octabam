@@ -18,7 +18,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 from remix import ledger, registry, schema, state, stock  # noqa: E402
-from remix.schema import (CavePatch, Claims, Detour, DramRegion, DspSection,  # noqa: E402
+from remix.schema import (CavePatch, Claims, Detour, DramRegion, DspHook, DspSection,  # noqa: E402
                           Kind, Linked, MenuEntry, Module, Param, YBase)
 
 
@@ -48,6 +48,17 @@ import tempfile  # noqa: E402
 _HARD_ASM = pathlib.Path(tempfile.mkdtemp(prefix="octabam_selftest_")) / "hard.asm"
 _HARD_ASM.write_text("        move    x:>$4a40,x0             ; curve 4's base\n"
                      "        rts\n")
+
+
+def _hooked(name, site=0x88, payloads=frozenset({"A"}), sram=()):
+    """A DSP section with no chooser row, reached by a jsr planted in stock
+    P code (USB AUDIO IN's RX inject)."""
+    return Module(
+        name=name, key=name.upper(), kind=Kind.HYBRID, doc="fixture",
+        dsp=DspSection(asm="does/not/exist.asm", priority=20, payloads=payloads,
+                       hooks=(DspHook(site, (0x627000, 0x000204), "inject"),)),
+        claims=Claims(sram=sram) if sram else None,
+    )
 
 
 def _stock(name, fx2_id, buffer):
@@ -95,6 +106,11 @@ CASES = [
     ("two modules hooking the same instruction",
      [_cave("alpha", 0x400d7000, hook_addr=0x40004d40),
       _cave("beta", 0x400d7100, hook_addr=0x40004d40)], "hook site"),
+    ("two DSP sections hooking one stock P word on one payload",
+     [_hooked("alpha"), _hooked("beta")], "DSP hook site"),
+    ("two modules claiming one on-chip SRAM window",
+     [_hooked("alpha", sram=((0x80007c00, 1024, "dTDs"),)),
+      _hooked("beta", site=0x90, sram=((0x80007e00, 512, "reply"),))], "on-chip SRAM"),
     ("two effects claiming one core-private Y word",
      [_effect("alpha", 0x07, reserved=(0x0905,)),
       _effect("beta", 0x1e, reserved=(0x0905,))], "core-private Y"),
@@ -146,6 +162,9 @@ CLEAN = [_effect("alpha", 0x07, reserved=(0x0905,)),
          _stock("compressor", 0x18, False)]
 CLEAN_STOCK_PAIR = [_stock("chorus", 0x12, True), _stock("comb", 0x13, True),
                     _effect("alpha", 0x07)]
+# One site, two payloads: no clash, each core has its own P.
+CLEAN_HOOK_PAIR = [_hooked("alpha", payloads=frozenset({"A"})),
+                   _hooked("beta", payloads=frozenset({"B"}))]
 
 
 def _submodule_preflight() -> int:
@@ -221,7 +240,9 @@ def main():
                   f"both modules, got {found}")
     for label, mods in (("modules that do not collide", CLEAN),
                         ("two buffered stock effects + a zero-buffer insert",
-                         CLEAN_STOCK_PAIR)):
+                         CLEAN_STOCK_PAIR),
+                        ("two DSP sections hooking one site on different payloads",
+                         CLEAN_HOOK_PAIR)):
         found = ledger.check(mods)
         if found:
             bad += 1
@@ -572,14 +593,14 @@ def main():
     _rig = ("FILTER", "SPATIALIZER", "EQUALIZER", "PHASER", "FLANGER", "CHORUS",
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
-    _want = {"restock": (), "recfix": (), "mods": (), "ok-ms": (), "usb-lean": (), "usb-full": (), "usb-master": (),
-             "octatrick": (), "octatrick-usb": (),     # stock effects + ColdFire modules, no DSP words
+    _want = {"restock": (), "mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
+             "octatrick": (), "octatrick-usb": (), "usb-out-main-cue": (), "usb-out-main": (),     # stock effects + ColdFire modules, no DSP words
              "repitch": (),
+             # the twelve io remixes: the IN module's RX inject is placed in SPATIALIZER's words
+             **{f"usb-io-{o}-{i}": ("SPATIALIZER",) for o in ("tracks", "tracks-main-cue", "main-cue", "main") for i in ("ab", "cd", "abcd")},
              "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "rig-scenes": _rig, "rig-kits": _rig,
-             "rig-mods": _rig, "usb": _rig, "usb-audio": _rig,
-             "bottleservice": _rig}
+             "usb": _rig, "usb-audio": _rig, "bottleservice": _rig}
     for _n in registry.remix_names():
         _r = registry.remix(_n)
         _hv = stock.region_of(stock.harvested(

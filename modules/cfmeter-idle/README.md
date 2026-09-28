@@ -1,7 +1,8 @@
 # CF METER IDLE
 
-Main's idle loop, timed, for [CF METER](../cfmeter/README.md)'s idle-time
-slot. It replaces main's last init call (`0x4001fc96`, `jsr 0x40098a2c`)
+Measures how much of the ColdFire's time is idle, for
+[CF METER](../cfmeter/README.md)'s idle-time readout: main's idle loop,
+timed. It replaces main's last init call (`0x4001fc96`, `jsr 0x40098a2c`)
 and the `bras .` after it with the call and a loop that reads DMA timer 3.
 A step shorter than twice the shortest step seen, + 8 counts, is added to
 CF METER's idle counter; a longer step was taken by an interrupt or a
@@ -11,7 +12,9 @@ Main is the priority-0 task and never blocks (`docs/firmware/KERNEL.md`),
 so it runs only when no other task is ready and no interrupt is being
 served.
 
-**Under the port** an image with this loop boots and, since 28 Sep 2026,
+## Measured under the port
+
+An image with this loop boots and, since 28 Sep 2026,
 loads a project and answers the scripted host calls: the port reads the
 `jmp` this detour leaves at `0x4001fc96` and counts PCs inside the loop's
 first 0x80 bytes as main's park for its idle skip, its burst end and its

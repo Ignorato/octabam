@@ -161,6 +161,13 @@ bytes a runtime writes about itself.
 
 ## Shared sites: the bridges
 
+Two pairs no bridge covers (measured 28 Sep 2026, building `mods` with each
+module removed in turn): DIRECT JUMP's queue hook `0x400a06d6` is a site
+Octakit's recipe writes, so the two never share an image; and in the free
+ROM, SCALE QUANTIZER's 2,916 B unit beside REPITCH's 576 B leaves CC MAP's
+724 B cave no run, so `mods` carries REPITCH and CC MAP without octatrick's
+three.
+
 A stock site claimed by two mods is refused by the ledger unless a bridge
 carries it. A bridge is a stub that does what both hooks did, in an order
 that respects each protocol, declared through `schema.Override` so the

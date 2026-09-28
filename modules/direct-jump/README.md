@@ -1,6 +1,8 @@
 # DIRECT JUMP
 
-CHAIN AFTER's unused value 1 becomes DIRECT, built from
+A pattern change lands at the next step instead of at the pattern's end,
+the Analog Four / Rytm direct jump: CHAIN AFTER's unused value 1 becomes
+DIRECT. Built from
 [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules)
 (submodule `upstream/`, pinned to `v9.1`). `Kind.CF_PATCH`: one floating ROM
 cave on the pattern-queue setter and the tick handler, four fixed pokes (step and label table entries, the menu setter, the project loader). No DSP code, no menu row of its

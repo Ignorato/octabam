@@ -479,7 +479,7 @@ def main():
                  server=(m.dsp.bus_role is BusRole.SERVER),
                  fx1_only=(m.claims is not None and m.claims.fx1_only),
                  replaces=(m.menu.replaces if m.menu is not None else None))
-            for m in registry.selected(remix) if m.dsp is not None]
+            for m in registry.selected(remix) if m.dsp is not None and m.menu is not None]
     from remix import stock as _stock
     _all = registry.modules()
     _stock_fx1 = {k for k in _stock.MODULES_BY_KEY

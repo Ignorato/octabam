@@ -306,7 +306,7 @@ class Context:
 
     def __init__(self, module_key, remixes_of, gate_owners, remixes, exists=None, deps=None,
                  shared_scripts=(), remix_scripts=(), gate_shared=None, make_base=None, make_head=None,
-                 all_remixes=False):
+                 all_remixes=False, read=None, read_base=None):
         self.module_key = module_key        # module directory -> key
         self.remixes_of = remixes_of        # key -> sorted remix names carrying it
         self.gate_owners = gate_owners      # verifier path -> keys whose manifests name it
@@ -322,6 +322,8 @@ class Context:
         self.remix_scripts = set(remix_scripts) - set(ACCEPTANCE)     # the verify-remix recipe's
         self.gate_shared = gate_shared or {}   # manifest gate script -> True when remix_arg=False
         self.make_base, self.make_head = make_base, make_head
+        self.read = read or (lambda path: (ROOT / path).read_text() if (ROOT / path).is_file() else None)
+        self.read_base = read_base or (lambda path: None)   # the file at the base commit, or None
         self._dependents = None
 
     def cover(self):
@@ -392,15 +394,19 @@ class Context:
                 gate_shared[g.script] = gate_shared.get(g.script, True) and not g.remix_arg
         make_head = (ROOT / "Makefile").read_text()
         make_base = None
-        if base:
-            r = subprocess.run(["git", "show", f"{base}:Makefile"], cwd=ROOT, capture_output=True, text=True)
-            make_base = r.stdout if r.returncode == 0 else None
+
+        def read_base(path):
+            if not base:
+                return None
+            r = subprocess.run(["git", "show", f"{base}:{path}"], cwd=ROOT, capture_output=True, text=True)
+            return r.stdout if r.returncode == 0 else None
+        make_base = read_base("Makefile")
         return cls(module_key, {k: sorted(v) for k, v in remixes_of.items()}, gate_owners,
                    registry.remix_names(), deps=scan_deps(),
                    shared_scripts=recipe_scripts(make_head, "verify-shared"),
                    remix_scripts=recipe_scripts(make_head, "verify-remix"),
                    gate_shared=gate_shared, make_base=make_base, make_head=make_head,
-                   all_remixes=all_remixes)
+                   all_remixes=all_remixes, read_base=read_base)
 
 
 def route_tool(path, ctx):
@@ -482,6 +488,49 @@ def route_makefile(ctx):
     return gates, "; ".join(notes)
 
 
+DISPLAY_FIELDS = {"doc", "proof", "proof_note", "author", "author_url", "category"}
+
+
+def manifest_display_only(base_src, head_src):
+    """True when two manifests differ only in docstrings and the display
+    fields (DISPLAY_FIELDS, on any call: Module, Param, ...). A new or
+    unparsable manifest is a real change."""
+    if base_src is None or head_src is None:
+        return False
+
+    def normal(src):
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            body = getattr(node, "body", None)
+            if isinstance(body, list) and body and isinstance(body[0], ast.Expr) \
+                    and isinstance(getattr(body[0], "value", None), ast.Constant) \
+                    and isinstance(body[0].value.value, str):
+                del body[0]
+            if isinstance(node, ast.Call):
+                node.keywords = [k for k in node.keywords if k.arg not in DISPLAY_FIELDS]
+        return ast.dump(tree)
+    try:
+        return normal(base_src) == normal(head_src)
+    except SyntaxError:
+        return False
+
+
+def port_is_stale(exe=None, src=None):
+    """The port binary is older than a source under tools/emu/ot_emu: a
+    rebase brought emulator changes the root tree never rebuilt (28 Sep
+    2026: four false reds in one run; the shards rebuild theirs)."""
+    exe = exe or ROOT / "out/emu/ot_emu"
+    src = src or ROOT / "tools/emu/ot_emu"
+    if not exe.is_file() or not src.is_dir():
+        return False
+    built = exe.stat().st_mtime
+    return any(p.stat().st_mtime > built for p in src.rglob("*")
+               if p.is_file() and "build" not in p.parts and "out" not in p.parts)
+
+
+PORT_KINDS = ("check", "check-remix", "accept")
+
+
 def classify(paths, ctx):
     """[(path, [(kind, command), ...], note)] for each changed path."""
     out = []
@@ -493,6 +542,18 @@ def classify(paths, ctx):
             d = parts[1]
             if d.startswith("_"):
                 note = "template: skipped by the registry"
+            elif parts[-1].endswith(".md"):
+                # A module's README is rendered nowhere; the index reads the
+                # manifest. Same as a remix's README.
+                gates = [CMD["verify_docs"]]
+            elif parts[-1] == "manifest.py" and d in ctx.module_key and \
+                    manifest_display_only(ctx.read_base(path), ctx.read(path)):
+                # Only the fields the README table and the remixer draw
+                # changed (doc, proof, proof_note, author, author_url,
+                # category, a docstring): the image, the gates and the
+                # dearest settings are what they were.
+                gates = [CMD["verify_docs"]]
+                note = f"{ctx.module_key[d]}: display fields only"
             elif d in ctx.module_key:
                 key = ctx.module_key[d]
                 remixes = ctx.remixes_of.get(key, [])
@@ -516,8 +577,15 @@ def classify(paths, ctx):
             # remixes/<name>/..., remixes/test/<name>/..., or a flat remixes/<name>.py
             name = parts[2] if parts[1] == "test" and len(parts) >= 3 else parts[1]
             name = name[:-3] if name.endswith(".py") else name
+            rdir = "/".join(parts[:3] if parts[1] == "test" else parts[:2])
             if parts[-1] == "README.md":
                 gates = [CMD["verify_docs"]]
+            elif not ctx.exists(rdir):
+                # A removed remix: nothing to build. The selftest refuses a
+                # module the deletion orphaned, and the index is re-rendered
+                # (verify_docs).
+                note = "removed remix: the selftest and the index"
+                gates = [CMD["selftest"], CMD["verify_docs"]]
             else:
                 gates = [cmd_check(name), cmd_accept(name)]
         elif top in ("tools", "scripts", "dsp"):
@@ -598,7 +666,11 @@ def remixes_reached(rows):
 def sharded(items, jobs):
     """The check-remix lines as one `check_shards.py --jobs N` line, in
     the first one's place: each remix's half in its own worktree, N at a
-    time (the halves all write out/mainos_bus.bin, so one tree runs one)."""
+    time (the halves all write out/mainos_bus.bin, so one tree runs one).
+    An accept line over several remixes gets `JOBS=N`: the runner runs
+    their per-remix halves the same way."""
+    items = [(k, c + f" JOBS={jobs}", p) if k == "accept" and "REMIXES=" in c and "JOBS=" not in c else (k, c, p)
+             for k, c, p in items]
     remixes = [c.split("REMIX=")[1] for k, c, _ in items if k == "check-remix"]
     if len(remixes) < 2:
         return items
@@ -611,6 +683,39 @@ def sharded(items, jobs):
             out.append(("check-remix", f"python3 tools/verify/check_shards.py --jobs {jobs} " + " ".join(remixes), all_paths))
             done = True
     return out
+
+
+def unsharded(items):
+    """The inverse of sharded(): a check_shards line back into its
+    check-remix lines, an accept line without its JOBS."""
+    out = []
+    for kind, command, paths in items:
+        if kind == "check-remix" and "check_shards.py" in command:
+            for r in command.split("--jobs")[1].split()[1:]:
+                out.append((kind, cmd_check_remix(r)[1], paths))
+        elif kind == "accept" and " JOBS=" in command:
+            out.append((kind, command.split(" JOBS=")[0], paths))
+        else:
+            out.append((kind, command, paths))
+    return out
+
+
+def replan(queue, extra, stress, jobs):
+    """The remaining queue plus identity's extra gates, planned again as
+    one: the extra checks fold into the accept line (with STRESS_SOURCE)
+    and the check-remix lines into the shards, instead of running one
+    full `make check` per moved remix after the fact (28 Sep 2026: 34
+    serial checks, then the same 34 inside accept)."""
+    rows = []
+    for kind, command, paths in unsharded(queue):
+        path = paths[0] if paths else ""
+        if kind == "accept" and 'REMIXES="' in command:
+            rows += [(path, [cmd_accept(r)], "") for r in shared_remixes(command)]
+        else:
+            rows.append((path, [(kind, command)], ""))
+    rows += [("image_identity", [g], "") for g in extra]
+    items = plan(rows, accept_runs_check=bool(stress))
+    return sharded(items, jobs) if jobs > 1 else items
 
 
 def git(*args):
@@ -675,6 +780,9 @@ def main(argv=None):
     print()
     results = []
     queue = list(items)
+    if any(k in PORT_KINDS for k, _, _ in queue) and not any(k == "emu-cf" for k, _, _ in queue) and port_is_stale():
+        print("reach: out/emu/ot_emu is older than tools/emu/ot_emu: rebuilding the port first")
+        queue.insert(0, ("emu-cf", CMD["emu-cf"][1], ["tools/emu/ot_emu"]))
     while queue:
         kind, command, _ = queue.pop(0)
         cmd = command.replace("${STRESS_SOURCE}", stress or "").replace("${BASE}", a.base)
@@ -697,11 +805,12 @@ def main(argv=None):
             # with STRESS_SOURCE) join the queue in the floor's place.
             changed = json.loads((ROOT / "out/identity/changed.json").read_text())
             extra = [cmd_check(r) for r in changed] + ([cmd_accept(r) for r in changed] if stress else [])
-            already = {c for _, c, _ in queue} | {c for c, _, _ in results}
-            extra = [(k, c, ["image_identity"]) for k, c in extra if c not in already]
+            done = {c for c, _, _ in results}
+            before = len(queue)
+            queue = [it for it in replan(queue, extra, stress, a.jobs) if it[1] not in done]
             print(f"reach: identity names {len(changed)} changed remix{'es' if len(changed) != 1 else ''}"
-                  + (": " + ", ".join(changed) if changed else "") + f" -> {len(extra)} more gate{'s' if len(extra) != 1 else ''}")
-            queue = sorted(queue + extra, key=lambda it: (ORDER.index(it[0]), it[1]))
+                  + (": " + ", ".join(changed) if changed else "")
+                  + f" -> {len(queue) - before:+d} gate{'s' if abs(len(queue) - before) != 1 else ''} in the queue")
     if a.keep_going:
         print("\nreach: results")
         for command, status, seconds in results:

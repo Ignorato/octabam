@@ -52,7 +52,7 @@ def ctx(make_head=MAKE_BASE, make_base=MAKE_BASE):
         remixes_of={"CHARACTER": ["bamsep26", "usb"], "MINIVERB": ["miniverb"], "ORPHAN": [], "SEND": ["bamsep26", "usb"]},
         gate_owners={"tools/verify/verify_character.py": ["CHARACTER"], "tools/verify/verify_burn.py": ["SEND"]},
         remixes=["bamsep26", "miniverb", "usb"],
-        exists=lambda path: path != "modules/gone",
+        exists=lambda path: path not in ("modules/gone", "remixes/gone", "remixes/test/gone"),
         deps=deps,
         shared_scripts=reach.recipe_scripts(make_head, "verify-shared") | {"tools/verify/verify_docs.py"},
         remix_scripts=reach.recipe_scripts(make_head, "verify-remix"),
@@ -118,9 +118,18 @@ class ModuleAndRemixTests(unittest.TestCase):
         self.assertEqual(commands(["remixes/miniverb/remix.py"]),
                          ["make check REMIX=miniverb", "make accept REMIX=miniverb STRESS_SOURCE=${STRESS_SOURCE}"])
         self.assertEqual(commands(["remixes/miniverb/README.md"]), ["python3 tools/verify/verify_docs.py"])
+        self.assertEqual(commands(["modules/miniverb/README.md"]), ["python3 tools/verify/verify_docs.py"])
 
     def test_one_remix_stays_make_check(self):
         self.assertEqual(commands(["remixes/miniverb/remix.py"])[0], "make check REMIX=miniverb")
+
+    def test_removed_remix_runs_the_selftest_and_the_index(self):
+        self.assertIn("removed remix", note("remixes/gone/remix.py"))
+        self.assertEqual(commands(["remixes/gone/remix.py"]),
+                         ["python3 tools/verify/verify_docs.py", "python3 tools/remix/selftest.py"])
+        self.assertEqual(commands(["remixes/test/gone/remix.py"]),
+                         ["python3 tools/verify/verify_docs.py", "python3 tools/remix/selftest.py"])
+        self.assertEqual(commands(["remixes/gone/README.md"]), ["python3 tools/verify/verify_docs.py"])
 
     def test_test_remix_selection_and_readme(self):
         self.assertEqual(commands(["remixes/test/miniverb/remix.py"]),
@@ -258,6 +267,54 @@ class PlanTests(unittest.TestCase):
         # a shared gate + a per-remix gate + one module's full check: one check-shared, one check-remix each
         cmds = commands(["tools/verify/verify_knob_clicks.py", "tools/verify/verify_menu.py", "modules/miniverb/a.asm"])
         self.assertEqual(cmds, COVER + ["make accept REMIX=miniverb STRESS_SOURCE=${STRESS_SOURCE}"])
+
+    def test_manifest_display_fields_alone_reach_the_docs_gate(self):
+        base = 'MODULE = Module(name="x", key="X", doc="old", proof=Proof.PORT, proof_note="n", params=(Param("A", doc="a"),))\n'
+        head = base.replace('doc="old"', 'doc="new"').replace('proof=Proof.PORT', 'proof=Proof.HARDWARE').replace('doc="a"', 'doc="b"')
+        self.assertTrue(reach.manifest_display_only(base, head))
+        self.assertTrue(reach.manifest_display_only('"""a docstring"""\n' + base, '"""another"""\n' + head))
+        self.assertFalse(reach.manifest_display_only(base, head.replace('key="X"', 'key="Y"')))
+        self.assertFalse(reach.manifest_display_only(base, head + 'dear={"A": 1}\n'))
+        self.assertFalse(reach.manifest_display_only(None, head))
+        c = ctx()
+        c.read_base = lambda p: base
+        c.read = lambda p: head
+        rows = reach.classify(["modules/character/manifest.py"], c)
+        self.assertEqual([cmd for _, g, _ in rows for _, cmd in g], ["python3 tools/verify/verify_docs.py"])
+        self.assertIn("display fields only", rows[0][2])
+        c.read = lambda p: head.replace('key="X"', 'key="Y"')
+        self.assertIn("make check REMIX=bamsep26", [cmd for _, g, _ in reach.classify(["modules/character/manifest.py"], c) for _, cmd in g])
+
+    def test_identity_extras_replan_into_the_accept_line_and_the_shards(self):
+        queue = [("check-remix", "python3 tools/verify/check_shards.py --jobs 4 bamsep26 miniverb", ["p"]),
+                 ("accept", 'make accept REMIXES="bamsep26 miniverb" STRESS_SOURCE=${STRESS_SOURCE} JOBS=4', ["p"])]
+        extra = [reach.cmd_check("usb"), reach.cmd_accept("usb")]
+        cmds = [c for _, c, _ in reach.replan(queue, extra, stress="/p", jobs=4)]
+        self.assertEqual(cmds, ['make accept REMIXES="bamsep26 miniverb usb" STRESS_SOURCE=${STRESS_SOURCE} JOBS=4'])
+        cmds = [c for _, c, _ in reach.replan([("check-remix", "make check-remix REMIX=bamsep26", ["p"])],
+                                              [reach.cmd_check("usb")], stress=None, jobs=1)]
+        self.assertEqual(cmds, ['make check-shared REMIXES="usb"', "make check-remix REMIX=bamsep26", "make check-remix REMIX=usb"])
+
+    def test_a_stale_port_is_detected(self):
+        import os, tempfile, time
+        with tempfile.TemporaryDirectory() as d:
+            d = pathlib.Path(d)
+            (d / "src").mkdir(); (d / "src/machine.cpp").write_text("x")
+            exe = d / "ot_emu"; exe.write_text("bin")
+            old = time.time() - 100
+            os.utime(d / "src/machine.cpp", (old, old))
+            self.assertFalse(reach.port_is_stale(exe, d / "src"))
+            os.utime(exe, (old - 100, old - 100))
+            self.assertTrue(reach.port_is_stale(exe, d / "src"))
+            self.assertFalse(reach.port_is_stale(d / "missing", d / "src"))
+
+    def test_sharded_gives_the_accept_line_jobs(self):
+        items = [("accept", 'make accept REMIXES="bamsep26 miniverb" STRESS_SOURCE=${STRESS_SOURCE}', ["p"]),
+                 ("accept", "make accept REMIX=usb STRESS_SOURCE=${STRESS_SOURCE}", ["p"])]
+        self.assertEqual([c for _, c, _ in reach.sharded(items, 4)],
+                         ['make accept REMIXES="bamsep26 miniverb" STRESS_SOURCE=${STRESS_SOURCE} JOBS=4',
+                          "make accept REMIX=usb STRESS_SOURCE=${STRESS_SOURCE}"])
+        self.assertEqual(reach.unsharded(reach.sharded(items, 4)), items)
 
     def test_sharded_collapses_the_check_remix_lines(self):
         items = reach.plan(reach.classify(["tools/verify/verify_menu.py"], ctx()))

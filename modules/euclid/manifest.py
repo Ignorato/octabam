@@ -14,7 +14,7 @@ MODULE = Module(
     name="euclid", key="EUCLID", kind=Kind.HYBRID,
     category=Category.TRACK, author="repeat98", author_url="https://github.com/repeat98",
     proof=Proof.RENDER, proof_note="its own render gates; not on hardware",
-    doc="Euclidean LP/BP/HP/amp sequencer: swing, envelope, gate, random and loop.",
+    doc="Euclidean LP/BP/HP/notch/amp sequencer: swing, envelope, gate, random and loop.",
     menu=MenuEntry(fx2_id=0x1d, donor_desc=0x400d58b8,
                    abbr=b"EUCL", fullname=b"Euclid"),
     params=(

@@ -105,9 +105,9 @@ and `.venv/bin/python3` when `venv` is set and the venv exists. An
 runs before the selected image is restored; an `"image"` gate reads
 `out/mainos_bus.bin` and runs after `make bus` and the shared set gates
 (`verify_tempobus` reads the card `verify_set` staged). A script that
-does not exist fails; the shared gates (the ledger selftest, the menu,
-the dirty-state render, the docs, the knob census, the set under the
-port) stay in the Makefile. Until 27 Sep 2026 the Makefile listed every
+does not exist fails; the gates every remix gets (the ledger selftest,
+the docs, the knob census, the dirty-state render, the menu, the set
+under the port) stay in the Makefile (`docs/remixer/TESTING.md`). Until 27 Sep 2026 the Makefile listed every
 module's verifier by hand, each one written to SKIP when the remix
 lacked its module.
 
@@ -417,6 +417,13 @@ dsp=DspSection(
   spelled `$30000`, and the literal is censused.
 - **`ptable`**: a tuple of words the build parks in the stock curve bank
   (X:0x4840) and points the source's `$fab1e0` literal at.
+- **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
+  label)`). The two stock words at `site` become `jsr >label` after
+  placement, the build asserting them first; the section replays the
+  displaced instruction. A section with hooks and no `MenuEntry` is placed
+  on `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject
+  at the frame head, P:0x88, on payload A. The ledger refuses two sections
+  on one site of one payload.
 - **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
 
 ## Declaring a ColdFire module
@@ -780,8 +787,9 @@ own.
 
 `tools/remix/ledger.py` refuses a build whose selected modules collide, and
 names both: FX2 ids, cave ranges, hook sites, detour sites, pokes, runtime
-writes, core-private Y words, the per-core FX2 instance buffer region,
-appended runtimes (one per image), arena reserves.
+writes, DSP hook sites per payload (`DspSection.hooks`), on-chip SRAM
+windows (`Claims.sram`), core-private Y words, the per-core FX2 instance
+buffer region, appended runtimes (one per image), arena reserves.
 
 Core-private Y is derived by scanning your source for `y:>$09xx`. Low Y is
 per core, not per instance. Declare `Claims(reserved_private_y=…)` only for

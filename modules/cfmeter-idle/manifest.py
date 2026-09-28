@@ -14,7 +14,7 @@ MODULE = Module(
     key="CF METER IDLE",
     kind=Kind.CF_PATCH,
     category=Category.REFERENCE, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.CHECK, proof_note="boots under the port; does not load a project there (the port's clock)",
+    proof=Proof.CHECK, proof_note="boots and loads a project under the port (28 Sep 2026); the idle number needs the unit",
     doc="Probe: main's idle loop timed, for CF METER's idle-time slot.",
     requires=("CF METER",),
     linked=(Linked("cfmeter_idle", "modules/cfmeter-idle/idle.s", dram=True),),

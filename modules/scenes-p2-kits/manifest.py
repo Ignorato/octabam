@@ -23,7 +23,7 @@ MODULE = Module(
     key="SCENES P2 KITS",
     kind=Kind.CF_PATCH,
     category=Category.PARTS, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.PORT, proof_note="26 Sep 2026",
+    proof=Proof.PORT, proof_note="28 Sep 2026: `--call` and the panel under the port",
     doc="The bridge that lets SCENES P2 and Octakit share the page-2 editor entries.",
     overrides=(
         Override(0x4003A9DC, "OCTAKIT",

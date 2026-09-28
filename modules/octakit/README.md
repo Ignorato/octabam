@@ -55,7 +55,7 @@ geometry once.
 
 Her recipe rewrites the apply_part entry `0x40009094` and the scene-parameter
 writer `0x40052ae8`; the ledger refuses any other module on those sites. CC
-PAGE 2 shares her MIDI CC dispatch entry through `modules/scenes-kits`.
+MAP shares her MIDI CC dispatch entry through `modules/scenes-kits`.
 
 ## Calling the page-1 writer beside her (26 Sep 2026)
 
@@ -93,10 +93,11 @@ Measured under the port (`bottleservice`, the `make accept` stress project,
   read PHSR.
 - Copy: FUNC+REC on 002 in LOAD KIT, FUNC+STOP on 003, loaded 003 ("003
   TWO"): the PHSR bytes; 001 and 002 unchanged.
-- The same sequence over CC MAP's page-2 store (`rig-kits`, T1 FX1 slot 6)
+- The same sequence over CC MAP's page-2 store (`bottleservice`, T1 FX1 slot 6)
   saved, reloaded and stayed per Kit.
 
-Not measured: hardware; whether her unsaved-changes marking (if any)
+Not measured: hardware (the tokened writer was carried by image 88 on Sam's
+MKII, not exercised there); whether her unsaved-changes marking (if any)
 notices a tokened or page-2 write; her UNDO KIT and pattern-paste paths
 after one.
 

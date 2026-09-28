@@ -108,7 +108,7 @@ REV the reverb's REV accumulator; T5's DEL feeds the delay's aux and its
 REV the reverb (its old SEND, slot 0 until then). TIME moved to page-2
 slot 11 (`$e` bits 8-15) on both; WOW left BusDelay. A part saved before
 reads its old TIME byte as REV and its old slot-11 byte (WOW, or 0) as
-TIME: stamp before play (`stamp-defaults <project> bamsep26 --all
+TIME: stamp before play (`stamp-defaults <project> bottleservice --all
 --keep-mode`). Each host's send is tapped from its dry before the engine,
 so neither reaches its own wet (`verify_onebus`: T5's DEL and T1's REV
 land bit-identically to a SEND track's on the same core).

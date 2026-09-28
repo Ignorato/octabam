@@ -1188,6 +1188,7 @@ int main(int _argc, char** _argv)
 	std::string pokeEarly;		// the same, written before --call (the current-track byte 0x80000000 an editor call reads)
 	std::string callSpec;		// "addr[,arg,...]": a firmware routine called AS MAIN after the load (a menu action the port has no panel for -- Part Reload, 14 Sep 2026)
 	int callAt = -1;			// with --sequencer: make that call this many frames AFTER the transport start instead (a panel edit while playing: the transport start re-applies the part over the live lane, so an edit made before it is gone)
+	std::vector<std::string> steps;	// 28 Sep 2026: --step "FRAME:call:addr[,arg..]" | "FRAME:poke:addr=byte[;..]" | "FRAME:dump:addr,len=path[;..]", repeatable, in order. FRAME "-" = after the load, before the transport (in the order given); a number = that many frames after the transport start (with --sequencer). One boot carries a gate's whole script instead of one boot per call (an Octakit load is ~32 s emulated)
 	std::string livePath;		// a FIFO (or file) of panel events, read while the RTOS runs: "key <code> down|up", "enc <n> <delta>", "pot <0..255>", "midi <hex>...", "quit" -- tools/emu/lcd_view.py --panel writes it
 	std::string midiOut;		// MIDI OUT: UART0's transmit bytes, raw, to FILE at the very end (the firmware's CC echo and CC FEEDBACK's dumps; a summary line counts them)
 	std::string midiFile;		// with --sequencer: MIDI IN bytes onto UART0, one event per line: "<frames after the transport start> <hex byte>..." (e.g. "20 B0 28 7F" = CC 40 to 127 on channel 1) or "pre <hex byte>..." before the transport start ("pre C0 10" = program change 16 while stopped)
@@ -1280,6 +1281,7 @@ int main(int _argc, char** _argv)
 		else if(a == "--call-before-play" && i + 1 < _argc)	callBeforePlay = _argv[++i];
 		else if(a == "--at" && i + 1 < _argc)			atFrames = _argv[++i];
 		else if(a == "--card-fail-after" && i + 1 < _argc)	cardFailAfter = std::atoll(_argv[++i]);
+		else if(a == "--step" && i + 1 < _argc)		steps.emplace_back(_argv[++i]);
 		else if(a == "--midi" && i + 1 < _argc)		midiFile = _argv[++i];
 		else if(a == "--midi-out" && i + 1 < _argc)	midiOut = _argv[++i];
 		else if(a == "--live" && i + 1 < _argc)		livePath = _argv[++i];
@@ -1296,7 +1298,8 @@ int main(int _argc, char** _argv)
 			std::printf("usage: ot_emu [--image FILE] [--max N] [--periph] [--profile]\n"
 			"              [--golden FILE] [--ms N] [--boot-logo]\n"
 			"              [--usb-host SOCKET] [--usb-notify FILE] [--usb-fs]   the USB device controller + a scripted host (usb.h)\n"
-			"              [--interactive] [--rtc host|off|EPOCH] [--dsp-rt]    the line protocol on stdin/stdout (tools/panel)\n");
+			"              [--interactive] [--rtc host|off|EPOCH] [--dsp-rt]    the line protocol on stdin/stdout (tools/panel)\n"
+			"              [--step FRAME:call|poke|dump:SPEC]...              a gate's whole script on one boot: FRAME '-' = after the load, N = N frames after the transport start\n");
 			return 2;
 		}
 	}
@@ -1917,16 +1920,45 @@ int main(int _argc, char** _argv)
 					std::printf("poke       : %#x <- %#x (%s)\n", addr, val, _when);
 				}
 			};
+			// "addr,len=path[;...]": ColdFire memory ranges, raw bytes, to files
+			// (the --mem-dump writer at the very end, and a --step dump).
+			const auto dumpRanges = [&m](const std::string& _spec)
+			{
+				size_t q = 0;
+				while(q < _spec.size())
+				{
+					auto e = _spec.find(';', q);
+					if(e == std::string::npos) e = _spec.size();
+					const auto spec = _spec.substr(q, e - q);
+					q = e + 1;
+					const auto eq = spec.find('=');
+					if(eq == std::string::npos)
+						continue;
+					const auto range = spec.substr(0, eq);
+					const auto path = spec.substr(eq + 1);
+					const auto comma = range.find(',');
+					if(comma == std::string::npos)
+						continue;
+					const auto addr = static_cast<uint32_t>(std::strtoul(range.c_str(), nullptr, 0));
+					const auto len = static_cast<uint32_t>(std::strtoul(range.c_str() + comma + 1, nullptr, 0));
+					std::vector<uint8_t> buf(len);
+					for(uint32_t k = 0; k < len; ++k)
+						buf[k] = m.read8(addr + k);
+					std::ofstream f(path, std::ios::binary);
+					f.write(reinterpret_cast<const char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
+					std::printf("mem dump   : %#x..%#x (%u bytes) -> %s\n", addr, addr + len - 1, len, path.c_str());
+				}
+			};
 			pokeBytes(pokeEarly, "before the call");
-			const auto doCall = [&]()
+			const auto doCallSpec = [&](const std::string& _callSpec)
 			{
 				std::vector<uint32_t> args;
 				size_t q = 0;
 				uint32_t target = 0;
-				while(q <= callSpec.size())
+				while(q <= _callSpec.size())
 				{
-					auto e = callSpec.find(',', q); if(e == std::string::npos) e = callSpec.size();
-					const auto v = static_cast<uint32_t>(std::strtoul(callSpec.substr(q, e - q).c_str(), nullptr, 0));
+					auto e = _callSpec.find(',', q); if(e == std::string::npos) e = _callSpec.size();
+					const auto v = static_cast<uint32_t>(std::strtoul(_callSpec.substr(q, e - q).c_str(), nullptr, 0));
 					if(q == 0) target = v; else args.push_back(v);
 					q = e + 1;
 				}
@@ -1941,8 +1973,41 @@ int main(int _argc, char** _argv)
 						target, args.size(), args.size() == 1 ? "" : "s", rtos.why().c_str(),
 						m.getD0(), m.getA7(), sp0);	// the address is in why() (PPC has moved on to the exception vector)
 			};
+			const auto doCall = [&]() { doCallSpec(callSpec); };
+			// A --step: "FRAME:kind:spec" -> (frame or -1, kind, spec).
+			struct Step { int frame; std::string kind, spec; };
+			std::vector<Step> parsedSteps;
+			for(const auto& s : steps)
+			{
+				const auto c1 = s.find(':');
+				const auto c2 = c1 == std::string::npos ? c1 : s.find(':', c1 + 1);
+				if(c2 == std::string::npos)
+				{
+					std::printf("step       : malformed '%s' (want FRAME:call|poke|dump:spec)\n", s.c_str());
+					continue;
+				}
+				const auto f = s.substr(0, c1);
+				parsedSteps.push_back({f == "-" || f.empty() ? -1 : std::atoi(f.c_str()), s.substr(c1 + 1, c2 - c1 - 1), s.substr(c2 + 1)});
+			}
+			const auto runStep = [&](const Step& _s, const char* _when)
+			{
+				if(_s.kind == "call")
+				{
+					std::printf("step       : call %s (%s)\n", _s.spec.c_str(), _when);
+					doCallSpec(_s.spec);
+				}
+				else if(_s.kind == "poke")
+					pokeBytes(_s.spec, _when);
+				else if(_s.kind == "dump")
+					dumpRanges(_s.spec);
+				else
+					std::printf("step       : unknown kind '%s'\n", _s.kind.c_str());
+			};
 			if(!callSpec.empty() && callAt < 0)
 				doCall();
+			for(const auto& s : parsedSteps)
+				if(s.frame < 0)
+					runStep(s, "after the load");
 
 			// -- live input: the panel link and MIDI IN from a FIFO ------------
 			// The poll runs every 256 stepped or skipped instructions and reads
@@ -2165,15 +2230,18 @@ int main(int _argc, char** _argv)
 				// Timed actions while the sequencer runs -- a panel edit
 				// (--call-at) or MIDI IN bytes (--midi): the frame engine
 				// keeps going underneath them, as on the unit.
-				struct Action { uint64_t frame; bool call; std::vector<uint8_t> bytes; uint32_t addr = 0, arg = 0; bool at = false; };
+				struct Action { uint64_t frame; bool call; std::vector<uint8_t> bytes; int step = -1; uint32_t addr = 0, arg = 0; bool at = false; };
 				std::vector<Action> actions;
 				if(!callSpec.empty() && callAt >= 0)
 					actions.push_back({static_cast<uint64_t>(callAt), true, {}});
+				for(size_t k = 0; k < parsedSteps.size(); ++k)
+					if(parsedSteps[k].frame >= 0)
+						actions.push_back({static_cast<uint64_t>(parsedSteps[k].frame), false, {}, static_cast<int>(k)});
 				for(const auto& ev : midiEvents)
 					if(!ev.pre)
 						actions.push_back({ev.frame, false, ev.bytes});
 				for(const auto& c : parseCalls(atFrames, true))
-					actions.push_back({c.frame, false, {}, c.addr, c.arg, true});
+					actions.push_back({c.frame, false, {}, -1, c.addr, c.arg, true});
 				std::stable_sort(actions.begin(), actions.end(), [](const Action& x, const Action& y) { return x.frame < y.frame; });
 				for(const auto& act : actions)
 				{
@@ -2187,6 +2255,16 @@ int main(int _argc, char** _argv)
 						std::printf("call       : %#x(%#x) at frame %llu -> %s, d0 %#x\n", act.addr, act.arg,
 							static_cast<unsigned long long>(rtos.frameCount() - frame0),
 							ok ? "returned" : rtos.why().c_str(), d0);
+					}
+					else if(act.step >= 0)
+					{
+						const auto& s = parsedSteps[static_cast<size_t>(act.step)];
+						char when[64];
+						std::snprintf(when, sizeof when, "frame %d after the transport start", s.frame);
+						if(s.kind != "call" || rtos.runToMainSpin() == ot::Rtos::Stop::Gate)
+							runStep(s, when);
+						else
+							std::printf("step       : main never spun for the call at frame %d -- %s\n", s.frame, rtos.why().c_str());
 					}
 					else if(act.call)
 					{

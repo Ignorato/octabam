@@ -21,7 +21,7 @@ MODULE = Module(
     key="SCENES KITS",
     kind=Kind.CF_PATCH,
     category=Category.PARTS, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.PORT, proof_note="in `kits` and `bottleservice`",
+    proof=Proof.PORT, proof_note="in `mods` and `bottleservice`",
     doc="The bridge that lets CC MAP and Octakit share the CC dispatch "
         "(MIDI SCENES needs no bridging since 1.40MSCN6).",
     overrides=(

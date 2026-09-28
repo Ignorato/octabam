@@ -3,7 +3,7 @@
 Symptom → cause (measured, inferred or open) → fix. Add an entry the moment
 a mode is seen on hardware.
 
-## Every FX1/FX2 page-2 knob turn halts under Octakit with SCENES P2 (rig-kits, bottleservice) ✅ measured under the port (28 Sep 2026), never flashed, fixed the same day
+## Every FX1/FX2 page-2 knob turn halts under Octakit with SCENES P2 (rig-kits, bottleservice) ✅ measured under the port (28 Sep 2026), fixed the same day; the twelve-byte build was carried by image 88 and the halt not reported from the unit
 
 **Symptom.** With SCENES P2 and Octakit in the image (SCENES P2 KITS
 bridging the editor entries), any turn of knobs A-F on an EFFECT SETUP

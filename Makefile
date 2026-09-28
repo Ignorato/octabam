@@ -359,9 +359,9 @@ check-remix: bus cycles verify-remix ## The per-remix half of make check: build,
 # Full local evidence; ordinary check remains useful for development.
 # STRESS_SOURCE copies a private project and generates the remix's stress fixture.
 .PHONY: accept
-accept: ## Strict local acceptance + JSON report: REMIX=<one>, or REMIXES="a b c" with the remix-independent half once (OT_PROJECT or STRESS_SOURCE required)
+accept: ## Strict local acceptance + JSON report: REMIX=<one>, or REMIXES="a b c" with the remix-independent half once, JOBS=n their per-remix halves over n worktrees (OT_PROJECT or STRESS_SOURCE required)
 	@test -n "$(REMIXES)" || { echo "REMIX is unset: make $@ REMIX=<name>, or REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
-	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix $(REMIXES) $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(ACCEPTARGS)
+	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix $(REMIXES) $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(if $(JOBS),--jobs $(JOBS),) $(ACCEPTARGS)
 
 .PHONY: test-acceptance
 test-acceptance: ## Firmware-free tests of the acceptance runner and the reach classifier

@@ -86,7 +86,7 @@ MODULE = Module(
     key="TEMPO BUS",
     kind=Kind.CF_PATCH,
     category=Category.BUS, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.PORT, proof_note="`verify_set`; nothing on hardware",
+    proof=Proof.PORT, proof_note="`verify_set`; carried by image 88 on Sam's MKII, not exercised there",
     doc="The TEMPO window lists and edits BusDelay's and BusVerb's knobs "
         "(UP/DOWN = row, A or B = value, LEFT/RIGHT = engine, FUNC + LEVEL = 0.1 BPM).",
     # Both pinned in measured free runs (docs/remixer/PLACEMENT.md): the

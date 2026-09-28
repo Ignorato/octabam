@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Read USB AUDIO's counters from a unit over USB (the vendor request
-0xc0/0x55 the module answers on EP0; modules/usb-audio-extended/usbaudio.s).
+0xc0/0x55 the module answers on EP0; modules/usb-audio-out-tracks-main-cue/usbaudio.s).
 
   tools/hw/usb_counters.py            # once
   tools/hw/usb_counters.py --watch 1  # every second, deltas beside the values
@@ -21,26 +21,48 @@ could not fill; overruns = the host stopped draining and the producer
 lapped the ring; bankdup = blocks where the read-back ping-pong bank did
 NOT alternate (the producer read a bank twice, or skipped one) -- the count
 that decides whether the clicks are the producer's.
+
+--in reads USB AUDIO IN's counters (0xc0/0x56; modules/usb-audio-in/
+usbaudio_in.s) instead: produced/consumed = frames into and out of its
+ring; pkts = OUT packets retired; lastn = frames in the last one; lastfill
+= the ring's fill at the last DSP frame; underruns = blocks the ring could
+not supply; overruns = ring laps; reprimes = EP3 OUT self-heal primes;
+bad = err + partial: err = completions with a dTD error bit (halted, data
+buffer, transaction), partial = lengths that were not whole frames;
+frames/seconds = the two state-7 visits (equal while running);
+minfill/maxfill = the ring's low and high water while consuming since the
+stream came up (the cushion IN_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns", "overruns",
+            "reprimes", "bad", "frames", "seconds", "minfill", "maxfill", "err", "partial")
+TARGET has to cover).
 """
 import argparse
 import struct
 import sys
 import time
 
+IN_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns", "overruns",
+             "reprimes", "bad", "frames", "seconds", "minfill", "maxfill",
+             "err", "partial", "errmask", "lasttok", "lastslot",
+             "depth", "badfr", "badfr_prev", "dry", "late", "maxpass",
+             "good_nz", "bad_nz", "bad_nzw", "last_nzw")
 NAMES = ("consumed", "acc", "overruns", "underruns", "lastn", "lastfill", "lastbank",
          "bankdup", "lastsamp", "srcjump", "reprimes", "produced")
 
 
-def read(dev):
-    raw = bytes(dev.ctrl_transfer(0xc0, 0x55, 0, 0, 48, timeout=1000))
-    if len(raw) != 48:
-        raise RuntimeError(f"{len(raw)} bytes back, expected 48 (not a usb-audio image?)")
-    return dict(zip(NAMES, struct.unpack(">12i", raw)))
+def read(dev, host_in=False):
+    req, names = (0x56, IN_NAMES) if host_in else (0x55, NAMES)
+    n = 4 * len(names)
+    raw = bytes(dev.ctrl_transfer(0xc0, req, 0, 0, n, timeout=1000))
+    if len(raw) != n:
+        raise RuntimeError(f"{len(raw)} bytes back, expected {n}")
+    return dict(zip(names, struct.unpack(f">{len(names)}I" if host_in else f">{len(names)}i", raw)))
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--watch", type=float, default=0, help="seconds between reads; 0 = once")
+    ap.add_argument("--in", dest="host_in", action="store_true",
+                    help="USB AUDIO IN's counters (vendor request 0x56) instead of USB AUDIO's")
     a = ap.parse_args()
     try:
         import usb.core
@@ -58,14 +80,14 @@ def main():
     if dev is None:
         sys.exit("no Octatrack on USB (1935:0002)")
     try:
-        last = read(dev)
+        last = read(dev, a.host_in)
     except Exception as e:  # noqa: BLE001
-        sys.exit(f"the request failed: {e} (a STALL means the image carries no USB AUDIO)")
+        sys.exit(f"the request failed: {e} (a STALL means the image carries no USB AUDIO{' IN' if a.host_in else ''})")
     print(" ".join(f"{k}={v}" for k, v in last.items()), flush=True)
     while a.watch > 0:
         time.sleep(a.watch)
-        now = read(dev)
-        print(" ".join(f"{k}={now[k]}{'(+%d)' % (now[k] - last[k]) if now[k] != last[k] else ''}" for k in NAMES), flush=True)
+        now = read(dev, a.host_in)
+        print(" ".join(f"{k}={now[k]}{'(+%d)' % (now[k] - last[k]) if now[k] != last[k] else ''}" for k in now), flush=True)
         last = now
 
 

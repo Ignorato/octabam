@@ -31,6 +31,12 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(result["skips"], ["[SKIP] missing emulator"])
 
+    def test_run_gate_runs_in_the_given_tree(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            a.run_gate("probe", [sys.executable, "-c", "import os; print(os.getcwd())"],
+                       self.out, dict(os.environ), 5, cwd=self.out)
+        self.assertEqual((self.out / "probe.stdout").read_text().strip(), str(self.out.resolve()))
+
     def test_stderr_skip_also_blocks(self):
         result = self.run_child("import sys; print('SKIP: missing project', file=sys.stderr)")
         self.assertEqual(result["status"], "blocked")
@@ -92,6 +98,9 @@ class GateTests(unittest.TestCase):
         status, _ = a.pressure_profile([known])
         self.assertEqual(status, "ready")
         status, _ = a.pressure_profile([SimpleNamespace(key="CF PATCH", dsp=None)])
+        self.assertEqual(status, "not_applicable")
+        # a DSP section with no chooser row (a hook-only inject) is not an effect
+        status, _ = a.pressure_profile([SimpleNamespace(key="USB AUDIO IN AB", dsp=object(), menu=None, params=(), dear={})])
         self.assertEqual(status, "not_applicable")
 
     def test_missing_prerequisites_produce_partial_json_and_nonzero_exit(self):
