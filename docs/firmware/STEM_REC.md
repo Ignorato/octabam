@@ -6799,3 +6799,194 @@ stays 169,768 after `full` (real free count 169,716) and after `overflow`
 (161,574): the firmware doesn't update it, which upgrades 14.1's 🟡 to
 measured under the port. A computer reading the card after a take may show
 stale free space until it recounts.
+
+## 15. Eight tracks under the emulator
+
+Piece 2 (`docs/superpowers/specs/2026-09-27-stem-rec-eight-tracks-design.md`),
+27–28 Sep 2026, on upstream `2a849af` merged in (`a1c4e27`). The build
+records all eight tracks by default (`stems_tracks = 0xFF`), and
+`stems_peak` keeps the take's largest ring fill. Image SHA-256
+`164f31224bf61181e3f50e7dec40df9afcae5b16dbf6e4c0d0cc5e986af0a84e`.
+
+### 15.1 THRU input routing, measured ✅
+
+The fixture needs sound in every frame of every track. Eight THRU machines
+play the port's inputs A to D, fed a four-channel WAV of seeded noise
+through `ot_emu --audio-in` (`stems_fixture.py --thru`; the WAV is ours,
+generated into `out/test_audio/`).
+
+- **MIDI CCs route nothing under the port.** ✅ The THRU page's CCs (16,
+  17, 19, 20 and 22 to 25) sent at frame 2 after the transport start, then
+  a note-on at frame 3, changed no track in a 300-frame run. Only the
+  routing stored in the template sounded: T1 INAB 1, T5 INCD 1.
+- **The part record holds the routing.** ✅ Each track's 30-byte block at
+  part + 0x33 + (track − 1) × 30 holds the THRU page at +12 to +16: INAB,
+  VOL, ---, INCD, VOL. The fixture writes it into every part record,
+  current and saved, of banks 1 and 2. Every track then sounds from frame
+  44 with no silent frame through 1,600 frames, with no CC and the amp
+  envelope left alone.
+- **The WAV's channels are inputs C, D, A and B, in that order.** ✅
+  Measured with one live channel per run and T1–T4 set to INAB 1–4, T5–T8
+  to INCD 1–4: channel 0 reached T5 left, T6 and T8; channel 1 T5 right, T7
+  and T8; channel 2 T1 left, T2 and T4; channel 3 T1 right, T3 and T4.
+- **The INAB and INCD values.** ✅ 0 is off. 1 is the pair in stereo (A or
+  C left, B or D right). 2 is the pair's first input alone, on both sides.
+  3 is the second alone. 4 is the pair summed, on both sides.
+- **The fixture's mixes.** T1 A, T2 B, T3 C, T4 D, T5 A and B in stereo, T6
+  C and D in stereo, T7 A with C, T8 B with D. Its proof, a check of
+  `verify_stems`: every track's read-back sounds in every frame from frame
+  44, and the eight signals are distinct.
+
+### 15.2 The eight-track takes ✅
+
+Method: `verify_stems.py stems` through `make check-remix-gates REMIX=stems
+JOBS=2` at `d31f55a` plus the mask takes (28 Sep 2026, 152 checks, 0
+failures), and the `--long` additions at `16fbc2a` (73 checks, 0
+failures). Each mask take arms before play, stops at frame 1,700 and runs
+to frame 3,000.
+
+| Mask | Tracks | Files | `stems_peak` = rebuilt | FINISHING to IDLE |
+|---|---|---|---|---|
+| `0x01` | T1 | 1 | 520 | 24 frames |
+| `0x03` | T1–T2 | 2 | 527 | 55 frames |
+| `0x0F` | T1–T4 | 4 | 526 | 111 frames |
+| `0xFF` | all eight | 8 | 535 | 410 frames |
+| `0xA5` | T1, T3, T6, T8 | 4 | 530 | 120 frames |
+| `0x07` | T1–T3 | 3 | 530 | (`--long`) |
+| `0x1F` | T1–T5 | 5 | 532 | (`--long`) |
+| `0x3F` | T1–T6 | 6 | 530 | (`--long`) |
+| `0x7F` | T1–T7 | 7 | 528 | (`--long`) |
+| `0x80` | T8 | 1 | 522 | (`--long`) |
+
+- **Every file is its track.** ✅ In every take each file holds 1,727
+  frames and equals its own track's read-back at lag 40, sample for sample.
+  Its first four frames are silent, before the input reaches the track;
+  from the fifth on, no frame is silent. No two files are alike, and the
+  writer wrote during every take. A negative control compares a `0x02`
+  take's file with T1's read-back; the check fails, as it must.
+- **The peak.** ✅ `stems_peak` equals the largest fill rebuilt from the
+  port's watch log of `stems_wr` and `stems_rd`, in every take. It stays
+  near one chunk (512 frames) plus the frames of one write at every track
+  count: the emulated card keeps up. The re-arm at the end of `overflow`
+  resets it to 0.
+- **The mask is latched at the start.** ✅ A T1 take with `stems_tracks`
+  poked to `0xFF` after play started (the port's report: `poke 0x40a955ff
+  <- 0xff`) writes `T1.WAV` alone, equal to T1.
+- **The wrap at eight tracks.** ✅ A take stopped at frame 9,000 holds
+  9,027 frames per file, past the ring's 8,192. Every file equals its
+  track; the writer wrote 18 times during the take; the peak was 539; the
+  drain took 421 frames.
+- **The overflow at eight tracks.** ✅ With the writer held and the ring
+  made to look nearly full, the guard trips at 100 frames with
+  `ERR_OVERFLOW`. The largest value the hook writes to `stems_peak` is
+  8,192, the ring's capacity. The writer then writes eight files of
+  524,332 bytes each, the whole ring's share, in 6,678 frames (5,167 for
+  the one-track ring of 13.3), goes IDLE, and the row arms again.
+- **The 20-second take.** ✅ 55,365 frames, the file equal to the ring byte
+  for byte. It was 55,342 at `5baf399`: that run predates the card latency
+  of 13.3, whose +23 frames on every take this is (55,367 on
+  `crosscheck`, −25 for 13.2's transport start, +23). Measured: the same
+  count at `ed486b3`, `main` before this piece, under its own port, and at
+  `def2503`, before this piece's hook change.
+- **One incidental count moved.** 🟡 `cardfail`'s polls in the stock DRQ
+  loop went from 3,460,329 to 3,460,318 when the hook gained the peak. Both
+  runs execute 18,591,841 ColdFire instructions over their frames (the
+  port gives every frame the same budget), write 23 sectors and change
+  state on the same samples. Inferred: the bigger image's load (859 more
+  instructions) and the hook's 3 or 4 more instructions per recorded frame
+  move where the poll loop falls inside each frame. The fact the check
+  records, a writer hung in the DRQ poll, is unchanged.
+
+### 15.3 The hook's cost ✅
+
+Section 12.2's method at `54542a6` (28 Sep 2026): 400 frames armed before
+play with no STOP, `--coverage` over the hook, the three-instruction tail
+left out, each address's count floored to whole frames.
+
+| Tracks | Raw sum | Per frame, floored | 12.2 |
+|---|---|---|---|
+| 1 (T1) | 54,000 | 134 | 130 |
+| 8 | 297,600 | 743 | 739 |
+
+- **The peak costs 4 instructions a frame here.** ✅ `addq`, `cmp`, `bls`
+  and the store to `stems_peak`, each hit 400 times in both runs. In 400
+  frames the writer takes no chunk (it takes one every 512), so the fill
+  sets a new peak on every frame and the store always runs.
+- 🟡 Inferred from the code: once the fill falls back below its peak, the
+  `bls` skips the store, and the peak costs 3 instructions a frame.
+- The counts that aren't whole frames are 12.2's again: three addresses
+  at one track (505, 541 and 554 hits) and three at eight (3,299, 3,384
+  and 3,317 against 3,200). Their excess is exactly 400 in both runs, one
+  extra count a frame. 🟡 Read, as in 10.0 and 12.2, as an instruction
+  counted again when an interrupt lands on it.
+
+### 15.4 The card-speed sweep ✅ under the port
+
+Method: `python3 tools/verify/stems_sweep.py --jobs 2` at `54542a6`, 28
+Sep 2026: a 5-second take on the THRU fixture for each track count and
+card delay (`ot_emu --ata-latency`, samples between a card sector and its
+interrupt), then its rows analysed again with `--from-logs` once the fill's
+trend had a noise test.
+
+**The arithmetic.** The emulated card moves one 512-byte sector per
+delay: 22.58 MB/s divided by the delay, 2.82 MB/s at the port's default
+of 8. A track needs 176,400 bytes a second. So a track count keeps up
+while the delay is under 128 divided by the count: 128 at one track, 64
+at two, 32 at four, 16 at eight.
+
+| Tracks | Delay | Peak fill | Overflow | Writer | Fill growth | To overflow |
+|---|---|---|---|---|---|---|
+| 1 | 8 | 1% (526) | no | 0.17 MB/s | −1 ± 3 frames/s, flat | - |
+| 1 | 16 | 1% (526) | no | 0.17 MB/s | −1 ± 3 frames/s, flat | - |
+| 1 | 24 | 1% (526) | no | 0.17 MB/s | +1 ± 3 frames/s, flat | - |
+| 1 | 32 | 1% (527) | no | 0.17 MB/s | −1 ± 4 frames/s, flat | - |
+| 1 | 48 | 1% (526) | no | 0.17 MB/s | +0 ± 3 frames/s, flat | - |
+| 1 | 64 | 1% (580) | no | 0.17 MB/s | +3 ± 3 frames/s, flat | - |
+| 2 | 8 | 2% (528) | no | 0.34 MB/s | +2 ± 3 frames/s, flat | - |
+| 2 | 16 | 2% (528) | no | 0.34 MB/s | −1 ± 3 frames/s, flat | - |
+| 2 | 24 | 2% (528) | no | 0.34 MB/s | +4 ± 3 frames/s | past the 60-min cap |
+| 2 | 32 | 2% (529) | no | 0.34 MB/s | −2 ± 3 frames/s, flat | - |
+| 2 | 48 | 2% (587) | no | 0.34 MB/s | +0 ± 3 frames/s, flat | - |
+| 2 | 64 | 3% (962) | no | 0.34 MB/s | +39 frames/s | 829 s |
+| 4 | 8 | 3% (533) | no | 0.68 MB/s | −4 ± 3 frames/s, flat | - |
+| 4 | 16 | 3% (532) | no | 0.68 MB/s | −1 ± 3 frames/s, flat | - |
+| 4 | 24 | 3% (531) | no | 0.68 MB/s | +1 ± 3 frames/s, flat | - |
+| 4 | 32 | 6% (971) | no | 0.68 MB/s | +78 ± 1 frames/s | 204 s |
+| 4 | 48 | 32% (5,210) | no | 0.45 MB/s | +953 frames/s | 11.9 s |
+| 4 | 64 | 46% (7,488) | no | 0.34 MB/s | +1,397 frames/s | 6.6 s |
+| 8 | 8 | 7% (539) | no | 1.36 MB/s | −1 ± 3 frames/s, flat | - |
+| 8 | 16 | 15% (1,264) | no | 1.31 MB/s | +154 frames/s | 47 s |
+| 8 | 24 | 81% (6,640) | no | 0.73 MB/s | +1,277 ± 2 frames/s | 1.2 s |
+| 8 | 32 | 92% (7,505) | no | 0.68 MB/s | +1,418 ± 1 frames/s | 0.8 s |
+| 8 | 48 | 100% (8,192) | at 4.27 s | 0.43 MB/s | +1,855 frames/s | - |
+| 8 | 64 | 100% (8,192) | at 3.72 s | 0.28 MB/s | +2,077 frames/s (two chunks) | - |
+
+The peak fill's share is of the ring at that track count: 65,536 frames
+at one track, 8,192 at eight. The writer's rate is averaged over the
+recording. A growth without a ± had an error under 1 frame a second.
+
+- **Under the break-even, every count keeps up.** ✅ The writer runs at
+  the data rate (0.17, 0.34, 0.68 and 1.36 MB/s), the peak stays at one
+  chunk and the frames of one write (526 to 587 frames), and the fill is
+  flat within its noise. One row, two tracks at 24, reads +4 ± 3: just
+  past the test, which at twice the error passes about one flat row in 40
+  by chance. At that rate the ring would outlast the 60-minute cap.
+- **At the break-even the fill grows slowly.** ✅ Two tracks at 64, four
+  at 32 and eight at 16 grow by 39, 78 and 154 frames a second. The ring
+  would last 829, 204 and 47 seconds more at that rate.
+- **Past it, the ring fills.** ✅ Eight tracks overflow at 4.27 s with a
+  delay of 48, and at 3.72 s with 64. The arithmetic predicts both: at 64
+  the writer's 0.28 of the needed 1.41 MB/s grows the fill by about 2,200
+  frames a second, and 8,192 frames last 3.7 s. At 48, 4.3 s.
+- **A slow card slows the project's load too.** ✅ At a delay of 64 the
+  load did not finish within the verifier's 20 s budget, and no take
+  started. The sweep's budget grows with the delay; the port ends a load
+  as soon as the engine is idle, so a bigger budget costs nothing.
+- **Its limit.** The emulated card has one constant delay per sector. A
+  real card stalls. OctaLab measured single card writes of up to 1.2 s
+  while STATIC tracks play, and 1.4 to 2.1 MB/s while they read (their
+  `docs/OTX_PROJECT_PROPOSAL.md`, 26 Sep 2026). 🟡 Arithmetic, not
+  measured: eight tracks need 1.41 MB/s, and the 4 MiB ring holds 8,192
+  frames at eight tracks, about 3 s, so a 1.2 s stall fits in the ring if
+  the card writes fast enough between stalls to empty it again. So this
+  table gives steady-rate limits only; flash A measures the real card.

@@ -4,7 +4,7 @@ One ColdFire module and nothing else. For recording what the tracks play to the 
 
 ## What is in it
 
-- **STEM REC.** MAIN MENU > CONTROL > STEM REC arms a take, or starts one if the sequencer is running. Selecting it again stops the take, and so does stopping the sequencer or reaching 60 minutes. Each enabled track is a 16-bit stereo file, `<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`. This build enables T1. `modules/stems/README.md`.
+- **STEM REC.** MAIN MENU > CONTROL > STEM REC arms a take, or starts one if the sequencer is running. Selecting it again stops the take, and so does stopping the sequencer or reaching 60 minutes. Each enabled track is a 16-bit stereo file, `<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`. This build records all eight tracks. `modules/stems/README.md`.
 
 ## Status
 

@@ -3,8 +3,9 @@
 MAIN MENU > CONTROL > STEM REC arms a recording, or starts one if the
 sequencer is running; selecting it again stops it, and so does the
 sequencer stopping or 60 minutes. Each enabled track is a file,
-<set>/AUDIO/YYMMDD-HHMM/T<n>.wav, 16-bit stereo; this build enables T1
-(stems_tracks = 0x01). Design:
+<set>/AUDIO/YYMMDD-HHMM/T<n>.wav, 16-bit stereo; this build records all
+eight (stems_tracks = 0xFF). stems_peak keeps the take's largest ring
+fill, for the menu's status row. Design:
 docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md.
 Every stock fact the unit uses: docs/firmware/STEM_REC.md.
 
@@ -53,11 +54,11 @@ MODULE = Module(
     kind=Kind.CF_PATCH,
     category=Category.MACHINES, author="yvesrosius", author_url="https://github.com/yvesrosius",
     proof=Proof.PORT, proof_note="`verify_stems` under the ColdFire port; never flashed",
-    doc="MAIN MENU > CONTROL > STEM REC: T1 to the card while the sequencer plays "
+    doc="MAIN MENU > CONTROL > STEM REC: every track to the card while the sequencer plays "
         "(streamed: 16-bit, up to 60 min).",
     linked=(Linked("stems", "modules/stems/stems.s", dram=True),),
     detours=(Detour(FRAME_SITE, FRAME_STOCK, "stems", "stems_frame_hook",
-                    "per-frame tap: T1 into the ring, then the stock routine",
+                    "per-frame tap: the enabled tracks into the ring, then the stock routine",
                     kind="jsr", pad_to=8),
              Detour(ATA_FIRST_SITE, ATA_FIRST_STOCK, "stems", "stems_ata_first",
                     "the PIO write's first sector, pointer and count advanced first",

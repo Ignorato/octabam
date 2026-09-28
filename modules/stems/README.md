@@ -4,9 +4,10 @@ MAIN MENU › CONTROL › STEM REC records tracks to the card while the
 sequencer plays. It writes the take while it records, so a take can run
 until you stop it, up to 60 minutes. Each track lands as its own file,
 `<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`, 16-bit stereo at 44,100 Hz. This build
-records T1 only. The code handles all eight tracks. The port has run
-eight tracks in one short take; the ring's limit and its wrap have run at
-T1 only. It's a step of `docs/proposals/MULTITRACK_TO_CARD.md`.
+records all eight tracks. The port has run every track count, the ring's
+wrap and its overflow at eight tracks, on a fixture with sound in every
+frame (STEM_REC.md section 15). It's a step of
+`docs/proposals/MULTITRACK_TO_CARD.md`.
 
 - The design: `docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md`,
   over the proof of concept's `docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md`.
@@ -29,6 +30,9 @@ each track's finished audio back to the main processor. The runs cover:
 - A take across the ring's wrap, with the take's sound on both sides.
 - A ring that fills because the card falls behind.
 - Eight tracks, eight files, each equal to its own track.
+- One take per track mask on the THRU fixture: 1, 2, 4 and 8 tracks, and
+  T1, T3, T6 and T8 together. Each file matches its own track, with sound
+  in every frame, and the ring's peak fill matches the watch log.
 - A card that refuses a write: the run records that the writer hangs.
 - A take cut off mid-way: the run records that its file is empty.
 
@@ -39,20 +43,25 @@ the start of every run, from the folder `STEMS_TEMPLATE` names (default
 `make check-remix-gates`, needs the variable. Without a template the
 verifier skips the port runs and says why.
 
-Under the port the fixture's sounds play only their first four frames, so
-most of each take is silence. A lost or repeated sector in a silent
-stretch wouldn't show. A flash's 60-second take (crosscheck's plan: FLASH.md) is the
-first test with sound throughout.
+Under the port the FLEX fixtures' sounds play only their first four
+frames, so most of each FLEX take is silence. The THRU fixture feeds four
+channels of noise into inputs A to D, and each track plays its own mix of
+them, so the mask takes have sound in every frame: a lost or repeated
+sector would show there.
 
 `--long` adds a 20-second take whose file must equal the ring byte for
-byte. It takes about 20 minutes and stays outside `make check`.
+byte, the masks of 3, 5, 6 and 7 tracks and T8 alone, a mask changed
+mid-take (the take keeps the one it started with), an eight-track take
+past the ring's wrap, and the overflow at eight tracks. It takes about an
+hour and stays outside `make check`. `tools/verify/stems_sweep.py`
+measures the ring against the emulated card's speed (STEM_REC.md 15.4).
 
 | Measured under the port | Value | STEM_REC.md |
 |---|---|---|
 | The frame hook, IDLE | 2 instructions per frame | 10.2 |
 | The frame hook, ARMED | 17 instructions per frame | 10.2 |
-| The frame hook, recording T1 | 130 instructions per frame | 12.2 |
-| The frame hook, recording eight tracks | 739 instructions per frame | 12.2 |
+| The frame hook, recording T1 | 134 instructions per frame | 15.3 |
+| The frame hook, recording eight tracks | 743 instructions per frame | 15.3 |
 | The writer task's stack peak | 1,052 of 8,192 bytes | 12.2 |
 
 The IDLE and ARMED figures come from the proof-of-concept build. Those two
@@ -98,8 +107,8 @@ the right length.
 
 ## Limits
 
-- One build-time set of tracks: T1 in this build. There's no menu to pick
-  tracks.
+- One build-time set of tracks: all eight in this build. There's no menu
+  to pick tracks yet.
 - 16-bit, at most 60 minutes.
 - No screen feedback, and no error report on the unit.
 - The name has no seconds. A second take in the same minute is refused, and
@@ -107,11 +116,17 @@ the right length.
 - If the card falls behind and the 4 MiB ring fills, the take stops by
   itself at the last whole frame. Its files still play. A slow or nearly
   full card is the likely cause.
+- The card must keep writing 176,400 bytes a second per track: 1.41 MB/s
+  for eight. Under the port's card model, eight tracks hold at 2.8 MB/s
+  with the ring at most 7% full, and overflow within 5 s at half the needed
+  speed. The ring holds about 3 s at eight tracks, so it can ride out a
+  short stall. A real card's stalls are measured on the unit (STEM_REC.md
+  15.4).
 - A power cut or a card pull before the end loses the take: each file is
   left at 0 bytes, because its length is set only at the end
   (STEM_REC.md 12.3).
-- A nearly full card isn't analysed. Leave room: a T1 take needs about
-  10.6 MB a minute.
+- A nearly full card isn't analysed. Leave room: each track needs about
+  10.6 MB a minute, so an eight-track take needs about 85 MB a minute.
 - Loading a project while recording isn't detected. Don't do it.
 - One risk accepted for the proof of concept (Yves, 12 Sep 2026): the
   writer task sleeps on a shared timer that holds one waiter (STEM_REC.md
@@ -132,6 +147,11 @@ it with each other, as in stock.
   track's 16 stereo samples from the read-back block into a 4 MiB ring,
   keeping the top 16 bits of each 24-bit sample. The ring holds whole
   frames of 64 bytes per track. It calls nothing and uses no RTOS service.
+- **The peak ring fill.** Each recorded frame the hook also keeps the
+  take's largest ring fill in frames, `stems_peak`. Arming resets it to 0,
+  and it keeps its value after the take ends. Its share of the ring is
+  `stems_peak` over the ring's capacity at the take's track count. It's
+  for the menu's status row, and for measuring the card on the unit.
 - **The writer task.** The module's own RTOS task at priority 1, created
   the first time STEM REC is selected. It wakes every 10 ms. At a take's
   start it names the take from the clock, creates the folder, refuses a
