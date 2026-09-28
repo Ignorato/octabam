@@ -93,6 +93,13 @@ starting values, on the panel and over MIDI
   page 2 and CC 68–73 set FX1 page 2 on every track whose channel matches.
   Needs AUDIO CC IN on in the project.
   ([`cc-map`](../../modules/cc-map/README.md))
+- **Knob values out as CC.** Every knob value that changes -- a pattern or
+  part change, a project load, a MODE re-default, an incoming CC, a
+  page-2 turn -- is transmitted as its CC on the track's channel (page 1 as
+  CC 16-45, page 2 as the numbers above), so a controller's encoders show
+  the unit's state. Stock sends page-1 panel turns only. Needs AUDIO CC
+  OUT set to EXT or INT+EXT. Port only.
+  ([`cc-feedback`](../../modules/cc-feedback/README.md))
 - **Delay in time.** The delay reads the project tempo and follows tempo
   changes while TIME sits on a division.
   ([`tempo-sync`](../../modules/tempo-sync/README.md))

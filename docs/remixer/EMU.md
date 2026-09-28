@@ -88,7 +88,8 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
 - Watches: `--watch-mem ADDR,LEN[;ADDR,LEN...]` (every write, with the
   PC), `--watch-read`, `--watch-pc`, `--dsp-watch core:X|Y|P:addr`,
   `--dsp-pcwatch core:pc` (the last 24 arrivals with a, b, x, y, r0, r4, r6, n4, sp, r2, m2, r1, n1, r7, m7, m0 and, since 21 Sep 2026, n7 -- the frame count of a call), `--dsp-peek core:X|Y|P:addr,len` (upper-case
-  space letter), `--mem-dump addr,len=file`.
+  space letter), `--mem-dump addr,len=file`, `--midi-out FILE` (UART0's
+  transmit bytes, raw: the firmware's CC echo and CC FEEDBACK's dumps).
 - The record a track's DSP instances read is `0x80000110 + 64·t` (32
   halfwords, `docs/firmware/MIDI.md`); the page-2 lane `0x80000810 + 72·t`.
 - `--card-out FILE` writes the card as the firmware left it;
@@ -161,8 +162,12 @@ bank B, 15 Sep 2026).
   write to `0x80000002` follows the parse and those remixes load (ok-ms's
   set gate: 0 failures at 8 and at 32). Why the latency changes the order
   is inferred (the engine blocks longer per sector, so `sys` drains its
-  queue earlier), not traced. One `--watch-mem` range per run: the last
-  flag wins.
+  queue earlier), not traced. The same check tripped at 8 samples on 28 Sep
+  2026 when CC FEEDBACK's first build transmitted 272 CCs (UART0
+  interrupts) inside the load; the module now waits for the engine's queue
+  to be idle (`0x460d17ce+0xc`) and the load passes at 8 again. A module
+  that adds interrupts or work during LOAD PROJECT under Octakit is exposed
+  to this ordering. One `--watch-mem` range per run: the last flag wins.
 - **A card-sample voice plays under the port, and its audio stops at the
   DSP's main mixdown (measured 28 Sep 2026, `verify_repitch`'s FLEX
   fixture on the repitch and bus images).** Retracting the 27 Sep reading

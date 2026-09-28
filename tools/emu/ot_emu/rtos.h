@@ -582,6 +582,7 @@ namespace ot
 		Dspi& dspi() { return m_dspi; }
 		bool frameOn() const { return m_frame; }
 		const std::vector<uint8_t>& serialTxB() const { return m_uart68.tx(); }
+		const std::vector<uint8_t>& serialTx0() const { return m_uart60.tx(); }	// MIDI OUT: every byte the firmware wrote to UART0's transmitter
 		size_t serialA() const { return m_uart64.tx().size(); }
 		size_t serialB() const { return m_uart68.tx().size(); }
 		const std::string& why() const { return m_why; }

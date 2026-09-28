@@ -16,7 +16,7 @@ twenty channels above), FULL (the sixteen track channels, remix
 
 - **USB MIDI** (markandrus, [octemu](https://github.com/markandrus/octemu), MIT) — MIDI in and out over USB. Incoming messages take the same path as DIN MIDI IN; everything the unit sends on DIN is also sent over USB. [`modules/usb-midi/README.md`](../../modules/usb-midi/README.md).
 - **USB AUDIO EXTENDED** (markandrus, octemu, MIT; `usb-audio` only) — at USB high speed, track N's post-FX, pre-fader L/R on channels 2N−1/2N. At full speed, the stereo sum of the tracks. Track LEVEL, the crossfader, MAIN volume and the master effects are not in the stream. [`modules/usb-audio-extended/README.md`](../../modules/usb-audio-extended/README.md).
-- The rig's effects and hosts as in [`bottleservice`](../bottleservice/README.md): the bus, the three stations, TEMPO SYNC, CC MAP, MODE DEFAULTS, RIG HOSTS; `usb-audio` also carries TEMPO BUS.
+- The rig's effects and hosts as in [`bottleservice`](../bottleservice/README.md): the bus, the three stations, TEMPO SYNC, CC MAP, MODE DEFAULTS, RIG HOSTS; `usb-audio` also carries TEMPO BUS and CC FEEDBACK (every knob value change transmitted as its CC, `modules/cc-feedback`).
 
 ## Status
 

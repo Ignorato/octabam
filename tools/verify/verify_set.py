@@ -261,6 +261,7 @@ def main():
     midi.write_text("\n".join(lines) + "\n")
 
     dumps = {k: OUT / f"{k}.bin" for k in ("ids", "records", "lanes")}
+    midi_out = OUT / "midi_out.bin" if "CC FEEDBACK" in mods else None
     blocks, cmds, log, card_after = OUT / "port.dump", OUT / "port.cmds", OUT / "port.txt", OUT / "card_after.img"
     if not (a.reuse and blocks.is_file() and all(p.is_file() for p in dumps.values())):
         card = OUT / "card.img"
@@ -272,7 +273,7 @@ def main():
                "--block-dump", str(blocks), "--cmd-log", str(cmds), "--card-out", str(card_after),
                "--mem-dump", f"{LIVE_IDS:#x},16={dumps['ids']};{RECORDS:#x},512={dumps['records']};{LANES:#x},576={dumps['lanes']}",
                "--dsp-peek", "0:Y:36082,1;1:Y:36082,1;1:X:6229,1;1:X:6275,1;0:Y:36081,1;0:Y:9f4,1"] \
-            + a.extra.split()
+            + (["--midi-out", str(midi_out)] if midi_out else []) + a.extra.split()
         with open(log, "w") as f:
             f.write(" ".join(cmd) + "\n"); f.flush()
             r = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
@@ -367,6 +368,48 @@ def main():
     m = re.search(r"midi in    : (\d+) byte\(s\) still queued", text)
     check("midi: the firmware took every byte", m is not None and m.group(1) == "0",
           f"{m.group(1) if m else '?'} queued at the end")
+    if midi_out:
+        # CC FEEDBACK: the port's MIDI OUT (UART0) decoded with running status;
+        # the last value sent per (channel, CC) is the lane byte at the end
+        # for every mapped slot (modules/cc-feedback: page 1 = CC 16-45, FX1
+        # page 2 = 68-73, FX2 page 2 = 62-67). The dump lags a change by up
+        # to eight UI ticks (67 ms); the run's last CC in lands 40 frames
+        # after the transport start.
+        cfmap = [(i, 16 + i) for i in range(30)] + [(0x32 + i, 68 + i) for i in range(6)] + [(0x38 + i, 62 + i) for i in range(6)]
+        msgs, st, buf = [], None, []
+        for x in (midi_out.read_bytes() if midi_out.is_file() else b""):
+            if x >= 0xf8:
+                continue
+            if x & 0x80:
+                st, buf = x, []
+            else:
+                buf.append(x)
+                if st is not None and st >> 4 == 0xb and len(buf) == 2:
+                    msgs.append((st & 15, buf[0], buf[1])); buf = []
+        last = {}
+        for ch, cc, v in msgs:
+            last[(ch, cc)] = v
+        wrong, sent = [], 0
+        for t in range(8):
+            ch = chans[t] & 0xf if chans[t] >= 0 else None
+            if ch is None:
+                continue
+            for off, cc in cfmap:
+                want = lanes[72 * t + off]
+                got = last.get((ch, cc))
+                if got is not None:
+                    sent += 1
+                if got != want and (got is not None or want != 0):
+                    wrong.append(f"T{t + 1} CC {cc} sent {got} lane {want}")
+        check(f"midi out: CC FEEDBACK dumped every mapped lane byte ({len(msgs)} CCs, {sent} slots)",
+              bool(msgs) and not wrong, "; ".join(wrong[:6]))
+        # Informational: the bytes after the transport start are the tail of
+        # the dump (the load's part, dumped once the engine is idle, drains
+        # at 31.25 kbaud) plus the echo of the CCs sent in. A step-rate
+        # stream from locks would show here; this fixture plays no locks
+        # under the port (no pattern trig fires there, EMU.md).
+        m = re.search(r"midi out   : (\d+) byte\(s\) on UART0 \((\d+) after the transport start\)", text)
+        print(f"  [info] midi out: {m.group(1) if m else '?'} bytes on UART0, {m.group(2) if m else '?'} after the transport start, {a.frames} frames")
 
     # audio
     import blockdump as bd, recloop as rl

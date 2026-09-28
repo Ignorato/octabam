@@ -7,6 +7,15 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- CC FEEDBACK (28 Sep 2026, `modules/cc-feedback`): the OT transmits a
+  CC for every live knob byte that changes -- a pattern or part change, a
+  project load, MODE DEFAULTS, an incoming CC, a page-2 turn -- so a
+  controller's encoders follow the unit; stock echoes page-1 panel turns
+  only. One track per UI tick (a detour on the keyrepeat task's loop),
+  the live lane against the stock emitter's own last-sent cache
+  (`0x46c7bf2c`), page 1 as CC 16-45 and page 2 as CC MAP's 62-73. In
+  `bottleservice` and `usb-audio`. `ot_emu --midi-out FILE` dumps UART0's
+  transmit bytes; `verify_set` checks them against the lane.
 - The port follows a detoured idle park (28 Sep 2026): `Rtos::install`
   reads a `jmp abs.l` at `0x4001fc96` (CF METER IDLE's `m_idle`) and counts
   the loop's first 0x80 bytes as main's park for the idle skip, the burst
