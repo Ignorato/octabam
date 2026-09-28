@@ -36,7 +36,8 @@ These five inputs follow from the spec, and no check in it covers them. Each lin
 
 ## Conventions
 
-- **Branch and trees.** Git work in the Windows checkout on branch `stem-rec-p2`; builds and runs in the WSL clone `/home/yvez/stemrec2`, synced with `bash .superpowers/v2/sync.sh`. Runs use `bash .superpowers/v2/wslrun NAME CMD...` and log to `/home/yvez/xcheck/v2-NAME.log`; tell Yves each long run's log path when it starts.
+- **Branch and trees.** Git work in the Windows checkout on branch `stem-rec-p2`; builds and runs in the WSL clone `/home/yvez/stemrec2`, synced with `bash .superpowers/v2/sync.sh`. Runs use `bash .superpowers/v2/wslrun NAME CMD...` and log to `/home/yvez/xcheck/v2-NAME.log`; tell Yves each long run's log path when it starts. **From Task 3u on** (28 Sep 2026): git work in the worktree `.claude/worktrees/stem-rec-p2-up` on branch `stem-rec-p2-up` (piece 2 with upstream `2a849af` merged in), synced with `bash .superpowers/v2/sync-up.sh`; every `sync.sh` below means `sync-up.sh`, and every `git` command runs in the worktree.
+- **The fixtures.** From Task 3u on, `verify_stems.py` builds its four fixture cards itself at the start of every run, from `STEMS_TEMPLATE` (default `out/projects/Ultimate FX 1.5.3`). A helper script that bypasses `main()` calls `v.fixtures()` after it builds the image.
 - **Commits.** Stage by name; check `git status --porcelain` shows only the intended files staged before each commit. After a `git checkout <rev> -- <path>`, unstage with `git reset -q`.
 - **The port runs.** Every `port()` call in `verify_stems.py` builds on the image the verifier built at its start (`REMIX=stems`). A helper script that bypasses `main()` builds the image itself first.
 
@@ -352,6 +353,47 @@ Run in the background; tell Yves the log. Expected: the 94 checks of `ed486b3` p
 ```bash
 git add tools/verify/verify_stems.py
 git commit -m "verify_stems: every one-track check pins stems_tracks to T1 before play -- ready for the all-eight default
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 3u: Upstream's gate runner (added 28 Sep 2026)
+
+Yves: "bamshanks did some more work upstream on the testing procedures. Can you pull changes on the Octabam repo and implement the new testing?" Upstream `2a849af` (53 commits) runs gates differently: `make accept REMIXES=...` runs the shared half of `make check` once; `make reach` places a change by what depends on it, with the cover as its floor; `make check-remix-gates REMIX=<name>` runs one remix's gates side by side in kept worktrees (`out/shards/<i>`, each with `out/` wiped except `emu/` and `raw/`); `make identity` builds every remix from the base and from this tree and compares the bytes.
+
+**Files:**
+- Modify: `tools/verify/verify_stems.py` (`TEMPLATE`, `fixtures()`, `main()`'s port-run guard)
+- Modify: `modules/stems/manifest.py` (the gate comment), `modules/stems/README.md` (where the fixtures come from)
+- Create (local): `.superpowers/v2/sync-up.sh`, `.superpowers/v2/wsl-sync-up.sh`
+
+- [ ] **Step 1: Merge upstream into piece 2, in a worktree**
+
+`git worktree add .claude/worktrees/stem-rec-p2-up -b stem-rec-p2-up <Task 3's commit>`, then `git merge --no-ff origin/main` there. Sync with `sync-up.sh`, then `make emu-cf` (upstream changed the port) and `make test-acceptance`. Expected: a clean merge; the runner's tests pass.
+
+- [ ] **Step 2: See the gap**
+
+`make reach BASE=2a849af` in WSL. Expected: `tools/verify/stems_fixture.py [no gate depends on it]`: `verify_stems` reads fixtures built by hand. Then `make check-remix-gates REMIX=stems JOBS=2`: in a shard, `out/` holds no fixture, so `gate:verify_stems` reports a SKIP of every port run.
+
+- [ ] **Step 3: The verifier builds its fixtures**
+
+`fixtures()` runs `stems_fixture.py` in its four modes from `TEMPLATE` at the start of every run, and one check line records the build. Without a template, the port runs SKIP by name. The four cards rebuild byte for byte in about 30 s (measured first: `.superpowers/v2/fixture-repro.sh`).
+
+- [ ] **Step 4: The runner, green**
+
+```bash
+bash .superpowers/v2/sync-up.sh
+bash .superpowers/v2/wslrun up-gates-green env STEMS_TEMPLATE="/home/yvez/stemrec2/out/projects/Ultimate FX 1.5.3" make check-remix-gates REMIX=stems JOBS=2
+bash .superpowers/v2/wslrun up-reach2 make reach BASE=2a849af
+```
+Expected: every gate `ok`, and `gate:verify_stems` with no SKIP and the check lines of Task 3's run, plus the fixture line; `reach` places `stems_fixture.py` under `verify_stems`. Then `make identity BASE=2a849af` (`up-identity`): every remix that builds here is identical except `stems`, which the base lacks; and `make accept REMIX=stems STRESS_SOURCE=<the template>` (`up-accept`): the first acceptance report of the stems remix, with `verify_set` on a real project.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tools/verify/verify_stems.py modules/stems/manifest.py modules/stems/README.md docs/superpowers/plans/2026-09-27-stem-rec-eight-tracks.md
+git commit -m "verify_stems: the fixtures built from the template at the start of every run -- a shard of check-remix-gates has none, and reach now sees stems_fixture.py
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
@@ -742,6 +784,8 @@ def main():
     env = {**os.environ, "REMIX": "stems", "XBUS": "1", "SPEC": "1"}
     subprocess.run([sys.executable, "tools/build/build_bus.py"], env=env, check=True, capture_output=True)
     s = v.syms()
+    if not v.fixtures():
+        sys.exit(f"stems_sweep: no fixtures (a project template at {v.TEMPLATE}: STEMS_TEMPLATE=<dir>)")
     rows = []
     for n in map(int, a.counts.split(",")):
         for lat in map(int, a.latencies.split(",")):
@@ -845,13 +889,16 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 2: Run the gates**
 
-In the background, one after another, each log's path told to Yves:
+In the background, one after another, each log's path told to Yves. Upstream's runner since Task 3u: `check-remix-gates` in place of `check-remix`, `accept` for the remix that carries the module, and `identity` in place of the local remix hash:
 ```bash
-bash .superpowers/v2/wslrun p2-final-check make check-remix REMIX=stems
+T="/home/yvez/stemrec2/out/projects/Ultimate FX 1.5.3"
+bash .superpowers/v2/wslrun p2-final-gates env STEMS_TEMPLATE="$T" make check-remix-gates REMIX=stems JOBS=2
+bash .superpowers/v2/wslrun p2-final-accept make accept REMIX=stems STRESS_SOURCE="$T"
 bash .superpowers/v2/wslrun p2-final-long .venv/bin/python3 tools/verify/verify_stems.py stems --long --fat32
-bash .superpowers/v2/wslrun p2-final-remixhash bash /mnt/c/Projects/Octabam/.superpowers/v2/remixhash.sh check
+bash .superpowers/v2/wslrun p2-final-identity make identity BASE=2a849af
+bash .superpowers/v2/wslrun p2-final-reach make reach BASE=2a849af
 ```
-Expected: `check-remix` exits 0; `--long --fat32` has no FAIL; the remix hash, against Task 1's baseline, differs only in the `stems` line.
+Expected: every gate of `check-remix-gates` is `ok` and `gate:verify_stems` has no SKIP; `accept` reports `passed`; `--long --fat32` has no FAIL; `identity` finds every remix that builds here identical except `stems`, which the base lacks; `reach` lists the gates for the record (the whole list, with the cover, is a pull request's run, not this piece's).
 
 - [ ] **Step 3: Check the spec's "done when" list**
 

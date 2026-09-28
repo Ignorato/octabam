@@ -7,8 +7,10 @@ Static, from the built image: CONTROL has seven rows, the six stock ones
 byte for byte, the seventh labelled STEM REC with the module's action and
 id 0; the frame site jumps to the hook; the ring and the stack sit at the
 top of the platform reserve, above the runtime's stage. Then, when the
-port is built and the fixture exists (tools/verify/stems_fixture.py), the
-port runs of the proof of concept and of the streaming plan. `--long` adds
+port is built, the fixtures are built from the project template
+(tools/verify/stems_fixture.py; STEMS_TEMPLATE=<dir>, default
+out/projects/Ultimate FX 1.5.3) and the port runs of the proof of concept
+and of the streaming plan follow. `--long` adds
 a 20-second take, which takes about 20 minutes under the port and stays
 out of `make check`. `--fat32` runs the take checks again on a FAT32 card
 (`stems_fixture.py --fat32`), after checking the firmware mounted it; it
@@ -41,6 +43,10 @@ T1_OFFSET = 0x00
 
 EMU = pathlib.Path("out/emu/ot_emu")
 FIXTURE = pathlib.Path("out/stems_fixture.json")   # written by tools/verify/stems_fixture.py
+# The fixtures' project: EZBot's "Ultimate FX 1.5.3" template, a local
+# project that never enters the repository. A fresh tree has none (the
+# shards of `make check-remix-gates` wipe out/), so STEMS_TEMPLATE names it.
+TEMPLATE = pathlib.Path(os.environ.get("STEMS_TEMPLATE") or "out/projects/Ultimate FX 1.5.3")
 KEY_STOP = 0x4000a1e0
 STOP_GATE = 0x80000029     # the STOP handler returns early while this byte is 0 (STEM_REC.md 1.6)
 PRE_ROLL = 40              # frames before the transport start; the dump includes them
@@ -779,6 +785,26 @@ def thru(s):
     check("thru: the eight signals are distinct", len(sigs) == 8, f"{len(sigs)} distinct of 8")
 
 
+def fixtures():
+    """The four fixture cards, built from TEMPLATE at the start of every
+    run: a fresh tree has none, and a card left by an older stems_fixture.py
+    must never be read. They rebuild byte for byte, in about 30 s for all
+    four (28 Sep 2026). False, with nothing checked, when there is no
+    template; a build that fails is a failed check."""
+    if not TEMPLATE.is_dir():
+        return False
+    for mode in ("", "--eight", "--fat32", "--thru"):
+        r = subprocess.run([sys.executable, "tools/verify/stems_fixture.py", *([mode] if mode else []),
+                            str(TEMPLATE)], capture_output=True, text=True)
+        if r.returncode:
+            tail = (r.stdout + r.stderr).strip().splitlines()
+            check(f"the fixture builds from the template (stems_fixture.py{' ' + mode if mode else ''})",
+                  False, tail[-1] if tail else f"exit {r.returncode}")
+            return False
+    check("the four fixtures build from the template", True, str(TEMPLATE))
+    return True
+
+
 def main():
     from remix import registry
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
@@ -796,7 +822,12 @@ def main():
     regions(s)
     check("the card-out parse reads upstream's line and refuses crosscheck's",
           card_out_sectors(CARD_OUT_UPSTREAM) == 23 and card_out_sectors(CARD_OUT_CROSSCHECK) is None)
-    if EMU.exists() and FIXTURE.exists():
+    if not EMU.exists():
+        print("  [SKIP] port runs: build the port (make emu-cf)")
+    elif not TEMPLATE.is_dir():
+        print(f"  [SKIP] port runs: no project template at {TEMPLATE} "
+              "(STEMS_TEMPLATE=<dir>, a local copy of EZBot's Ultimate FX 1.5.3)")
+    elif fixtures():
         probe(s)
         thru(s)
         tap(s)
@@ -814,9 +845,6 @@ def main():
             limit(s)
         if "--fat32" in sys.argv:
             fat32(s)
-    else:
-        print("  [SKIP] port runs: build the port (make emu-cf) and the fixture "
-              "(python3 tools/verify/stems_fixture.py)")
     return 1 if fails else 0
 
 

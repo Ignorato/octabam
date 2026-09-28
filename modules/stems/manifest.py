@@ -73,9 +73,10 @@ MODULE = Module(
     dram_regions=(DramRegion("stems_ring", 0x400000),
                   DramRegion("stems_stack", 0x2000),
                   DramRegion("stems_buf", 270336, align=512),),
-    # verify_stems builds its own stems image and runs the takes under the
-    # port (with stems_fixture.py's cards on disk; it SKIPs the port runs
-    # without them). The card reader's round trip is remix-independent:
+    # verify_stems builds its own stems image and its fixture cards (from the
+    # project template STEMS_TEMPLATE names, default out/projects/Ultimate FX
+    # 1.5.3; it SKIPs the port runs by name without one) and runs the takes
+    # under the port. The card reader's round trip is remix-independent:
     # every take is read back through it.
     gates=(Gate("tools/verify/verify_card_reader.py", remix_arg=False, venv=True),
            Gate("tools/verify/verify_stems.py", venv=True)),

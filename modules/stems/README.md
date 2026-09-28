@@ -32,6 +32,13 @@ each track's finished audio back to the main processor. The runs cover:
 - A card that refuses a write: the run records that the writer hangs.
 - A take cut off mid-way: the run records that its file is empty.
 
+The fixture projects come from a local copy of EZBot's Ultimate FX 1.5.3
+template, which never enters the repository. The verifier builds them at
+the start of every run, from the folder `STEMS_TEMPLATE` names (default
+`out/projects/Ultimate FX 1.5.3`). A fresh tree, such as a shard of
+`make check-remix-gates`, needs the variable. Without a template the
+verifier skips the port runs and says why.
+
 Under the port the fixture's sounds play only their first four frames, so
 most of each take is silence. A lost or repeated sector in a silent
 stretch wouldn't show. A flash's 60-second take (crosscheck's plan: FLASH.md) is the
