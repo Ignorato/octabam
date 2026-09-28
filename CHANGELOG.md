@@ -7,6 +7,13 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- One boot per gate (28 Sep 2026): `ot_emu --step FRAME:call|poke|dump:SPEC`,
+  repeatable, runs a gate's script on one load; `verify_modedefaults` went
+  from three Octakit loads to one (38 s with the build on bottleservice).
+  `verify_repitch` probes the port's voice silence once and skips the other
+  six loads (mods' per-remix half was 2,580 s, the seven loads then skipped
+  each playback check).
+
 - The gates, made to fit their changes (28 Sep 2026, #510, #511): a
   manifest edit to the display fields alone, or a module's README, reaches
   `verify_docs`; `make identity`'s moved remixes plan into the accept line

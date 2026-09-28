@@ -330,8 +330,15 @@ def main():
         k0, k1 = pair
         return k0, (k1 if k1 is not None else ratio) * (-1 if k0 < 0 else 1)
 
+    silent = None   # the first case's log when the port's output carried no audio
     for name in a.case or list(CASES):
         machine, tstr, tsmode, ptch, rate, pk, sk, resolved = CASES[name]
+        if silent:
+            # The silence is the port's, not the case's (the same image, the
+            # same machine): one probe stands for all seven, and the other
+            # six Octakit loads (~1 min each on the wall) are not paid.
+            print(f"  [SKIP] playback {name}: not measured, the first case's output carried no audio -- {silent}", flush=True)
+            continue
         res = run_case(a, name, machine, tstr, tsmode, ptch, image, rate)
         if "error" in res:
             if res["error"].startswith("no audio on any slot"):
@@ -340,6 +347,7 @@ def main():
                 # 0 under the port on this machine, so nothing reaches the
                 # ESAI (docs/remixer/EMU.md, the voice-silence entry, 28 Sep
                 # 2026). A run with audio is measured in full.
+                silent = res["error"].split(" -- ", 1)[-1]
                 print(f"  [SKIP] playback {name}: {res['error']} -- the port's main mixdown gain "
                       f"(docs/remixer/EMU.md); pitch and speed not measured", flush=True); continue
             print(f"  [FAIL] playback {name}: {res['error']}", flush=True); fails += 1; continue
