@@ -46,6 +46,15 @@
 #include <sstream>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/wait.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <map>
+#include <fstream>
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
+#endif
 
 namespace
 {
@@ -1085,6 +1094,88 @@ namespace
 	}
 }
 
+// After a fork: the vendored DSP memory is a shm object mapped MAP_SHARED
+// several times over (the bridged X/Y/P views, dsp56kBase/mmuhelper.cpp),
+// so a forked child would write its parent's and its siblings' DSP memory
+// (29 Sep 2026: two of three scenarios faulted a core, PC outside P). Every
+// writable shared region inside `_ranges` is grouped by its backing object;
+// each object is copied into a fresh shm object and every view remapped
+// onto it at the same offset, so the aliases stay and nothing is shared.
+static bool unshareRanges(const std::vector<std::pair<uint8_t*, size_t>>& _ranges, std::string& _why)
+{
+	struct View { uint8_t* addr; size_t size; uint64_t off; };
+	std::map<std::string, std::vector<View>> byObj;
+	for(const auto& [start, len] : _ranges)
+	{
+		uint8_t* const end = start + len;
+#ifdef __APPLE__
+		mach_vm_address_t a = reinterpret_cast<mach_vm_address_t>(start);
+		while(a < reinterpret_cast<mach_vm_address_t>(end))
+		{
+			mach_vm_address_t ra = a;
+			mach_vm_size_t sz = 0;
+			natural_t depth = 0;
+			vm_region_submap_info_data_64_t info{};
+			mach_msg_type_number_t cnt = VM_REGION_SUBMAP_INFO_COUNT_64;
+			if(mach_vm_region_recurse(mach_task_self(), &ra, &sz, &depth, reinterpret_cast<vm_region_recurse_info_t>(&info), &cnt) != KERN_SUCCESS)
+				break;
+			if(ra >= reinterpret_cast<mach_vm_address_t>(end))
+				break;
+			const auto lo = std::max<mach_vm_address_t>(ra, reinterpret_cast<mach_vm_address_t>(start));
+			const auto hi = std::min<mach_vm_address_t>(ra + sz, reinterpret_cast<mach_vm_address_t>(end));
+			const bool shared = info.share_mode == SM_SHARED || info.share_mode == SM_TRUESHARED || info.share_mode == SM_SHARED_ALIASED;
+			if(shared && (info.protection & VM_PROT_WRITE) && hi > lo)
+				byObj[std::to_string(info.object_id)].push_back({reinterpret_cast<uint8_t*>(lo), static_cast<size_t>(hi - lo), info.offset + (lo - ra)});
+			a = ra + sz;
+		}
+#else
+		std::ifstream maps("/proc/self/maps");
+		std::string line;
+		while(std::getline(maps, line))
+		{
+			unsigned long long s = 0, e = 0, off = 0, inode = 0;
+			char perms[8] = {}, dev[32] = {};
+			if(std::sscanf(line.c_str(), "%llx-%llx %7s %llx %31s %llu", &s, &e, perms, &off, dev, &inode) < 6)
+				continue;
+			const auto lo = std::max<unsigned long long>(s, reinterpret_cast<uintptr_t>(start));
+			const auto hi = std::min<unsigned long long>(e, reinterpret_cast<uintptr_t>(end));
+			if(perms[1] == 'w' && perms[3] == 's' && hi > lo)
+				byObj[std::string(dev) + ":" + std::to_string(inode)].push_back({reinterpret_cast<uint8_t*>(lo), static_cast<size_t>(hi - lo), off + (lo - s)});
+		}
+#endif
+	}
+	size_t k = 0;
+	for(const auto& [obj, views] : byObj)
+	{
+		uint64_t total = 0;
+		for(const auto& v : views)
+			total = std::max<uint64_t>(total, v.off + v.size);
+		char name[64];
+		std::snprintf(name, sizeof name, "/ot_emu_fork_%d_%zu", static_cast<int>(getpid()), k++);
+		const int fd = shm_open(name, O_RDWR | O_CREAT | O_EXCL, 0600);
+		if(fd < 0) { _why = "shm_open failed"; return false; }
+		shm_unlink(name);
+		if(ftruncate(fd, static_cast<off_t>(total))) { ::close(fd); _why = "ftruncate failed"; return false; }
+		// The content first, from the views still on the old object, through
+		// a scratch mapping of the new one (macOS shm takes no write()) ...
+		auto* scratch = static_cast<uint8_t*>(mmap(nullptr, static_cast<size_t>(total), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
+		if(scratch == MAP_FAILED) { ::close(fd); _why = "mmap of the new object failed"; return false; }
+		for(const auto& v : views)
+			std::memcpy(scratch + v.off, v.addr, v.size);
+		munmap(scratch, static_cast<size_t>(total));
+		// ... then every view onto the new one.
+		for(const auto& v : views)
+			if(mmap(v.addr, v.size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, static_cast<off_t>(v.off)) != v.addr)
+			{
+				::close(fd);
+				_why = "mmap MAP_FIXED failed";
+				return false;
+			}
+		::close(fd);
+	}
+	return true;
+}
+
 int main(int _argc, char** _argv)
 {
 	// ⚠️ LINE-BUFFERED, ALWAYS. Redirected to a file, printf is block-buffered,
@@ -1158,6 +1249,8 @@ int main(int _argc, char** _argv)
 	std::string pokeEarly;		// the same, written before --call (the current-track byte 0x80000000 an editor call reads)
 	std::string callSpec;		// "addr[,arg,...]": a firmware routine called AS MAIN after the load (a menu action the port has no panel for -- Part Reload, 14 Sep 2026)
 	int callAt = -1;			// with --sequencer: make that call this many frames AFTER the transport start instead (a panel edit while playing: the transport start re-applies the part over the live lane, so an edit made before it is gone)
+	std::vector<std::string> scenarios;	// 29 Sep 2026: --scenario "LOG ARGS...", repeatable: after the load the port forks one child per scenario; each starts from the same loaded machine (the snapshot is the fork), writes its stdout to LOG and takes ARGS as its post-load options (--sequencer, --frames, --step, --poke, --call, --midi, --mem-dump, --live-script, ...). One LOAD PROJECT instead of one per run
+	int scenarioJobs = 3;		// children at a time (four boots at once contend on a four-performance-core machine)
 	std::vector<std::string> steps;	// 28 Sep 2026: --step "FRAME:call:addr[,arg..]" | "FRAME:poke:addr=byte[;..]" | "FRAME:dump:addr,len=path[;..]", repeatable, in order. FRAME "-" = after the load, before the transport (in the order given); a number = that many frames after the transport start (with --sequencer). One boot carries a gate's whole script instead of one boot per call (an Octakit load is ~32 s emulated)
 	std::string liveScript;		// 28 Sep 2026: a file of "<emulated ms> <live line>" (key/enc/pot/midi/quit, as --live takes), applied at those emulated times from the start of the live phase, transport stopped: a panel script without wall-clock sleeps, the same on a loaded machine as on a quiet one
 	std::string livePath;		// a FIFO (or file) of panel events, read while the RTOS runs: "key <code> down|up", "enc <n> <delta>", "pot <0..255>", "midi <hex>...", "quit" -- tools/emu/lcd_view.py --panel writes it
@@ -1172,6 +1265,8 @@ int main(int _argc, char** _argv)
 	bool mkii = false;			// boot as an MKII: the GPIO loopback the boot probe tests, the MKII panel's replies (docs/firmware/PANEL.md)
 	std::string rtc;			// 11 Sep 2026: the DSPI chip-select-2 clock -- "host", "off", or <epoch seconds> (UTC, frozen); default off, host under --interactive (Dspi::RtcClock)
 
+	const auto parseArgs = [&](int _argc, char** _argv) -> bool
+	{
 	for(int i = 1; i < _argc; ++i)
 	{
 		const std::string a = _argv[i];
@@ -1246,6 +1341,8 @@ int main(int _argc, char** _argv)
 		else if(a == "--call-at" && i + 1 < _argc)	callAt = std::atoi(_argv[++i]);
 		else if(a == "--step" && i + 1 < _argc)		steps.emplace_back(_argv[++i]);
 		else if(a == "--live-script" && i + 1 < _argc)	liveScript = _argv[++i];
+		else if(a == "--scenario" && i + 1 < _argc)	scenarios.emplace_back(_argv[++i]);
+		else if(a == "--scenario-jobs" && i + 1 < _argc)	scenarioJobs = std::max(1, std::atoi(_argv[++i]));
 		else if(a == "--midi" && i + 1 < _argc)		midiFile = _argv[++i];
 		else if(a == "--midi-out" && i + 1 < _argc)	midiOut = _argv[++i];
 		else if(a == "--live" && i + 1 < _argc)		livePath = _argv[++i];
@@ -1264,12 +1361,17 @@ int main(int _argc, char** _argv)
 			"              [--usb-host SOCKET] [--usb-notify FILE] [--usb-fs]   the USB device controller + a scripted host (usb.h)\n"
 			"              [--interactive] [--rtc host|off|EPOCH] [--dsp-rt]    the line protocol on stdin/stdout (tools/panel)\n"
 			"              [--step FRAME:call|poke|dump:SPEC]...              a gate's whole script on one boot: FRAME '-' = after the load, N = N frames after the transport start\n"
-			"              [--live-script FILE]                              '<emulated ms> key|enc|pot|midi|quit ...' lines, transport stopped, no wall-clock pacing\n");
-			return 2;
+			"              [--live-script FILE]                              '<emulated ms> key|enc|pot|midi|quit ...' lines, transport stopped, no wall-clock pacing\n"
+			"              [--scenario \"LOG ARGS...\"]... [--scenario-jobs N]  load once, fork one child per scenario (stdout to LOG, ARGS its post-load options)\n");
+			return false;
 		}
 	}
+	return true;
+	};
+	if(!parseArgs(_argc, _argv))
+		return 2;
 
-	if(sequencer || !livePath.empty() || !liveScript.empty())
+	if(sequencer || !livePath.empty() || !liveScript.empty() || !scenarios.empty())
 		mount = true;			// M6c needs the card mounted and the project loaded; so does a panel
 	if(dspRt && !interactive)
 	{
@@ -1865,6 +1967,91 @@ int main(int _argc, char** _argv)
 					card->log()[i].lba, card->log()[i].count);
 
 			// -- a routine called as main, after the load ------------------
+			// -- scenarios: the loaded machine, forked -----------------------
+			// Every child starts from this exact state (the process image is
+			// the snapshot) and runs the rest of main with its own post-load
+			// options; the parent waits and returns the worst exit status.
+			if(!scenarios.empty())
+			{
+				std::fflush(stdout);
+				std::fflush(stderr);
+				size_t mine = scenarios.size();		// scenarios.size() = the parent
+				std::vector<std::pair<pid_t, size_t>> running;
+				std::vector<int> status(scenarios.size(), -1);
+				const auto reapOne = [&]
+				{
+					int st = 0;
+					const pid_t done = ::wait(&st);
+					for(size_t r = 0; r < running.size(); ++r)
+						if(running[r].first == done)
+						{
+							status[running[r].second] = WIFEXITED(st) ? WEXITSTATUS(st) : 128 + (WIFSIGNALED(st) ? WTERMSIG(st) : 0);
+							running.erase(running.begin() + static_cast<std::ptrdiff_t>(r));
+							break;
+						}
+				};
+				for(size_t k = 0; k < scenarios.size(); ++k)
+				{
+					while(running.size() >= static_cast<size_t>(scenarioJobs))
+						reapOne();
+					const pid_t pid = ::fork();
+					if(pid == 0)
+					{
+						mine = k;
+						break;
+					}
+					if(pid < 0)
+					{
+						std::printf("scenario   : fork failed for %zu: %s\n", k, std::strerror(errno));
+						status[k] = 127;
+						continue;
+					}
+					running.emplace_back(pid, k);
+				}
+				if(mine == scenarios.size())
+				{
+					while(!running.empty())
+						reapOne();
+					int worst = 0;
+					for(size_t k = 0; k < scenarios.size(); ++k)
+					{
+						std::printf("scenario   : %zu exit %d -- %s\n", k, status[k], scenarios[k].substr(0, scenarios[k].find(' ')).c_str());
+						worst = std::max(worst, status[k]);
+					}
+					std::fflush(stdout);
+					return worst;
+				}
+				// The child: its own log, its own post-load options.
+				std::istringstream is(scenarios[mine]);
+				std::vector<std::string> toks{"ot_emu"};
+				for(std::string w; is >> w;)
+					toks.push_back(w);
+				if(toks.size() < 2)
+					::_exit(2);
+				if(!std::freopen(toks[1].c_str(), "w", stdout))
+					::_exit(2);
+				::dup2(::fileno(stdout), 2);
+				std::vector<char*> av;
+				av.push_back(toks[0].data());
+				for(size_t w = 2; w < toks.size(); ++w)
+					av.push_back(toks[w].data());
+				if(!parseArgs(static_cast<int>(av.size()), av.data()))
+					::_exit(2);
+				if(dspPair)
+				{
+					std::vector<std::pair<uint8_t*, size_t>> ranges;
+					dspPair->memoryRanges(ranges);
+					std::string why;
+					if(!unshareRanges(ranges, why))
+					{
+						std::printf("scenario   : cannot unshare the DSP memory after the fork: %s\n", why.c_str());
+						std::fflush(stdout);
+						::_exit(3);
+					}
+				}
+				std::printf("scenario   : %zu of %zu, forked from the loaded machine: %s\n", mine, scenarios.size(), scenarios[mine].c_str());
+			}
+
 			// The port has no panel: a menu action (Part Reload, a kit
 			// reload) is reached by calling its handler from main's spin
 			// with the stack a `pea arg; jsr` would leave, on the loaded
