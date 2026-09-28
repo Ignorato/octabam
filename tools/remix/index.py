@@ -131,20 +131,29 @@ def remix_index() -> str:
              "builds it into a card-flashable image from your own OS 1.40C. "
              "[BUILDING.md](BUILDING.md) is the step-by-step guide. Each remix is "
              "a directory, `remixes/<name>/`: `remix.py` is the selection and "
-             "`README.md` says what is in it and where it has run. This index is "
-             "rendered from the selections (`make docs`). BUILDING.md §8 says "
-             "how to write one.", ""]
+             "`README.md` says what is in it and where it has run. "
+             "`remixes/test/<name>/` holds the remixes that carry one module "
+             "for that module's gates. This index is rendered from the "
+             "selections (`make docs`). BUILDING.md §8 says how to write one.", ""]
     remixes = [registry.remix(n) for n in registry.remix_names()]
-    for fam, title in FAMILIES:
-        rs = [r for r in remixes if (r.family or "reference") == fam]
-        if not rs:
-            continue
-        lines += [f"## {title}", "", "| remix | contains | proof |", "|---|---|---|"]
+    tests = [r for r in remixes if registry.is_test(r.name)]
+    remixes = [r for r in remixes if not registry.is_test(r.name)]
+
+    def rows(rs):
+        out = ["| remix | contains | proof |", "|---|---|---|"]
         for r in rs:
             doc = r.doc.replace("|", "\\|")
-            lines.append(f"| [`{r.name}`](../../remixes/{r.name}/README.md) | {doc} "
-                         f"| {proof_text(r)} |")
-        lines.append("")
+            link = registry.remix_dir(r.name).relative_to(ROOT)
+            out.append(f"| [`{r.name}`](../../{link}/README.md) | {doc} | {proof_text(r)} |")
+        return out + [""]
+
+    for fam, title in FAMILIES:
+        rs = [r for r in remixes if (r.family or "reference") == fam]
+        if rs:
+            lines += [f"## {title}", ""] + rows(rs)
+    if tests:
+        lines += ["## Test remixes", "",
+                  "One module each, for that module's gates: `make check REMIX=<name>`.", ""] + rows(tests)
     lines += ["Never share a built image: it contains Elektron's OS.", ""]
     return "\n".join(lines)
 
@@ -227,11 +236,12 @@ def _print_stock():
 
 def _print_remixes():
     from remix import stock
-    print("REMIXES  (remixes/<name>/remix.py)\n")
+    print("REMIXES  (remixes/<name>/remix.py; remixes/test/<name>/remix.py carries one module for its gates)\n")
     for name in registry.remix_names():
         r = registry.remix(name)
         print(f"  {r.name:<12} {r.doc}")
-        print(f"      {r.family or 'reference'} | {proof_text(r)}")
+        fam = "test" if registry.is_test(name) else (r.family or "reference")
+        print(f"      {fam} | {proof_text(r)}")
         print(f"      modules: {', '.join(r.modules)}")
         if r.fx1:
             print(f"      also on the FX1 chooser: {', '.join(r.fx1)}")

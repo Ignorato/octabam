@@ -59,9 +59,10 @@ README.md       what it is, what was MEASURED, what is INFERRED, what is open
 <sources>       .s for the ColdFire, .asm for the DSP -- or `upstream/`, a submodule
 ```
 
-plus a remix that carries it (`remixes/<name>/remix.py` and a `README.md`
-beside it: what is in it, where it has run; `docs/remixes/BUILDING.md`
-§8) and, for anything with behaviour worth pinning, a gate
+plus a remix that carries it (`remixes/<name>/remix.py`, or
+`remixes/test/<name>/remix.py` for a remix of that one module, and a
+`README.md` beside it: what is in it, where it has run;
+`docs/remixes/BUILDING.md` §8) and, for anything with behaviour worth pinning, a gate
 (`tools/verify/verify_<name>.py`, named in the manifest's `gates`, run by
 `make check` for every remix that carries the module). Nothing else
 registers it: the registry discovers every `modules/*/manifest.py`, and
@@ -211,7 +212,7 @@ What `make reach` lists, by what changed:
 | changed | gates |
 |---|---|
 | `modules/<name>/` (a pin bump too) | `make accept` for every remix that carries the module (one `REMIXES="..."` line; it runs both halves of `make check` itself, the shared half once) |
-| `remixes/<name>/remix.py` | `make accept` for that remix |
+| `remixes/<name>/remix.py`, `remixes/test/<name>/remix.py` | `make accept` for that remix |
 | a file under `tools/` or `scripts/` | by dependency: the Python imports and the `tools/x/y.py` paths the code runs or reads form a graph, and a change reaches the gates that depend on it. The build (`build_bus.py`, `cycle_count.py`, `dsp/`) and what it imports: `scripts/refhash.sh check` (save the baseline on main first), `make test-acceptance`, every remix. A gate of the shared half (the selftest, slots, replaces, docs, label_fmt, the knob census, a manifest gate with `remix_arg=False`): `make check-shared` for every remix or the owners' remixes. A gate of the per-remix half (dirtystate, initregs, dram_boot, labels, modenames, hidden, menu, set, usb): `make check-remix` for every remix. A manifest gate with `remix_arg=True`: its owners' remixes. The acceptance runner, the stress generator, `pressure.py`: `make test-acceptance`, `make accept` on every remix. A file no gate depends on: nothing, and the listing says so |
 | `tools/harness/dsp_host/`, `tools/patches/`, `scripts/setup.sh`, `scripts/vendor.sh` | `make ci-dsp`, then every remix (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
 | `tools/emu/ot_emu/` | `make ci-emu`, `make emu-cf`, every remix's per-remix half, with OT_PROJECT |

@@ -132,6 +132,7 @@ local ColdFire emulator. `make remix` opens the TUI remixer
 ```
 modules/<name>/manifest.py   what a module is and what it claims (yours, or a pointer into an author's repo)
 remixes/<name>/remix.py      which modules, in which chooser order; README.md beside it
+remixes/test/<name>/         a remix of one module, for that module's gates
 tools/remix/ledger.py        refuses two modules that claim one address, hook, id or buffer, by name
 tools/build/build_bus.py     the build: assembles, links, places, wires, verifies -> out/mainos_bus.bin
 tools/verify/*               the gates: oracles, the boot under the ColdFire port, menu, cycles, identity
@@ -221,6 +222,7 @@ AGENTS.md          instructions and traps for coding agents (CLAUDE.md imports i
 .github/           CI (Ubuntu + macOS, SHA-pinned actions), the PR template
 modules/           the contributions, one directory each
 remixes/           one directory per remix: remix.py (the selection, in chooser order) and README.md
+remixes/test/      the one-module remixes, for their modules' gates (make check REMIX=<name>)
 docs/remixes/      the build guide and the rendered remix index
 tools/remix/       the toolkit: schema, registry, ledger, the loader, the DRAM platform, the TUI
 tools/build/       the image build (build_bus.py) and the tools that understand the OS layout

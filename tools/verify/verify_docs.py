@@ -20,11 +20,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 def main():
     fails = [f"{p.relative_to(ROOT)} is stale: make docs" for p in index.stale()]
     for name in registry.remix_names():
-        d = ROOT / "remixes" / name
-        if not d.is_dir():
-            fails.append(f"remixes/{name}.py: a remix is a directory, remixes/{name}/remix.py + README.md")
+        d = registry.remix_dir(name)
+        if d is None:
+            fails.append(f"remixes/{name}.py: a remix is a directory, remixes/{name}/remix.py "
+                         f"(or remixes/test/{name}/remix.py) + README.md")
         elif not (d / "README.md").exists():
-            fails.append(f"remixes/{name}/README.md: missing")
+            fails.append(f"{d.relative_to(ROOT)}/README.md: missing")
     for f in fails:
         print("  [FAIL]", f)
     n = len([m for m in registry.modules().values() if not m.is_stock])

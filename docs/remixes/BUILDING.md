@@ -145,7 +145,10 @@ parameter layout (the rig family), stamp every project before playing:
 
 A remix is one directory, `remixes/<name>/`: `remix.py` holds the
 selection, `README.md` says what is in it and where it has run. The
-registry discovers every `remixes/*/remix.py`; nothing else registers it.
+registry discovers every `remixes/*/remix.py` and `remixes/test/*/remix.py`;
+nothing else registers it. A remix that carries one module for that
+module's gates goes in `remixes/test/<name>/`; names are unique across
+both, and every tool takes the bare name (`make check REMIX=miniverb`).
 
 Two ways to write one:
 
@@ -156,7 +159,7 @@ Two ways to write one:
   `name`, `doc`, `modules`, `fallback` and, when it differs from stock's,
   `fx1`.
 - **Copy an existing `remix.py`** and edit it. `remixes/bus/remix.py` is
-  a bus image, `remixes/euclid/remix.py` an insert beside the stock
+  a bus image, `remixes/test/euclid/remix.py` an insert beside the stock
   effects, `remixes/ok-ms/remix.py` two ColdFire mods and no DSP code.
 
 ```python

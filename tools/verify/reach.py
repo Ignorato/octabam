@@ -18,7 +18,7 @@ HOW A PATH IS PLACED (28 Sep 2026; before, by directory):
 
   modules/<name>/           the remixes carrying the module: make check (both
                             halves) and make accept for each
-  remixes/<name>/remix.py   that remix
+  remixes/<name>/remix.py   that remix (remixes/test/<name>/remix.py too)
   tools/, scripts/          by DEPENDENCY: the Python imports (`from remix
                             import`, `import send_probe`) and the
                             `tools/x/y.py` path strings in every tools/ file
@@ -456,7 +456,9 @@ def classify(paths, ctx):
                 note = "unknown module directory"
                 gates = ctx.every()
         elif top == "remixes" and len(parts) >= 2:
-            name = parts[1][:-3] if parts[1].endswith(".py") else parts[1]
+            # remixes/<name>/..., remixes/test/<name>/..., or a flat remixes/<name>.py
+            name = parts[2] if parts[1] == "test" and len(parts) >= 3 else parts[1]
+            name = name[:-3] if name.endswith(".py") else name
             if parts[-1] == "README.md":
                 gates = [CMD["verify_docs"]]
             else:

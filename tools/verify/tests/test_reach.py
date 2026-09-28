@@ -114,6 +114,11 @@ class ModuleAndRemixTests(unittest.TestCase):
     def test_one_remix_stays_make_check(self):
         self.assertEqual(commands(["remixes/miniverb/remix.py"])[0], "make check REMIX=miniverb")
 
+    def test_test_remix_selection_and_readme(self):
+        self.assertEqual(commands(["remixes/test/miniverb/remix.py"]),
+                         ["make check REMIX=miniverb", "make accept REMIX=miniverb STRESS_SOURCE=${STRESS_SOURCE}"])
+        self.assertEqual(commands(["remixes/test/miniverb/README.md"]), ["python3 tools/verify/verify_docs.py"])
+
 
 class DependencyTests(unittest.TestCase):
     def test_the_build_and_what_it_imports_reach_every_remix_with_refhash(self):
