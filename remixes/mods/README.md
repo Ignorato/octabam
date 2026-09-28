@@ -20,7 +20,7 @@ MIDI SCENES, Octakit, the recorder fixes, REPITCH, octatrick's three machines, U
 - **SCALE QUANTIZER** (timhastie/octatrick-modules) — PROJECT > CONTROL > SEQUENCER > SCALE: the PTCH knob and CHROMATIC trig keys quantize to a scale (24 scales, OFF = stock); > GLIDE: the synth's glide time (OFF, 1..127) and 303-style legato on the chromatic keys; polyphonic chromatic keys on a synth track whose VOIC is 2..4.
 - **SYNTH MACHINE** (timhastie/octatrick-modules) — A FLEX track whose sample is named SYNTH* plays a two-operator FM voice (STRT/LEN/RTRG/RTIM = ratio/index/feedback/decay); the DSP shapes and effects it as a sample. Its PLAYBACK page reads RATO/INDX/FDBK/DEC with icons and the title FM SYNTH.
 - **USB MIDI** (markandrus/octemu) — Class-compliant USB-MIDI in and out on the OT's own USB port, mirroring the DIN ports (markandrus/octemu).
-- **USB AUDIO EXTENDED** (markandrus/octemu) — Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu).
+- **USB AUDIO OUT TRACKS MAIN CUE** (markandrus/octemu) — Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu).
 - the 14 stock FX2 effects, listed so the chooser is stock's.
 
 ## Status

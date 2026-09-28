@@ -3,7 +3,7 @@
 MIDI SCENES (bkkbrls-del), Octakit (Em), the LO-FI AMF fix (Bryan T),
 CC MAP, SCENES KITS and KITS RELOAD (the bridges), the five recorder
 fixes (recfix until 28 Sep 2026), REPITCH (repeat98), DIRECT JUMP, SCALE
-QUANTIZER and SYNTH MACHINE (timhastie), USB MIDI and USB AUDIO EXTENDED
+QUANTIZER and SYNTH MACHINE (timhastie), USB MIDI and USB AUDIO OUT TRACKS MAIN CUE
 (markandrus). No DSP module; the 14 stock effects are listed so the FX2
 chooser is stock's. SCENES P2 is out: the ledger refuses it beside KITS
 RELOAD and MIDI SCENES. Booted under the ColdFire port; unflashed as a
@@ -23,7 +23,7 @@ REMIX = Remix(
     modules=("MIDI SCENES", "OCTAKIT", "LOFI AMF FIX", "CC MAP", "SCENES KITS", "KITS RELOAD",
              "FLEX SEEK BIND", "FLEX SEEK BIND CTR", "RECORDER SPACING", "RECORDER HOLD", "RLEN PLEN",
              "REPITCH", "DIRECT JUMP", "SCALE QUANTIZER", "SYNTH MACHINE",
-             "USB MIDI", "USB AUDIO EXTENDED",
+             "USB MIDI", "USB AUDIO OUT TRACKS MAIN CUE",
              "FILTER", "EQUALIZER", "DJ EQ", "PHASER", "FLANGER", "CHORUS",
              "SPATIALIZER", "COMB FILTER", "COMPRESSOR", "LO-FI", "DELAY",
              "PLATE REV", "SPRING REV", "DARK REV"),
