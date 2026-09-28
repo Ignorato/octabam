@@ -140,11 +140,19 @@ once a second:
   stops polling EP3 IN before it sends alt 0. Both rings restart on the
   next open.
 
-So `IN_TARGET` alone does not set the latency. The levers, in order: start
-usbaudio's consumer at the host's first IN poll rather than at
-SET_INTERFACE (removes the ~460), then lower `AUD_TARGET`, `IN_TARGET` and
-`AUD_BAND` together, keeping `IN_TARGET − AUD_BAND` (this ring's floor)
-above the jitter the unit shows. Both are in `usbaudio.s`, for a follow-up.
+So `IN_TARGET` alone does not set the latency. Two levers, both in
+`usbaudio.s`:
+
+1. **Anchor usbaudio's consumer at the host's first IN poll** rather than
+   at SET_INTERFACE. Done 28 Sep 2026 (`usbaudio_kick`, the `anchor`
+   counter over `0x55`; `verify_usb` holds the bench's first poll back 600
+   frames and checks the fill lands at 512). Not measured on a unit:
+   expected sum of the two `lastfill`s about 896.
+2. Lower `AUD_TARGET`, `IN_TARGET` and `AUD_BAND` together, keeping
+   `IN_TARGET − AUD_BAND` (this ring's floor) above the jitter the unit
+   shows. The OUT ring's own jitter is `minfill`/`maxfill` over `0x55`
+   (added with lever 1), unmeasured on a unit; the values follow that
+   measurement.
 
 ## Open
 
@@ -157,7 +165,7 @@ above the jitter the unit shows. Both are in `usbaudio.s`, for a follow-up.
   the setting cured them with the four-channel pairing and the larger
   pairings have not been run since. `usb-io-tracks-main-cue-ab` pairs it with OUT TRACKS MAIN CUE.
 - Packet buffers in SDRAM through the alias with USB CROSSBAR on.
-- The latency follow-up above.
+- Latency lever 2 above, after the unit measurement.
 
 ## Ground
 

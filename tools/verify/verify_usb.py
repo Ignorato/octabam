@@ -213,6 +213,34 @@ def main():
             b.ctrl_nodata(0x01, 0x0b, 0, 4)
             after = [len(b.ep_in(3, 1024)) for _ in range(8)]
             check("USB AUDIO: alt 0 stops the stream (empty polls)", all(a == 0 for a in after[2:]), str(after))
+            # THE FIRST POLL SETS THE CUSHION (usbaudio_kick). A host that
+            # starts polling late finds the ring AUD_TARGET (512) behind the
+            # producer, not 512 plus what it produced while the host was
+            # getting ready: the consumer is re-anchored at the first retired
+            # packet and the frames between are skipped, counted in `anchor`.
+            # Here the bench is that late host: alt 1 again, then no EP3 poll
+            # until 600 frames have been produced (EP0 keeps answering), so
+            # the port logs one run of missed polls for this phase.
+            lag_before = log.read_text(errors="replace").count("with no IN from the bench host")
+            b.ctrl_nodata(0x01, 0x0b, 1, 4)
+            c0 = usb_host.counters(b)
+            while usb_host.counters(b)["produced"] - c0["produced"] < 600:
+                pass
+            first = [len(b.ep_in(3, 1024)) for _ in range(4)]
+            c1 = usb_host.counters(b)
+            gap = c1["produced"] - c0["produced"]
+            check(f"{audio}: a first poll {gap} frames after alt 1 re-anchors the cushion at 512: {c1['anchor']} frames skipped",
+                  480 <= c1["anchor"] <= gap + 32 and abs(c1["lastfill"] - 512) <= 64 and any(first),
+                  f"anchor {c1['anchor']} gap {gap} lastfill {c1['lastfill']} first polls {first}")
+            for _ in range(400):
+                b.ep_in(3, 1024)
+            c2 = usb_host.counters(b)
+            lagged = log.read_text(errors="replace").count("with no IN from the bench host") - lag_before - 1
+            check(f"{audio}: 400 polls on, the fill stayed in the servo band: {c2['minfill']}-{c2['maxfill']} of 512 +-128, no underrun"
+                  + (" (bench lagged, band not checked)" if lagged > 0 else ""),
+                  c2["underruns"] == 0 and (lagged > 0 or (368 <= c2["minfill"] and c2["maxfill"] <= 656)),
+                  f"minfill {c2['minfill']} maxfill {c2['maxfill']} underruns {c2['underruns']} lagged {lagged}")
+            b.ctrl_nodata(0x01, 0x0b, 0, 4)
             # Full speed: the same device re-enumerated. The stereo sum of the
             # tracks (OUT TRACKS MAIN CUE, OUT TRACKS) or track 8's L/R (OUT MASTER) in 44/45-frame
             # 1 ms packets of 8-byte frames.

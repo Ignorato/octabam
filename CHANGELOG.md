@@ -7,6 +7,15 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- USB AUDIO OUT: the consumer is anchored at the host's first EP3 IN poll
+  rather than at SET_INTERFACE (28 Sep 2026), so a host that starts
+  polling late (macOS, about 460 frames) streams 512 frames behind the
+  producer instead of 512 plus that gap; with USB AUDIO IN beside it the
+  round trip should fall from about 1,355 frames to about 896, unmeasured
+  on a unit. The `0x55` counters gain minfill, maxfill and anchor (fifteen
+  longs); `verify_usb` holds the bench's first poll back and checks the
+  anchor.
+
 - One boot per gate (28 Sep 2026): `ot_emu --step FRAME:call|poke|dump:SPEC`,
   repeatable, runs a gate's script on one load; `verify_modedefaults` went
   from three Octakit loads to one (38 s with the build on bottleservice).

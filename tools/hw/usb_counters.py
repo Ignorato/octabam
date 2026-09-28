@@ -20,7 +20,10 @@ Meaning (from usbaudio.s): produced/consumed are frame counts (the ring is
 could not fill; overruns = the host stopped draining and the producer
 lapped the ring; bankdup = blocks where the read-back ping-pong bank did
 NOT alternate (the producer read a bank twice, or skipped one) -- the count
-that decides whether the clicks are the producer's.
+that decides whether the clicks are the producer's; minfill/maxfill = the
+ring's low and high water at packet builds since the host's first poll of
+this open; anchor = the frames the consumer skipped at that first poll (the
+producer's output between SET_INTERFACE and the host starting to poll).
 
 --in reads USB AUDIO IN's counters (0xc0/0x56; modules/usb-audio-in/
 usbaudio_in.s) instead: produced/consumed = frames into and out of its
@@ -46,7 +49,7 @@ IN_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns", "o
              "depth", "badfr", "badfr_prev", "dry", "late", "maxpass",
              "good_nz", "bad_nz", "bad_nzw", "last_nzw")
 NAMES = ("consumed", "acc", "overruns", "underruns", "lastn", "lastfill", "lastbank",
-         "bankdup", "lastsamp", "srcjump", "reprimes", "produced")
+         "bankdup", "lastsamp", "srcjump", "reprimes", "minfill", "maxfill", "anchor", "produced")
 
 
 def read(dev, host_in=False):
