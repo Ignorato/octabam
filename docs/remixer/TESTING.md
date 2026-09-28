@@ -142,7 +142,7 @@ rebase are not a result.
 
 | changed | reaches |
 |---|---|
-| `modules/<name>/` | `make check` and `make accept` for every remix that carries the module; its README alone reaches `verify_docs` |
+| `modules/<name>/` | `make check` and `make accept` for every remix that carries the module. Its README alone, or a manifest edit that changes only the display fields (`doc`, `proof`, `proof_note`, `author`, `author_url`, `category`, docstrings), reaches `verify_docs` |
 | `remixes/<name>/remix.py` | `make check` and `make accept` for that remix; its README alone reaches `verify_docs` |
 | the build (`build_bus.py`, `cycle_count.py`, `dsp/`) or anything it imports | `scripts/refhash.sh check`, `make identity`, `make test-acceptance`, `make check-shared` for the cover |
 | a gate script of the shared half | one `make check-shared` for the cover |
@@ -173,6 +173,11 @@ change, `RUN=1` then checks only the remixes whose bytes moved.
 With `STRESS_SOURCE=<a local project>` set, the accept lines can run and
 they replace the check lines for the same remixes (accept runs both halves
 itself). Without it, accept is listed as blocked and the check lines stay.
+After `make identity`, the remixes whose image moved are planned into the
+same accept line and the same shards, not run as separate checks. Before
+running, `reach` rebuilds `out/emu/ot_emu` when a source under
+`tools/emu/ot_emu` is newer than the binary (a rebase can bring emulator
+changes the root tree never rebuilt; the shards rebuild theirs).
 
 ## 5. Running several remixes at once: shards
 
@@ -207,7 +212,14 @@ schema `docs/remixer/acceptance.schema.json`).
 make accept REMIX=bottleservice STRESS_SOURCE=<a local project>   # a fixture generated for the remix
 make accept REMIX=bottleservice OT_PROJECT=<a project you prepared>
 make accept REMIXES="a b c" STRESS_SOURCE=<dir>                   # the shared half once
+make accept REMIXES="a b c" STRESS_SOURCE=<dir> JOBS=4            # the per-remix halves over four shard worktrees
 ```
+
+With `JOBS=n` the per-remix stages of n remixes run at a time, each in a
+`check_shards` worktree, handed out from one queue; the shared half still
+runs once in the root tree. Measured 28 Sep 2026: 23 remixes, four shards,
+2,930 s wall for 7,877 s of per-remix work, floored by the longest remix
+(mods, 2,580 s). `make reach JOBS=4` adds `JOBS=4` to the accept line.
 
 Stages, serially per remix: preflight (provenance, instruments, the
 pressure profile), fixture (generated from `STRESS_SOURCE` by
@@ -294,6 +306,11 @@ its. The ones that have cost real work:
 - **The stock DELAY's audio and the recorder's DMA** under the port: the
   ring arithmetic runs, the eDMA that moves audio through SDRAM is not
   modelled.
+- **The bench's clock under load.** `verify_usb` and `verify_usb_in` count
+  overruns and underruns against a scripted USB host; with four shards and
+  another run on the machine the host falls behind the device and a remix
+  fails that passes alone (28 Sep 2026: three of twelve usb-io remixes).
+  A USB red under load is rerun alone before it is believed.
 - **Ears.** GRAIN's right-channel hiss passed every gate and was found by
   listening. `docs/remixer/HARNESS.md` has the listening protocol.
 

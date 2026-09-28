@@ -7,6 +7,22 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- The gates, made to fit their changes (28 Sep 2026, #510, #511): a
+  manifest edit to the display fields alone, or a module's README, reaches
+  `verify_docs`; `make identity`'s moved remixes plan into the accept line
+  and the shards instead of serial checks; `make reach` rebuilds a stale
+  port; `make accept ... JOBS=n` runs the per-remix halves over shard
+  worktrees (23 remixes: 2,930 s wall for 7,877 s of work). The plain
+  two-server image stays as `remixes/test/bus`, the fixture `verify_twocore`
+  and refhash build: with bottleservice as the fixture the hidden engines'
+  host guard passed the delay dry in the DEV hatch.
+- The documentation for readers (28 Sep 2026): README opens with where to
+  read next; `docs/remixer/TESTING.md` says what every gate proves and what
+  none can see; Linux/WSL2 is a section of BUILDING.md; the module pages and
+  proof notes were audited against what was measured (image 88 carried
+  TEMPO BUS, SCENES P2, RIG HOSTS, the tokened Octakit writer, none
+  exercised there); the remix pages say what you get and link the modules.
+
 Image 43 is the last flashed image with an entry of its own. Images built
 from main since then that reached a unit, each recorded where it was
 measured:
