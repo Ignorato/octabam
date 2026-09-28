@@ -57,6 +57,14 @@ image is byte-identical to the one built before the variants (27 Sep 2026).
   512-frame target fill, so the stream is a gap-free copy of the ring.
   Four transfer descriptors are kept queued (1 ms of polls). The frame
   interrupt (every 363 µs) is the only context that queues packets.
+- **The first poll sets the cushion.** SET_INTERFACE alt 1 queues four
+  packets and then nothing more until one has retired, the controller's
+  own record that the host polled. At that block the consumer is set 512
+  frames behind the producer and the frames produced in between are
+  skipped once (`anchor` in the counters). A host that starts polling late
+  (macOS: about 460 frames after alt 1, Bryan T's unit, 27 Sep 2026) had
+  otherwise started the stream that much further behind for good, since
+  the servo holds whatever fill it finds.
   Full speed: the stereo sum, 44 or 45 frames per 1 ms packet.
 - **Descriptors.** Two functions under interface associations: the MIDI
   function, then a UAC2 AudioControl with a fixed 44.1 kHz clock source
@@ -78,9 +86,11 @@ image is byte-identical to the one built before the variants (27 Sep 2026).
 ## Counters
 
 A vendor control request (bmRequestType `0xc0`, bRequest `0x55`) returns
-twelve counters as 48 big-endian bytes: consumed, acc, overruns,
+fifteen counters as 60 big-endian bytes: consumed, acc, overruns,
 underruns, lastn, lastfill, lastbank, bankdup, lastsamp, srcjump,
-reprimes, produced.
+reprimes, minfill, maxfill, anchor, produced. minfill/maxfill are the
+ring's low and high water at packet builds since the host's first poll of
+this open; anchor is the frames skipped at that poll.
 
 - `tools/hw/usb_counters.py [--watch 1]` reads them from a unit
   (`brew install libusb`, `.venv/bin/pip install pyusb`).
@@ -121,6 +131,9 @@ silent tracks. It checks:
 
 - EP `0x83` is isochronous, 960 bytes, bInterval 2.
 - AS_GENERAL has 20 channels; FORMAT_TYPE_I has subslot 4 and 24 bits.
+- A second open with the first poll held back 600 frames: `anchor` within
+  that gap and `lastfill` at 512 ± 64; over the next 400 polls the fill
+  holds the servo band's floor (384) with no underrun.
 - Taps: with the read-back arena and MAIN/CUE re-poked before every poll
   with words that name their source, side and frame, channel N carries
   only its own source (tracks 1–8 L/R, MAIN L/R, CUE L/R), each seen.
@@ -174,6 +187,12 @@ on hardware is inferred from the port's structure, not measured on a unit.
   entry.
 - Not measured: Windows and Linux hosts; USB controller load from the
   250 µs packet rate beyond the takes above.
+- The first-poll anchor on a unit: `anchor` over `usb_counters.py` after
+  an open (expected about 460 on macOS), and the two rings' `lastfill` sum
+  with USB AUDIO IN beside it (expected about 896, was about 1,355).
+- `minfill`/`maxfill` on a unit under a busy project and DISK MODE churn:
+  the host poll jitter the OUT ring absorbs, which is the floor for a
+  lower `AUD_TARGET`.
 
 ## Ground
 

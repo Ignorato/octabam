@@ -363,7 +363,44 @@ audio_isr_shim:
 | is left alone.
 usbaudio_kick:
     tstb    usbaudio_alt            | alt 0 requested since this block began:
-    beqs    9f                      | queue nothing more (teardown follows)
+    beq     9f                      | queue nothing more (teardown follows)
+    | THE FIRST POLL SETS THE CUSHION. The host polls EP3 IN some time after
+    | its SET_INTERFACE (macOS: about 460 frames later, Bryan T's unit, 27
+    | Sep 2026), and the producer keeps filling meanwhile, so a cursor set
+    | at bring-up starts the stream that much further behind than
+    | AUD_TARGET and the servo holds it there. So: bring-up queues NSLOT
+    | packets and sets aud_await to 1; this block marks them queued (2);
+    | from then on nothing more is built until one of them has RETIRED, the
+    | controller's own record of a poll (the ACTIVE bit it clears), and at
+    | that block the cursor is re-set to AUD_TARGET behind the producer.
+    | The frames between are skipped once, before the host has audio;
+    | usbaudio_anchor holds the count.
+    mvzb    aud_await,%d0
+    cmpil   #2,%d0
+    bnes    .Lk_build
+    moveq   #0,%d2                  | any slot no longer ACTIVE = a poll happened
+.Lk_await:
+    movel   %d2,%d0
+    bsr     audio_dtd_of
+    movel   %a0@(4),%d1
+    btst    #7,%d1
+    beqs    .Lk_anchor
+    addql   #1,%d2
+    cmpil   #NSLOT,%d2
+    bcss    .Lk_await
+    rts                             | all still queued: the host has not polled
+.Lk_anchor:
+    movel   aud_produced,%d0
+    movel   %d0,%d1
+    subl    usbaudio_consumed,%d1   | fill now
+    subil   #AUD_TARGET,%d1         | beyond the cushion: skipped
+    bles    .Lk_anchored            | at or under it already (a prompt host)
+    movel   %d1,usbaudio_anchor
+    subil   #AUD_TARGET,%d0
+    movel   %d0,usbaudio_consumed
+.Lk_anchored:
+    clrb    aud_await
+.Lk_build:
     moveq   #NSLOT,%d0
     movel   %d0,%sp@-               | builds left this block
 1:  bsr     audio_pkt_build         | fill the tail slot, if free
@@ -372,6 +409,12 @@ usbaudio_kick:
     subql   #1,%sp@
     bnes    1b
 2:  addql   #4,%sp
+    mvzb    aud_await,%d0
+    cmpil   #1,%d0
+    bnes    3f
+    moveq   #2,%d0                  | the bring-up's packets are queued
+    moveb   %d0,aud_await
+3:
     | Self-heal. The add-dTD tripwire (audio_pkt_build) is the documented
     | way to append to a running queue, and its hazard window is reported by
     | the hardware clearing ATDTW. Should anything ever leave an ACTIVE dTD
@@ -452,7 +495,15 @@ audio_pkt_build:
     subil   #AUD_FRAMES,%d1
     movel   %d1,usbaudio_consumed   | resync to the ring's trailing edge
     movel   #AUD_FRAMES,%d2
-3:  movel   usbaudio_acc,%d3
+3:  tstb    aud_await               | low and high water since the first poll
+    bnes    5f
+    cmpl    usbaudio_minfill,%d2
+    bccs    4f
+    movel   %d2,usbaudio_minfill
+4:  cmpl    usbaudio_maxfill,%d2
+    blss    5f
+    movel   %d2,usbaudio_maxfill
+5:  movel   usbaudio_acc,%d3
     | RATE SERVO. The endpoint is ASYNCHRONOUS: the device sends at its own
     | clock and the host adapts. The host's polls run on ITS clock, so a fixed
     | 11.025 frames per poll would drain the ring faster or slower than the
@@ -814,6 +865,11 @@ audio_ep3_up:
     clrl    usbaudio_acc
     moveq   #1,%d0
     moveb   %d0,aud_running
+    moveb   %d0,aud_await           | 1: queue, then wait for the host's first poll
+    movel   #0x7fffffff,%d0
+    movel   %d0,usbaudio_minfill
+    clrl    usbaudio_maxfill
+    clrl    usbaudio_anchor
     rts
 
 audio_ep3_down:
@@ -1189,7 +1245,7 @@ audio_frame_shim_body:
 audio_ctrl_shim:
     mvzb    SETUP_BMREQ,%d0
     | A vendor GET (bmRequestType 0xc0, bRequest 0x55) reads the
-    | twelve counters below back over EP0 as 48 big-endian bytes, so a
+    | fifteen counters below back over EP0 as 60 big-endian bytes, so a
     | host -- the port's bench, or tools/hw/usb_counters.py on a unit --
     | can watch underruns, overruns and the bank-duplicate count during a
     | stream. Any driver a host attached to the interfaces is bypassed: a
@@ -1200,7 +1256,7 @@ audio_ctrl_shim:
     cmpil   #0x55,%d0
     bne     .Lctrl_stock
     pea     usbaudio_consumed
-    moveq   #48,%d0
+    moveq   #60,%d0
     bra     .Lctrl_send
 .Lctrl_class:
     cmpil   #0xa1,%d0               | class GET, interface recipient
@@ -1259,8 +1315,8 @@ uac2_clock_valid: .byte 0x01
     .global usbaudio_consumed, usbaudio_acc, usbaudio_overruns
     .global usbaudio_underruns, usbaudio_lastn, usbaudio_lastfill
     .global usbaudio_lastbank, usbaudio_bankdup, usbaudio_srcjump
-    .global usbaudio_reprimes
-| The twelve longs from usbaudio_consumed to aud_produced are what the
+    .global usbaudio_reprimes, usbaudio_minfill, usbaudio_maxfill, usbaudio_anchor
+| The fifteen longs from usbaudio_consumed to aud_produced are what the
 | vendor request 0xc0/0x55 returns, in this order.
 usbaudio_consumed: .long 0          | frames pulled from the ring
 usbaudio_acc:      .long 0          | frames-per-packet accumulator (x1000)
@@ -1273,6 +1329,9 @@ usbaudio_bankdup:  .long 0    | blocks where the bank did NOT alternate
 usbaudio_lastsamp: .long 0    | previous summed L sample
 usbaudio_srcjump:  .long 0    | discontinuities present at production
 usbaudio_reprimes: .long 0    | idle endpoint found holding a queued dTD
+usbaudio_minfill:  .long 0    | lowest fill at a packet build since the first poll
+usbaudio_maxfill:  .long 0    | highest
+usbaudio_anchor:   .long 0    | frames skipped at the host's first poll (this open)
 aud_produced:      .long 0          | producer frame count
 qh_ep3:            .long 0          | EP3 IN dQH, read from ENDPTLISTADDR
 aud_step:          .long STEP_HS    | frames per packet x1000, set by the speed
@@ -1285,6 +1344,7 @@ aud_sum:           .space AUD_FRAMES*SUM_BYTES   | 1024 x stereo sum (MAIN alone
 .endif
 usbaudio_alt:      .byte 0          | alt setting the host asked for
 aud_running:       .byte 0          | EP3 is up (frame-ISR owned)
+aud_await:         .byte 0          | 1 = queue for the first poll, 2 = queued, 0 = anchored
 aud_hs:            .byte 0          | 1 = high speed (20 ch), 0 = full (sum)
 aud_tail:          .byte 0          | next dTD slot to fill (0..NSLOT-1)
 
