@@ -52,6 +52,9 @@ frame interrupt.
 
 ## Measured under the port (remix `cfmeter-port`, 27 Sep 2026)
 
+Since 28 Sep 2026 `make check REMIX=cfmeter` (with CF METER IDLE) passes
+too: the port follows the detoured idle park and loads the project.
+
 `OCTABAM89_setgate` with T8 FX2 = CF METER, 12,000 frames,
 `verify_set.py cfmeter-port`, decoded with `cfmeter.py --dump`:
 

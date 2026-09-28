@@ -15,7 +15,22 @@ make remix
 The frontend is `tools/remix/app.py` (Textual); `make remix` prefers
 `.venv/bin/python3` and exits with the setup hint on bare `python3`. The
 build and every check stay dependency-free. Playback is `afplay`
-(macOS); everything else runs wherever the DSP toolchain does.
+(macOS); everything else runs wherever the DSP toolchain does. On Linux
+or WSL2 (`docs/remixes/BUILDING.md` §1a) `r` renders and nothing plays
+until `afplay` exists; WSLg already runs a PulseAudio server wired to
+Windows audio, and `paplay` from `pulseaudio-utils` takes a wav:
+
+```bash
+sudo tee /usr/local/bin/afplay >/dev/null <<'SH'
+#!/bin/sh
+exec paplay "$@"
+SH
+sudo chmod +x /usr/local/bin/afplay
+```
+
+`exec` matters: the remixer stops playback by killing that pid, and
+without it the wrapper dies while the sound plays on. `afplay` is looked
+up at play time, so no restart is needed.
 
 ## One page, three panes
 

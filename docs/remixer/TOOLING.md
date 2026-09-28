@@ -172,13 +172,15 @@ Render on the desktop at ~6× real time instead of flashing.
 
 ## 6. Verifying
 
-`make check` is the floor for any change. The family, and what each proves:
+`make check` is the floor for any change; `docs/remixer/TESTING.md` is the
+mechanism (the two halves, module gates, `make reach`, shards, `make accept`,
+CI). The family, and what each proves:
 
 | tool | proves |
 |---|---|
 | `tools/build/cycle_count.py` (`make cycles`) | static per-sample cycle count of every module in the selected remix, plus the worst load one core can be asked for |
 | `tools/verify/verify_roll.py` / `verify_delay.py` | an alternate reverb / delay engine is bit-identical to the shipping one |
-| `tools/verify/verify_bus.py` (`make verify-bus`) | a bus-layout change is behaviour-preserving: 21 layouts, stamp-edit-compare (`docs/effects/XBUS.md`) |
+| `tools/verify/verify_bus.py` (`make verify-bus`) | a bus-layout change is behaviour-preserving over its case list (34 layouts on 28 Sep 2026), stamp-edit-compare (`docs/effects/XBUS.md`) |
 | `tools/verify/verify_menu.py` | the built choosers and descriptor clones against the chooser mechanism decompiled from the firmware, including formatter vs count and the name-field lengths |
 | `tools/verify/verify_slots.py` | static dead-store check on the reverb's r7 state block |
 | `tools/verify/verify_midi.py` | the note→PITCH interval path, locally, via a build override |

@@ -191,6 +191,8 @@ drift, incrementally rebuilds its ColdFire probe, and runs:
   including original/patched stock baselines, two/three-instance automation,
   eight-instance default MIX, all-control edits and full-history stress.
 
+## Status
+
 **Hardware freeze remains open:** OCTACLID4 reached six instances before
 freezing during edits; OCTACLID3 froze on TIME with three. Earlier images
 also froze on second-instance TIME changes and loading three instances.

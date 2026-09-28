@@ -5,7 +5,36 @@ main carries beyond the last flashed image. The version the panel shows is
 `BUILD` (`make image BUILD=N`); a git tag `OCTABAM<N>` marks the commit each
 flashed image was built from.
 
-## Unreleased (main after image 43; image 53 built)
+## Unreleased (main after image 43)
+
+- The gates, made to fit their changes (28 Sep 2026, #510, #511): a
+  manifest edit to the display fields alone, or a module's README, reaches
+  `verify_docs`; `make identity`'s moved remixes plan into the accept line
+  and the shards instead of serial checks; `make reach` rebuilds a stale
+  port; `make accept ... JOBS=n` runs the per-remix halves over shard
+  worktrees (23 remixes: 2,930 s wall for 7,877 s of work). The plain
+  two-server image stays as `remixes/test/bus`, the fixture `verify_twocore`
+  and refhash build: with bottleservice as the fixture the hidden engines'
+  host guard passed the delay dry in the DEV hatch.
+- The documentation for readers (28 Sep 2026): README opens with where to
+  read next; `docs/remixer/TESTING.md` says what every gate proves and what
+  none can see; Linux/WSL2 is a section of BUILDING.md; the module pages and
+  proof notes were audited against what was measured (image 88 carried
+  TEMPO BUS, SCENES P2, RIG HOSTS, the tokened Octakit writer, none
+  exercised there); the remix pages say what you get and link the modules.
+
+Image 43 is the last flashed image with an entry of its own. Images built
+from main since then that reached a unit, each recorded where it was
+measured:
+
+| image | remix | unit | date | record |
+|---|---|---|---|---|
+| 64 | `usb-audio` (now `test/usb-audio`) | Sam's MKII | 25 Sep 2026 | 16 USB channels at 16 bits, USB MIDI receive at 7,950 msg/s: `remixes/test/usb/README.md` |
+| 69 | `usb-audio` | Sam's MKII | 25 Sep 2026 | the same at 24 bits, 3 minutes without a discontinuity after 0.76 s |
+| 90 | `usb-out-tracks-main-cue` (Bryan T's build) | Bryan T's MKII | 25 Sep 2026 | MAIN on 17-18, CUE on 19-20 |
+| OCTATRICK9 | `octatrick-usb` | Tim Hastie's MKI | 26 Sep 2026 | the synth, the quantizer, direct jump; USB audio on all 20 channels: `remixes/octatrick/README.md` |
+| 88 | `bottleservice` at `d6867bd` | Sam's MKII | 27 Sep 2026 | load, play; a fourth MODULATION beside the reverb overran, three fit. It carried TEMPO BUS, SCENES P2 (the twelve-byte detour, before the 28 Sep fix), CC MAP, RIG HOSTS, the tokened Octakit writer and the 20-channel USB AUDIO; which were exercised is not recorded (`remixes/bottleservice/README.md`) |
+
 
 - USB AUDIO IN as a stereo feed, placed (28 Sep 2026): Bryan T's USB AUDIO
   OUT / IN (PRs #468, #495: four host channels into inputs A-D, its DSP

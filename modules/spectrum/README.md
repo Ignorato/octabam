@@ -152,6 +152,8 @@ On Sam's unit since flash 4; the LADR voicing (PR #254) since image 21.
 
 ## Open
 
+- VOWL went silent once on the unit with RES up
+  (`docs/remixer/FAILURE_MODES.md`, seen once, not reproduced).
 - The remaining displaced moves are the SVF's cutoff ramp (g2run += dg,
   read twice per sample) and ISO's WDTH read; the other modes step g2run
   per block by n7·dg (`fs_gramp`), the same end value.

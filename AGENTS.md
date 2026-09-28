@@ -54,7 +54,8 @@ make reverb IN=loop.wav ARGS='--wet --mode all'
 ```
 
 Never claim something works because it assembled or linked. `make check` is
-the floor.
+the floor; `docs/remixer/TESTING.md` says what each gate proves and what
+none of them can see.
 
 **Before opening a PR, and again before merging one:** rebase onto
 `origin/main` and run every gate in `CONTRIBUTING.md` "Before you open a
