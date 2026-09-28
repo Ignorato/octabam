@@ -163,19 +163,48 @@ bank B, 15 Sep 2026).
   is inferred (the engine blocks longer per sector, so `sys` drains its
   queue earlier), not traced. One `--watch-mem` range per run: the last
   flag wins.
-- **No card-sample voice has started under the port on this machine.**
-  `verify_repitch`'s and `verify_euclid`'s playback fixtures (FLEX and
-  STATIC, two source projects, stored banks synced or not, MIDI sync off)
-  render silence: the sequencer steps (`0x4009d1e8` per step, at the
-  pattern's 1/2X), the sample loads (30,558 ATA reads, no FLEX error in
-  the card's LOG), a MIDI note-on writes trig words, and the voice END
-  write `0x40001612` never runs while the frame builder runs 8 per frame
-  and every voice slot zero-fills. `verify_set`'s audio comes from THRU
-  tracks fed by `--audio-in` and `--poke-trig`, never from a card sample.
-  The runs that heard FLEX under the port (the mixer model, the SOS
-  recorder work) used fixtures not on this machine; the projects here
-  reference 115 samples, none on disk. A positive control needs a project
-  with its samples present.
+- **A card-sample voice plays under the port, and its audio stops at the
+  DSP's main mixdown (measured 28 Sep 2026, `verify_repitch`'s FLEX
+  fixture on the repitch and bus images).** Retracting the 27 Sep reading
+  "no voice has started": the voice starts at the transport (`0x4000f824`
+  resets its position, then `0x40008898` advances it 16 per frame for the
+  whole run), the fetch through the voice struct returns the FLEX arena
+  chunk with the staged sine in it (`0x400086c0`: 16 frames a call), the
+  format-3 copy loop (`0x40008768`) fills the 84-word track record with
+  the samples, the host port pushes it, core 1 renders it and its post-FX
+  read-back (`0x80003190`, 25 % non-zero, rms 6,699) and the 512-word
+  forward to core 0 carry it. Core 0's summing mixdown (`P:0x259..0x275`,
+  the `y:(r5)+` gains from `Y:0x40` against the track blocks at
+  `X:0x2400..`) multiplies the track's samples by a gain that reads 0
+  (`--dsp-pcwatch 0:0x25e`: x0 = the sine, y0 = 0), so the TX DMA ring at
+  `X:0x8000` (`DSR2 0x8000, DDR2 M_TX0`) stays zero and every ESAI word is
+  0. `Y:0x40` is written 0 each frame by the record unpack at `P:0x3c7`
+  from the record's fields; the same voice on T5 (core 0) is silent the
+  same way. The record arrives on the DSP as one 24-bit word per
+  halfword with `0x03` in the high byte (`X:0x2080: 030000 030400 ..
+  038000 03ee9a`). `FW_TRIG_WORDS` (0x46104d26) stays 0 in audible runs
+  too and is not a trig indicator.
+  Every fixture on this machine is silent at TX0: the repitch and euclid
+  playback fixtures, the set gate's THRU tracks on the setgate project
+  (restock, bus, repitch images), and the acceptance stress project under
+  the plain port flags, with `--audio-in tones` and with `--poke-trig 2`.
+  The one audible configuration (`verify_set` on the stress project, bus
+  image: TX0 ring words 2-5 non-zero on 14,223 of 14,400 samples, also a
+  27 Sep charsave run) adds the MIDI sends into the hosts, so those words
+  are the engines' wet, not any track's dry. `verify_set` prints the TX0
+  census as info and does not check it; the level-law and SOS runs that
+  heard FLEX under the port were not re-run here. Open: which record field
+  the unpack turns into the mixdown gain and why it is 0 for every track
+  (a port defect in the record delivery or in the ColdFire level chain at
+  `0x4000cc96`, whose 6 longs per record are the EMAC's `msacw` products;
+  the FLEX voice's word 18 reads `0x0040`, a THRU's `0x047f`), against the
+  DSP's own unpack (`P:0x3ac..0x3f7`, gains into `L:0x40..`, ramps into
+  `X/Y:0x80..`). The level bytes `0x8000005e/0x8000005f` the dispatcher
+  copies into the record's words 0x32/0x33 are what the project parse
+  stores from `METRONOME_CUE_VOLUME` / `METRONOME_MAIN_VOLUME`
+  (`0x40087b14`, `0x40087b58`); `MAIN_LEVEL` / `CUE_LEVEL` land at
+  `0x80000035` / `0x80000036` (`0x40087348`, `0x4008738c`); poking either
+  pair after the load changes nothing here.
 
 ## The screen itself (the port, 17 Sep 2026)
 
