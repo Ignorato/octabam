@@ -11,8 +11,16 @@ verifier's callers. This reads the changed paths (committed and not,
 against the merge-base with `--base`) and prints the commands, one line
 each, with the paths that put them there; `--run` runs them in order and
 stops at the first failure (`--keep-going`: every one, then a table).
-There is no default remix: the build and an unclassified path reach EVERY
-remix, and an unclassified path is named as such.
+There is no default remix. The FLOOR -- what a change to the build, the
+port, a shared tool or an unclassified path reaches -- is the COVER: the
+fewest remixes that between them carry every module (greedy from the
+registry, 9 of 27 on 28 Sep 2026), so every module's gates and every kind
+of per-remix gate run at least once. `--all` makes it every remix. A
+change to the BUILD adds `image_identity.py`: every remix built from the
+base and from this tree, and `--run` then checks the ones whose image
+moved (dry mode says so). Together with refhash (the flag matrix of one
+layout) that replaces "every remix" for a build change; before 28 Sep
+2026 every such change ran all 25-27 remixes' checks.
 
 HOW A PATH IS PLACED (28 Sep 2026; before, by directory):
 
@@ -25,39 +33,42 @@ HOW A PATH IS PLACED (28 Sep 2026; before, by directory):
                             are a graph; a changed file reaches the gates
                             that transitively depend on it --
                               the build (build_bus.py, cycle_count.py, dsp/)
-                                -> refhash, the runner tests, every remix (both halves)
+                                -> refhash, identity (then the changed remixes'
+                                   checks), the runner tests, check-shared once
+                                   for the cover
                               a gate of the SHARED half (the verify-shared
                               recipe: selftest, slots, replaces, docs,
                               label_fmt, the knob census; a manifest gate
                               with remix_arg=False)
-                                -> make check-shared for every remix / its owners
+                                -> make check-shared once (for the cover) / its owners
                               a gate of the PER-REMIX half (the verify-remix
                               recipe: dirtystate, initregs, dram_boot, labels,
                               modenames, hidden, menu, set, usb)
-                                -> make check-remix for every remix
+                                -> make check-remix for the cover
                               a manifest gate with remix_arg=True
                                 -> make check for its owners' remixes
                               the acceptance machinery (acceptance.py,
                               module_gates.py, stress_project.py, pressure.py)
-                                -> the runner tests, every remix, accept for every remix
+                                -> the runner tests, the cover, accept for the cover
                               a file no gate depends on (bcr2000.py, a render
                               tool a `make render*` target runs)
                                 -> nothing, and the note says so
-                            tools/emu/ (the port) is every remix's per-remix
+                            tools/emu/ (the port) is the cover's per-remix
                             half plus ci-emu and emu-cf; tools/harness/dsp_host,
                             tools/patches, setup.sh, vendor.sh are ci-dsp
-                            plus every remix
+                            plus the cover (identity cannot see a toolchain
+                            change: both trees build with the same binary)
   Makefile                  by TARGET: the targets whose recipe or
                             prerequisites changed against the base --
                             the check graph (bus, cycles, verify*, check*)
-                            reaches every remix and make ci; the runner's
-                            targets (accept, reach, check-remixes,
+                            reaches identity, the cover and make ci; the
+                            runner's targets (accept, reach, check-remixes,
                             test-acceptance) the runner tests; the ci
                             targets make ci; any other target nothing; a
-                            changed variable or define, every remix
+                            changed variable or define, identity + the cover
   docs/, *.md               verify_docs
   .github/                  make ci
-  anything else             every remix, named unclassified
+  anything else             the cover, named unclassified
 
 It refuses a tree that is not rebased onto the base (the base must be an
 ancestor of HEAD): gates run before a rebase are not a result (PR #396).
@@ -75,6 +86,7 @@ lines through `check_shards.py`, N worktrees at a time.
 """
 import argparse
 import ast
+import json
 import os
 import pathlib
 import re
@@ -87,7 +99,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 # One command per gate; the order is the order they run in.
-ORDER = ("verify_docs", "selftest", "test-acceptance", "ci-dsp", "ci-emu", "emu-cf", "refhash", "check-shared", "check", "check-remix", "accept", "ci")
+ORDER = ("verify_docs", "selftest", "test-acceptance", "ci-dsp", "ci-emu", "emu-cf", "refhash", "identity", "check-shared", "check", "check-remix", "accept", "ci")
 
 # The build: a change here is every remix, both halves, and refhash proves
 # the artifacts identical. dsp/ holds the sources build_bus assembles.
@@ -136,6 +148,11 @@ CMD = {
     "ci-emu": ("ci-emu", "make ci-emu"),
     "emu-cf": ("emu-cf", "make emu-cf"),
     "refhash": ("refhash", "scripts/refhash.sh check"),
+    # Names the remixes whose IMAGE the change moved; --run then checks
+    # those (dry mode says so). scripts/refhash.sh pins the build FLAGS of
+    # one layout, this pins the 27 remixes: together they replace "every
+    # remix" for a build change.
+    "identity": ("identity", "python3 tools/verify/image_identity.py --base ${BASE}"),
     "ci": ("ci", "make ci"),
 }
 
@@ -288,11 +305,17 @@ class Context:
     can fake it."""
 
     def __init__(self, module_key, remixes_of, gate_owners, remixes, exists=None, deps=None,
-                 shared_scripts=(), remix_scripts=(), gate_shared=None, make_base=None, make_head=None):
+                 shared_scripts=(), remix_scripts=(), gate_shared=None, make_base=None, make_head=None,
+                 all_remixes=False):
         self.module_key = module_key        # module directory -> key
         self.remixes_of = remixes_of        # key -> sorted remix names carrying it
         self.gate_owners = gate_owners      # verifier path -> keys whose manifests name it
-        self.remixes = remixes              # every remix: the floor, since nothing is the default
+        self.remixes = remixes              # every remix
+        # The floor, since nothing is the default remix: every remix with
+        # --all, else the cover -- the fewest remixes that between them carry
+        # every module, so every module's gates and every kind of per-remix
+        # gate run at least once (28 Sep 2026; 9 of 27 that day).
+        self.floor = list(remixes) if all_remixes else self.cover()
         self.exists = exists or (lambda path: (ROOT / path).exists())
         self.deps = deps or {}              # file -> files it depends on
         self.shared_scripts = set(shared_scripts) - set(ACCEPTANCE)   # the verify-shared recipe's
@@ -301,13 +324,41 @@ class Context:
         self.make_base, self.make_head = make_base, make_head
         self._dependents = None
 
+    def cover(self):
+        """Greedy set cover of the modules by the remixes: the remix adding
+        the most uncovered modules first (ties by name), until every module
+        some remix carries is covered."""
+        modules_of = {}
+        for key, names in self.remixes_of.items():
+            for n in names:
+                modules_of.setdefault(n, set()).add(key)
+        left = set().union(*modules_of.values()) if modules_of else set()
+        picked = []
+        while left:
+            name = min(modules_of, key=lambda n: (-len(modules_of[n] & left), n))
+            if not modules_of[name] & left:
+                break
+            picked.append(name)
+            left -= modules_of[name]
+        return sorted(picked)
+
+    def floor_note(self):
+        return ("every remix" if len(self.floor) == len(self.remixes)
+                else f"the cover ({len(self.floor)} of {len(self.remixes)} remixes)")
+
     def every(self):
-        """Every remix, both halves (plan() folds these into one check-shared
+        """The floor, both halves (plan() folds these into one check-shared
         and a check-remix each)."""
-        return [cmd_check(r) for r in self.remixes]
+        return [cmd_check(r) for r in self.floor]
 
     def every_remix(self):
-        return [cmd_check_remix(r) for r in self.remixes]
+        return [cmd_check_remix(r) for r in self.floor]
+
+    def build_change(self):
+        """A change to the build: refhash (the flag matrix), identity (the
+        remixes whose image moved, checked by --run), the shared half once
+        for the floor."""
+        return [CMD["refhash"], CMD["identity"], CMD["test-acceptance"], cmd_check_shared(self.floor)]
 
     def dependents(self, path):
         """Every file that depends on `path`, transitively."""
@@ -326,7 +377,7 @@ class Context:
         return seen
 
     @classmethod
-    def from_registry(cls, base=None):
+    def from_registry(cls, base=None, all_remixes=False):
         from remix import registry
         mods = registry.modules()
         module_key = {m.name: m.key for m in mods.values()}
@@ -348,38 +399,41 @@ class Context:
                    registry.remix_names(), deps=scan_deps(),
                    shared_scripts=recipe_scripts(make_head, "verify-shared"),
                    remix_scripts=recipe_scripts(make_head, "verify-remix"),
-                   gate_shared=gate_shared, make_base=make_base, make_head=make_head)
+                   gate_shared=gate_shared, make_base=make_base, make_head=make_head,
+                   all_remixes=all_remixes)
 
 
 def route_tool(path, ctx):
     """A tools/ or scripts/ file: the gates that depend on it."""
     if path.startswith("dsp/") or path in BUILD_ROOTS:
-        return [CMD["refhash"], CMD["test-acceptance"]] + ctx.every(), "the build: every remix; refhash proves the artifacts and reports identical"
+        return ctx.build_change(), f"the build: refhash the flag matrix, identity the remixes whose image moved (their checks follow), the shared half once for {ctx.floor_note()}"
     if path in CLASSIFIER or path.startswith("tools/verify/tests/"):
         return [CMD["test-acceptance"]], "the classifier and its tests: their own tests are the gate"
     if path in ACCEPTANCE:
-        return [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes], "the acceptance machinery: every remix"
+        return [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.floor], f"the acceptance machinery: {ctx.floor_note()}"
     if path.startswith("tools/emu/ot_emu/"):
-        return [CMD["ci-emu"], CMD["emu-cf"]] + ctx.every_remix(), "the ColdFire port: every remix's per-remix half (the set gates need OT_PROJECT)"
+        return [CMD["ci-emu"], CMD["emu-cf"]] + ctx.every_remix(), f"the ColdFire port: the per-remix half of {ctx.floor_note()} (the set gates need OT_PROJECT)"
     if path.startswith(("tools/harness/dsp_host/", "tools/patches/")) or path in ("scripts/setup.sh", "scripts/vendor.sh"):
-        return [CMD["ci-dsp"]] + ctx.every(), "the DSP toolchain: rebuild it first (scripts/setup.sh; a dsp_host change in an isolated tree, AGENTS.md)"
+        return [CMD["ci-dsp"]] + ctx.every(), f"the DSP toolchain: rebuild it first (scripts/setup.sh; a dsp_host change in an isolated tree, AGENTS.md); {ctx.floor_note()}"
     if path == "scripts/refhash.sh":
         return [CMD["refhash"]], ""
     users = ctx.dependents(path) | {path}
     gates, notes = [], []
     if users & set(BUILD_ROOTS):
-        return [CMD["refhash"], CMD["test-acceptance"]] + ctx.every(), "the build depends on it: every remix; refhash proves the artifacts and reports identical"
+        return ctx.build_change(), f"the build depends on it: refhash, identity (the remixes whose image moved are checked), the shared half once for {ctx.floor_note()}"
     if users & set(ACCEPTANCE):
-        gates += [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.remixes]
-        notes.append("the acceptance machinery depends on it: every remix")
+        gates += [CMD["test-acceptance"]] + ctx.every() + [cmd_accept(r) for r in ctx.floor]
+        notes.append(f"the acceptance machinery depends on it: {ctx.floor_note()}")
     if users & set(CLASSIFIER):
         gates.append(CMD["test-acceptance"])
     if users & ctx.shared_scripts:
-        gates.append(cmd_check_shared(ctx.remixes))
+        # once; REMIXES only picks the module union for the isolated gates,
+        # and the floor's union is every module
+        gates.append(cmd_check_shared(ctx.floor))
         notes.append("a gate of the shared half: " + ", ".join(sorted(pathlib.PurePosixPath(u).stem for u in users & ctx.shared_scripts)))
     if users & ctx.remix_scripts:
         gates += ctx.every_remix()
-        notes.append("a gate of every remix's per-remix half: " + ", ".join(sorted(pathlib.PurePosixPath(u).stem for u in users & ctx.remix_scripts)))
+        notes.append(f"a gate of the per-remix half, run for {ctx.floor_note()}: " + ", ".join(sorted(pathlib.PurePosixPath(u).stem for u in users & ctx.remix_scripts)))
     for script in sorted(users & set(ctx.gate_owners)):
         owners = ctx.gate_owners[script]
         remixes = sorted({r for k in owners for r in ctx.remixes_of.get(k, [])})
@@ -399,16 +453,19 @@ def route_tool(path, ctx):
 
 def route_makefile(ctx):
     if ctx.make_base is None:
-        return ctx.every() + [CMD["ci"]], "the Makefile (no base to diff against): every remix"
+        return ctx.every() + [CMD["ci"]], f"the Makefile (no base to diff against): {ctx.floor_note()}"
     targets, other = makefile_changes(ctx.make_base, ctx.make_head)
     gates, notes = [], []
+    # A variable or a check target can change what the build writes (a
+    # flag default) or how a gate runs: identity names the moved images,
+    # the floor runs the gates.
     if other:
-        gates += ctx.every() + [CMD["ci"]]
-        notes.append("variables or defines changed: " + ", ".join(other) + ": every remix")
+        gates += [CMD["identity"]] + ctx.every() + [CMD["ci"]]
+        notes.append("variables or defines changed: " + ", ".join(other) + f": identity + {ctx.floor_note()}")
     check = [t for t in targets if t in MAKE_CHECK]
     if check:
-        gates += ctx.every() + [CMD["ci"]]
-        notes.append("the check graph: " + ", ".join(check) + ": every remix")
+        gates += [CMD["identity"]] + ctx.every() + [CMD["ci"]]
+        notes.append("the check graph: " + ", ".join(check) + f": identity + {ctx.floor_note()}")
     runner = [t for t in targets if t in MAKE_RUNNER]
     if runner:
         gates.append(CMD["test-acceptance"])
@@ -475,7 +532,7 @@ def classify(paths, ctx):
             gates = ctx.every()
         else:
             gates = ctx.every()
-            note = "unclassified: every remix"
+            note = f"unclassified: {ctx.floor_note()}"
         out.append((path, gates, note))
     return out
 
@@ -581,12 +638,14 @@ def main(argv=None):
     ap.add_argument("--keep-going", action="store_true", help="with --run: run every command, then one table")
     ap.add_argument("--jobs", type=int, default=1,
                     help="with --run: the check-remix lines through check_shards.py, N worktrees at a time")
+    ap.add_argument("--all", action="store_true",
+                    help="the floor is every remix instead of the cover (the remixes that between them carry every module)")
     a = ap.parse_args(argv)
     if a.paths is not None:
         merge_base, paths = None, sorted(set(a.paths))
     else:
         merge_base, paths = changed_paths(a.base)
-    ctx = Context.from_registry(base=merge_base or a.base)
+    ctx = Context.from_registry(base=merge_base or a.base, all_remixes=a.all)
     rows = classify(paths, ctx)
     if merge_base:
         print(f"reach: {len(paths)} changed path{'s' if len(paths) != 1 else ''} against {a.base} ({merge_base[:10]})")
@@ -606,6 +665,8 @@ def main(argv=None):
         print(f"  {command:56}  # {why}")
     if not items:
         print("  (none: no gate depends on what changed)")
+    if any(k == "identity" for k, _, _ in items):
+        print(f"  then: make check REMIX=<r> for each remix image_identity names (--run does this; the floor is {ctx.floor_note()})")
     if any(k == "accept" for k, _, _ in items) and not stress:
         print("\nSTRESS_SOURCE is unset: point it at a local project (never committed) for the accept line"
               " (it then runs the accepted remixes' checks itself).")
@@ -613,8 +674,10 @@ def main(argv=None):
         return 0
     print()
     results = []
-    for kind, command, _ in items:
-        cmd = command.replace("${STRESS_SOURCE}", stress or "")
+    queue = list(items)
+    while queue:
+        kind, command, _ = queue.pop(0)
+        cmd = command.replace("${STRESS_SOURCE}", stress or "").replace("${BASE}", a.base)
         if kind == "accept" and not stress:
             print(f"reach: BLOCKED {command}: STRESS_SOURCE is unset")
             if not a.keep_going:
@@ -629,6 +692,16 @@ def main(argv=None):
             print(f"reach: FAILED ({r.returncode}) {cmd}")
             if not a.keep_going:
                 return 1
+        elif kind == "identity":
+            # The remixes whose image moved: their full check (and accept,
+            # with STRESS_SOURCE) join the queue in the floor's place.
+            changed = json.loads((ROOT / "out/identity/changed.json").read_text())
+            extra = [cmd_check(r) for r in changed] + ([cmd_accept(r) for r in changed] if stress else [])
+            already = {c for _, c, _ in queue} | {c for c, _, _ in results}
+            extra = [(k, c, ["image_identity"]) for k, c in extra if c not in already]
+            print(f"reach: identity names {len(changed)} changed remix{'es' if len(changed) != 1 else ''}"
+                  + (": " + ", ".join(changed) if changed else "") + f" -> {len(extra)} more gate{'s' if len(extra) != 1 else ''}")
+            queue = sorted(queue + extra, key=lambda it: (ORDER.index(it[0]), it[1]))
     if a.keep_going:
         print("\nreach: results")
         for command, status, seconds in results:
