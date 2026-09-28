@@ -14,7 +14,8 @@ of the streaming plan and of the eight-track plan follow: the mask takes
 on the THRU fixture (1, 2, 4 and 8 tracks, and 0xA5). `--long` adds a
 20-second take, which takes about 20 minutes under the port, the masks of
 3, 5, 6 and 7 tracks and T8 alone, the mask latched at the start, an
-eight-track wrap and an eight-track overflow; it stays out of
+eight-track wrap, an eight-track overflow and eight tracks on a card at
+half the speed they need; it stays out of
 `make check`. `--fat32` runs the take checks again on a FAT32 card
 (`stems_fixture.py --fat32`), after checking the firmware mounted it; it
 stays out of `make check` too.
@@ -835,17 +836,18 @@ THRU_STOP = 1700
 THRU_FRAMES = 3000
 
 
-def mask_take(s, mask, tag, stop_at=THRU_STOP, frames=THRU_FRAMES, pokes=()):
+def mask_take(s, mask, tag, stop_at=THRU_STOP, frames=THRU_FRAMES, pokes=(), extra=(), load_ms=20000):
     """One take on the THRU fixture with `mask`: a file per enabled track,
     each equal to its own track's read-back at one fixed offset, sound in
     every frame from its first, no two alike, the writer writing during the
-    take, IDLE with no error, and stems_peak exact against the watch log."""
+    take, IDLE with no error, and stems_peak exact against the watch log.
+    `extra` and `load_ms` go to the port (a slower card: slow8)."""
     if not FIXTURE_THRU.exists():
         check(f"{tag}: the THRU fixture exists (stems_fixture.py --thru)", False)
         return
     log, dump, card, words, _ = port(s, frames, stop_at=stop_at, tag=tag, fixture=FIXTURE_THRU,
-                                     mask=mask, pokes=pokes, extra=watched(s, span=28),
-                                     mems=((s["stems_peak"], 4, "peak"),))
+                                     mask=mask, pokes=pokes, extra=watched(s, span=28, extra=extra),
+                                     mems=((s["stems_peak"], 4, "peak"),), load_ms=load_ms)
     st, status, _, wr, rd, nfr = words
     want = [k for k in range(8) if mask >> k & 1]
     check(f"{tag}: the task finished (state IDLE, no error)", st == ST_IDLE and status == 0,
@@ -920,6 +922,27 @@ def overflow8(s):
           f"state {st}, state writes {[val for x, w, val in ws if w == 0]}")
 
 
+# A card slower than eight tracks need: 22.58 MB/s / 32 = 0.71 MB/s against
+# 1.41 (STEM_REC.md 15.4). A 5-second take then fills the ring to about 92%
+# without overflowing (the sweep, 28 Sep 2026), and the writer needs about
+# 5.6 s more to drain its ~7,500 frames of 512 bytes.
+SLOW_LATENCY = 32
+SLOW_STOP = 13781                  # 5 s of frames
+SLOW_FRAMES = SLOW_STOP + 17000
+
+
+def slow8(s):
+    """Eight tracks on a card at half the speed they need: the ring fills to
+    near its capacity without overflowing, and the take still ends IDLE with
+    no error, every file equal to its track (the plan's Review Focus 5)."""
+    mask_take(s, 0xFF, "slow8", stop_at=SLOW_STOP, frames=SLOW_FRAMES,
+              extra=("--ata-latency", str(SLOW_LATENCY)), load_ms=20000 * SLOW_LATENCY // 8)
+    raw = run_path("slow8", "peak")
+    peak = int.from_bytes(raw.read_bytes(), "big") if raw.exists() else 0
+    check("slow8: the ring came within a fifth of its capacity and did not overflow",
+          RING_FRAMES_8 * 4 // 5 <= peak < RING_FRAMES_8, f"stems_peak {peak} of {RING_FRAMES_8}")
+
+
 def fixtures():
     """The four fixture cards, built from TEMPLATE at the start of every
     run: a fresh tree has none, and a card left by an older stems_fixture.py
@@ -988,6 +1011,7 @@ def main():
             latch(s)
             wrap8(s)
             overflow8(s)
+            slow8(s)
         if "--fat32" in sys.argv:
             fat32(s)
     return 1 if fails else 0

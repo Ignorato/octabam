@@ -6978,6 +6978,11 @@ recording. A growth without a ± had an error under 1 frame a second.
   delay of 48, and at 3.72 s with 64. The arithmetic predicts both: at 64
   the writer's 0.28 of the needed 1.41 MB/s grows the fill by about 2,200
   frames a second, and 8,192 frames last 3.7 s. At 48, 4.3 s.
+- **A take near capacity still completes.** ✅ `verify_stems --long`'s
+  `slow8`: eight tracks at a delay of 32, half the speed they need, for 5
+  seconds. The ring peaks at 7,505 of 8,192 frames (92%) without
+  overflowing; the take ends IDLE with no error, and each of the eight
+  files holds 13,783 frames equal to its track, sample for sample.
 - **A slow card slows the project's load too.** ✅ At a delay of 64 the
   load did not finish within the verifier's 20 s budget, and no take
   started. The sweep's budget grows with the delay; the port ends a load

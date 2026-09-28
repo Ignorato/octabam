@@ -52,7 +52,9 @@ sector would show there.
 `--long` adds a 20-second take whose file must equal the ring byte for
 byte, the masks of 3, 5, 6 and 7 tracks and T8 alone, a mask changed
 mid-take (the take keeps the one it started with), an eight-track take
-past the ring's wrap, and the overflow at eight tracks. It takes about an
+past the ring's wrap, the overflow at eight tracks, and eight tracks on a
+card at half the speed they need, where the ring fills to 92% and the take
+still completes. It takes about an
 hour and stays outside `make check`. `tools/verify/stems_sweep.py`
 measures the ring against the emulated card's speed (STEM_REC.md 15.4).
 
