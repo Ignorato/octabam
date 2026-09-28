@@ -16,7 +16,13 @@ OWN port build (out/emu is never shared between trees: AGENTS.md), then
 hands the remixes out from one queue as shards come free, so the dear ones
 (bottleservice, rig-kits) do not decide the wall time. Logs land in
 out/check_shards/<remix>.log; one table at the end; exit 1 when a remix
-failed. The shards are removed unless --keep.
+failed. The shards are KEPT between runs (since 28 Sep 2026): a run finds
+out/shards/<i> in place and refreshes it -- `git checkout --detach` to this
+tree's HEAD plus its uncommitted diff, `git submodule update`, the shard's
+out/ wiped except emu/ and raw/, and the port rebuilt on its existing
+CMake cache (nothing recompiles unless tools/emu changed) -- which turns
+~220 s of setup (four worktrees, four `cmake --fresh` builds) into a few
+seconds. `--fresh` rebuilds them from nothing; `--rm` removes them after.
 
 `--by-gate` shards ONE remix's per-remix half by gate instead: every gate
 of `make verify-remix` (plus `make cycles`) is its own job, each shard
@@ -47,12 +53,28 @@ def git(*args, cwd=ROOT, check=True):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
 
 
-def make_shard(path, log):
+def shard_ok(path):
+    """A registered worktree of this repository at `path`."""
+    if not (path / ".git").is_file():
+        return False
+    r = git("worktree", "list", "--porcelain", check=False)
+    return f"worktree {path.resolve()}" in r.stdout.splitlines()
+
+
+def make_shard(path, log, fresh=False):
     """A detached worktree of HEAD with this tree's uncommitted changes, the
     shared toolchain links, the stock slice, its submodules and its own
-    port build."""
-    remove_shard(path)
-    git("worktree", "add", "--detach", str(path), "HEAD")
+    port build -- created, or refreshed when one is already there."""
+    keep = shard_ok(path) and not fresh
+    if not keep:
+        remove_shard(path)
+        git("worktree", "add", "--detach", str(path), "HEAD")
+    else:
+        # Drop the previous run's applied diff and untracked copies, then
+        # move to this tree's HEAD.
+        for args in (("reset", "--hard", "--quiet"), ("clean", "-fdq"),
+                     ("checkout", "--detach", "--quiet", git("rev-parse", "HEAD").stdout.strip())):
+            git(*args, cwd=path)
     diff = subprocess.run(["git", "diff", "HEAD", "--binary", "--ignore-submodules=all"],
                           cwd=ROOT, capture_output=True, check=True).stdout
     if diff.strip():
@@ -62,12 +84,30 @@ def make_shard(path, log):
             (path / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / rel, path / rel)
     for name in ("vendor", ".venv"):
-        if (ROOT / name).exists():
+        if (ROOT / name).exists() and not (path / name).exists():
             os.symlink(os.path.realpath(ROOT / name), path / name)
-    (path / "out/raw").mkdir(parents=True)
-    shutil.copy2(ROOT / "out/raw/section_3_MAIN_OS.bin", path / "out/raw/section_3_MAIN_OS.bin")
+    out = path / "out"
+    if keep:
+        # No gate may read a previous run's artifact; the port build and
+        # the stock slice are the two things worth keeping.
+        for child in out.iterdir() if out.is_dir() else ():
+            if child.name not in ("emu", "raw"):
+                shutil.rmtree(child, ignore_errors=True) if child.is_dir() else child.unlink()
+    (out / "raw").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "out/raw/section_3_MAIN_OS.bin", out / "raw/section_3_MAIN_OS.bin")
+    arch = os.uname().machine
+    cmds = [["git", "submodule", "update", "--init"],
+            # `make emu-cf` configures with --fresh (a cache from another
+            # source path makes cmake refuse); a kept shard's cache names
+            # its own, fixed path, so configure in place and let the build
+            # recompile only what changed under tools/emu.
+            ["cmake"] + ([] if keep else ["--fresh"]) + ["-B", "out/emu", "-S", "tools/emu/ot_emu",
+                                                         f"-DCMAKE_OSX_ARCHITECTURES={arch}"],
+            ["cmake", "--build", "out/emu", "-j8"],
+            ["./out/emu/ot_emu", "--image", "out/raw/section_3_MAIN_OS.bin"]]
     with log.open("w") as f:
-        for cmd in (["git", "submodule", "update", "--init"], ["make", "emu-cf"]):
+        f.write(f"# {'refreshed' if keep else 'created'} {path}\n")
+        for cmd in cmds:
             f.write(f"$ {' '.join(cmd)}\n")
             f.flush()
             r = subprocess.run(cmd, cwd=path, stdout=f, stderr=subprocess.STDOUT, env=clean_env())
@@ -178,7 +218,9 @@ def main(argv=None):
     ap.add_argument("remixes", nargs="+")
     ap.add_argument("--jobs", type=int, default=4, help="worktrees at a time")
     ap.add_argument("--shards", type=pathlib.Path, default=ROOT / "out/shards")
-    ap.add_argument("--keep", action="store_true", help="leave the shard worktrees for a look")
+    ap.add_argument("--keep", action="store_true", help="(the default since 28 Sep 2026; kept for callers)")
+    ap.add_argument("--fresh", action="store_true", help="recreate the shards instead of refreshing the kept ones")
+    ap.add_argument("--rm", action="store_true", help="remove the shards after the run")
     ap.add_argument("--by-gate", action="store_true",
                     help="one remix: its per-remix half as one job per gate over the shards")
     a = ap.parse_args(argv)
@@ -198,12 +240,14 @@ def main(argv=None):
     shards = [a.shards / str(i) for i in range(jobs)]
 
     what = f"{len(work)} gates of {remixes[0]}" if a.by_gate else f"{len(remixes)} remixes"
-    print(f"check_shards: {what} over {jobs} shards under {a.shards} (setup: submodules + make emu-cf each)", flush=True)
+    print(f"check_shards: {what} over {jobs} shards under {a.shards} "
+          f"({'refreshing kept shards' if all(shard_ok(s) for s in shards) and not a.fresh else 'setup: worktree + submodules + port build each'})", flush=True)
+    t_setup = time.monotonic()
     errors = []
 
     def setup(i):
         try:
-            make_shard(shards[i], a.shards / f"{i}.setup.log")
+            make_shard(shards[i], a.shards / f"{i}.setup.log", fresh=a.fresh)
         except (SystemExit, subprocess.CalledProcessError, OSError) as exc:
             errors.append(str(exc))
     threads = [threading.Thread(target=setup, args=(i,)) for i in range(jobs)]
@@ -213,6 +257,7 @@ def main(argv=None):
         t.join()
     if errors:
         sys.exit("check_shards: " + "; ".join(errors))
+    print(f"check_shards: shards ready in {time.monotonic() - t_setup:.0f} s", flush=True)
 
     todo = queue.Queue()
     for w in work:
@@ -255,7 +300,7 @@ def main(argv=None):
         print(f"  {status:12} {r['seconds']:6.0f} s  {remix:20} {r['log'].relative_to(ROOT)}")
         for s in r["skips"]:
             print(f"               {s}")
-    if not a.keep:
+    if a.rm:
         for s in shards:
             remove_shard(s)
     bad = [r for r in results.values() if r["rc"]]
