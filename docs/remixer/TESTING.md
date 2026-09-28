@@ -115,6 +115,7 @@ The gates as declared on 28 Sep 2026 (`grep "Gate(" modules/*/manifest.py`):
 | SCENES P2 | `verify_scenesp2` | per remix | page-2 locks reach the DSP frame through the crossfader; the editor with a scene held writes the pool (three boots) |
 | TEMPO BUS | `verify_tempobus` | image | the TEMPO key opens the bus screen, its rows edit the hosts, the window closes clean (on `verify_set`'s staged card) |
 | CC MAP | `verify_ccmap` | shared | the CC cave re-assembles to its pinned bytes; CC 62-73 write page 2 and clamp to the count; page-1 CCs tail-call stock (Tier-0) |
+| CC FEEDBACK | `verify_ccfeedback` | shared | the knob-change sweep enters the stock CC emitter once per changed byte, with the lane's value, gated as stock gates (Tier-0) |
 | MIDI SCENES, OCTAKIT | `verify_midiscenes`, `verify_octakit` | shared | the two port oracles: the author's own build reproduced byte for byte |
 | REPITCH | `verify_repitch` | per remix | the hooks, the page (Tier-0) and playback pitch/speed under the port on a project |
 | EUCLID | `verify_euclid` | image | control math, hooks, renders, playback under the port |

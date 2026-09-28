@@ -113,6 +113,6 @@ default.
 
 OT MIDI OUT to the BCR's MIDI IN, BCR OUT A to OT MIDI IN. The BCR's
 encoders in `absolute` mode take an incoming CC on their channel and move
-the LED ring (`tools/hw/bcr2000.py`, branch `bcr2000`). Whether the BCR's
+the LED ring (`tools/hw/bcr2000.py`). Whether the BCR's
 mode S-4 merges MIDI IN into OUT A is not checked; if it does, every echo
 returns to the OT as a redundant CC write of the same value.
