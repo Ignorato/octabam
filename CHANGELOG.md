@@ -42,6 +42,12 @@ flashed image was built from.
   channels onto inputs A/B, C/D or A-D; one per remix, shared detour
   sites), each with its own placed inject. `tools/harness/usb_align.py`
   measures MAIN's lag behind the tracks in the twenty-channel stream
+  under the port from the tone project's phases: 16 samples, one block,
+  on every tone (the tracks come from the previous bank, MAIN/CUE from the
+  current pull); the producer now writes MAIN/CUE one block behind the
+  tracks' slot and `verify_usb_align` (on the twenty-channel module,
+  skips without a source project) reads 0. Heard as MAIN lagging on
+  Bryan T's unit; the size on hardware is inferred from the port.
   under the port from the tone project's phases.
   discriminating number for the MKI half-speed report. Remix `usb-io` =
   stock - SPATIALIZER + USB MIDI + USB AUDIO EXTENDED + USB CROSSBAR + USB

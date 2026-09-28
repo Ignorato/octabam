@@ -7,16 +7,18 @@ arena (the previous ping-pong bank) and 17-20 from the mixdown buffer (the
 current pull), two sources with two timings. On hardware MAIN was heard
 lagging the tracks (Bryan T, 25 Sep 2026), the amount unmeasured. This
 stages the tone project (tools/harness/usb_sig_project.py: track N's left
-channel at 200 + 100 N Hz, its right at +50) on a card, boots the remix
-under the port, drains EP3 IN once the sequencer plays, and reads the lag of
-MAIN L (channel 17) behind each track's left channel from the phase of that
-track's tone in both, Goertzel at the known frequency over the same window:
-lag = (phase_track - phase_main) / (2 pi f) samples, modulo the tone's
-period. Eight tracks, eight periods: the one lag in [-4096, 4096] that fits
-them all is reported, in samples and in 16-sample blocks; MAIN R against the
-right channels likewise.
+channel at 200 + 100 N Hz, its right at +50) on a card, runs the remix under
+the port with the sequencer playing, and at the end dumps the producer's
+own ring (`aud_ring`, 1,024 frames x 20 channels, the last 23 ms, contiguous
+once unwrapped at `aud_produced`) -- no USB bench, whose polls pace nothing
+under --sequencer. The lag of MAIN L (channel 17) behind each track's left
+channel comes from the phase of that track's tone in both, Goertzel at the
+known frequency over the same window: lag = (phase_track - phase_main) /
+(2 pi f) samples, modulo the tone's period. Every tone that sounds gives a
+residue; the one lag in [-SEARCH, SEARCH] that fits them all is reported, in
+samples and in 16-sample blocks; MAIN R against the right channels likewise.
 
-    tools/harness/usb_align.py [--source <project>] [--remix usb-audio] [--polls 12000]
+    tools/harness/usb_align.py [--source <project>] [--remix usb-audio] [--frames 3000]
 
 The source project is the template usb_sig_project.py needs (a locally saved
 Octatrack project; default OT_PROJECT or ~/.octabam_project). The remix must
@@ -37,7 +39,6 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 import toolpath  # noqa: E402,F401
-import usb_host  # noqa: E402
 from remix import registry  # noqa: E402
 
 EMU = ROOT / "out/emu/ot_emu"
@@ -62,16 +63,17 @@ def goertzel(x, f):
 
 def lag_fit(pairs):
     """pairs: (f, phase_track - phase_main). The lag in [-SEARCH, SEARCH] that
-    fits every tone's residue best; returns (lag, rms residual in samples)."""
+    fits every tone's residue best, the smallest |lag| among equals; returns
+    (lag, rms residual in samples)."""
     best = None
-    for d in range(-SEARCH, SEARCH + 1):
+    for d in sorted(range(-SEARCH, SEARCH + 1), key=abs):
         err = 0.0
         for f, dphi in pairs:
             period = FS / f
             r = (dphi * period / (2 * math.pi) - d) % period
             r = min(r, period - r)
             err += r * r
-        if best is None or err < best[1]:
+        if best is None or err < best[1] - 1e-9:
             best = (d, err)
     return best[0], math.sqrt(best[1] / len(pairs))
 
@@ -82,8 +84,7 @@ def main():
                     (pathlib.Path("~/.octabam_project").expanduser().read_text().strip()
                      if pathlib.Path("~/.octabam_project").expanduser().is_file() else ""))
     ap.add_argument("--remix", default="usb-audio")
-    ap.add_argument("--polls", type=int, default=12000, help="EP3 IN polls to drain once playing (250 us each)")
-    ap.add_argument("--frames", type=int, default=24000, help="DSP frames the port runs after the transport start")
+    ap.add_argument("--frames", type=int, default=3000, help="DSP frames the port runs after the transport start (the ring holds the last 1,024)")
     ap.add_argument("--image", default="", help="a built image (default: build the remix)")
     a = ap.parse_args()
     if not a.source:
@@ -110,6 +111,10 @@ def main():
                         "--remix", a.remix], cwd=ROOT, capture_output=True, text=True)
     if r.returncode:
         sys.exit(f"usb_align: usb_sig_project failed\n{r.stdout[-800:]}{r.stderr[-800:]}")
+    # MASTER TRACK off, as verify_set runs: MAIN is then the plain mix, and
+    # every track's tone reaches it (with it on, MAIN is T8's output alone).
+    pw = proj / "project.work"
+    pw.write_bytes(pw.read_bytes().replace(b"MASTER_TRACK=1", b"MASTER_TRACK=0"))
     audio = [f"{proj / 'AUDIO' / 'USBSIG' / f'T{t}.wav'}:AUDIO/USBSIG/T{t}.wav" for t in range(1, 9)]
     card = OUT / "card.img"
     cmd = [str(PY), str(ROOT / "tools/emu/ot_emu/stage_card.py"), str(proj), "OCTABAM", "USBSIG",
@@ -119,74 +124,63 @@ def main():
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     if r.returncode:
         sys.exit(f"usb_align: stage_card failed\n{r.stdout[-800:]}{r.stderr[-800:]}")
-    sock = f"/tmp/ot-align-{os.getpid()}.sock"
+    nm = subprocess.run(["m68k-elf-nm", str(ROOT / "out/platform/runtime/runtime.elf")], capture_output=True, text=True).stdout
+    sym = {p[2]: int(p[0], 16) for p in (l.split() for l in nm.splitlines()) if len(p) == 3}
+    ring_b = 1024 * FRAME_B
     log = OUT / "port.txt"
     with open(log, "w") as lf:
-        emu = subprocess.Popen([str(EMU), "--image", str(image), "--card", str(card), "--set", "OCTABAM",
-                                "--project", "USBSIG", "--sequencer", "--internal-clock", "--poke-trig", "2",
-                                "--frames", str(a.frames), "--load-ms", "90000",
-                                "--usb-host", sock, "--usb-hold-ms", "60000"],
-                               cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT)
-    raw = bytearray()
-    try:
-        b = usb_host.Bench(sock, timeout=120.0)
-        usb_host.enumerate_device(b, hs=True)
-        b.ctrl_nodata(0x01, 0x0b, 1, 4)                 # SET_INTERFACE 4 alt 1: EP3 IN up
-        deadline = time.time() + 1200
-        while "sequencer  : playing" not in log.read_text(errors="replace"):
-            if emu.poll() is not None:
-                sys.exit(f"usb_align: the port exited before the transport started -- {log}")
-            if time.time() > deadline:
-                sys.exit(f"usb_align: no transport start in 20 min -- {log}")
-            b.ep_in(3, 1024)                            # keep the endpoint drained meanwhile
-            time.sleep(0.05)
-        print("transport started; draining", a.polls, "polls")
-        empty = 0
-        for _ in range(a.polls):
-            data = b.ep_in(3, 1024)
-            empty += not data
-            raw += data
-        b.sock.close()
-    finally:
-        try:
-            emu.wait(timeout=600)
-        except subprocess.TimeoutExpired:
-            emu.kill()
-    (OUT / "stream.pcm").write_bytes(raw)
-    n = len(raw) // FRAME_B
-    print(f"stream: {n} frames ({n / FS:.2f} s), {empty} empty polls, {log}")
-    if n < 2 * FS:
-        sys.exit("usb_align: less than two seconds of stream")
-    # the steady state: the last second, one window for every channel
-    start = n - FS
-    ch = [[0] * FS for _ in range(NCH)]
-    for i in range(FS):
-        base = (start + i) * FRAME_B
+        r = subprocess.run([str(EMU), "--image", str(image), "--card", str(card), "--set", "OCTABAM",
+                            "--project", "USBSIG", "--sequencer", "--internal-clock", "--poke-trig", "2",
+                            "--frames", str(a.frames), "--load-ms", "90000",
+                            "--dsp", "--main-level", "64",          # both cores live; MAIN volume up (verify_set's run)
+                            "--mem-dump", f"{sym['aud_ring']:#x},{ring_b}={OUT / 'ring.bin'};"
+                                          f"{sym['aud_produced']:#x},4={OUT / 'produced.bin'}"],
+                           cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT)
+    if r.returncode:
+        sys.exit(f"usb_align: ot_emu exit {r.returncode} -- {log}")
+    raw = (OUT / "ring.bin").read_bytes()
+    produced = int.from_bytes((OUT / "produced.bin").read_bytes(), "big")
+    n = 1024
+    print(f"ring: {n} frames, {produced} produced, {log}")
+    # unwrap: frame (produced - 1024 + i) sits at slot (produced - 1024 + i) & 1023
+    start = produced - n
+    ch = [[0] * n for _ in range(NCH)]
+    for i in range(n):
+        base = ((start + i) & (n - 1)) * FRAME_B
         for c in range(NCH):
             w = int.from_bytes(raw[base + 4 * c:base + 4 * c + 4], "little")
             v = w >> 8
             ch[c][i] = v - (1 << 24) if v & 0x800000 else v
+    allpairs = []
     for side, main_ch in (("L", 16), ("R", 17)):
         pairs, rows = [], []
         for t in range(1, 9):
             f = tone(t)[0 if side == "L" else 1]
             xt = goertzel(ch[2 * (t - 1) + (0 if side == "L" else 1)], f)
             xm = goertzel(ch[main_ch], f)
-            if abs(xt) < 1e3 or abs(xm) < 1e3:
+            # only a tone that reaches MAIN near full level is on the direct path;
+            # a faint component is the bus engines' wet return (a delay of its
+            # own) or leakage, and its phase says nothing about the producer
+            if abs(xt) < 1e5 or abs(xm) < 0.3 * abs(xt):
                 rows.append(f"    T{t} {f} Hz: track {abs(xt):.3g} main {abs(xm):.3g} -- too weak, skipped")
                 continue
             dphi = cmath.phase(xt) - cmath.phase(xm)
             period = FS / f
-            rows.append(f"    T{t} {f} Hz: |track| {abs(xt) / FS * 2:.0f} |main| {abs(xm) / FS * 2:.0f}  "
+            rows.append(f"    T{t} {f} Hz: |track| {abs(xt) / n * 2:.0f} |main| {abs(xm) / n * 2:.0f}  "
                         f"lag mod {period:.1f} = {(dphi * period / (2 * math.pi)) % period:.2f} samples")
             pairs.append((f, dphi))
         print(f"MAIN {side} against the tracks' {side} channels:")
         print("\n".join(rows))
-        if len(pairs) >= 3:
+        allpairs += pairs
+        if len(pairs) >= 2:
             d, res = lag_fit(pairs)
             print(f"  -> MAIN {side} lags the tracks by {d} samples = {d / 16:.3f} blocks (rms residual {res:.2f} samples over {len(pairs)} tones)")
         else:
-            print("  -> too few tones to fit a lag")
+            print("  -> too few tones on this side to fit a lag")
+    if len(allpairs) < 2:
+        print("RESULT: no fit"); return 1
+    d, res = lag_fit(allpairs)
+    print(f"RESULT: MAIN lags the tracks by {d} samples = {d / 16:.3f} blocks (rms residual {res:.2f} samples over {len(allpairs)} tones, both sides)")
     return 0
 
 

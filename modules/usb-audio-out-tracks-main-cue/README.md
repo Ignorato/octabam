@@ -148,12 +148,24 @@ device. The port logs them as `iso poll(s) with no IN waiting`.
 The port cannot see the producer's timing against the eDMA's bank swap:
 the emulator runs the frame interrupt and the eDMA in lock-step.
 
+## MAIN/CUE against the tracks
+
+The producer reads channels 1–16 from the read-back arena's previous bank
+and 17–20 from the mixdown buffer's current pull. Measured under the port
+(`tools/harness/usb_align.py`, 28 Sep 2026: the tone project on a staged
+card, the producer's ring dumped at the end of the run, each tone's phase in
+its track channel against MAIN): MAIN lagged the tracks by 16 samples, one
+block, on every tone that reached MAIN (T8 both sides 15.95 / 16.03, T6
+16.02 / 15.96, T3 15.91 / 16.09, T1 R 15.72; residues modulo periods from
+42 to 126 samples, so 16 is the only lag under 882 that fits). Bryan T heard
+MAIN lag on his unit (25 Sep 2026), the same direction. Since 28 Sep the
+producer writes MAIN/CUE into the ring slot `MAIN_CUE_LAG_BLOCKS` = 1 block
+behind the tracks' slot (the consumer runs 512 frames behind, so the slot is
+unread), and `verify_usb_align` reads 0 under the port. The size of the lag
+on hardware is inferred from the port's structure, not measured on a unit.
+
 ## Open
 
-- **MAIN lags the track channels** on hardware (Bryan T, 25 Sep 2026; lag
-  not measured). The producer reads MAIN/CUE from the current pull and
-  the tracks from the previous bank. Aligning them means delaying channels
-  1–16 by the measured lag.
 - **A burst of reordered samples 0.5–1.5 s after a host opens the
   stream**, then in order for good; no frames are lost. At 24 bits it is
   on the right channel of every pair only. It was absent on one take in

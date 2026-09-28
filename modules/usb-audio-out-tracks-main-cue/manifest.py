@@ -9,7 +9,7 @@ measured. USB AUDIO OUT TRACKS (modules/usb-audio-out-tracks, the sixteen track
 channels) and USB AUDIO OUT MASTER (modules/usb-audio-out-master, track 8's two)
 assemble the same source with another USB_LAYOUT.
 """
-from remix.schema import Category, Proof, Detour, Kind, Linked, Module, Override, Poke
+from remix.schema import Category, Gate, Proof, Detour, Kind, Linked, Module, Override, Poke
 
 H = bytes.fromhex
 
@@ -57,4 +57,6 @@ MODULE = Module(
     overrides=(Override(0x4001e606, "USB MIDI"),),
     pokes=(Poke(0x400e2004, H("000000"), H("ef0201"),
                 "device descriptor: class/subclass/protocol = interface-association composite"),),
+    # MAIN/CUE aligned with the tracks (skips without a source project)
+    gates=(Gate("tools/verify/verify_usb_align.py", remix_arg=False, venv=True, stage="image"),),
 )
