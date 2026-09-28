@@ -17,13 +17,15 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           LOAD PROJECT, ~32 s under Octakit): a pool poked once the
           transport has started never reaches the live lane, with or
           without a transport restart (measured 28 Sep 2026), so they
-          cannot share one boot.
+          cannot share one boot. The editor pass is one more boot after
+          them.
   editor  calls the FX2 page-2 editor `0x4003a9dc(5, 2 ticks)` on T1 with
           scene A held (0x460d169c = 1): the Part byte and the live lane
           must not move; the pool in the Part DB's part-0 window and its
           SRAM twin must hold one entry (scene 0, track 0, slot 5) whose
-          value is the knob's plus the ticks' step. A second run starts from
-          a poked entry of 50 and expects the same entry updated, count 1.
+          value is the knob's plus the ticks' step. Then, on the same boot
+          (`ot_emu --step`), the pool is poked to one entry of 50 and the
+          call repeated: the same entry updated, count 1.
 
 SKIPs without a project, without the port, or for a remix without SCENES
 P2. Under a remix with Octakit the editor call runs through her wrapper
@@ -145,14 +147,41 @@ def main():
         rec = dump.read_bytes()
         return ("frames run : 120" in text, [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)])
 
+    # ---- the editor with a scene held: one boot, both seeds ----------------
+    early = f"{TRACK_CUR:#x}=0;{SCENE_HELD + 3:#x}=1;{PART_DISP:#x}=0"
+    SEEDS = (None, 50)
+
+    def dumps_for(seed):
+        d = OUT / f"editor_{seed}"
+        d.mkdir(parents=True, exist_ok=True)
+        return d, ";".join([f"{DBPTR:#x},4={d / 'dbptr.bin'}"]
+                           + [f"{BLOB + b * BANK_STRIDE + POOL_OFF:#x},12={d / f'pool_{b}.bin'}" for b in range(16)]
+                           + [f"{BLOB + b * BANK_STRIDE + 0x8f084:#x},6={d / f'p2_{b}.bin'}" for b in range(16)]
+                           + [f"{SRAM_PART + POOL_OFF - 0x8ed80:#x},12={d / 'pool_sram.bin'}",
+                              f"{LANES + 0x38:#x},6={d / 'lane.bin'}"])
+
+    def editor():
+        steps = []
+        for seed in SEEDS:
+            pokes = early
+            if seed is not None:
+                for b in range(16):
+                    pokes += ";" + ";".join(pokes_bytes(BLOB + b * BANK_STRIDE + POOL_OFF, [0x50, 0x32, 1, 0, 5, seed]))
+            steps += ["--step", f"-:poke:{pokes}", "--step", f"-:call:{FX2_EDITOR:#x},5,2",
+                      "--step", f"-:dump:{dumps_for(seed)[1]}"]
+        return run(base + ["--mount"] + steps, OUT / "editor.txt")
+
     # the knob alone: the same run with the pool's count 0, so what fader 0
     # (the B side, which holds no MODE lock) must read is measured from the
     # project: T1's MODE is 1 in the stress fixture's part 0 and 0 in
     # OCTABAM89_setgate's (a literal 0 failed `make accept`, 26 Sep 2026)
+    # Three boots side by side, then the editor's one: four at once contend
+    # on a four-performance-core machine (28 Sep 2026: slower than 3 + 1).
     with ThreadPoolExecutor(3) as pool_:
         runs = {tag: pool_.submit(frames, tag, pl, xf)
                 for tag, pl, xf in (("knob", pool[:2] + [0] + pool[3:], 0), ("fader 64", pool, 64), ("fader 0", pool, 0))}
         results = {tag: f.result() for tag, f in runs.items()}
+    editor_text = editor()
     for tag, (ran, _) in results.items():
         check(f"{tag}: 120 frames ran", ran)
     recs = {tag: r for tag, (_, r) in results.items()}
@@ -166,28 +195,16 @@ def main():
                   r[48] == want_mode)
             check(f"fader {xf}: ping {ping} T1 TIME (hw 26 lo) = {r[53]} (want {want_time})", r[53] == want_time)
 
-    # ---- the editor with a scene held -------------------------------------
-    early = f"{TRACK_CUR:#x}=0;{SCENE_HELD + 3:#x}=1;{PART_DISP:#x}=0"
-    dumps = ";".join([f"{DBPTR:#x},4={OUT / 'dbptr.bin'}"]
-                     + [f"{BLOB + b * BANK_STRIDE + POOL_OFF:#x},12={OUT / f'pool_{b}.bin'}" for b in range(16)]
-                     + [f"{BLOB + b * BANK_STRIDE + 0x8f084:#x},6={OUT / f'p2_{b}.bin'}" for b in range(16)]
-                     + [f"{SRAM_PART + POOL_OFF - 0x8ed80:#x},12={OUT / 'pool_sram.bin'}",
-                        f"{LANES + 0x38:#x},6={OUT / 'lane.bin'}"])
-    for seed in (None, 50):
-        early2 = early
-        if seed is not None:
-            for b in range(16):
-                early2 += ";" + ";".join(pokes_bytes(BLOB + b * BANK_STRIDE + POOL_OFF, [0x50, 0x32, 1, 0, 5, seed]))
-        log = OUT / f"editor_{seed}.txt"
-        text = run(base + ["--mount", "--poke-early", early2, "--call", f"{FX2_EDITOR:#x},5,2",
-                           "--mem-dump", dumps], log)
-        check(f"editor (seed {seed}): the call returned", "returned, d0" in text)
-        db = int.from_bytes((OUT / "dbptr.bin").read_bytes(), "big")
+    # ---- the editor's checks ------------------------------------------------
+    check(f"editor: both calls returned", editor_text.count("returned, d0") == len(SEEDS))
+    for seed in SEEDS:
+        d = dumps_for(seed)[0]
+        db = int.from_bytes((d / "dbptr.bin").read_bytes(), "big")
         bank = (db - BLOB) // BANK_STRIDE
-        got = (OUT / f"pool_{bank}.bin").read_bytes()
-        sram = (OUT / "pool_sram.bin").read_bytes()
-        lane = (OUT / "lane.bin").read_bytes()
-        part = (OUT / f"p2_{bank}.bin").read_bytes()
+        got = (d / f"pool_{bank}.bin").read_bytes()
+        sram = (d / "pool_sram.bin").read_bytes()
+        lane = (d / "lane.bin").read_bytes()
+        part = (d / f"p2_{bank}.bin").read_bytes()
         knob = part[5]
         check(f"editor (seed {seed}): pool magic + count 1 in bank {bank}'s part 0 ({got[:3].hex(' ')})",
               got[:3] == bytes([0x50, 0x32, 1]))
