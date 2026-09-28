@@ -46,20 +46,18 @@ writes back the length that was already there: a bit-exact no-op, proven
 for all 11,208 (tempo, RLEN) pairs and observed over 21,000 emulator calls
 at 65.6.
 
-The `recfix` remix is these three and the fourteen stock FX2 effects
-(every octabam image rebuilds the FX2 chooser from the remix's contents;
-listing the stock effects costs nothing and keeps the unit normal).
+The `mods` remix carries these (with the other ColdFire mods) on the fourteen stock FX2 effects; `recfix`, the remix of these fixes alone, was removed on 28 Sep 2026 (`git show 13eb3339:remixes/recfix/remix.py`).
 
 ```bash
 git clone --recurse-submodules https://github.com/sambanks/octabam
 cd octabam
 make setup
 make os && make recon
-make check REMIX=recfix
-make image REMIX=recfix BUILD=84         # -> out/OCTATRACK_OCTABAM84.bin
+make check REMIX=mods
+make image REMIX=mods BUILD=84         # -> out/OCTATRACK_OCTABAM84.bin
 ```
 
-`docs/remixes/BUILDING.md` is the walk-through. Always pass `REMIX=recfix`
+`docs/remixes/BUILDING.md` is the walk-through. Always pass `REMIX=mods`
 to `make check`, `make bus` and `make image` alike (there is no default
 remix, and every verifier reads the one image at `out/mainos_bus.bin`). Sam's build of that image is sha256 `ecb574a9…`;
 yours should match if your stock 1.40C does (`370c55a3…`).
@@ -137,7 +135,7 @@ firmware too:
 - The fixture in §3 (REC1 only) and a 1 kHz tone (1,875 cycles per bar at
   128 BPM, so a sample one bar old has the same value) cannot show it.
 
-`RECORDER HOLD` (in `recfix`) repeats the last sample in place of the zero.
+`RECORDER HOLD` (in `mods`) repeats the last sample in place of the zero.
 In a remix with a DRAM runtime the caves follow the moved arena base (the
 build report prints `arena: hold cave ...`); a build of main before that
 change carries caves that never fire in such a remix.
@@ -160,6 +158,6 @@ Open: whether the caves fire on the unit.
   (the hardware result)
 - `modules/recorder-spacing/`, `modules/recorder-hold/`, `modules/flex-seekbind/`,
   `modules/flex-seekbind-ctr/`
-- `remixes/recfix/remix.py`, `remixes/recfix/README.md`
+- `remixes/mods/remix.py`, `remixes/mods/README.md` (`remixes/recfix/` until 28 Sep 2026)
 - `out/hw/softretrig/tempo_seam.py`, `lever_e.py` (the arithmetic gate,
   115,200 cases)

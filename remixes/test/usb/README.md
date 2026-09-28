@@ -1,6 +1,6 @@
 # `usb` and `usb-audio` — the rig over the OT's own USB port
 
-Two remixes of the rig (the effects and hosts of [`bottleservice`](../bottleservice/README.md), without Octakit and the scene modules), with USB functions added on the DRAM platform:
+Two remixes of the rig (the effects and hosts of [`bottleservice`](../../bottleservice/README.md), without Octakit and the scene modules), with USB functions added on the DRAM platform:
 
 | remix | adds | the unit appears to a host as |
 |---|---|---|
@@ -14,9 +14,9 @@ twenty channels above), FULL (the sixteen track channels, remix
 
 ## What is in it
 
-- **USB MIDI** (markandrus, [octemu](https://github.com/markandrus/octemu), MIT) — MIDI in and out over USB. Incoming messages take the same path as DIN MIDI IN; everything the unit sends on DIN is also sent over USB. [`modules/usb-midi/README.md`](../../modules/usb-midi/README.md).
-- **USB AUDIO OUT TRACKS MAIN CUE** (markandrus, octemu, MIT; `usb-audio` only) — at USB high speed, track N's post-FX, pre-fader L/R on channels 2N−1/2N. At full speed, the stereo sum of the tracks. Track LEVEL, the crossfader, MAIN volume and the master effects are not in the stream. [`modules/usb-audio-out-tracks-main-cue/README.md`](../../modules/usb-audio-out-tracks-main-cue/README.md).
-- The rig's effects and hosts as in [`bottleservice`](../bottleservice/README.md): the bus, the three stations, TEMPO SYNC, CC MAP, MODE DEFAULTS, RIG HOSTS; `usb-audio` also carries TEMPO BUS and CC FEEDBACK (every knob value change transmitted as its CC, `modules/cc-feedback`).
+- **USB MIDI** (markandrus, [octemu](https://github.com/markandrus/octemu), MIT) — MIDI in and out over USB. Incoming messages take the same path as DIN MIDI IN; everything the unit sends on DIN is also sent over USB. [`modules/usb-midi/README.md`](../../../modules/usb-midi/README.md).
+- **USB AUDIO OUT TRACKS MAIN CUE** (markandrus, octemu, MIT; `usb-audio` only) — at USB high speed, track N's post-FX, pre-fader L/R on channels 2N−1/2N. At full speed, the stereo sum of the tracks. Track LEVEL, the crossfader, MAIN volume and the master effects are not in the stream. [`modules/usb-audio-out-tracks-main-cue/README.md`](../../../modules/usb-audio-out-tracks-main-cue/README.md).
+- The rig's effects and hosts as in [`bottleservice`](../../bottleservice/README.md): the bus, the three stations, TEMPO SYNC, CC MAP, MODE DEFAULTS, RIG HOSTS; `usb-audio` also carries TEMPO BUS and CC FEEDBACK (every knob value change transmitted as its CC, `modules/cc-feedback`).
 
 ## Status
 
@@ -29,7 +29,7 @@ twenty channels above), FULL (the sixteen track channels, remix
 
 ## Build and flash
 
-1. Set up the repository and the stock OS: [BUILDING.md](../../docs/remixes/BUILDING.md) §1–2 (`make setup`, `make os`, `make recon`).
+1. Set up the repository and the stock OS: [BUILDING.md](../../../docs/remixes/BUILDING.md) §1–2 (`make setup`, `make os`, `make recon`).
 2. Build:
 
    ```bash
@@ -37,8 +37,8 @@ twenty channels above), FULL (the sixteen track channels, remix
    ```
 
    Optional first: `make emu-cf` then `make check REMIX=usb-audio`. `verify_usb` enumerates the image under the emulator and streams from it.
-3. Back up the card and flash from it: [BUILDING.md](../../docs/remixes/BUILDING.md) §4–5. Recovery: §6.
-4. Old projects: [`bottleservice` — How to flash](../bottleservice/README.md#how-to-flash) (`ot_project.py host` and `stamp-defaults`).
+3. Back up the card and flash from it: [BUILDING.md](../../../docs/remixes/BUILDING.md) §4–5. Recovery: §6.
+4. Old projects: [`bottleservice` — How to flash](../../bottleservice/README.md#how-to-flash) (`ot_project.py host` and `stamp-defaults`).
 
 OS upgrades still need DIN MIDI or the card. They do not work over USB MIDI.
 

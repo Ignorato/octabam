@@ -52,7 +52,7 @@ def ctx(make_head=MAKE_BASE, make_base=MAKE_BASE):
         remixes_of={"CHARACTER": ["bamsep26", "usb"], "MINIVERB": ["miniverb"], "ORPHAN": [], "SEND": ["bamsep26", "usb"]},
         gate_owners={"tools/verify/verify_character.py": ["CHARACTER"], "tools/verify/verify_burn.py": ["SEND"]},
         remixes=["bamsep26", "miniverb", "usb"],
-        exists=lambda path: path != "modules/gone",
+        exists=lambda path: path not in ("modules/gone", "remixes/gone", "remixes/test/gone"),
         deps=deps,
         shared_scripts=reach.recipe_scripts(make_head, "verify-shared") | {"tools/verify/verify_docs.py"},
         remix_scripts=reach.recipe_scripts(make_head, "verify-remix"),
@@ -121,6 +121,14 @@ class ModuleAndRemixTests(unittest.TestCase):
 
     def test_one_remix_stays_make_check(self):
         self.assertEqual(commands(["remixes/miniverb/remix.py"])[0], "make check REMIX=miniverb")
+
+    def test_removed_remix_runs_the_selftest_and_the_index(self):
+        self.assertIn("removed remix", note("remixes/gone/remix.py"))
+        self.assertEqual(commands(["remixes/gone/remix.py"]),
+                         ["python3 tools/verify/verify_docs.py", "python3 tools/remix/selftest.py"])
+        self.assertEqual(commands(["remixes/test/gone/remix.py"]),
+                         ["python3 tools/verify/verify_docs.py", "python3 tools/remix/selftest.py"])
+        self.assertEqual(commands(["remixes/gone/README.md"]), ["python3 tools/verify/verify_docs.py"])
 
     def test_test_remix_selection_and_readme(self):
         self.assertEqual(commands(["remixes/test/miniverb/remix.py"]),

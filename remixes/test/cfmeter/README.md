@@ -1,8 +1,8 @@
 # `cfmeter` — the ColdFire's spare time with SYNTH MACHINE running
 
 `octatrick-usb` (SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP, USB MIDI, USB
-AUDIO, the stock effects) plus [CF METER](../../modules/cfmeter/README.md)
-and [CF METER IDLE](../../modules/cfmeter-idle/README.md). DARK REV is off
+AUDIO, the stock effects) plus [CF METER](../../../modules/cfmeter/README.md)
+and [CF METER IDLE](../../../modules/cfmeter-idle/README.md). DARK REV is off
 the chooser: its DSP words hold the readout insert. The readout comes over
 USB AUDIO, T8 on channels 15/16 (post-FX, pre-fader, so LEVEL and MAIN do
 not matter).
@@ -11,7 +11,7 @@ not matter).
 
 Not flashed. `OT_PROJECT=<dir> make check REMIX=cfmeter` passes every
 gate since 28 Sep 2026 (the port follows the idle loop's detour,
-[CF METER IDLE](../../modules/cfmeter-idle/README.md)); `cfmeter-port`,
+[CF METER IDLE](../../../modules/cfmeter-idle/README.md)); `cfmeter-port`,
 the same selection without the loop, is the variant that passed before.
 
 ## Procedure

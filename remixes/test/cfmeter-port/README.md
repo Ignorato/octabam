@@ -11,5 +11,5 @@ passes its gates too. The idle slot reads 0 here.
 
 With T8's FX2 = CF METER (`tools/hw/ot_project.py set-fx <dir> fx2 8 "CF
 METER"`) the decoder prints the interrupt timing; see
-[`modules/cfmeter/README.md`](../../modules/cfmeter/README.md) "Measured
+[`modules/cfmeter/README.md`](../../../modules/cfmeter/README.md) "Measured
 under the port". Not for flashing.
