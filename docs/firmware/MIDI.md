@@ -747,14 +747,25 @@ transmit; it queues:
 | bit `channel` | `0x46c7e0de` |
 | bit 2 | INTFRCH `0xfc048010` when `0x46c7ca34` is 0: forces interrupt source 34, the soft-timer dispatcher `0x400409f4`, which drains the bitmap to UART0 |
 
-A CC queued twice before the drain is sent once. 28 `jsr` sites in the
-image; the page-1 knob path (`0x400552f0`: current track, CC `10 + 6·page
+A CC queued twice before the drain is sent once. The drainer (DTIM2's
+handler, `0x400409f4`) walks the channel mask and each channel's bitmap,
+builds `Bn cc value` from the cache for every set bit and hands the bytes
+to the UART ring (`0x400b9670`, 4096 B; the UART0 ISR `0x400106ec` feeds
+the transmitter from it). If it sent anything it sets `0x46c7ca34` = 1 and
+re-arms DTIM2 for the batch's wire time (`DTRR = bytes × 0x400a763e[rate]`,
+`0x40040ac6..0x40040aee`); otherwise clears the flag and re-arms the
+one-second tick. The emitter forces the timer only while the flag is 0, so
+the wire is paced to MIDI bandwidth and a burst of changes drains in
+batches. 28 `jsr` sites in the image; the page-1 knob path (`0x400552f0`: current track, CC `10 + 6·page
 + slot`, the clamped value) and the crossfader (CC 48) are the two
 traced. Nothing calls it on a pattern, part or project change.
 
-Measured under the port (`verify_set`, bottleservice, 28 Sep 2026): 280
-CCs queued by CC FEEDBACK's sweep left UART0 as 576 bytes with running
-status; UART0's transmit interrupt (vector 0x5a) was acknowledged 280
-times, the dispatcher (0x62) 35. `ot_emu --midi-out FILE` writes the
-bytes.
+Measured under the port (`verify_set`, bottleservice, 28 Sep 2026): 277
+CCs queued by CC FEEDBACK's sweep left UART0 as 573 bytes with running
+status; UART0's transmit interrupt (vector 0x5a) was acknowledged once per
+message, the dispatcher (0x62) 35 times over the load. On the acceptance
+stress fixture 469 CCs, and at the end of the 900-frame run channel 7's
+bitmap still held 15 CCs with the busy flag set: a part change late in
+the run, queued (cache = lane) and waiting for the batch timer. `ot_emu
+--midi-out FILE` writes the bytes.
 

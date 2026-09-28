@@ -25,6 +25,13 @@ track on the same channel (`0x46c76de0 + 68·i`, byte = ch+1) returns. Then:
 | bit `channel` | `0x46c7e0de` | channels with dirty CCs |
 | bit 2 | INTFRCH `0xfc048010`, when `0x46c7ca34` is 0 | forces source 34, the soft-timer dispatcher `0x400409f4`, which drains the bitmap to UART0 |
 
+The drainer sends every pending CC of every dirty channel into the UART
+ring in one batch, then sets `0x46c7ca34` = 1 and re-arms DTIM2 for that
+batch's wire time (`bytes × 0x400a763e[rate]`); the flag clears on a drain
+that found nothing. The wire is paced to MIDI bandwidth by stock; a burst
+of changes goes out in batches and a value that changes twice inside one
+batch is sent once (`docs/firmware/MIDI.md` appendix D).
+
 A repeated CC coalesces in the bitmap. Stock callers: 28 `jsr` sites; the
 page-1 knob path at `0x400552f0` (current track, CC `10 + 6·page + slot`,
 the clamped value) and the panel crossfader as CC 48 are the two traced.
@@ -79,8 +86,15 @@ default.
   transmit interrupt (vector 0x5a) acknowledged once per message; after
   the transport start 9 messages in 900 frames (the eight CCs the gate
   sends in, echoed, and a MODE DEFAULTS neighbour): no step-rate
-  transmission on that project. `verify_set` checks the last value sent
-  per (channel, CC) against the lane dump, and the count after the start.
+  transmission on that project.
+- The port, the acceptance stress fixture (bottleservice, 900 frames):
+  469 CCs; at the end channel 7's bitmap held 15 CCs with the busy flag
+  set -- T7's part changed late in the run, the sweep queued the new
+  values (the cache equalled the lane where the lane had stopped) and the
+  batch timer had not fired yet. `verify_set` therefore checks the
+  emitter's cache against the lane (the module's contract) when the engine
+  is idle at the end, and the wire for shape: every CC sent is a mapped
+  slot on a track's channel.
 
 ## Open
 
