@@ -160,7 +160,7 @@ def core1_slot_peaks(dump_path):
 
 def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
          card_in=None, dump_blocks=True, stack=False, mems=(), calls_before=None, fixture=None,
-         pokes_before=(), mask=0x01):
+         pokes_before=(), mask=0x01, load_ms=20000):
     """One fixture run under the port: the module's action called before
     play (`--call-before-play`: the action arms, and the hook takes the
     ARMED-to-RECORDING edge on the first playing frame), STOP at `stop_at`
@@ -186,7 +186,10 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     A fixture with `audio_in`/`midi` feeds the port's inputs and MIDI IN.
     `mask` is the track mask poked before play, ahead of `pokes_before`
     (default T1: every check written for one track keeps its meaning with
-    the build's all-eight default); None pokes nothing."""
+    the build's all-eight default); None pokes nothing. `load_ms` is the
+    port's budget for LOAD PROJECT, in emulated ms: the load ends as soon
+    as the engine is idle, so a larger budget costs nothing when the load
+    is quicker, and a slow emulated card needs one (stems_sweep.py)."""
     tag = f"{tag}{SUFFIX}"
     fx = json.loads(pathlib.Path(fixture or FIXTURE).read_text())
     pokes_before = ([(s["stems_tracks"] + 3, mask)] if mask is not None else []) + list(pokes_before)
@@ -207,7 +210,7 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
         pk.append((STOP_GATE, 1))
     args = [str(EMU), "--image", str(IMAGE), "--card", card_in or fx["card"], "--set", fx["set"],
             "--project", fx["project"], "--sequencer", "--internal-clock",
-            "--frames", str(frames), "--load-ms", "20000", "--dsp", "--main-level", "64",
+            "--frames", str(frames), "--load-ms", str(load_ms), "--dsp", "--main-level", "64",
             "--pre-roll", str(PRE_ROLL), "--poke-trig", "2",
             *(["--block-dump", str(dump)] if dump_blocks else []),
             "--call-before-play", ",".join(f"0x{a:x}:0" for a in (calls_before or (s["stems_action"],))),
