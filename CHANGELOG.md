@@ -11,7 +11,7 @@ flashed image was built from.
   `ot_emu --live-script FILE` applies panel lines at emulated times;
   `verify_tempobus` drives the TEMPO window with it instead of a FIFO and
   wall-clock sleeps (the key sequence is 7.1 s emulated). `verify_scenesp2`
-  runs both editor cases on one boot, beside its three frame boots.
+  runs both editor cases on one boot (two serial editor boots before).
 - USB AUDIO OUT: the consumer is anchored at the host's first EP3 IN poll
   rather than at SET_INTERFACE (28 Sep 2026), so a host that starts
   polling late (macOS, about 460 frames) streams 512 frames behind the

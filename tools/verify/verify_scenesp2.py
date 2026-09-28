@@ -17,7 +17,7 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           LOAD PROJECT, ~32 s under Octakit): a pool poked once the
           transport has started never reaches the live lane, with or
           without a transport restart (measured 28 Sep 2026), so they
-          cannot share one boot. The editor pass is a fourth boot beside
+          cannot share one boot. The editor pass is one more boot after
           them.
   editor  calls the FX2 page-2 editor `0x4003a9dc(5, 2 ticks)` on T1 with
           scene A held (0x460d169c = 1): the Part byte and the live lane
@@ -175,12 +175,13 @@ def main():
     # (the B side, which holds no MODE lock) must read is measured from the
     # project: T1's MODE is 1 in the stress fixture's part 0 and 0 in
     # OCTABAM89_setgate's (a literal 0 failed `make accept`, 26 Sep 2026)
-    with ThreadPoolExecutor(4) as pool_:
+    # Three boots side by side, then the editor's one: four at once contend
+    # on a four-performance-core machine (28 Sep 2026: slower than 3 + 1).
+    with ThreadPoolExecutor(3) as pool_:
         runs = {tag: pool_.submit(frames, tag, pl, xf)
                 for tag, pl, xf in (("knob", pool[:2] + [0] + pool[3:], 0), ("fader 64", pool, 64), ("fader 0", pool, 0))}
-        editor_run = pool_.submit(editor)
         results = {tag: f.result() for tag, f in runs.items()}
-        editor_text = editor_run.result()
+    editor_text = editor()
     for tag, (ran, _) in results.items():
         check(f"{tag}: 120 frames ran", ran)
     recs = {tag: r for tag, (_, r) in results.items()}
