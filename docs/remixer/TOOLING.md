@@ -198,6 +198,7 @@ last section), the hardware rig — protocol in `docs/history/CAPTURE_18AUG.md`:
 | `tools/hw/capture_hw.py` | records the unit through an audio interface and analyses the capture numerically |
 | `tools/hw/rec.swift` | drop-free CoreAudio HAL recorder (compiled on demand); the ffmpeg/avfoundation path drops samples |
 | `tools/hw/ot_midi.py` | drives the Octatrack over CoreMIDI from the CLI: CC, notes, raw bytes |
+| `tools/hw/bcr2000.py` | programs a Behringer BCR2000 for the rig: BCL from the manifests (page-1 CCs + CC MAP's page 2), sent over SysEx with per-line acks or written for BC Manager |
 | `tools/hw/hw_sweep.py` | scripted sweeps: MIDI steps + capture + per-step metrics in one process |
 | `tools/hw/level_cap.py` | quick capture with peak/RMS/crest/clip-run reporting per channel |
 | `tools/hw/gain_pass.py` | gain-matches a whole project bank-by-bank over MIDI |
