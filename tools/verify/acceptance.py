@@ -109,8 +109,9 @@ def provenance():
     }
 
 
-def run_gate(name, command, out, env, timeout):
+def run_gate(name, command, out, env, timeout, cwd=None):
     """A failed command, timeout, or successful-but-skipped gate cannot pass."""
+    cwd = cwd or ROOT
     log = out / (name + ".log")
     start = time.monotonic()
     result = dict(name=name, command=command, status="failed", exit_code=None,
@@ -119,7 +120,7 @@ def run_gate(name, command, out, env, timeout):
     stdout = out / (name + ".stdout")
     with log.open("w", encoding="utf-8") as f, stdout.open("w", encoding="utf-8") as output:
         try:
-            proc = subprocess.Popen(command, cwd=ROOT, env=env, stdout=output,
+            proc = subprocess.Popen(command, cwd=cwd, env=env, stdout=output,
                                     stderr=f,
                                     start_new_session=(os.name == "posix"))
             try:
@@ -218,8 +219,9 @@ GATES = ("preflight", "fixture", "check_shared", "check_remix", "cycles", "press
 class Run:
     """One remix's report: its gates, its output directory, its environment."""
 
-    def __init__(self, remix, out, env, timeout):
+    def __init__(self, remix, out, env, timeout, tree=None):
         self.remix, self.out, self.timeout = remix, out, timeout
+        self.tree = tree or ROOT   # the worktree the per-remix stages run in (a shard with --jobs)
         self.env = dict(env, REMIX=remix)
         self.out.mkdir(parents=True, exist_ok=True)
         self.report = dict(schema_version=SCHEMA_VERSION, remix=remix,
@@ -242,7 +244,9 @@ class Run:
         return ok
 
     def run(self, name, command):
-        return self.record(run_gate(name, command, self.out, self.env, self.timeout))
+        # cwd only when sharded: the tests fake run_gate with the five-argument signature
+        extra = {} if self.tree == ROOT else {"cwd": self.tree}
+        return self.record(run_gate(name, command, self.out, self.env, self.timeout, **extra))
 
     def fail(self, exc):
         self.report["gates"].append(dict(name="runner", status="failed", reason=str(exc)))
@@ -350,7 +354,7 @@ def remix_stages(r):
         return
     # Preserve the exact restored image for every pressure invocation.
     image = r.out / "image.bin"
-    shutil.copy2(ROOT / "out/mainos_bus.bin", image)
+    shutil.copy2(r.tree / "out/mainos_bus.bin", image)
     r.report["provenance"]["image_sha256"] = sha256(image)
     if not r.run("cycles", [sys.executable, "tools/build/cycle_count.py", "--json"]):
         return
@@ -399,6 +403,41 @@ def remix_stages(r):
         r.record(gate)
 
 
+def run_sharded(live, jobs):
+    """The per-remix stages of `jobs` remixes at a time, each remix in a
+    shard worktree (check_shards.make_shard: HEAD + this tree's diff, its
+    own port build), handed out from one queue so the dearest remix does
+    not set the wall. The shared half ran once in this tree already."""
+    import queue as queue_mod
+    import threading
+    import check_shards
+    shards = [ROOT / "out/shards" / str(i) for i in range(jobs)]
+    (ROOT / "out/shards").mkdir(parents=True, exist_ok=True)
+    print(f"acceptance: {len(live)} remixes over {jobs} shards under out/shards/", flush=True)
+    for s in shards:
+        check_shards.make_shard(s, ROOT / "out/shards" / f"{s.name}.setup.log")
+    todo = queue_mod.Queue()
+    for r in live:
+        todo.put(r)
+
+    def worker(shard):
+        while True:
+            try:
+                r = todo.get_nowait()
+            except queue_mod.Empty:
+                return
+            r.tree = shard
+            try:
+                remix_stages(r)
+            except RUNNER_ERRORS as exc:
+                r.fail(exc)
+    threads = [threading.Thread(target=worker, args=(s,)) for s in shards]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--remix", nargs="+",
@@ -411,7 +450,12 @@ def main(argv=None):
     ap.add_argument("--out", type=pathlib.Path,
                     default=ROOT / "out/acceptance" / dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ"))
     ap.add_argument("--timeout", type=int, default=3600, help="seconds per command")
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="the per-remix stages of N remixes at a time, each in its own worktree under out/shards/ "
+                         "(tools/verify/check_shards.py); the shared half still runs once, here")
     args = ap.parse_args(argv)
+    if args.jobs <= 0:
+        ap.error("--jobs must be positive")
     if args.timeout <= 0:
         ap.error("--timeout must be positive")
     out = args.out.resolve()
@@ -453,13 +497,15 @@ def main(argv=None):
         except RUNNER_ERRORS as exc:
             for r in live:
                 r.fail(exc)
-    for r in live:
-        if r.stopped:
-            continue
-        try:
-            remix_stages(r)
-        except RUNNER_ERRORS as exc:
-            r.fail(exc)
+    live = [r for r in live if not r.stopped]
+    if args.jobs > 1 and len(live) > 1:
+        run_sharded(live, min(args.jobs, len(live)))
+    else:
+        for r in live:
+            try:
+                remix_stages(r)
+            except RUNNER_ERRORS as exc:
+                r.fail(exc)
     statuses = {r.remix: r.finish() for r in runs}
     if len(runs) > 1:
         (out / "summary.json").write_text(json.dumps(statuses, indent=2) + "\n", encoding="utf-8")

@@ -31,6 +31,12 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result["status"], "blocked")
         self.assertEqual(result["skips"], ["[SKIP] missing emulator"])
 
+    def test_run_gate_runs_in_the_given_tree(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            a.run_gate("probe", [sys.executable, "-c", "import os; print(os.getcwd())"],
+                       self.out, dict(os.environ), 5, cwd=self.out)
+        self.assertEqual((self.out / "probe.stdout").read_text().strip(), str(self.out.resolve()))
+
     def test_stderr_skip_also_blocks(self):
         result = self.run_child("import sys; print('SKIP: missing project', file=sys.stderr)")
         self.assertEqual(result["status"], "blocked")
