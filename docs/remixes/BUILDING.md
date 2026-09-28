@@ -83,21 +83,52 @@ source $HOME/.local/bin/env
   Ubuntu profile. Its playback is `afplay` (macOS only); `docs/remixer/REMIXER.md`
   has the two-line wrapper that points it at WSLg's PulseAudio.
 
-**Not verified on this route since 9 Sep 2026.** The build now needs the
-m68k cross-toolchain (`m68k-elf-gcc`, `as`, `ld`, `objcopy`, `nm`): every
-remix with linked ColdFire units (Octakit, MIDI SCENES, the USB modules,
-every DRAM module) refuses without it, and `scripts/setup.sh` adds
-`m68k-elf-gcc` to its Homebrew list when it is missing, so on a machine
-without Homebrew `make setup` stops at `brew: command not found`.
-`binutils-m68k-linux-gnu` ships the binutils half under the
-`m68k-linux-gnu-` prefix; whether symlinking them as `m68k-elf-*`
-satisfies the build, and whether a `.s` re-assembled that way still
-matches its author's bytes, has not been tried. Until someone reports a
-run, treat `make setup`, `make image` and `make check` on Linux as
-unverified; a Linux run that works, with the package list that made it
-work, is a doc PR. Flashing from a Windows host has not been done: the
-card copy is a plain file copy, and the MIDI path needs a SysEx app on
-the host.
+**The m68k cross-toolchain.** The build needs `m68k-elf-gcc`, `as`,
+`ld`, `objcopy` and `nm`: every remix with linked ColdFire units (Octakit,
+MIDI SCENES, the USB modules, every DRAM module) refuses without them, and
+`scripts/setup.sh` adds `m68k-elf-gcc` to its Homebrew list when it's
+missing, so on a machine without Homebrew `make setup` stops at `brew:
+command not found`. Ubuntu's packages ship the tools under another prefix.
+This route was run with them, measured on Ubuntu 26.04 under WSL2 (10 and
+27 Sep 2026, on branch `stem-rec-v2`):
+
+```bash
+sudo apt install -y gcc-m68k-linux-gnu      # GCC 15.2.0; binutils 2.46 comes with it
+for t in as ld objcopy nm objdump gcc; do
+  sudo ln -sf "$(command -v m68k-linux-gnu-$t)" /usr/local/bin/m68k-elf-$t
+done
+```
+
+- ✅ With these on PATH, `make setup` runs without Homebrew: binwalk,
+  radare2 and `m68k-elf-gcc` are all present, so step 1 has nothing to
+  install.
+- ✅ They produce this repository's own pinned ColdFire bytes:
+  `tools/build/label_fmt.py` re-assembles its twelve caves and matches,
+  `tools/build/mode_names.py` passes, and the DRAM loader they build boots
+  under the port (`verify_dram_boot`: it ran once and never reached
+  `fatal`).
+- ❌ They can't build Octakit's runtime. Its `firmware.json` pins
+  `m68k-elf-gcc` 16.1.0, and binutils 2.46 refuses `runtime.S:438`
+  (`bne.s` to a `.global` label more than 127 bytes into the section: it
+  emits an `R_68K_PC8` relocation that overflows). The same loop with a
+  local label assembles at any offset.
+- ❌ USB MIDI's linked unit links to 1,130 bytes that aren't its author's
+  (sha256 `b49af01e…`, not `6291d91e…`), so the build refuses it.
+- 🟡 Inferred: both refusals are the toolchain, because the same trees
+  pass on a Homebrew `m68k-elf` toolchain. Falsifier: a bare-metal
+  `m68k-elf` binutils and GCC 16.1.0 on Linux that still miss the
+  authors' bytes.
+
+So `make check` passes here, and the every-remix sweeps skip the remixes
+this machine can't build, by name, with the reason
+(`tools/remix/prereq.py`). `make accept` doesn't pass here: it refuses any
+`[SKIP]`, so its `check_shared` stage fails for every remix until the
+toolchain builds Octakit and USB MIDI. ❌ Retracted: this paragraph said
+until 28 Sep 2026 that the symlinked tools had "not been tried" and that
+`make check` on Linux was unverified.
+
+Flashing from a Windows host hasn't been done: the card copy is a plain
+file copy, and the MIDI path needs a SysEx app on the host.
 
 ## 2. Get the stock OS
 
