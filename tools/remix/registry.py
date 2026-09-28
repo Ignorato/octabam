@@ -164,6 +164,11 @@ def by_id(fx2_id: int):
 
 
 REMIXES_DIR = ROOT / "remixes"
+# Two roots. remixes/<name>/ is a remix for a card; remixes/test/<name>/
+# carries one module for that module's gates (`make check REMIX=<name>`).
+# A name is unique across both, and every tool takes it bare.
+TEST_DIR = REMIXES_DIR / "test"
+REMIX_ROOTS = (REMIXES_DIR, TEST_DIR)
 # There is no default remix. Every tool takes the selection from its
 # argument or $REMIX and refuses without one (`remix(None)` below); a gate
 # that needs a particular image asks for it by requirement (`fixture`).
@@ -172,15 +177,32 @@ NO_REMIX = ("no remix selected: pass REMIX=<name> (or the remix argument); "
             "`make modules` lists them")
 
 
+def remix_dir(name: str) -> pathlib.Path | None:
+    """The directory holding remixes/<name>/remix.py or
+    remixes/test/<name>/remix.py; None for a flat scratch file. Refuses a
+    name present under both roots."""
+    hits = [r / name for r in REMIX_ROOTS if (r / name / "remix.py").exists()]
+    if len(hits) > 1:
+        raise SystemExit(f"remix {name!r} exists under both roots: "
+                         + " and ".join(str(h.relative_to(ROOT)) for h in hits))
+    return hits[0] if hits else None
+
+
+def is_test(name: str) -> bool:
+    """True for a remix under remixes/test/."""
+    d = remix_dir(name)
+    return d is not None and d.parent == TEST_DIR
+
+
 def remix_path(name: str) -> pathlib.Path:
-    """remixes/<name>/remix.py, the remix's directory beside its README; or
-    the flat remixes/<name>.py the TUI and the selftest write as scratch."""
-    d = REMIXES_DIR / name / "remix.py"
-    return d if d.exists() else REMIXES_DIR / f"{name}.py"
+    """The remix.py under either root (remix_dir); or the flat
+    remixes/<name>.py the TUI and the selftest write as scratch."""
+    d = remix_dir(name)
+    return d / "remix.py" if d is not None else REMIXES_DIR / f"{name}.py"
 
 
 def remix(name: str | None):
-    """Load remixes/<name>/remix.py and return its REMIX. None refuses."""
+    """Load the remix's remix.py (remix_path) and return its REMIX. None refuses."""
     if not name:
         raise SystemExit(NO_REMIX)
     f = remix_path(name)
@@ -229,11 +251,21 @@ def remix(name: str | None):
 
 
 def remix_names() -> list[str]:
+    """Every remix under both roots, plus the flat scratch files at the top
+    level. remixes/test/ itself has no remix.py, so the top-level walk skips
+    it; a name under both roots is refused."""
     if not REMIXES_DIR.is_dir():
         return []
-    names = {d.name for d in REMIXES_DIR.iterdir()
-             if d.is_dir() and not d.name.startswith(("_", "."))
-             and (d / "remix.py").exists()}
+    names: set[str] = set()
+    for root in REMIX_ROOTS:
+        if not root.is_dir():
+            continue
+        for d in root.iterdir():
+            if not d.is_dir() or d.name.startswith(("_", ".")) or not (d / "remix.py").exists():
+                continue
+            if d.name in names:
+                remix_dir(d.name)   # raises, naming both
+            names.add(d.name)
     names |= {f.stem for f in REMIXES_DIR.glob("*.py")
               if not f.name.startswith("_")}
     return sorted(names)

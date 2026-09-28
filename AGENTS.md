@@ -9,7 +9,8 @@ the memory.
 
 The repo is organised as **modules** (`modules/<name>/manifest.py` declares one
 contribution) composed into **remixes** (`remixes/<name>/remix.py` selects a
-set, `README.md` beside it says where it has run).
+set, `README.md` beside it says where it has run; `remixes/test/<name>/`
+carries one module for its gates).
 `make modules` lists them, with the compatibility matrix; `make remix`
 composes one. `docs/remixer/MODULES.md` is the contributor guide and
 `CONTRIBUTING.md` the contract. The build refuses to start when two selected

@@ -254,14 +254,14 @@ def main():
     # ---- every module has a remix ----------------------------------------
     # Every check starts from a remix (make check, make accept, the module
     # gates, make reach): a module no selection carries is never built or
-    # checked. A module arrives with its remix (remixes/<name>/remix.py +
-    # README.md), or in an existing one.
+    # checked. A module arrives with its remix (remixes/<name>/remix.py or
+    # remixes/test/<name>/remix.py, README.md beside it), or in an existing one.
     carried = {k for n in registry.remix_names() for k in registry.remix(n).modules}
     orphans = sorted(m.key for m in registry.modules().values()
                      if not m.is_stock and m.key not in carried)
     for key in orphans:
         bad += 1
-        print(f"  [FAIL] {key}: no remix carries it -- add it to one, or add remixes/<name>/")
+        print(f"  [FAIL] {key}: no remix carries it -- add it to one, or add remixes/test/<name>/")
     if not orphans:
         print("  [PASS] every module is carried by at least one remix")
 
