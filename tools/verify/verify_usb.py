@@ -41,7 +41,7 @@ MIDI_FIFO_HEAD = 0x46100b80         # midi_rx_fifo_head: +1 per byte midi_rx_enq
 LAYOUTS = {
     "USB AUDIO OUT TRACKS MAIN CUE": (20, 960, 2, [(t, c) for t in range(8) for c in (0, 1)] + [(8, 0), (8, 1), (9, 0), (9, 1)]),
     "USB AUDIO OUT TRACKS": (16, 768, 2, [(t, c) for t in range(8) for c in (0, 1)]),
-    "USB AUDIO OUT MASTER": (2, 360, 4, [(7, 0), (7, 1)]),
+    "USB AUDIO OUT MASTER": (2, 96, 2, [(7, 0), (7, 1)]),
     "USB AUDIO OUT MAIN CUE": (4, 192, 2, [(8, 0), (8, 1), (9, 0), (9, 1)]),
     "USB AUDIO OUT MAIN": (2, 96, 2, [(8, 0), (8, 1)]),
 }
