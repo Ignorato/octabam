@@ -1606,6 +1606,9 @@ int main(int _argc, char** _argv)
 				rtos.setUsbNotify(usbNotify);
 		}
 		rtos.install();
+		if(const auto r = rtos.spinRange(); r.second)
+			std::printf("rtos       : main's park is detoured to %#x (a jmp at %#x): PCs in [%#x, %#x) count as the park; a borrowed call returns to the stock bras\n",
+				r.first, ot::g_mainSpin - 6, r.first, r.second);
 		rtos.setBlockLog(!blockLog.empty());
 		if(!blockDump.empty())
 			rtos.setBlockDump(blockDump);

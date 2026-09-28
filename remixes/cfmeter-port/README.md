@@ -1,9 +1,10 @@
 # `cfmeter-port` — `cfmeter` without the idle loop, for the port gate
 
 The same selection as [`cfmeter`](../cfmeter/README.md) without CF METER
-IDLE: the ColdFire port advances its clock only at main's stock `bras .`,
-which the idle loop replaces, so `cfmeter` does not load a project there.
-The idle slot reads 0.
+IDLE. Until 28 Sep 2026 the ColdFire port advanced its clock only at
+main's stock `bras .`, which the idle loop replaces, so `cfmeter` did not
+load a project there; the port follows the detour now and `cfmeter`
+passes its gates too. The idle slot reads 0 here.
 
     OT_PROJECT=<dir> make check REMIX=cfmeter-port
     python3 tools/harness/cfmeter.py --dump out/setverify/port.dump

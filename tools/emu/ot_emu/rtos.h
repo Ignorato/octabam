@@ -202,6 +202,15 @@ namespace ot
 		// Run until the PC is parked at main's spin -- what `callAsMain`
 		// needs before it can borrow the slot.
 		Stop runToMainSpin(double _ms = 5000.0);
+		// A mod may DETOUR main's park: CF METER IDLE replaces the `jsr` at
+		// g_mainSpin-6 with `jmp m_idle` and spins in its own DRAM loop, never
+		// reaching the stock `bras .`. install() reads the site: a `jmp abs.l`
+		// there makes [target, target+0x80) count as the park for the idle
+		// skip, the burst end and runToMainSpin. A borrowed call still returns
+		// to the stock `bras .` (intact behind the detour), where main then
+		// parks for good; the meter's own idle accounting stops there.
+		std::pair<uint32_t, uint32_t> spinRange() const { return {m_spinLo, m_spinHi}; }
+		bool atSpin(const uint32_t _pc) const { return _pc == g_mainSpin || (_pc >= m_spinLo && _pc < m_spinHi); }
 
 		// ---- the card ------------------------------------------------------
 		// Interpose on the task-file window so the card raises INTRQ the way
@@ -613,6 +622,7 @@ namespace ot
 			bool untilGate = false;					// the M6a gate, asked when m_gateDirty
 			uint32_t pc = 0;						// stop BEFORE executing this address (pcArmed)
 			bool pcArmed = false;
+			uint32_t pcLo = 0, pcHi = 0;			// ... or any address in [pcLo, pcHi) (the detoured park)
 			const std::function<bool()>* stop = nullptr;	// the caller's condition, asked before each instruction
 			bool stopOnEvent = false;				// ... and it can only change on a burst-ending instruction: bursts stay on
 			bool idleSkip = true;					// advance the clock over main's idle park
@@ -731,6 +741,7 @@ namespace ot
 		// the bank byte, the main gain table); armed once, at first use.
 		bool m_cardReadyWatched = false, m_curBankWatched = false, m_gainTableWatched = false;
 		int m_savedBank = -1;
+		uint32_t m_spinLo = 0, m_spinHi = 0;	// the detoured park's range (spinRange), 0:0 when the site is stock
 		bool m_frame = false;
 		bool m_framePending = false;
 		bool m_frameFromDsp = false;
