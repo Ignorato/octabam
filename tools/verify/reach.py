@@ -577,8 +577,15 @@ def classify(paths, ctx):
             # remixes/<name>/..., remixes/test/<name>/..., or a flat remixes/<name>.py
             name = parts[2] if parts[1] == "test" and len(parts) >= 3 else parts[1]
             name = name[:-3] if name.endswith(".py") else name
+            rdir = "/".join(parts[:3] if parts[1] == "test" else parts[:2])
             if parts[-1] == "README.md":
                 gates = [CMD["verify_docs"]]
+            elif not ctx.exists(rdir):
+                # A removed remix: nothing to build. The selftest refuses a
+                # module the deletion orphaned, and the index is re-rendered
+                # (verify_docs).
+                note = "removed remix: the selftest and the index"
+                gates = [CMD["selftest"], CMD["verify_docs"]]
             else:
                 gates = [cmd_check(name), cmd_accept(name)]
         elif top in ("tools", "scripts", "dsp"):

@@ -158,7 +158,7 @@ Two ways to write one:
   `remixes/<name>/remix.py` and a README stub. The written file carries
   `name`, `doc`, `modules`, `fallback` and, when it differs from stock's,
   `fx1`.
-- **Copy an existing `remix.py`** and edit it. `remixes/bus/remix.py` is
+- **Copy an existing `remix.py`** and edit it. `remixes/bottleservice/remix.py` is
   a bus image, `remixes/test/euclid/remix.py` an insert beside the stock
   effects, `remixes/ok-ms/remix.py` two ColdFire mods and no DSP code.
 

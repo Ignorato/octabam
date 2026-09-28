@@ -1,6 +1,6 @@
-# `mods` — MIDI SCENES, Octakit and the fixes, bridged
+# `mods` — every ColdFire mod in one image
 
-MIDI SCENES + Octakit + the LO-FI AMF fix + CC MAP on the stock effects, bridged.
+MIDI SCENES, Octakit, the recorder fixes, REPITCH, USB MIDI and USB AUDIO on the stock effects. Not in it: SCENES P2 (the ledger refuses it beside KITS RELOAD and MIDI SCENES) and octatrick's three (DIRECT JUMP hooks `0x400a06d6`, a site Octakit's recipe writes; SCALE QUANTIZER's 2,916-byte ROM unit beside REPITCH's leaves CC MAP's 724-byte cave no run in the free ROM; measured 28 Sep 2026). Those three are in [`octatrick`](../octatrick/README.md).
 
 ## What is in it
 
@@ -10,11 +10,19 @@ MIDI SCENES + Octakit + the LO-FI AMF fix + CC MAP on the stock effects, bridged
 - **CC MAP** (Sam Banks) — MIDI CC 62–67 reach the FX2 effect's page-2 knobs (slots 6–11) and CC 68–73 the FX1 effect's; stock reaches only page 1 over MIDI. One ColdFire cave. Confirmed on hardware 13 Sep 2026.
 - **SCENES KITS** (Sam Banks) — the bridge that lets CC MAP and Octakit share the MIDI CC dispatch entry: CCs 62–73 CC MAP's, then Octakit's, then stock's. Nothing of its own to use.
 - **KITS RELOAD** (Sam Banks) — the bridge that lets MIDI SCENES' Part Reload run beside Octakit's kit reload: Octakit's reload validates its caller's return address, midisc's stub substituted it (OKMS1 trapped on the first Part Reload); the stock call stays and midisc's post-reload restore runs from the return sites.
+- **FLEX SEEK BIND** (sambanks) — ColdFire cave: a same-slot/type/generation FLEX re-bind takes the bind's same-sample path (DSP seek) instead of becoming a new note.
+- **FLEX SEEK BIND CTR** (sambanks) — ColdFire cave: on a same-sample FLEX re-bind, do not bump the voice's per-bind counter (pairs with FLEX SEEK BIND).
+- **RECORDER SPACING** (sambanks) — ColdFire cave: a fixed-RLEN recording is exactly as long as the gap to the next arm, derived from the current arm -- no lane, no stored state.
+- **RECORDER HOLD** (sambanks) — ColdFire cave: a recorder-buffer FLEX voice reading one sample past its recording repeats the last sample instead of reading zero.
+- **RLEN PLEN** (sambanks) — ColdFire cave: RLEN value PLEN (past MAX) = one loop of the track's pattern on its own scale, so TRIG ONE + QREC PLEN records the next pass and stops.
+- **REPITCH** (repeat98) — Adds TSTR REPITCH (STATIC/FLEX and the sample's own TIMESTRETCH): project-tempo following by playback speed, without grains; PTCH off.
+- **USB MIDI** (markandrus/octemu) — Class-compliant USB-MIDI in and out on the OT's own USB port, mirroring the DIN ports (markandrus/octemu).
+- **USB AUDIO OUT TRACKS MAIN CUE** (markandrus/octemu) — Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu).
 - the 14 stock FX2 effects, listed so the chooser is stock's.
 
 ## Status
 
-Boots under the ColdFire port; every `apply_part` in a project load runs the chain. Not flashed as a whole; `ok-ms` (its subset) has run on hardware. Unmeasured: MIDI CCs through the chained dispatch, and his Part save/reload menu hooks against her LOAD/SAVE KIT menus.
+Boots under the ColdFire port; every `apply_part` in a project load runs the chain. Not flashed as a whole. On hardware in subsets: `ok-ms` (MIDI SCENES + Octakit + KITS RELOAD, 14 Sep 2026), the recorder fixes as OCTABAM83/84 (12 Sep 2026; RECORDER HOLD and RLEN PLEN port-gated), REPITCH as OCTABAM81 (16 Sep 2026), USB AUDIO as image 64 (25 Sep 2026). Unmeasured: MIDI CCs through the chained dispatch, and his Part save/reload menu hooks against her LOAD/SAVE KIT menus.
 
 ## Build
 

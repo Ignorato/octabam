@@ -566,16 +566,14 @@ def main():
     _rig = ("FILTER", "SPATIALIZER", "EQUALIZER", "PHASER", "FLANGER", "CHORUS",
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
-    _want = {"restock": (), "recfix": (), "mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
+    _want = {"restock": (), "mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
              "octatrick": (), "octatrick-usb": (), "usb-out-main-cue": (), "usb-out-main": (),     # stock effects + ColdFire modules, no DSP words
              "repitch": (),
              # the twelve io remixes: the IN module's RX inject is placed in SPATIALIZER's words
              **{f"usb-io-{o}-{i}": ("SPATIALIZER",) for o in ("tracks", "tracks-main-cue", "main-cue", "main") for i in ("ab", "cd", "abcd")},
              "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "rig-scenes": _rig, "rig-kits": _rig,
-             "rig-mods": _rig, "usb": _rig, "usb-audio": _rig,
-             "bottleservice": _rig}
+             "usb": _rig, "usb-audio": _rig, "bottleservice": _rig}
     for _n in registry.remix_names():
         _r = registry.remix(_n)
         _hv = stock.region_of(stock.harvested(

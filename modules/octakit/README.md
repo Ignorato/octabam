@@ -93,7 +93,7 @@ Measured under the port (`bottleservice`, the `make accept` stress project,
   read PHSR.
 - Copy: FUNC+REC on 002 in LOAD KIT, FUNC+STOP on 003, loaded 003 ("003
   TWO"): the PHSR bytes; 001 and 002 unchanged.
-- The same sequence over CC MAP's page-2 store (`rig-kits`, T1 FX1 slot 6)
+- The same sequence over CC MAP's page-2 store (`bottleservice`, T1 FX1 slot 6)
   saved, reloaded and stayed per Kit.
 
 Not measured: hardware; whether her unsaved-changes marking (if any)
