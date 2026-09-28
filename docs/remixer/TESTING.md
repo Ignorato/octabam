@@ -304,9 +304,9 @@ with the load average noted because it moves every number:
 |---|---|
 | `make check-shared` for a cover | 250-375 s |
 | per-remix half, a USB test remix | 115-260 s |
-| per-remix half, bottleservice | 788 s (29 Sep 2026, 3 shards, before the scenesp2 fork) |
-| per-remix half, mods | 627 s (2,580 s before `verify_repitch` stopped loading seven times) |
-| the cover's per-remix halves, `JOBS=3` | 986 s |
+| per-remix half, bottleservice | 468 s (29 Sep 2026, 3 shards; 788 s before the scenesp2 fork, 1,143 s on 27 Sep) |
+| per-remix half, mods | 432-627 s (2,580 s before `verify_repitch` stopped loading seven times) |
+| the cover's per-remix halves, `JOBS=3` | 681 s (986 s before the scenesp2 fork) |
 | `verify_scenesp2` on bottleservice, quiet machine | 109-111 s one load per run, 73-74 s one load and forked scenarios |
 | `verify_tempobus`, quiet machine | 49 s wall-clock paced, 34 s scripted |
 
@@ -316,7 +316,7 @@ Typical changes (with `JOBS=4`, kept shards):
 |---|---|---|
 | a module README or a manifest's display fields | none | seconds (`verify_docs`) |
 | one USB IN or OUT module | its few `usb-io-*` remixes (+ bottleservice if it carries it) | 5-15 min |
-| USB MIDI (every USB remix) | ~24 | 20-25 min, floored by bottleservice |
+| USB MIDI (every USB remix) | ~24 | 15-20 min, floored by bottleservice |
 | the build | the cover + identity's moved remixes | 25-40 min |
 
 The floor of most runs is bottleservice's half, and inside it the Octakit
