@@ -58,6 +58,10 @@ decoder once, the same six FIFO writes).
   stream running, without a stall or a change in the audio stream
   (`modules/usb-audio-out-tracks-main-cue/README.md`, the image 64 takes).
 - No USB MIDI transmit measurement from the unit is recorded.
+
+Also carried on Tim Hastie's MKI (`octatrick-usb`, OCTATRICK9, 26 Sep 2026),
+Bryan T's MKII (`usb-lean` image 90, 25 Sep 2026) and Sam's MKII as image 88
+(`bottleservice`, 27 Sep 2026); none of those runs measured MIDI itself.
 - The `usb` remix (this module without USB AUDIO) has not been flashed.
 
 Not measured: timing on the unit (bulk transfers have no schedule; clock

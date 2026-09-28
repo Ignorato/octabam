@@ -121,6 +121,8 @@ The gates as declared on 28 Sep 2026 (`grep "Gate(" modules/*/manifest.py`):
 | EUCLID | `verify_euclid` | image | control math, hooks, renders, playback under the port |
 | MINIVERB | `verify_miniverb` | image | eight instances isolated, dirty memory, buffer guards, audio gates |
 | TAPE ECHO | `verify_tapeecho_cpu` | image | the C reference against the compiled ColdFire port of the echo |
+| USB AUDIO IN AB / CD / ABCD | `verify_usb_in` | image | the host's channels land bit-exact on their RX slots under the port, the others zero, the recorder ring filled, the jacks back at alt 0 |
+| USB AUDIO OUT TRACKS MAIN CUE | `verify_usb_align` | image | MAIN/CUE in the twenty-channel stream are in phase with the tracks (lag 0 samples) |
 
 A gate whose instrument or project is absent prints `[SKIP]`; one whose
 subject is absent from the remix prints `[ -- ]` or `[N/A]` and exits 0.
