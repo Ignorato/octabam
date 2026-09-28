@@ -66,7 +66,8 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
 - Samples: `stage_card.py` skips `.wav`/`.ot`; `--audio` stages one at its
   card path. FLEX and STATIC (measured 15 Sep 2026: TSMODE 0 fits the file
   at unity, −69 dB) both play. `--main-level` is required for any voice.
-- Cost: the 20 s load ≈ 40 s wall; ≈ 15 frames/s with both cores live.
+- Cost: the load runs until the engine is idle (below; 90 s ceiling), about
+  2× emulated time on the wall; ≈ 15 frames/s with both cores live.
 - A panel action: `--poke-early ADDR=BYTE` (before the call; `0x80000000`
   is the current track), `--call ADDR,arg,...` (a firmware routine as
   main, after the load) and `--call-at N` (the same call N frames after

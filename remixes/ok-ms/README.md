@@ -15,7 +15,7 @@ Tested on hardware (14 Sep 2026).
 
 ## Build
 
-macOS with [Homebrew](https://brew.sh) (Linux/WSL2: [docs/WSL.md](../../docs/WSL.md)); `git`, `python3` (3.10+), `cmake`.
+macOS with [Homebrew](https://brew.sh) (Linux/WSL2: [BUILDING.md §1a](../../docs/remixes/BUILDING.md#1a-linux-and-wsl2)); `git`, `python3` (3.10+), `cmake`.
 
 ```bash
 git clone --recurse-submodules https://github.com/sambanks/octabam

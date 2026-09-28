@@ -36,7 +36,7 @@ from the user's image at build time.
 
 2. `make setup` builds the toolchain: dsp56300 at its pin with our patch,
    the ColdFire core, `elektron-firmware-tool` (`scripts/vendor.sh` holds
-   the pins). macOS with Homebrew; `docs/WSL.md` for Linux.
+   the pins). macOS with Homebrew; `docs/remixes/BUILDING.md` §1a for Linux/WSL2.
 3. `make os && make recon` turns **your own** copy of OS 1.40C into
    `out/raw/section_3_MAIN_OS.bin`. Every build and most gates read it;
    it never leaves your machine.
@@ -142,43 +142,43 @@ because the author keeps developing where they are:
 
 ## Gates
 
+[`docs/remixer/TESTING.md`](docs/remixer/TESTING.md) is the mechanism:
+what `make check` runs, what each gate proves, what none of them can see.
+The contract:
+
 **`make check REMIX=<name>` is the floor**, for every remix the change
 reaches. There is no default remix: every target that builds or checks an
 image takes `REMIX=<name>` and refuses without it (`make modules` lists
-them); a gate that needs a particular image asks the registry for the
-smallest remix carrying what it needs (`registry.fixture`). It builds, prices cycles, runs the shared gates (the ledger
-selftest, the menu, the dirty-state render, the docs, a project under the
-ColdFire port) and then every gate the selected modules declare in their
-manifests (`schema.Gate`, run by `tools/verify/module_gates.py`). A remix
-without a module never runs that module's gates; a module without gates
-has only the shared ones. Never claim something works because it
-assembled.
+them). It builds, prices cycles, runs the gates every remix gets (the
+ledger selftest, the stock-id audit, the docs, the knob census, the
+dirty-state render, the menu, the boot under the ColdFire port, a project
+under the port, USB) and then every gate the selected modules declare in
+their manifests (`schema.Gate`). A remix without a module never runs that
+module's gates; a module without gates has only the shared ones. Never
+claim something works because it assembled.
 
 **`make reach`** reads the branch's diff against `origin/main` and prints
-the gates it reaches: a module's remixes from the selections, a
-verifier's owners, refhash for the build, `make ci-dsp`/`ci-emu` for the
-toolchains. `make reach RUN=1` runs them in order. It refuses a tree that
-is not rebased onto the base. Two or more remixes are printed as one
-`make check-shared REMIXES="..."` (the ledger selftest, the knob census
-and the isolated module gates that build their own image, once) and a
-`make check-remix REMIX=<r>` each (its build, cycles, dirty state, init
-regs, DRAM boot, labels, its own module gates, menu, the set under the
-port, USB); `make check` is the two halves for one remix.
+the gates it reaches, in order; `RUN=1` runs them. It refuses a tree that
+is not rebased onto the base. A change to a module reaches every remix
+that carries it; a change to the build reaches `scripts/refhash.sh check`,
+`make identity` and the cover (the fewest remixes that carry every
+module); a change to a gate reaches the remixes that run it; a doc change
+reaches `verify_docs`. TESTING.md §4 has the full routing.
 
-For acceptance evidence, use `make accept REMIX=<name>` with
-`STRESS_SOURCE=<a local project>` (the fixture is generated for the
-remix) or `OT_PROJECT=<dir>` (a project you prepared). Unlike the
-development check, this refuses missing evidence and writes a versioned
-JSON report. The pressure stages run when every DSP module in the
-selection declares its dearest settings (`schema.Module.dear`); a module
-without them blocks the remix, by name, never a render at defaults. See
-[the acceptance contract](docs/remixer/ACCEPTANCE.md) for the fixture,
-report fields, coverage and hardware limitations.
+**`make accept`** is the strict form of the same gates: it refuses a
+`[SKIP]`, a swallowed failure or a missing instrument, prices every
+selectable layout, renders the dearest, and writes a versioned JSON report
+(`docs/remixer/ACCEPTANCE.md`). `STRESS_SOURCE=<a local project>` generates
+the fixture for the remix; `OT_PROJECT=<dir>` uses a project you prepared.
+The pressure stages run only when every DSP module in the selection
+declares its dearest settings (`schema.Module.dear`); a module without them
+blocks the remix, by name, never a render at defaults.
 
 **If you changed the build rather than a module, prove it changed
 nothing**: `scripts/refhash.sh save` on a tree you trust, then
-`scripts/refhash.sh check` — 24 configurations, artifacts *and* build
-reports, bit-identical. Every step of the DRAM platform landed under it.
+`scripts/refhash.sh check` (24 configurations, artifacts *and* build
+reports, bit-identical), and `make identity` (every remix, base against
+head).
 
 **Say what was measured and what was inferred**, in the README, with what
 would falsify each claim; retract in every document that repeated a
@@ -201,33 +201,17 @@ that #415 had renamed).
 ```bash
 git fetch upstream && git rebase upstream/main
 make reach BASE=upstream/main        # the gates this diff reaches, in order
-STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1   # run them
 STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1 KEEP=1 JOBS=4
 #   KEEP=1: every gate, then one table (instead of stopping at the first failure)
-#   JOBS=4: the check-remix lines over four worktrees at a time (make check-remixes)
+#   JOBS=4: the per-remix lines over four worktrees at a time
 ```
-
-What `make reach` lists, by what changed:
-
-| changed | gates |
-|---|---|
-| `modules/<name>/` (a pin bump too) | `make accept` for every remix that carries the module (one `REMIXES="..."` line; it runs both halves of `make check` itself, the shared half once) |
-| `remixes/<name>/remix.py`, `remixes/test/<name>/remix.py` | `make accept` for that remix |
-| a file under `tools/` or `scripts/` | by dependency: the Python imports and the `tools/x/y.py` paths the code runs or reads form a graph, and a change reaches the gates that depend on it. The build (`build_bus.py`, `cycle_count.py`, `dsp/`) and what it imports: `scripts/refhash.sh check` (save the baseline on main first), `python3 tools/verify/image_identity.py` (every remix built from the base and from this tree; `RUN=1` then checks the remixes whose image moved), `make test-acceptance`, `make check-shared` once for the cover. A gate of the shared half (the selftest, slots, replaces, docs, label_fmt, the knob census, a manifest gate with `remix_arg=False`): `make check-shared` once (for the cover) or for the owners' remixes. A gate of the per-remix half (dirtystate, initregs, dram_boot, labels, modenames, hidden, menu, set, usb): `make check-remix` for the cover. A manifest gate with `remix_arg=True`: its owners' remixes. The acceptance runner, the stress generator, `pressure.py`: `make test-acceptance`, `make accept` on the cover. A file no gate depends on: nothing, and the listing says so |
-| `tools/harness/dsp_host/`, `tools/patches/`, `scripts/setup.sh`, `scripts/vendor.sh` | `make ci-dsp`, then the cover (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md; identity cannot see a toolchain change, both trees build with the same binary) |
-| `tools/emu/ot_emu/` | `make ci-emu`, `make emu-cf`, the cover's per-remix half, with OT_PROJECT |
-| `Makefile` | by target, against the base: a target of the check graph (`bus`, `cycles`, `verify*`, `check*`), a variable or a `define`: identity, the cover and `make ci`; `accept`, `reach`, `check-remixes`, `test-acceptance`: the runner tests; a ci target: `make ci`; any other target: nothing |
-| `docs/`, `*.md` | `python3 tools/verify/verify_docs.py` |
-| `.github/` | `make ci` |
-| anything else | the cover, named as unclassified |
-
-**The cover** is the fewest remixes that between them carry every module, computed from the registry each run (9 of 27 on 28 Sep 2026: `cfmeter`, `bottleservice`, `recfix`, `mods`, `euclid`, `miniverb`, `repitch`, `tapeecho`, `usb-full`), so every module's gates and every kind of per-remix gate run at least once. A remix outside it is a subset of one inside. `make reach REACHARGS=--all` makes the floor every remix. **Identity** (`tools/verify/image_identity.py`) builds every remix from the merge-base (a kept worktree under `out/identity/base`) and from this tree with the shipping flags and compares image and report byte for byte; a remix whose bytes did not move has nothing new for a gate that reads the image.
 
 Without `STRESS_SOURCE` the accept line cannot run, so the list carries
 the `make check` lines separately and names the accept line as blocked.
 A remix with a DSP module that declares no `dear` makes `make accept`
 report `blocked` with the module's name; say so in the PR. List each
-command and its result in the PR body (`make reach`'s output is the list).
+command and its result in the PR body (`make reach`'s output is the list;
+the PR template asks for it).
 
 ## What CI checks
 
@@ -238,9 +222,9 @@ bytes, so it checks only what needs none:
 | job | make target | what it proves |
 |---|---|---|
 | gates the PR reaches | `make reach` | the diff classifies and the tree is rebased; the job log carries the gate list the PR body must answer (pull requests only) |
-| acceptance runner tests | `make test-acceptance` | `make accept` refuses skipped, failed, incomplete and over-budget evidence; `make reach` classifies paths as documented |
+| acceptance runner tests | `make test-acceptance` | `make accept` refuses skipped, failed, incomplete and over-budget evidence; `make reach` classifies paths as documented; the shard runner's job list covers the recipe |
 | dsp56300 + our patch | `make ci-dsp` | the vendored DSP emulator at its pin takes `tools/patches/dsp56300.patch`, builds, passes upstream's own test runner, and `dsp_asm` emits the one-word displaced move (`make check-asm`) |
-| ColdFire port unit tests | `make ci-emu` | `tools/emu/ot_emu` builds against the pinned cores and passes the EMAC, peripheral and mc68k unit tests |
+| ColdFire port unit tests | `make ci-emu` | `tools/emu/ot_emu` builds against the pinned cores and passes its EMAC and peripheral unit tests |
 
 The port's `rtos`, `dsp` and `repitch` tests read the stock OS and are
 excluded from CI by name. **A green CI run says nothing about a

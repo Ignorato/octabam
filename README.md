@@ -6,37 +6,49 @@ An unofficial community remixer for the Elektron Octatrack's operating
 system, not affiliated with Elektron: pick the modifications you want and
 build them into one firmware image from your own copy of OS 1.40C.
 
-A modification is a **module** (`modules/<name>/`), a selection of modules
-is a **remix** (`remixes/<name>/remix.py`), and `make image REMIX=<name>` composes
-a remix into a card-flashable image: placing code, wiring hooks by symbol,
-refusing collisions by name, and proving every ported module against its
-author's own build byte for byte. No firmware is distributed here; every
-image is derived from the user's own 1.40C on the user's machine.
+A modification is a **module** (`modules/<name>/`). A named selection of
+modules is a **remix** (`remixes/<name>/`). `make image REMIX=<name>`
+composes a remix into a card-flashable image: it places the code, wires
+the hooks by symbol, refuses collisions by name, and proves every ported
+module against its author's own build byte for byte. No firmware is
+distributed here; every image is derived from the user's own 1.40C on the
+user's machine, and a built image must never be shared.
 
-Every module is contributed by its author and credited in the table
-below. Pull requests are accepted: a module, a port of an existing mod, a
-fix, a doc correction (`CONTRIBUTING.md`, `docs/remixer/MODULES.md`).
-Issues are disabled and there is no request queue. The licence is MIT; a
-fork that takes requests and tracks issues is allowed.
+Every module is contributed by its author and credited in the table below.
+Pull requests are accepted: a module, a port of an existing mod, a fix, a
+doc correction. Issues are disabled and there is no request queue. The
+licence is MIT; a fork that takes requests and tracks issues is allowed.
 
-**[docs/remixes/BUILDING.md](docs/remixes/BUILDING.md)** is the step-by-step
-guide from a fresh machine to a flashed unit; its §8 is how to write a
-remix of your own.
-**[docs/remixes/README.md](docs/remixes/README.md)** lists every remix with
-its contents and how far it has been proven; each remix's own README is
-beside its selection in `remixes/<name>/`.
+## Start here
 
-## What it carries
+| you want to | read |
+|---|---|
+| put a remix on your Octatrack | [docs/remixes/BUILDING.md](docs/remixes/BUILDING.md): a fresh machine to a flashed unit, step by step, with the recovery path |
+| see what remixes exist and what is in each | [docs/remixes/README.md](docs/remixes/README.md), then the remix's own page in `remixes/<name>/README.md` |
+| see every module and how far it is proven | the table below; each module's `modules/<name>/README.md` has the measurements |
+| compose your own selection | `make remix`, the interactive remixer ([docs/remixer/REMIXER.md](docs/remixer/REMIXER.md)), or [BUILDING.md §8](docs/remixes/BUILDING.md#8-your-own-remix) |
+| write a module or port an existing mod | [CONTRIBUTING.md](CONTRIBUTING.md) (the contract), [docs/remixer/MODULES.md](docs/remixer/MODULES.md) (the guide), [docs/remixer/TESTING.md](docs/remixer/TESTING.md) (what the gates prove) |
+| understand the firmware | [docs/firmware/ARCHITECTURE.md](docs/firmware/ARCHITECTURE.md) and its neighbours; [docs/remixer/TOOLING.md](docs/remixer/TOOLING.md) for the tools |
 
-Every module, with its author. Those with a repository are built from it.
-The table is rendered from the manifests (`make docs`; `make check` refuses
-a stale copy). `make modules` prints the same index with the compatibility
-matrix (which ColdFire modules can share an image, from the same check the
-build makes; `✓*` is a pair that needs the named bridge) and every remix.
-The last column is how far the module has been proven: `make check`
-(builds and boots under the port), a local render, port-gated (a gate
-under the ColdFire port pins its behaviour), or on hardware, with the
-unit, image and date.
+## Quick start
+
+macOS with Homebrew, or Linux / WSL2 ([BUILDING.md §0](docs/remixes/BUILDING.md#0-what-you-need)
+says what each needs). `git`, `python3` 3.10+, `cmake`.
+
+```bash
+git clone --recurse-submodules https://github.com/sambanks/octabam
+cd octabam
+make setup                              # the toolchain: vendored tools at their pins, patched, built
+make os && make recon                   # your own 1.40C -> out/raw/section_3_MAIN_OS.bin
+make modules                            # every module, the compatibility matrix, every remix
+make image REMIX=bottleservice BUILD=1  # -> out/OCTATRACK_OCTABAM1.bin, the card image
+```
+
+Then [BUILDING.md §4–5](docs/remixes/BUILDING.md#4-back-up): back up the
+card, copy the image to its root, PROJECT → SYSTEM → OS UPGRADE. The unit's
+OS version reads `OCTABAM1`. Before flashing, `make emu-cf` then
+`make check REMIX=bottleservice` runs every gate and boots the image under
+the local emulator.
 
 <!-- modules:begin -->
 
@@ -105,8 +117,8 @@ unit, image and date.
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| [**FLEX SEEK BIND**](modules/flex-seekbind/) | [sambanks](https://github.com/sambanks) | ColdFire cave: a same-slot/type/generation FLEX re-bind takes the bind's same-sample path (DSP seek) instead of becoming a new note. | on hardware: OCTABAM83, 12 Sep 2026 |
-| [**FLEX SEEK BIND CTR**](modules/flex-seekbind-ctr/) | [sambanks](https://github.com/sambanks) | ColdFire cave: on a same-sample FLEX re-bind, do not bump the voice's per-bind counter (pairs with FLEX SEEK BIND). | on hardware: OCTABAM83, 12 Sep 2026 |
+| [**FLEX SEEK BIND**](modules/flex-seekbind/README.md) | [sambanks](https://github.com/sambanks) | ColdFire cave: a same-slot/type/generation FLEX re-bind takes the bind's same-sample path (DSP seek) instead of becoming a new note. | on hardware: OCTABAM83, 12 Sep 2026 |
+| [**FLEX SEEK BIND CTR**](modules/flex-seekbind-ctr/README.md) | [sambanks](https://github.com/sambanks) | ColdFire cave: on a same-sample FLEX re-bind, do not bump the voice's per-bind counter (pairs with FLEX SEEK BIND). | on hardware: OCTABAM83, 12 Sep 2026 |
 | [**LOFI AMF FIX**](modules/lofi-amf-fix/README.md) | [bryantysinger/octa-bt-pt](https://github.com/bryantysinger/octa-bt-pt) | Fixes stock LO-FI's AMF knob: mpysu -> mpyuu, both payloads. Ported from bryantysinger/octa-bt-pt. | `make check`: both words disassembled against stock |
 | [**RECORDER HOLD**](modules/recorder-hold/README.md) | [sambanks](https://github.com/sambanks) | ColdFire cave: a recorder-buffer FLEX voice reading one sample past its recording repeats the last sample instead of reading zero. | port-gated: 26 Sep 2026 |
 | [**RECORDER SPACING**](modules/recorder-spacing/README.md) | [sambanks](https://github.com/sambanks) | ColdFire cave: a fixed-RLEN recording is exactly as long as the gap to the next arm, derived from the current arm -- no lane, no stored state. | on hardware: OCTABAM83, 12 Sep 2026 |
@@ -119,20 +131,6 @@ unit, image and date.
 | [**CF METER IDLE**](modules/cfmeter-idle/README.md) | [sambanks](https://github.com/sambanks) | Probe: main's idle loop timed, for CF METER's idle-time slot. | `make check`: boots under the port; does not load a project there (the port's clock) |
 
 <!-- modules:end -->
-
-## Quick start
-
-```bash
-git clone --recurse-submodules https://github.com/sambanks/octabam
-cd octabam
-make setup                          # toolchain (macOS + Homebrew; docs/WSL.md for Linux)
-make os && make recon               # your own 1.40C -> out/raw/section_3_MAIN_OS.bin
-make image REMIX=ok-ms BUILD=1      # -> out/OCTATRACK_OCTABAM1.bin
-```
-
-`make check REMIX=<name>` runs every gate and boots the image under the
-local ColdFire emulator. `make remix` opens the TUI remixer
-(`docs/remixer/REMIXER.md`).
 
 ## How it works
 
@@ -154,50 +152,43 @@ go where, and a module declares what it is, not an address:
 | DRAM unit | `Linked(..., dram=True)`: a GNU-as unit | linked with every other DRAM unit in the remix into one runtime, packed, appended behind octabam's loader, depacked at boot into a 10 MB reserve carved off stock's 85.5 MB sample/recorder pool |
 | appended runtime | `Runtime`: a recipe (Octakit's `firmware.json`) | its own reserve of the same pool, as a second payload of the same loader |
 
-The OS-image edits every class needs — a detour at a stock instruction, a
-poke, a grown table — are `Detour`, `Poke`, `TableGrow`, wired by symbol and
+The OS-image edits every class needs (a detour at a stock instruction, a
+poke, a grown table) are `Detour`, `Poke`, `TableGrow`, wired by symbol and
 asserted against stock before a byte is written. `docs/remixer/PLACEMENT.md`
 is the map of what is free and what was measured.
 
 **A port is a proof.** The build re-links every unit at the author's own
 address and compares, rebuilds Octakit's runtime to the identities her
-recipe pins, and refuses on any drift. `CONTRIBUTING.md` is the contract;
-`docs/remixer/MODULES.md` the guide to writing a module.
+recipe pins, and refuses on any drift.
 
 **Where a module's state lives.** An effect's twelve knobs are Part
 parameters and stay in the Part. Personal material (Octakit's Kits,
 octalab's grooves) is in files the module owns and formats. A module's
-settings (how it behaves or looks: menu options, a USB profile) have no
-shared home yet: Octakit and octalab each write their own files, and the
-other modules keep none. The shared settings store for all modules, OTX
-(`otx.work` / `otx.strd` in the project folder, one record per module,
-unknown records preserved byte for byte by any firmware that saves), is
-specified in
-[`docs/proposals/OTX_PROJECT_PROPOSAL.md`](docs/proposals/OTX_PROJECT_PROPOSAL.md)
+settings (menu options, a USB profile) have no shared home yet; the shared
+settings store for all modules, OTX, is specified in
+[docs/proposals/OTX_PROJECT_PROPOSAL.md](docs/proposals/OTX_PROJECT_PROPOSAL.md)
 (nordseele, draft 2, 26 Sep 2026) with author-facing
-[guidelines](docs/proposals/OTX_MODULE_GUIDELINES.md);
-not implemented. `docs/remixer/MODULES.md` "Settings on the card" says
-what a module declares under it.
+[guidelines](docs/proposals/OTX_MODULE_GUIDELINES.md), and is not implemented.
 
 ## Checking without a flash
 
-The DSP side renders locally on the assembled instruction stream (`make
-render`, `make render-rig`; `docs/remixer/HARNESS.md`). The whole machine
-— ColdFire, both DSP cores, the card, the panel, MIDI, USB — runs under a
-port of it (`tools/emu/ot_emu`, `make emu-cf`):
+Everything is checked on your machine against your own 1.40C
+([docs/remixer/TESTING.md](docs/remixer/TESTING.md)). The DSP side renders
+locally on the assembled instruction stream (`make render`, `make render-rig`;
+[docs/remixer/HARNESS.md](docs/remixer/HARNESS.md)). The whole machine, the
+ColdFire, both DSP cores, the card, the panel, MIDI and USB, runs under a
+port of it (`tools/emu/ot_emu`, `make emu-cf`; [docs/remixer/EMU.md](docs/remixer/EMU.md)):
 
 ```bash
-make check REMIX=<name>             # boots the image under the port; OT_PROJECT=<dir> adds a real project
+make check REMIX=<name>             # build + every gate + boot under the port; OT_PROJECT=<dir> adds a real project
 make reach                          # the gates this branch's diff reaches, in order; RUN=1 runs them
 make panel REMIX=<name>             # the virtual front panel with sound at localhost:8563 (tools/panel/README.md)
 make emu-live REMIX=<name>          # the screen and keys in a window, no sound
 ```
 
-`docs/remixer/EMU.md` covers all of them and the Unicorn routes the
-label gates use. CI (`.github/workflows/ci.yml`, `make ci`) runs the checks that
-need no firmware; `CONTRIBUTING.md` says what those cover and what they
-cannot. What the emulators cannot see — caches, the recorder,
-cross-core timing — is listed beside every gate that is blind to it.
+CI (`.github/workflows/ci.yml`, `make ci`) runs the checks that need no
+firmware. What the emulators cannot see (caches, the recorder's DMA,
+cross-core timing) is listed beside every gate that is blind to it.
 
 ## Before you flash anything
 
@@ -221,6 +212,35 @@ the repo; everyone builds their own.
 *Octatrack* and *Elektron* are trademarks of Elektron Music Machines MAV
 AB, used here only to identify the hardware this project targets.
 
+## Documentation
+
+For users:
+
+| page | what it is |
+|---|---|
+| [docs/remixes/BUILDING.md](docs/remixes/BUILDING.md) | build and flash a remix, macOS and Linux/WSL2, recovery, your own remix |
+| [docs/remixes/README.md](docs/remixes/README.md) | the remix index (rendered from the selections); `remixes/<name>/README.md` per remix |
+| [docs/remixer/FLASHING.md](docs/remixer/FLASHING.md) | the card and MIDI flash paths in full, what to check after, reverting |
+| [docs/remixer/FAILURE_MODES.md](docs/remixer/FAILURE_MODES.md) | symptom → cause → fix, for everything that has gone wrong on a unit |
+| [docs/remixer/REMIXER.md](docs/remixer/REMIXER.md) | `make remix`, the interactive remixer |
+
+For contributors:
+
+| page | what it is |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | the contract: the one rule, your first PR, the oracle rule, the gates before a PR, what CI checks |
+| [docs/remixer/MODULES.md](docs/remixer/MODULES.md) | writing a module: manifests, descriptors, DSP and ColdFire declarations, the ledger |
+| [docs/remixer/TESTING.md](docs/remixer/TESTING.md) | how the testing works: the two halves of `make check`, module gates, `make reach`, shards, `make accept`, bit-identity, CI, blind spots |
+| [docs/remixer/PLACEMENT.md](docs/remixer/PLACEMENT.md) | where a module's code goes and what is free, measured |
+| [docs/remixer/HARNESS.md](docs/remixer/HARNESS.md), [EMU.md](docs/remixer/EMU.md) | hearing and measuring the DSP side locally; the ColdFire emulators |
+| [docs/remixer/TOOLING.md](docs/remixer/TOOLING.md) | every tool, end to end |
+| [docs/remixer/ACCEPTANCE.md](docs/remixer/ACCEPTANCE.md) | `make accept`'s report and coverage |
+| [docs/effects/](docs/effects/) | the bus (XBUS), the reverb, the master, the borrowed voicings |
+| [docs/firmware/](docs/firmware/) | the firmware reverse-engineered: architecture, kernel, DSP, chip, tables, parameter pages, menus, panel, MIDI, LFO, level law, recorder, storage; CONTRIBUTIONS is the dated index of what each contributor sent |
+| [docs/proposals/](docs/proposals/) | OTX (the settings store), multitrack to card |
+| [AGENTS.md](AGENTS.md) | working rules and the traps that have cost real work (for people and coding agents alike) |
+| [CHANGELOG.md](CHANGELOG.md) | one entry per image that reached a unit |
+
 ## Repository layout
 
 ```
@@ -231,6 +251,10 @@ modules/           the contributions, one directory each
 remixes/           one directory per remix: remix.py (the selection, in chooser order) and README.md
 remixes/test/      the one-module remixes, for their modules' gates (make check REMIX=<name>)
 docs/remixes/      the build guide and the rendered remix index
+docs/remixer/      using and extending the remixer
+docs/firmware/     the firmware, reverse-engineered
+docs/effects/      the effects: XBUS (the bus), REVERB, MASTER, PORTS
+docs/proposals/    technical propositions
 tools/remix/       the toolkit: schema, registry, ledger, the loader, the DRAM platform, the TUI
 tools/build/       the image build (build_bus.py) and the tools that understand the OS layout
 tools/verify/      the gates
@@ -238,13 +262,10 @@ tools/harness/     hear and measure the DSP side locally (dsp_host, send_probe, 
 tools/emu/         the ColdFire emulators: the headless port (ot_emu) and the Unicorn bring-up
 tools/panel/       the virtual front panel over the port, with sound (tools/panel/README.md)
 tools/hw/          the unit and its card: MIDI control, capture, project files, MIDI flashing
+tools/ghidra/      one Ghidra project over the OS and both DSP payloads
 tools/patches/     local patches to the vendored toolchains
 scripts/           toolchain setup, vendored pins (vendor.sh), OS fetch and recon, the bit-identity gate
 dsp/               shared DSP infrastructure: the null stub and the probes
-docs/remixer/      using and extending the remixer: MODULES, PLACEMENT, REMIXER, TOOLING, EMU, HARNESS, ACCEPTANCE, FLASHING, FAILURE_MODES
-docs/firmware/     the firmware, reverse-engineered: ARCHITECTURE, KERNEL, DSP, CHIP, TABLES, PARAM_PAGES, MAINMENU, PANEL, MIDI, LFO, LEVEL_LAW, COLDFIRE_DELAY, COLDFIRE_PORT, RECORDER, RECORDER_CLICK, REPITCH, SAMPLE_SAVE, STORAGE; CONTRIBUTIONS is the dated index of what each contributor sent
-docs/effects/      the effects: XBUS (the bus), REVERB, MASTER, PORTS
-docs/proposals/    technical propositions: OTX_PROJECT_PROPOSAL + OTX_MODULE_GUIDELINES (the settings store), MULTITRACK_TO_CARD
 ```
 
 ## Credit

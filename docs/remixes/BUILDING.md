@@ -10,7 +10,7 @@ name.
 
 ## 0. What you need
 
-- A Mac with [Homebrew](https://brew.sh), or Linux / WSL2 ([docs/WSL.md](../WSL.md)).
+- A Mac with [Homebrew](https://brew.sh), or Linux / WSL2 (§1a below).
 - `git`, `python3` (3.10+; stdlib only, no packages), `cmake` (`brew install cmake`).
 - An Octatrack MKI or MKII on OS 1.40C. The stock 1.40C image is one file
   for both marks; octabam's own effects have only been tested on an MKII,
@@ -39,6 +39,65 @@ it: `git submodule update --init`.
 Homebrew, checks out three pinned vendored tools (`vendor/`), applies the
 local patches and builds them. Re-running it is safe. It ends with
 `setup complete`.
+
+### 1a. Linux and WSL2
+
+The build is bash + Makefile + CMake and does not run on native Windows;
+it runs inside WSL2 (WSL 2, not WSL 1: [Microsoft's install
+guide](https://learn.microsoft.com/windows/wsl/install)). What is written
+here was verified on Ubuntu 26.04.1 under WSL2 on 3 Sep 2026 and re-read
+against the tree of 28 Sep 2026; the last paragraph says what has not been
+verified since.
+
+Clone into the Linux filesystem, not `/mnt/c`: over the 9p bridge the
+CMake build is slow, and a Windows-side clone loses the exec bit and can
+carry CRLF endings bash chokes on. Reach the tree from Windows at
+`\\wsl$\Ubuntu\home\<user>\octabam` (to play rendered wavs, or to copy a
+built image to the card from Explorer). VS Code: the **WSL** extension.
+
+Inside the shell, before `make setup`:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake git curl unzip xxd binutils \
+                    binutils-m68k-linux-gnu \
+                    python3 python3-numpy binwalk radare2 pulseaudio-utils
+sudo ln -sf "$(command -v m68k-linux-gnu-objdump)" /usr/local/bin/m68k-elf-objdump
+curl -LsSf https://astral.sh/uv/install.sh | sh     # for make emu-setup / make remix
+source $HOME/.local/bin/env
+```
+
+- `binwalk` and `radare2` go in first: `scripts/setup.sh` installs them
+  with Homebrew when they are missing, and with them on PATH it skips
+  that branch.
+- `binutils-m68k-linux-gnu` provides the only correct ColdFire
+  disassembler here under a different name, hence the symlink.
+  `scripts/disasm.sh emac` shells out to `m68k-elf-objdump`; without it
+  the only decoder left is radare2, which silently invents code on this
+  CPU (`docs/remixer/TOOLING.md` §3). Check it:
+  `scripts/disasm.sh emac 0x40003664 8` must print `msacl`, not
+  `invalid`. The symlink goes in `/usr/local/bin`: `~/.local/bin` is on
+  PATH only in login shells, and `wsl.exe -d Ubuntu -- bash script.sh`
+  from Windows is not one (observed 10 Sep 2026).
+- `make remix` wants a real terminal: run it from Windows Terminal on the
+  Ubuntu profile. Its playback is `afplay` (macOS only); `docs/remixer/REMIXER.md`
+  has the two-line wrapper that points it at WSLg's PulseAudio.
+
+**Not verified on this route since 9 Sep 2026.** The build now needs the
+m68k cross-toolchain (`m68k-elf-gcc`, `as`, `ld`, `objcopy`, `nm`): every
+remix with linked ColdFire units (Octakit, MIDI SCENES, the USB modules,
+every DRAM module) refuses without it, and `scripts/setup.sh` adds
+`m68k-elf-gcc` to its Homebrew list when it is missing, so on a machine
+without Homebrew `make setup` stops at `brew: command not found`.
+`binutils-m68k-linux-gnu` ships the binutils half under the
+`m68k-linux-gnu-` prefix; whether symlinking them as `m68k-elf-*`
+satisfies the build, and whether a `.s` re-assembled that way still
+matches its author's bytes, has not been tried. Until someone reports a
+run, treat `make setup`, `make image` and `make check` on Linux as
+unverified; a Linux run that works, with the package list that made it
+work, is a doc PR. Flashing from a Windows host has not been done: the
+card copy is a plain file copy, and the MIDI path needs a SysEx app on
+the host.
 
 ## 2. Get the stock OS
 
@@ -84,19 +143,21 @@ make emu-cf                 # builds the local ColdFire emulator (cmake) and boo
 make check REMIX=ok-ms      # build + every gate + boot under the emulator
 ```
 
-`make check` is two halves: `make check-shared` (the ledger selftest,
-which builds every remix in turn, the docs, the knob census and the module
-gates that build their own image) and `make check-remix` (the selected
-remix's build, cycles and its own gates). Measured on one machine, 27 Sep
-2026, over all 25 remixes of the day: 475 s for the shared half, 223 s per
-remix on average (`lofi-amf-fix` 51 s, `bottleservice` 1,143 s). Without
-`make emu-setup` (the `.venv`) the label gates (`verify_labels`,
-`verify_modenames`, `verify_hidden`) report `[SKIP]`; without `make
-emu-cf` the set gates do. Run from a fresh clone on 16 Sep 2026:
-`scripts/setup.sh` → `make os` → `make recon` → `make check
-REMIX=bamsep26` (that day's rig remix; `bottleservice` is its successor)
-green with exactly those SKIP lines (Homebrew tools already installed on
-that machine; the `brew install` branch was not exercised).
+`make check` is two halves: `make check-shared` (the gates that do not
+depend on the remix: the ledger selftest, the stock-id audit that builds
+every remix, the docs, the knob census, the module gates that build their
+own image) and `make check-remix` (the selected remix's build, cycles and
+its own gates). [docs/remixer/TESTING.md](../remixer/TESTING.md) says what
+each step proves. Measured on one machine, 27 Sep 2026, over the 25
+remixes of the day: 475 s for the shared half, 223 s per remix on average
+(`lofi-amf-fix` 51 s, `bottleservice` 1,143 s). Without `make emu-setup`
+(the `.venv`) the label gates (`verify_labels`, `verify_modenames`,
+`verify_hidden`) report `[SKIP]`; without `make emu-cf` the set gates do;
+without a project in `OT_PROJECT` the set gates do too. Run from a fresh
+clone on 16 Sep 2026: `scripts/setup.sh` → `make os` → `make recon` →
+`make check REMIX=bamsep26` (that day's rig remix; `bottleservice` is its
+successor) green with exactly those SKIP lines (Homebrew tools already
+installed on that machine; the `brew install` branch was not exercised).
 
 ## 4. Back up
 
@@ -158,9 +219,10 @@ Two ways to write one:
   `remixes/<name>/remix.py` and a README stub. The written file carries
   `name`, `doc`, `modules`, `fallback` and, when it differs from stock's,
   `fx1`.
-- **Copy an existing `remix.py`** and edit it. `remixes/bottleservice/remix.py` is
-  a bus image, `remixes/test/euclid/remix.py` an insert beside the stock
-  effects, `remixes/ok-ms/remix.py` two ColdFire mods and no DSP code.
+- **Copy an existing `remix.py`** and edit it. `remixes/bottleservice/remix.py`
+  is the bus with stations, hosts and ColdFire mods,
+  `remixes/test/euclid/remix.py` an insert beside the stock effects,
+  `remixes/ok-ms/remix.py` two ColdFire mods and no DSP code.
 
 ```python
 from remix.schema import Proof, Remix

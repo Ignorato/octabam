@@ -105,9 +105,9 @@ and `.venv/bin/python3` when `venv` is set and the venv exists. An
 runs before the selected image is restored; an `"image"` gate reads
 `out/mainos_bus.bin` and runs after `make bus` and the shared set gates
 (`verify_tempobus` reads the card `verify_set` staged). A script that
-does not exist fails; the shared gates (the ledger selftest, the menu,
-the dirty-state render, the docs, the knob census, the set under the
-port) stay in the Makefile. Until 27 Sep 2026 the Makefile listed every
+does not exist fails; the gates every remix gets (the ledger selftest,
+the docs, the knob census, the dirty-state render, the menu, the set
+under the port) stay in the Makefile (`docs/remixer/TESTING.md`). Until 27 Sep 2026 the Makefile listed every
 module's verifier by hand, each one written to SKIP when the remix
 lacked its module.
 
