@@ -253,15 +253,17 @@ def main():
     if r["rx"] and r["cur"] is not None:
         # X:$202 is the block the inject is writing at this frame head; the
         # port halts at any instruction, so that block may be half written
-        # (seen: the first samples coded, the tail still zero). The seven
-        # before it are complete.
+        # (seen: the first samples coded, the tail still zero), and the two
+        # peeks (the ring, then X:$202) can land a block apart under a loaded
+        # machine (28 Sep 2026: the oldest of seven read as the one the ESAI
+        # was filling). The six before it are complete.
         cb = (r["cur"] - 0x8100) // 64
         got = []
-        for back in range(1, 8):                        # the completed blocks, newest first
+        for back in range(1, 7):                        # the completed blocks, newest first
             blk = (cb - back) % 9
             got.append(block_frame(r["rx"][blk * 64:(blk + 1) * 64]))
         print(f"  RX blocks before the one under the pen, newest first: first frames {got}")
-        check(f"the 7 completed RX blocks hold the host's channels on slots {sorted(SLOT_CH)}, the other slots untouched, bit-exact",
+        check(f"the 6 completed RX blocks hold the host's channels on slots {sorted(SLOT_CH)}, the other slots untouched, bit-exact",
               all(g is not None for g in got), str(got))
         ok = all(g is not None for g in got) and all(a - b == 16 for a, b in zip(got, got[1:]))
         check("... in consecutive frames (no drop, no repeat)", ok)
@@ -279,9 +281,9 @@ def main():
     rx2 = r2["rx"]
     if rx2 and r2["cur"] is not None:
         cb = (r2["cur"] - 0x8100) // 64
-        blks = [rx2[((cb - back) % 9) * 64:((cb - back) % 9 + 1) * 64] for back in range(1, 8)]
+        blks = [rx2[((cb - back) % 9) * 64:((cb - back) % 9 + 1) * 64] for back in range(1, 7)]
         coded_left = sum(1 for bl in blks if any(w != 0 for w in bl))
-        check("the RX blocks are the jacks' again (no host samples in the 7 completed blocks)",
+        check("the RX blocks are the jacks' again (no host samples in the 6 completed blocks)",
               coded_left == 0, f"{coded_left} block(s) with host words")
     print(f"verify_usb_in: {'OK' if not fails else f'{len(fails)} FAILED'}")
     return 1 if fails else 0

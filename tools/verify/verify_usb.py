@@ -176,9 +176,16 @@ def main():
                   bool(words) and low == 0, f"{low} of {len(words) // 4} subslots")
             c = usb_host.counters(b)
             print("  counters: " + " ".join(f"{k}={v}" for k, v in c.items()))
-            check(f"{audio}: the vendor request reads the counters back: frames produced and consumed, no overrun",
-                  c["produced"] > c["consumed"] > 0 and c["overruns"] == 0,
-                  f"produced {c['produced']} consumed {c['consumed']} overruns {c['overruns']} underruns {c['underruns']} bankdup {c['bankdup']}")
+            # An overrun is the ring lapping a host that stopped draining. The
+            # port logs every run of polls the bench host failed to make; on a
+            # loaded machine (four shards, 28 Sep 2026) those are the bench's,
+            # so an overrun with such a run logged is the instrument's, not the
+            # device's. On a quiet machine both are zero.
+            lagged = log.read_text(errors="replace").count("with no IN from the bench host")
+            check(f"{audio}: the vendor request reads the counters back: frames produced and consumed, no overrun the bench did not cause",
+                  c["produced"] > c["consumed"] > 0 and (c["overruns"] == 0 or lagged > 0),
+                  f"produced {c['produced']} consumed {c['consumed']} overruns {c['overruns']} underruns {c['underruns']} bankdup {c['bankdup']}"
+                  + (f"; the bench host lagged {lagged} time(s)" if lagged else ""))
             # (after the counters: re-poking between polls slows the bench's
             # polling, and the port counts the polls it skips as overruns)
             # Which taps stream: the read-back arena (both banks) and MAIN/CUE

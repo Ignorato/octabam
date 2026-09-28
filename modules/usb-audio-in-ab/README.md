@@ -101,7 +101,7 @@ counters through a host session and prints a verdict.
 
 - **Under the port:** `tools/verify/verify_usb_in.py`, this module's gate
   (`make check` runs it for any remix that carries it): the host's coded
-  samples bit-exact on slots 2/3 of the RX blocks with slots 0/1 zero, in
+  samples bit-exact on slots 2/3 of the six completed RX blocks with slots 0/1 zero, in
   consecutive frames, and on the recorder's input ring; the counters over
   `0x56`; word 0 clear and the jacks back after alt 0. EP3 IN's frame size
   comes from the remix's layout, so the gate runs beside OUT MAIN CUE, OUT TRACKS or
