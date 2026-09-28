@@ -55,7 +55,7 @@ def price_modules(remix):
     stock_fx1 = {e.key for e in _stock.MODULES if e.menu.fx2_id in _stock.fx1_ids()}
     fx1_keys = set(remix.fx1) if remix.fx1 else set()
     for m in registry.selected(remix):
-        if m.dsp is None:
+        if m.dsp is None or m.menu is None:      # a hooked section has no slot to price
             continue
         stem = pathlib.Path(m.dsp.asm).stem
         row = cc.measure(stem)

@@ -7,6 +7,51 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- USB AUDIO IN as a stereo feed, placed (28 Sep 2026): Bryan T's USB AUDIO
+  OUT / IN (PRs #468, #495: four host channels into inputs A-D, its DSP
+  inject poked into SPATIALIZER's stock words) becomes a stereo pair into
+  inputs A/B, C/D on the jacks, with the inject a DSP section the build
+  places in payload A's donor region and reaches by a hook the ledger sees
+  (`schema.DspHook`, `DspSection.hooks`: a section with no chooser row).
+  A rig remix carrying it and a server no longer builds an image whose
+  dispatcher jumps into the reverb; the ledger refuses the hook site. The
+  crossbar setting that cured lost packet tails (SCM BCR, XBS PRS/CRS on
+  the SDRAM and SRAM slaves) is its own module, USB CROSSBAR, written at
+  the USB controller init instead of at stream-up. Interface 5 is in the
+  high-speed configurations only (the unit never served it at full speed);
+  GET_INTERFACE(5) answers the alt in force; SET_INTERFACE(5) STALLs an alt
+  other than 0/1. The unit's diagnostic scan, per-packet counters and the
+  vendor register peek/poke (0x57-0x5b, `usb_reg.py`) are gone; fifteen
+  counters stay on 0x56. `Claims.sram` declares the top 1 KB of on-chip
+  SRAM the dTDs and packet buffers take. `tools/hw/usb_probe.py` (Bryan T's
+  PR #492) runs a host session against a unit and reads both rings'
+  counters while the stream is open, with EP3 IN's drain rate as the
+  discriminating number for the MKI half-speed report. Remixes `usb-io-<out>-<in>`,
+  twelve: the four 250 us out layouts (tracks, tracks-main-cue, main-cue,
+  main) by the three IN modules (ab, cd, abcd), each stock - SPATIALIZER +
+  USB MIDI + USB CROSSBAR; `usb-out-main-cue` keeps the MAIN + CUE layout. Port only in
+  this form. The USB audio modules are named by direction and content:
+  USB AUDIO OUT TRACKS (was FULL), OUT TRACKS MAIN CUE (was EXTENDED),
+  OUT MASTER (was MASTER), OUT MAIN CUE (was MC), beside USB AUDIO IN;
+  remixes `usb-out-tracks` (was `usb-full`), `usb-out-tracks-main-cue`
+  (`usb-lean`), `usb-out-master` (`usb-master`), `usb-out-main-cue`
+  (`usb-mc`). Earlier entries keep the names of their day. Two more
+  modules: USB AUDIO OUT MAIN (MAIN L/R alone every 250 us, the stereo
+  pairing for the IN modules; remix `usb-out-main`) and the IN module in
+  three widths on one source, USB AUDIO IN AB, IN CD and IN ABCD (host
+  channels onto inputs A/B, C/D or A-D; one per remix, shared detour
+  sites), each with its own placed inject. `tools/harness/usb_align.py`
+  measures MAIN's lag behind the tracks in the twenty-channel stream
+  under the port from the tone project's phases: 16 samples, one block,
+  on every tone (the tracks come from the previous bank, MAIN/CUE from the
+  current pull); the producer now writes MAIN/CUE one block behind the
+  tracks' slot and `verify_usb_align` (on the twenty-channel module,
+  skips without a source project) reads 0. Heard as MAIN lagging on
+  Bryan T's unit; the size on hardware is inferred from the port.
+  under the port from the tone project's phases.
+  discriminating number for the MKI half-speed report. Remix `usb-io` =
+  stock - SPATIALIZER + USB MIDI + USB AUDIO EXTENDED + USB CROSSBAR + USB
+  AUDIO IN; `usb-mc` keeps the MAIN + CUE layout. Port only in this form.
 - CC FEEDBACK (28 Sep 2026, `modules/cc-feedback`): the OT transmits a
   CC for every live knob byte that changes -- a pattern or part change, a
   project load, MODE DEFAULTS, an incoming CC, a page-2 turn -- so a
