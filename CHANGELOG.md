@@ -7,6 +7,15 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- The fork is the snapshot (29 Sep 2026): `ot_emu --scenario "LOG ARGS..."`
+  loads a project once and forks one child per run, each from the identical
+  loaded machine. The vendored DSP memory is a `shm` object mapped shared
+  several times, so each child copies it into private objects first
+  (`unshareRanges`, macOS and Linux paths). `verify_scenesp2` runs its three
+  frame runs and its editor pass from one load: 109-111 s to 73-74 s on a
+  quiet machine. `docs/remixer/TESTING.md` rewritten in full: every gate,
+  how to write one, the port features gates use, what it costs.
+
 - Panel scripts at emulated time and fewer boots (28 Sep 2026, second cut):
   `ot_emu --live-script FILE` applies panel lines at emulated times;
   `verify_tempobus` drives the TEMPO window with it instead of a FIFO and

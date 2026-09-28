@@ -79,7 +79,11 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
   (lines of `<emulated ms> key|enc|pot|midi|quit ...`, the `--live` vocabulary,
   applied at those emulated times with the transport stopped: a panel script
   that runs the same on a loaded machine as on a quiet one; `verify_tempobus`
-  since 28 Sep 2026) and `--call-at N` (the same call N frames after
+  since 28 Sep 2026), `--scenario "LOG ARGS..."` (repeatable, with
+  `--scenario-jobs N`: the port loads once and forks one child per scenario,
+  each from the identical loaded machine, stdout to LOG, ARGS its post-load
+  options; the DSP cores' shared memory is copied private in each child;
+  `verify_scenesp2` since 29 Sep 2026) and `--call-at N` (the same call N frames after
   the transport start, so the part re-apply does not erase an edit).
   `--poke` writes after the load, before the frames.
 - MIDI IN: `--midi FILE`, one event per line, `<frames after the
