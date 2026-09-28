@@ -155,6 +155,14 @@ namespace ot
 		const dsp56k::HDI08& hdi() const { return px->getHDI08(); }
 	};
 
+	void DspPair::memoryRanges(std::vector<std::pair<uint8_t*, size_t>>& _out) const
+	{
+		for(const auto& k : m_cores)
+			for(const auto area : {dsp56k::MemArea_P, dsp56k::MemArea_X, dsp56k::MemArea_Y})
+				_out.emplace_back(reinterpret_cast<uint8_t*>(k->mem->getMemAreaPtr(area)),
+					static_cast<size_t>(0x1000000) * sizeof(dsp56k::TWord));
+	}
+
 	DspPair::DspPair(const double _ratio, const double _ips, const bool _rt)
 		: m_ratio(_ratio), m_ips(_ips), m_shared(_rt ? 0 : g_shareHi - g_shareLo, 0)
 	{

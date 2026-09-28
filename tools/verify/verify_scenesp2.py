@@ -16,9 +16,10 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           TIME 20. The three runs are three boots side by side (each is one
           LOAD PROJECT, ~32 s under Octakit): a pool poked once the
           transport has started never reaches the live lane, with or
-          without a transport restart (measured 28 Sep 2026), so they
-          cannot share one boot. The editor pass is one more boot after
-          them.
+          without a transport restart (measured 28 Sep 2026), so each
+          needs the machine as it was after the load: the port loads once
+          and forks one child per run (`ot_emu --scenario`), the editor
+          pass a fourth.
   editor  calls the FX2 page-2 editor `0x4003a9dc(5, 2 ticks)` on T1 with
           scene A held (0x460d169c = 1): the Part byte and the live lane
           must not move; the pool in the Part DB's part-0 window and its
@@ -34,7 +35,6 @@ twelve bytes and her trampoline continued at entry+8 into a nop, so the
 body read a garbage slot and her marker check halted every page-2 turn.
 """
 import argparse, os, pathlib, shutil, subprocess, sys
-from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
 from remix import registry  # noqa: E402
@@ -134,18 +134,18 @@ def main():
     pool = [0x50, 0x32, 3, 0x00, 0x05, 100, 0x08, 0x05, 20, 0x00, 0x00, 1]
 
     def frames(tag, pool, xf):
+        """One frame run as a scenario: (log, args, dump)."""
         common = []
         for bank in range(16):
             common += pokes_bytes(BLOB + bank * BANK_STRIDE + POOL_OFF, pool)
             common += pokes_bytes(BLOB + bank * BANK_STRIDE + SEL_OFF, [0, 1])
         common += ["0x80000006=0", "0x80000007=0"]
-        dump, log = OUT / f"rec_{tag}.bin", OUT / f"frames_{tag}.txt"
-        cmd = base + ["--sequencer", "--internal-clock", "--frames", "120", "--dsp", "--main-level", "64",
-                      "--poke-trig", "2", "--poke", ";".join(common + weights(xf)),
-                      "--mem-dump", f"{RECORDS:#x},1024={dump}"]
-        text = run(cmd, log)
-        rec = dump.read_bytes()
-        return ("frames run : 120" in text, [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)])
+        tag_ = tag.replace(" ", "_")
+        dump, log = OUT / f"rec_{tag_}.bin", OUT / f"frames_{tag_}.txt"
+        args = ["--sequencer", "--internal-clock", "--frames", "120", "--main-level", "64",
+                "--poke-trig", "2", "--poke", ";".join(common + weights(xf)),
+                "--mem-dump", f"{RECORDS:#x},1024={dump}"]
+        return log, args, dump
 
     # ---- the editor with a scene held: one boot, both seeds ----------------
     early = f"{TRACK_CUR:#x}=0;{SCENE_HELD + 3:#x}=1;{PART_DISP:#x}=0"
@@ -161,6 +161,7 @@ def main():
                               f"{LANES + 0x38:#x},6={d / 'lane.bin'}"])
 
     def editor():
+        """Both seeds as one scenario: (log, args)."""
         steps = []
         for seed in SEEDS:
             pokes = early
@@ -169,19 +170,28 @@ def main():
                     pokes += ";" + ";".join(pokes_bytes(BLOB + b * BANK_STRIDE + POOL_OFF, [0x50, 0x32, 1, 0, 5, seed]))
             steps += ["--step", f"-:poke:{pokes}", "--step", f"-:call:{FX2_EDITOR:#x},5,2",
                       "--step", f"-:dump:{dumps_for(seed)[1]}"]
-        return run(base + ["--mount"] + steps, OUT / "editor.txt")
+        return OUT / "editor.txt", steps
 
     # the knob alone: the same run with the pool's count 0, so what fader 0
     # (the B side, which holds no MODE lock) must read is measured from the
     # project: T1's MODE is 1 in the stress fixture's part 0 and 0 in
     # OCTABAM89_setgate's (a literal 0 failed `make accept`, 26 Sep 2026)
-    # Three boots side by side, then the editor's one: four at once contend
-    # on a four-performance-core machine (28 Sep 2026: slower than 3 + 1).
-    with ThreadPoolExecutor(3) as pool_:
-        runs = {tag: pool_.submit(frames, tag, pl, xf)
-                for tag, pl, xf in (("knob", pool[:2] + [0] + pool[3:], 0), ("fader 64", pool, 64), ("fader 0", pool, 0))}
-        results = {tag: f.result() for tag, f in runs.items()}
-    editor_text = editor()
+    # ONE load, four scenarios forked from it (ot_emu --scenario, 29 Sep
+    # 2026): the three frame runs and the editor pass each start from the
+    # same loaded machine. Until then each was its own LOAD PROJECT (~32 s
+    # emulated under Octakit), three side by side and one after.
+    specs = {tag: frames(tag, pl, xf)
+             for tag, pl, xf in (("knob", pool[:2] + [0] + pool[3:], 0), ("fader 64", pool, 64), ("fader 0", pool, 0))}
+    elog, eargs = editor()
+    scen = [f"{log} " + " ".join(args) for log, args, _ in specs.values()] + [f"{elog} " + " ".join(eargs)]
+    cmd = base + ["--dsp"] + [x for s in scen for x in ("--scenario", s)]
+    run(cmd, OUT / "port.txt")
+    results = {}
+    for tag, (log, _, dump) in specs.items():
+        text = log.read_text()
+        rec = dump.read_bytes() if dump.is_file() else bytes(1024)
+        results[tag] = ("frames run : 120" in text, [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)])
+    editor_text = elog.read_text()
     for tag, (ran, _) in results.items():
         check(f"{tag}: 120 frames ran", ran)
     recs = {tag: r for tag, (_, r) in results.items()}

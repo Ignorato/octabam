@@ -78,6 +78,10 @@ namespace ot
 		static constexpr uint32_t g_select = 0xfc0a400c;
 		static constexpr uint32_t g_shareLo = 0x30000, g_shareHi = 0x40000;
 		static constexpr uint32_t g_pSize = 0x80000;			// the P memory each core is built with
+		// Every core's P/X/Y area as (host address, bytes): the whole 16M-word
+		// span the vendored MemoryBuffer maps for each (ot_emu --scenario
+		// unshares these after a fork).
+		void memoryRanges(std::vector<std::pair<uint8_t*, size_t>>& _out) const;
 		bool faulted(int _core) const;
 
 		// `_ratio`: DSP instructions per ColdFire instruction (boot clock);
