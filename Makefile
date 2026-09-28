@@ -331,6 +331,11 @@ check-remixes: ## The per-remix half for REMIXES="a b c", JOBS=4 worktrees at a 
 	@test -n "$(REMIXES)" || { echo "REMIXES is unset: make $@ REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
 	BUILD=$(BUILD) python3 tools/verify/check_shards.py --jobs $(or $(JOBS),4) $(REMIXES)
 
+.PHONY: check-remix-gates
+check-remix-gates: ## One remix's per-remix half, one gate per job over JOBS=4 worktrees (the wall is the longest gate, not the list; OT_PROJECT as for check-remix)
+	$(need-remix)
+	BUILD=$(BUILD) python3 tools/verify/check_shards.py --by-gate --jobs $(or $(JOBS),4) $(REMIX)
+
 check: bus cycles verify ## Everything that can be checked without hardware (the set gates run under the port when OT_PROJECT or ~/.octabam_project names a project)
 	@# verify_burn.py shells out to build_bus.py twice -- with and without
 	@# BURN=1, neither with XBUS/SPEC -- and each run overwrites
