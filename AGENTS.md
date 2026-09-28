@@ -662,6 +662,16 @@ Before calling a stock routine from a module in a remix that carries a
 image (`tools/build/where.py`, or the recipe's writes): the same family as
 KITS RELOAD's return-address check, found the same way.
 
+**A FORKED PORT SHARES ITS DSP MEMORY WITH ITS SIBLINGS UNLESS IT IS
+UNSHARED.** The vendored DSP memory is a `shm` object mapped `MAP_SHARED`
+several times (the bridged X/Y/P views, `dsp56kBase/mmuhelper.cpp`), so
+`fork()` gives every child the same DSP memory: the first `--scenario`
+run (29 Sep 2026) faulted a core in two of three children, PC outside P,
+while the third ran clean. `unshareRanges` in `tools/emu/ot_emu/main.cpp`
+copies each backing object into a private one after the fork. Anything
+new the port maps shared (a window, a ring for the host) needs the same
+treatment, or the children interfere and the failure moves between runs.
+
 **The report is API, and it prints paths.** Moving a tool changed the build
 report (the hints name `tools/harness/send_probe.py`), which refhash
 correctly flagged with every artifact identical. Re-save only after proving
