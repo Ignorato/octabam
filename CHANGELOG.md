@@ -7,6 +7,13 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- bottleservice takes the computer's audio in (28 Sep 2026): USB CROSSBAR +
+  USB AUDIO IN CD, the computer's stereo output onto inputs C/D in place of
+  the jacks (A/B stay jacks). USB AUDIO OUT MASTER polls every 250 µs at
+  high speed (96-byte packets; 1 ms and 360 bytes until now, the form on
+  image 88) so a USB AUDIO IN module can take it as its implicit-feedback
+  source; the descriptor unit's refusal of IN beside OUT MASTER goes. Port
+  only in this form.
 - USB AUDIO IN as a stereo feed, placed (28 Sep 2026): Bryan T's USB AUDIO
   OUT / IN (PRs #468, #495: four host channels into inputs A-D, its DSP
   inject poked into SPATIALIZER's stock words) becomes a stereo pair into

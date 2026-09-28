@@ -43,11 +43,10 @@ FS_CHANNELS, FS_MAXPKT, FS_BINTERVAL = 2, 45 * 8, 1       # 44/45 stereo frames 
 # per audio module: (channels, max packet) at high speed; full speed is FS_*
 HS_LAYOUT = {"USB AUDIO OUT TRACKS MAIN CUE": (HS_CHANNELS, HS_MAXPKT),
              "USB AUDIO OUT TRACKS": (16, 12 * 64),                # 11/12 frames x 64 B (16 tracks) every 250 us
-             "USB AUDIO OUT MASTER": (2, 45 * 8),                # 44/45 frames x 8 B (T8) every 1 ms
+             "USB AUDIO OUT MASTER": (2, 12 * 8),                # 11/12 frames x 8 B (T8) every 250 us (1 ms until 28 Sep 2026)
              "USB AUDIO OUT MAIN CUE": (4, 12 * 16),                   # 11/12 frames x 16 B (MAIN + CUE) every 250 us
              "USB AUDIO OUT MAIN": (2, 12 * 8)}                        # 11/12 frames x 8 B (MAIN) every 250 us
 FRONT_LR = 0x3                                             # bmChannelConfig: front left, front right (OUT MASTER, IN)
-HS_BINTERVAL_1MS = 4                                       # 2^(4-1) microframes = 1 ms (OUT MASTER at high speed)
 UAC2_AC_IFACE, UAC2_AS_IFACE = 3, 4                        # usbaudio.s .set: the same numbers
 UAC2_CLOCK_ID, UAC2_IT_ID, UAC2_OT_ID = 0x10, 0x11, 0x12
 
@@ -58,7 +57,7 @@ UAC2_CLOCK_ID, UAC2_IT_ID, UAC2_OT_ID = 0x10, 0x11, 0x12
 # for an explicit feedback IN, so EP3 IN is marked as the implicit-feedback
 # data endpoint and the host sizes each OUT packet from EP3 IN's. Same
 # clock source. It needs a USB AUDIO input layout for that feedback, one
-# that polls every 250 us as this stream does (not OUT MASTER's 1 ms; untested).
+# that polls every 250 us as this stream does (every out layout since 28 Sep 2026).
 # HIGH SPEED ONLY: the full-speed configurations carry no interface 5 (the
 # unit does not serve it), so a full-speed host is never offered one.
 USBIN_AS_IFACE = 5
@@ -159,7 +158,7 @@ def audio_config(hs, other_speed=False, key="USB AUDIO OUT TRACKS MAIN CUE", wit
         # bmAttributes: isochronous, asynchronous; + usage "implicit
         # feedback data" (bits 5:4 = 10) when USB AUDIO IN pairs with it
         bytes([7, 5, 0x83, 0x25 if with_in else 0x05]) + struct.pack("<H", maxpkt) +
-        bytes([(HS_BINTERVAL_1MS if key == "USB AUDIO OUT MASTER" else HS_BINTERVAL) if hs else FS_BINTERVAL]) +
+        bytes([HS_BINTERVAL if hs else FS_BINTERVAL]) +
         bytes([8, 0x25, 1, 0, 0, 0]) + struct.pack("<H", 0))
     if with_in:
         ii = USBIN_AS_IFACE
@@ -221,9 +220,6 @@ def remix_inc(modules):
     if with_in:
         assert audio, (f"{with_in} needs a USB AUDIO OUT module beside it: EP3 IN is "
                        "its implicit-feedback source")
-        assert audio != "USB AUDIO OUT MASTER", ("USB AUDIO IN beside USB AUDIO OUT MASTER is untested: "
-                                             "OUT MASTER polls every 1 ms, the IN stream's feedback was "
-                                             "built and measured against a 250 us input stream")
     tables, length = configs(audio, with_in)
     what = ("USB MIDI + " + audio if audio else "USB MIDI") + (f" + {with_in}" if with_in else "")
     lines = [f"| remix.inc -- the configuration descriptors for this remix ({what}),",

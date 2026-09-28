@@ -13,10 +13,12 @@ The variant is Sam Banks's (27 Sep 2026):
   as OUT TRACKS MAIN CUE's channels 15/16, the same 24-bit format) and writes one
   8-byte slot per frame into a 1,024-frame ring. No other track, no
   MAIN/CUE, no stereo sum.
-- **Both speeds send the same ring, one packet a millisecond.** 44.1
-  frames × 8 bytes is 353 bytes, one transaction, so high speed polls every
-  1 ms (bInterval 4) as full speed does: 44/45 frames, at most 360 bytes.
-  OUT TRACKS MAIN CUE and OUT TRACKS poll every 250 µs at high speed.
+- **Both speeds send the same ring.** High speed polls every 250 µs
+  (bInterval 2) like the other out layouts: 11/12 frames, at most 96 bytes;
+  full speed every 1 ms: 44/45 frames, at most 360 bytes. Until 28 Sep 2026
+  high speed polled every 1 ms too (360-byte packets, the form on Sam's MKII
+  as image 88); the 250 µs cadence is what lets a USB AUDIO IN module take
+  this stream as its implicit-feedback source. Not on a unit at 250 µs.
 - **Descriptors.** USB MIDI's descriptor unit declares a two-channel input
   with bmChannelConfig front left + front right (`0x3`, the standard stereo
   cluster) in the input terminal and AS_GENERAL, at both speeds; 24-bit
@@ -29,9 +31,9 @@ The variant is Sam Banks's (27 Sep 2026):
 `verify_usb` with `REMIX=usb-out-master` and `REMIX=bottleservice`
 (27 Sep 2026):
 
-- EP `0x83` isochronous, 360 bytes, bInterval 4; AS_GENERAL 2 channels,
+- EP `0x83` isochronous, 96 bytes, bInterval 2; AS_GENERAL 2 channels,
   bmChannelConfig `0x3`.
-- 352/360-byte packets at high speed, none empty after the first ten;
+- 88/96-byte packets at high speed, none empty after the first ten;
   every subslot's low byte zero; counters: 0 overruns, 0 underruns.
 - Taps: with the read-back arena re-poked before every poll with words that
   name their source, side and frame, channel 1 carries T8 L and channel 2
@@ -45,7 +47,7 @@ Counted from the source, instructions executed (not cycles):
 |---|---|---|
 | producer, per block (16 frames) | ~2,710 | ~180 |
 | read-back words read per block | 320 | 32 |
-| packets built per ms (high speed) | 4 | 1 |
+| packets built per ms (high speed) | 4 | 4 |
 | bytes copied into packets per ms | ~3,530 | ~353 |
 | packet builder + copy per ms | ~750 | ~250 |
 

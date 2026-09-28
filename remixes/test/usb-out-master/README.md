@@ -9,7 +9,7 @@ The stock chooser plus USB MIDI and USB AUDIO OUT MASTER, for testing the two-ch
 
 ## Status
 
-Port only (`verify_usb`, 27 Sep 2026). Not on a unit.
+Port only (`verify_usb`). Not on a unit in this form: high speed polls every 250 µs since 28 Sep 2026 (1 ms before, the form bottleservice ran as image 88).
 
 ## Build
 

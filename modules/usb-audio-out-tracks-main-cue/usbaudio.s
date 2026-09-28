@@ -22,7 +22,7 @@
 |                               which both speeds send.
 |   3  USB AUDIO OUT MAIN CUE -- four channels, MAIN L/R + CUE L/R, at the same
 |                               250 us cadence as OUT TRACKS MAIN CUE and OUT
-|                               TRACKS (not OUT MASTER's 1 ms): the producer
+|                               TRACKS: the producer
 |                               reads MAIN_CUE_BASE directly (not ping-ponged,
 |                               so no bank bookkeeping) and writes one 16-byte
 |                               slot per frame. Full speed carries MAIN alone,
@@ -160,13 +160,14 @@
 | must be 4); this is why the descriptors are UAC2.
 .if USB_LAYOUT == LAYOUT_MASTER
 | Two channels: T8's (L,R) is the one slot, 8 bytes, the same ring at both
-| speeds (the full-speed "sum" ring is this ring). 44.1 frames x 8 B is 353 B
-| a millisecond, one transaction, so high speed polls every 1 ms too
-| (bInterval 4): one packet a millisecond at either speed, at most 360 B.
+| speeds (the full-speed "sum" ring is this ring). High speed polls every
+| 250 us like the other layouts (11/12 frames x 8 B = 96 B; until 28 Sep 2026
+| it polled every 1 ms, 360 B, which a USB AUDIO IN module cannot take as its
+| implicit-feedback source); full speed 44/45 frames x 8 B = 360 B.
 | The packet buffer stride is 512.
 .set SLOT_BYTES,   8            | ring slot: T8 (L,R), 4 B each
 .set SUM_BYTES,    8
-.set PKT_MAX_HS,   45*SLOT_BYTES | 360: the largest 1 ms packet, high speed too
+.set PKT_MAX_HS,   12*SLOT_BYTES | 96: the largest 250 us packet
 .set PKT_MAX_FS,   45*SUM_BYTES | 360: the largest 1 ms packet
 .set PKT_BUF,      512          | packet buffer stride (>= PKT_MAX_FS)
 .elseif USB_LAYOUT == LAYOUT_MAIN
@@ -204,11 +205,7 @@
 .set PKT_MAX_FS,   45*SUM_BYTES | 360: the largest 1 ms stereo packet
 .set PKT_BUF,      PKT_MAX_HS   | packet buffer stride
 .endif
-.if USB_LAYOUT == LAYOUT_MASTER
-.set STEP_HS,      44100        | 44.1 frames per 1 ms packet, x1000 (bInterval 4)
-.else
-.set STEP_HS,      11025        | 11.025 frames per 250 us packet, x1000
-.endif
+.set STEP_HS,      11025        | 11.025 frames per 250 us packet, x1000 (every layout)
 .set STEP_FS,      44100        | 44.1 frames per 1 ms packet, x1000
 .set SERVO_STEP,   100          | +-0.1 frame per packet, x1000
 
