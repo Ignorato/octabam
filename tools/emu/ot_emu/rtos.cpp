@@ -382,6 +382,11 @@ namespace ot
 		m_intc0.setForceHook([this](uint64_t) { ++m_forces; });
 		m_intc1.setForceHook([this](uint64_t) { ++m_forces; });
 		m_installed = true;
+		if(m_machine.read16(g_mainSpin - 6) == 0x4ef9)		// jmp abs.l: the park is detoured
+		{
+			m_spinLo = m_machine.peek32(g_mainSpin - 4);
+			m_spinHi = m_spinLo + 0x80;
+		}
 	}
 
 	// O8 step 4 -- THE DATA. Decoded from route A's tape (8 Sep 2026): every
@@ -1017,6 +1022,8 @@ namespace ot
 		// the old stepOnce loops stepped it, and breaking on it would make a
 		// burst of one instruction).
 		const uint32_t pcStop = _s.pcArmed ? _s.pc : 1u;
+		const uint32_t pcLo = _s.pcArmed ? _s.pcLo : 0u, pcHi = _s.pcArmed ? _s.pcHi : 0u;
+		const uint32_t spinLo = m_spinLo, spinHi = m_spinHi;
 		const bool gateEnds = _s.untilGate;
 		const bool spinEnds = _s.idleSkip;
 		Coprocessor* const co = m_machine.coprocessor();
@@ -1046,7 +1053,7 @@ namespace ot
 			// still "did not return" -- kept, for the stamps' sake.
 			if(_s.budget && executed >= _s.budget)
 				return Stop::Time;
-			if(_s.pcArmed && m_machine.pcFast() == _s.pc)
+			if(_s.pcArmed && (m_machine.pcFast() == _s.pc || (m_machine.pcFast() >= pcLo && m_machine.pcFast() < pcHi)))
 			{
 				if(_s.whyGate)
 					m_why = _s.whyGate;
@@ -1095,7 +1102,7 @@ namespace ot
 			// wait loops (`idleSkip` false): they never skipped, and a skip
 			// lands the clock ON the expiry where stepping lands it a
 			// fraction of a sample past -- every later stamp would move.
-			if(_s.idleSkip && pc == g_mainSpin && !anyPending())
+			if(_s.idleSkip && atSpin(pc) && !anyPending())
 			{
 				double ex;
 				if(!nextExpiry(ex))
@@ -1189,12 +1196,12 @@ namespace ot
 					// O15e: the caller's address, BEFORE the instruction -- the
 					// old loop asked its predicate at the top, after the
 					// previous instruction's pair; the pair runs at the break.
-					if(ipc == pcStop) { ++m_burstStats.endPc; break; }
+					if(ipc == pcStop || (ipc >= pcLo && ipc < pcHi)) { ++m_burstStats.endPc; break; }
 					// Main's park: the idle skip must get its look at it before
 					// the spin is executed (the old loop checked before every
 					// instruction) -- after at least one instruction, so a park
 					// with something pending but masked still makes progress.
-					if(spinEnds && i > 0 && ipc == g_mainSpin) { ++m_burstStats.endSpin; break; }
+					if(spinEnds && i > 0 && (ipc == g_mainSpin || (ipc >= spinLo && ipc < spinHi))) { ++m_burstStats.endSpin; break; }
 					if(ring)
 					{
 						m_pcRing[m_pcRingPos % m_pcRing.size()] = ipc;
@@ -1320,6 +1327,7 @@ namespace ot
 		s.ms = _ms;
 		s.pc = g_mainSpin;
 		s.pcArmed = true;
+		s.pcLo = m_spinLo; s.pcHi = m_spinHi;
 		s.idleSkip = false;
 		s.needInstall = false;
 		s.whyTime = "never reached main's spin";
@@ -1371,7 +1379,7 @@ namespace ot
 	bool Rtos::callAsMain(const uint32_t _addr, const std::vector<uint32_t>& _args, uint32_t& _d0,
 		const uint64_t _budget)
 	{
-		if(m_machine.pc() != g_mainSpin)
+		if(!atSpin(m_machine.pc()))
 		{
 			char msg[160];
 			std::snprintf(msg, sizeof msg, "callAsMain(%#x): pc is %#x, not main's spin %#x",

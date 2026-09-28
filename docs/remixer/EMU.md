@@ -206,6 +206,15 @@ bank B, 15 Sep 2026).
   `0x80000035` / `0x80000036` (`0x40087348`, `0x4008738c`); poking either
   pair after the load changes nothing here.
 
+- **A detoured idle park is followed (28 Sep 2026).** `Rtos::install`
+  reads `g_mainSpin-6`: a `jmp abs.l` there (CF METER IDLE's `m_idle`)
+  makes `[target, target+0x80)` count as main's park for the idle skip,
+  the burst end, `runToMainSpin` and `callAsMain`'s entry check
+  (`atSpin`, `spinRange`; the narrative prints `main's park is detoured
+  to ...`). A borrowed call still returns to the stock `bras .`, intact
+  behind the detour, and main parks there afterwards. `cfmeter`'s set
+  gate: 0 failures (before: card ready 0, LOAD PROJECT never posted).
+
 ## The screen itself (the port, 17 Sep 2026)
 
 `ot_emu --lcd FILE` writes the firmware's own 1-bpp plane (`0x46c7e0ea`,

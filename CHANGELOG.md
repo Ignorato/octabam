@@ -7,6 +7,12 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- The port follows a detoured idle park (28 Sep 2026): `Rtos::install`
+  reads a `jmp abs.l` at `0x4001fc96` (CF METER IDLE's `m_idle`) and counts
+  the loop's first 0x80 bytes as main's park for the idle skip, the burst
+  end and run-to-park; a borrowed call still returns to the stock `bras .`.
+  `cfmeter`'s set gate passes (card ready, load handled 7.9 s after the
+  post; before: never posted).
 - SCENES P2's page-2 editor-entry detours displace eight bytes, the span
   Octakit's own entry write takes (28 Sep 2026): at twelve the build
   nopped the stock slot load at entry+8, where her trampoline continues,
