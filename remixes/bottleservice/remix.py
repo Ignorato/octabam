@@ -1,6 +1,6 @@
 """bottleservice -- the rig plus USB MIDI, USB AUDIO MASTER and Octakit.
 
-the rig's selection (the bus, three stations, hosts, TEMPO SYNC, CC MAP, MODE
+the rig's selection (the bus, three stations, hosts, TEMPO SYNC, CC MAP, CC FEEDBACK, MODE
 DEFAULTS, TEMPO BUS, SCENES P2; `bamsep26` until 27 Sep 2026) with USB MIDI and
 USB AUDIO MASTER (two channels: track 8, the master track, post-FX
 pre-fader) on the DRAM platform and Em's Octakit (as `rig-kits`, with
@@ -16,7 +16,7 @@ REMIX = Remix(
     doc="The rig + USB MIDI + USB AUDIO MASTER (T8 over USB) + Octakit.",
     modules=("REVERB SERVER", "DELAY SERVER", "SEND",
              "SPECTRUM", "CHARACTER", "MODULATION",
-             "TEMPO SYNC", "CC MAP", "MODE DEFAULTS", "RIG HOSTS", "TEMPO BUS",
+             "TEMPO SYNC", "CC MAP", "CC FEEDBACK", "MODE DEFAULTS", "RIG HOSTS", "TEMPO BUS",
              "USB MIDI", "USB AUDIO MASTER",
              "OCTAKIT", "SCENES KITS",
              "SCENES P2", "SCENES P2 KITS"),

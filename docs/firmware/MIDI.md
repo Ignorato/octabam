@@ -728,3 +728,44 @@ Falsifiers: a hardware flash where the fader at the A end changes a page-1
 lock the wrong way (would invert §2's endpoint claim); a `TPROBE`-style capture
 showing `r6+$8` not tracking the fader (would mean the cave hook is not
 per-frame for that track).
+
+## Appendix D: CC out — the emitter (record)
+
+`0x40033e3c(track, cc, value)`, stack arguments, disassembled 28 Sep 2026
+(`modules/cc-feedback`). Gated on `0x8000004a` (AUDIO CC OUT) **bit 1**;
+bit 0 is what the panel crossfader path tests before applying its move
+(§4 above), so bit 0 = INT, bit 1 = EXT ✅. `track` 8 = the current track
+(resolved to the first audio-track channel no MIDI track uses); a track
+0..7 uses `0x8000003f + track` (−1 = off → return) and returns if a MIDI
+track's channel byte (`0x46c76de0 + 68·i`, ch+1) equals it. It does not
+transmit; it queues:
+
+| write | address |
+|---|---|
+| the value byte | `0x46c7bf2c + channel·128 + cc` — the last value queued per (channel, CC) |
+| bit `cc` | `0x46c7d7d8 + channel·16`, four longs per channel |
+| bit `channel` | `0x46c7e0de` |
+| bit 2 | INTFRCH `0xfc048010` when `0x46c7ca34` is 0: forces interrupt source 34, the soft-timer dispatcher `0x400409f4`, which drains the bitmap to UART0 |
+
+A CC queued twice before the drain is sent once. The drainer (DTIM2's
+handler, `0x400409f4`) walks the channel mask and each channel's bitmap,
+builds `Bn cc value` from the cache for every set bit and hands the bytes
+to the UART ring (`0x400b9670`, 4096 B; the UART0 ISR `0x400106ec` feeds
+the transmitter from it). If it sent anything it sets `0x46c7ca34` = 1 and
+re-arms DTIM2 for the batch's wire time (`DTRR = bytes × 0x400a763e[rate]`,
+`0x40040ac6..0x40040aee`); otherwise clears the flag and re-arms the
+one-second tick. The emitter forces the timer only while the flag is 0, so
+the wire is paced to MIDI bandwidth and a burst of changes drains in
+batches. 28 `jsr` sites in the image; the page-1 knob path (`0x400552f0`: current track, CC `10 + 6·page
++ slot`, the clamped value) and the crossfader (CC 48) are the two
+traced. Nothing calls it on a pattern, part or project change.
+
+Measured under the port (`verify_set`, bottleservice, 28 Sep 2026): 277
+CCs queued by CC FEEDBACK's sweep left UART0 as 573 bytes with running
+status; UART0's transmit interrupt (vector 0x5a) was acknowledged once per
+message, the dispatcher (0x62) 35 times over the load. On the acceptance
+stress fixture 469 CCs, and at the end of the 900-frame run channel 7's
+bitmap still held 15 CCs with the busy flag set: a part change late in
+the run, queued (cache = lane) and waiting for the batch timer. `ot_emu
+--midi-out FILE` writes the bytes.
+
