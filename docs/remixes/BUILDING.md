@@ -5,8 +5,8 @@ OS 1.40C. Nothing built here may be shared: a built `.bin` or `.syx`
 contains Elektron's OS.
 
 Pick a remix from [README.md](README.md). The commands below use `ok-ms`
-(Octakit + MIDI SCENES, the interim-share image); substitute any remix
-name.
+(Octakit + MIDI SCENES on the stock effects, the smallest remix that has
+run on a unit); substitute any remix name.
 
 ## 0. What you need
 
