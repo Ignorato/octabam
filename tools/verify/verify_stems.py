@@ -129,7 +129,7 @@ def core1_slot_peaks(dump_path):
 
 def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
          card_in=None, dump_blocks=True, stack=False, mems=(), calls_before=None, fixture=None,
-         pokes_before=()):
+         pokes_before=(), mask=0x01):
     """One fixture run under the port: the module's action called before
     play (`--call-before-play`: the action arms, and the hook takes the
     ARMED-to-RECORDING edge on the first playing frame), STOP at `stop_at`
@@ -152,9 +152,13 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     An older port refuses the call, prints the refusal and records nothing,
     so `tap()` checks the call's own report line before anything else.
 
-    A fixture with `audio_in`/`midi` feeds the port's inputs and MIDI IN."""
+    A fixture with `audio_in`/`midi` feeds the port's inputs and MIDI IN.
+    `mask` is the track mask poked before play, ahead of `pokes_before`
+    (default T1: every check written for one track keeps its meaning with
+    the build's all-eight default); None pokes nothing."""
     tag = f"{tag}{SUFFIX}"
     fx = json.loads(pathlib.Path(fixture or FIXTURE).read_text())
+    pokes_before = ([(s["stems_tracks"] + 3, mask)] if mask is not None else []) + list(pokes_before)
     work = pathlib.Path("out/stems_runs"); work.mkdir(parents=True, exist_ok=True)
     dump, card = work / f"{tag}.dump", work / f"{tag}.img"
     mem, ring = work / f"{tag}.mem", work / f"{tag}.ring"
@@ -473,7 +477,7 @@ def eight(s):
         check("eight: the 8-track fixture exists (stems_fixture.py --eight)", False)
         return
     log, dump, card, words, _ = port(s, EIGHT_FRAMES, stop_at=300, tag="eight", fixture=FIXTURE8,
-                                     pokes_before=[(s["stems_tracks"] + 3, 0xff)])
+                                     mask=0xFF)
     st, status, _, wr, rd, nfr = words
     check("eight: the task finished (state IDLE, no error)", st == ST_IDLE and status == 0,
           f"state {st}, status {status}")
