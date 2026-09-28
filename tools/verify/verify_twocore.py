@@ -21,7 +21,7 @@ real defect, and no local test could show one before.
 
     make verify-twocore          # ~1 min; part of `make check`
 
-Both builds are of the smallest two-server remix (`registry.fixture`): SPEC (the shipping shape) and DEV (the
+Both builds are of the plain two-server remix `bus` (`remixes/test/bus`, `registry.fixture`): SPEC (the shipping shape) and DEV (the
 hatch). The shipping artifact is snapshotted and restored, the way
 verify_busscreen does, so `make check`'s remix is what is left on disk.
 """
