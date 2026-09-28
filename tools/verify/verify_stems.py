@@ -818,6 +818,56 @@ def thru(s):
     check("thru: the eight signals are distinct", len(sigs) == 8, f"{len(sigs)} distinct of 8")
 
 
+# A mask take: at least three chunks (512 frames each) while recording,
+# then the time the writer needs at the port's card speed (8 samples a
+# sector: STEM_REC.md 13.3). Measured 28 Sep 2026 from the watch logs,
+# FINISHING to IDLE: 24 frames at one track, 55 at two, 111 at four, 120
+# for 0xA5, 410 at eight -- the 1,300 frames after the stop leave three
+# times the eight-track drain.
+THRU_STOP = 1700
+THRU_FRAMES = 3000
+
+
+def mask_take(s, mask, tag, stop_at=THRU_STOP, frames=THRU_FRAMES, pokes=()):
+    """One take on the THRU fixture with `mask`: a file per enabled track,
+    each equal to its own track's read-back at one fixed offset, sound in
+    every frame from its first, no two alike, the writer writing during the
+    take, IDLE with no error, and stems_peak exact against the watch log."""
+    if not FIXTURE_THRU.exists():
+        check(f"{tag}: the THRU fixture exists (stems_fixture.py --thru)", False)
+        return
+    log, dump, card, words, _ = port(s, frames, stop_at=stop_at, tag=tag, fixture=FIXTURE_THRU,
+                                     mask=mask, pokes=pokes, extra=watched(s, span=28),
+                                     mems=((s["stems_peak"], 4, "peak"),))
+    st, status, _, wr, rd, nfr = words
+    want = [k for k in range(8) if mask >> k & 1]
+    check(f"{tag}: the task finished (state IDLE, no error)", st == ST_IDLE and status == 0,
+          f"state {st}, status {status}")
+    files = take_files(card, FIXTURE_THRU)
+    check(f"{tag}: one file per enabled track", [n.upper() for n, _ in files] == [f"T{k + 1}.WAV" for k in want],
+          f"{[n for n, _ in files]}")
+    datas = []
+    for k, (name, data) in zip(want, files):
+        got = [list(struct.unpack_from("<32h", data, 44 + 64 * f)) for f in range((len(data) - 44) // 64)]
+        ref = slot_frames(dump, k)
+        lag = next((L for L in range(len(ref) - len(got) + 1) if ref[L:L + len(got)] == got), None)
+        first = next((i for i, f in enumerate(got) if any(f)), None)
+        silent = [i for i in range(first + 1, len(got)) if not any(got[i])] if first is not None else []
+        check(f"{tag}: {name} equals track {k + 1}'s read-back at one offset, sound in every frame from its first",
+              nfr > 0 and len(got) == nfr and lag is not None and first is not None and not silent,
+              f"{len(got)} frames, lag {lag}, first sound {first}, {len(silent)} silent after")
+        datas.append(data[44:])
+    check(f"{tag}: no two files alike", len(set(datas)) == len(datas), f"{len(set(datas))} distinct of {len(datas)}")
+    ws = writes(s, log, span=28)
+    fin = next((x for x, w, val in ws if w == 0 and val == ST_FINISHING), None)
+    mid = [x for x, w, val in ws if w == 4 and fin is not None and x < fin]
+    check(f"{tag}: the task wrote during the take", len(mid) >= 2, f"{len(mid)} rd writes before FINISHING")
+    raw = run_path(tag, "peak")
+    peak = int.from_bytes(raw.read_bytes(), "big") if raw.exists() else None
+    check(f"{tag}: stems_peak is the largest fill the hook saw", peak == rebuilt_peak(ws) and peak > 0,
+          f"stems_peak {peak}, rebuilt {rebuilt_peak(ws)}")
+
+
 def fixtures():
     """The four fixture cards, built from TEMPLATE at the start of every
     run: a fresh tree has none, and a card left by an older stems_fixture.py
@@ -873,6 +923,8 @@ def main():
         wrap(s)
         cap(s)
         eight(s)
+        for mask in (0x01, 0x03, 0x0F, 0xFF, 0xA5):
+            mask_take(s, mask, f"mask{mask:02x}")
         cut(s)
         exists(s)
         overflow(s)
