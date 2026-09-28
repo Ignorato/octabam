@@ -7,10 +7,12 @@ Two remixes of the rig (the effects and hosts of [`bottleservice`](../../bottles
 | `usb` | USB MIDI | card storage + a class-compliant MIDI port that mirrors the DIN ports |
 | `usb-audio` | USB MIDI + USB AUDIO OUT TRACKS MAIN CUE | the above + a 20-channel 44.1 kHz 24-bit audio input (tracks 1–16, MAIN 17–18, CUE 19–20) |
 
-USB AUDIO has three builds of one source, one module each: EXTENDED (the
-twenty channels above), FULL (the sixteen track channels, remix
-`usb-out-tracks`) and MASTER (track 8's L/R, remixes `usb-out-master` and
-`bottleservice`).
+USB AUDIO is one source assembled several ways, one module each: OUT
+TRACKS MAIN CUE (the twenty channels above), OUT TRACKS, OUT MASTER, OUT
+MAIN CUE and OUT MAIN, plus the IN modules that carry the computer's audio
+onto the inputs; the variant table is in
+[`modules/usb-audio-out-tracks-main-cue/README.md`](../../../modules/usb-audio-out-tracks-main-cue/README.md)
+and each has a one-module remix under `remixes/test/`.
 
 ## What is in it
 

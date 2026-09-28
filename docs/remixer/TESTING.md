@@ -236,6 +236,9 @@ the generated project.
   check on the branch. A path in the report is part of the report: moving
   a tool is a report change, re-saved only after the artifacts are shown
   identical. Local discipline: the hashes depend on your own stock image.
+  Two of the 24 cases (`plain`, `marker`) refuse to build on main (28 Sep
+  2026: the plain two-server selection overruns payload A); the gate
+  compares the report as well as the artifacts, so a refusal is pinned too.
 - **`make identity`**: every remix, base against head, image and report.
 - **`make verify-bus`** (`SAVE=1` first): a bus-layout change is
   behaviour-preserving over every layout in its case list, stamp, edit,
