@@ -326,6 +326,16 @@ burn-image: burn ## Repack the RIG BURN build into a card-flashable .bin (BUILD=
 	@echo "  MIDI image: out/OCTATRACK_OS1.40C_$(VERSION)B.syx"
 
 .PHONY: check
+.PHONY: check-remixes
+check-remixes: ## The per-remix half for REMIXES="a b c", JOBS=4 worktrees at a time (out/shards/<i>, each its own port build; logs in out/check_shards/)
+	@test -n "$(REMIXES)" || { echo "REMIXES is unset: make $@ REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
+	BUILD=$(BUILD) python3 tools/verify/check_shards.py --jobs $(or $(JOBS),4) $(REMIXES)
+
+.PHONY: check-remix-gates
+check-remix-gates: ## One remix's per-remix half, one gate per job over JOBS=4 worktrees (the wall is the longest gate, not the list; OT_PROJECT as for check-remix)
+	$(need-remix)
+	BUILD=$(BUILD) python3 tools/verify/check_shards.py --by-gate --jobs $(or $(JOBS),4) $(REMIX)
+
 check: bus cycles verify ## Everything that can be checked without hardware (the set gates run under the port when OT_PROJECT or ~/.octabam_project names a project)
 	@# verify_burn.py shells out to build_bus.py twice -- with and without
 	@# BURN=1, neither with XBUS/SPEC -- and each run overwrites
@@ -349,18 +359,22 @@ check-remix: bus cycles verify-remix ## The per-remix half of make check: build,
 # Full local evidence; ordinary check remains useful for development.
 # STRESS_SOURCE copies a private project and generates the remix's stress fixture.
 .PHONY: accept
-accept: ## Strict local acceptance + JSON report (OT_PROJECT or STRESS_SOURCE required)
-	$(need-remix)
-	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix "$(REMIX)" $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(ACCEPTARGS)
+accept: ## Strict local acceptance + JSON report: REMIX=<one>, or REMIXES="a b c" with the remix-independent half once (OT_PROJECT or STRESS_SOURCE required)
+	@test -n "$(REMIXES)" || { echo "REMIX is unset: make $@ REMIX=<name>, or REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
+	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix $(REMIXES) $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(ACCEPTARGS)
 
 .PHONY: test-acceptance
 test-acceptance: ## Firmware-free tests of the acceptance runner and the reach classifier
 	python3 -m unittest discover -s tools/verify/tests -p 'test_*.py' -v
 
 BASE ?= origin/main
+
+.PHONY: identity
+identity: ## Which remixes' images this branch moved: every remix built from BASE (a kept worktree under out/identity/base) and from this tree, compared byte for byte
+	python3 tools/verify/image_identity.py --base $(BASE)
 .PHONY: reach
-reach: ## The gates this branch's changes reach (the diff against BASE=origin/main); RUN=1 runs them in order
-	python3 tools/verify/reach.py --base $(BASE) $(if $(RUN),--run,) $(REACHARGS)
+reach: ## The gates this branch's changes reach (the diff against BASE=origin/main); RUN=1 runs them in order, KEEP=1 every one then a table, JOBS=n the check-remix lines over n worktrees
+	python3 tools/verify/reach.py --base $(BASE) $(if $(RUN),--run,) $(if $(KEEP),--keep-going,) $(if $(JOBS),--jobs $(JOBS),) $(REACHARGS)
 
 .PHONY: modules
 modules: ## List the module index and the available remixes
@@ -449,6 +463,15 @@ emu-card: ## Boot with an emulated CF card holding PROJECT and load it
 .PHONY: disasm
 disasm: ## Open radare2 on the decompressed ColdFire MAIN OS
 	scripts/disasm.sh
+
+.PHONY: ghidra
+ghidra: ## One Ghidra project: the MAIN OS and both DSP payloads (out/ghidra). GHIDRA=<install dir> [IMAGE=out/mainos_bus.bin]; tools/ghidra/README.md
+	python3 tools/ghidra/ot_ghidra.py import $(if $(GHIDRA),--ghidra $(GHIDRA)) $(if $(IMAGE),--image $(IMAGE))
+
+.PHONY: ghidra-install
+ghidra-install: ## A copy of a stock Ghidra 12.1.4 with the DSP56300 module and the ColdFire EMAC patch. GHIDRA=<stock install> [GHIDRA_DEST=dir]
+	@test -n "$(GHIDRA)" || { echo "usage: make ghidra-install GHIDRA=<stock Ghidra 12.1.4 install> [GHIDRA_DEST=dir]"; exit 1; }
+	tools/ghidra/install.sh $(GHIDRA) $(GHIDRA_DEST)
 
 .PHONY: where
 where: ## Every doc paragraph citing one ColdFire address + a disasm window. make where A=0x40004d40 [N=128]

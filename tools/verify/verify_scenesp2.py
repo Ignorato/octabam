@@ -13,7 +13,11 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           T1's voice record (0x80000110, both pings): at fader 64 MODE must
           snap to the A side (1) and TIME lerp to 60; at fader 0 the B side
           alone: MODE the knob (measured by a run with the pool's count 0),
-          TIME 20.
+          TIME 20. The three runs are three boots side by side (each is one
+          LOAD PROJECT, ~32 s under Octakit): a pool poked once the
+          transport has started never reaches the live lane, with or
+          without a transport restart (measured 28 Sep 2026), so they
+          cannot share one boot.
   editor  calls the FX2 page-2 editor `0x4003a9dc(5, 2 ticks)` on T1 with
           scene A held (0x460d169c = 1): the Part byte and the live lane
           must not move; the pool in the Part DB's part-0 window and its
@@ -22,13 +26,13 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           a poked entry of 50 and expects the same entry updated, count 1.
 
 SKIPs without a project, without the port, or for a remix without SCENES
-P2. Under a remix with Octakit the editor section SKIPs by name: her editor
-wrapper refuses a `--call` (no UI context) once she is active, and since 28
-Sep 2026 the port's load runs to completion, so she is (before, the fixed
-20 s load left her quiesced and her wrapper trampolined to stock). The knob
-and fader checks run under every remix.
+P2. Under a remix with Octakit the editor call runs through her wrapper
+(SCENES P2 KITS): until 28 Sep 2026 SCENES P2's entry detour displaced
+twelve bytes and her trampoline continued at entry+8 into a nop, so the
+body read a garbage slot and her marker check halted every page-2 turn.
 """
 import argparse, os, pathlib, shutil, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
 from remix import registry  # noqa: E402
@@ -138,30 +142,31 @@ def main():
                       "--poke-trig", "2", "--poke", ";".join(common + weights(xf)),
                       "--mem-dump", f"{RECORDS:#x},1024={dump}"]
         text = run(cmd, log)
-        check(f"{tag}: 120 frames ran", "frames run : 120" in text)
         rec = dump.read_bytes()
-        return [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)]
+        return ("frames run : 120" in text, [rec[ping * 0x200:ping * 0x200 + 64] for ping in (0, 1)])
 
     # the knob alone: the same run with the pool's count 0, so what fader 0
     # (the B side, which holds no MODE lock) must read is measured from the
     # project: T1's MODE is 1 in the stress fixture's part 0 and 0 in
     # OCTABAM89_setgate's (a literal 0 failed `make accept`, 26 Sep 2026)
-    knob = frames("knob", pool[:2] + [0] + pool[3:], 0)
+    with ThreadPoolExecutor(3) as pool_:
+        runs = {tag: pool_.submit(frames, tag, pl, xf)
+                for tag, pl, xf in (("knob", pool[:2] + [0] + pool[3:], 0), ("fader 64", pool, 64), ("fader 0", pool, 0))}
+        results = {tag: f.result() for tag, f in runs.items()}
+    for tag, (ran, _) in results.items():
+        check(f"{tag}: 120 frames ran", ran)
+    recs = {tag: r for tag, (_, r) in results.items()}
+    knob = recs["knob"]
     knob_mode = knob[0][48]
     check(f"knob alone: both pings read T1 MODE {knob_mode}", knob[1][48] == knob_mode)
     for xf, want_mode, want_time, why in ((64, 1, 60, "the A side, a select snaps"),
                                           (0, knob_mode, 20, "the knob, B alone")):
-        for ping, r in enumerate(frames(f"fader {xf}", pool, xf)):
+        for ping, r in enumerate(recs[f"fader {xf}"]):
             check(f"fader {xf}: ping {ping} T1 MODE (hw 24 hi) = {r[48]} (want {want_mode}: {why})",
                   r[48] == want_mode)
             check(f"fader {xf}: ping {ping} T1 TIME (hw 26 lo) = {r[53]} (want {want_time})", r[53] == want_time)
 
     # ---- the editor with a scene held -------------------------------------
-    if "OCTAKIT" in remix.modules:
-        print(f"  [SKIP] editor: {a.remix} carries OCTAKIT, whose editor wrapper refuses a direct call "
-              f"once she is active (gk_track_setup_byte_fatal); drive it from the panel instead")
-        print(f"verify_scenesp2: {'FAIL' if fails else 'ok'} ({fails} failure(s))")
-        return 1 if fails else 0
     early = f"{TRACK_CUR:#x}=0;{SCENE_HELD + 3:#x}=1;{PART_DISP:#x}=0"
     dumps = ";".join([f"{DBPTR:#x},4={OUT / 'dbptr.bin'}"]
                      + [f"{BLOB + b * BANK_STRIDE + POOL_OFF:#x},12={OUT / f'pool_{b}.bin'}" for b in range(16)]

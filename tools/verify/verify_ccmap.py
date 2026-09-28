@@ -57,8 +57,8 @@ IDLIVE = 0x80000ecc            # +track = live FX2 id
 PARTB = 0x80000003
 DBPTR = 0x46c82456
 
-VERB_COUNTS = (3, 128, 128, 4, 128, 128)
-DLY_COUNTS = (3, 128, 128, 4, 128, 2)
+VERB_COUNTS = (3, 128, 128, 128, 128, 128)
+DLY_COUNTS = (3, 128, 128, 4, 128, 128)
 
 
 def _manifest():

@@ -1189,6 +1189,7 @@ int main(int _argc, char** _argv)
 	std::string callSpec;		// "addr[,arg,...]": a firmware routine called AS MAIN after the load (a menu action the port has no panel for -- Part Reload, 14 Sep 2026)
 	int callAt = -1;			// with --sequencer: make that call this many frames AFTER the transport start instead (a panel edit while playing: the transport start re-applies the part over the live lane, so an edit made before it is gone)
 	std::string livePath;		// a FIFO (or file) of panel events, read while the RTOS runs: "key <code> down|up", "enc <n> <delta>", "pot <0..255>", "midi <hex>...", "quit" -- tools/emu/lcd_view.py --panel writes it
+	std::string midiOut;		// MIDI OUT: UART0's transmit bytes, raw, to FILE at the very end (the firmware's CC echo and CC FEEDBACK's dumps; a summary line counts them)
 	std::string midiFile;		// with --sequencer: MIDI IN bytes onto UART0, one event per line: "<frames after the transport start> <hex byte>..." (e.g. "20 B0 28 7F" = CC 40 to 127 on channel 1) or "pre <hex byte>..." before the transport start ("pre C0 10" = program change 16 while stopped)
 	int mainLevel = -1;			// O9b: post sys command 4 (SET MAIN LEVEL) with this level after the load; -1 = don't (the emulated load never does, and every voice then renders at gain zero)
 	std::string lcd;			// the panel's 1-bpp plane (0x46c7e0ea, 1024 B) plus the popup windows (table + planes) to FILE whenever they have changed, at most once per 2M instructions; tools/emu/lcd_view.py composites and draws it
@@ -1280,6 +1281,7 @@ int main(int _argc, char** _argv)
 		else if(a == "--at" && i + 1 < _argc)			atFrames = _argv[++i];
 		else if(a == "--card-fail-after" && i + 1 < _argc)	cardFailAfter = std::atoll(_argv[++i]);
 		else if(a == "--midi" && i + 1 < _argc)		midiFile = _argv[++i];
+		else if(a == "--midi-out" && i + 1 < _argc)	midiOut = _argv[++i];
 		else if(a == "--live" && i + 1 < _argc)		livePath = _argv[++i];
 		else if(a == "--frame-timer")				frameTimer = true;
 		else if(a == "--usb-host" && i + 1 < _argc)	usbHost = _argv[++i];
@@ -1645,6 +1647,9 @@ int main(int _argc, char** _argv)
 				rtos.setUsbNotify(usbNotify);
 		}
 		rtos.install();
+		if(const auto r = rtos.spinRange(); r.second)
+			std::printf("rtos       : main's park is detoured to %#x (a jmp at %#x): PCs in [%#x, %#x) count as the park; a borrowed call returns to the stock bras\n",
+				r.first, ot::g_mainSpin - 6, r.first, r.second);
 		rtos.setBlockLog(!blockLog.empty());
 		if(!blockDump.empty())
 			rtos.setBlockDump(blockDump);
@@ -2150,6 +2155,7 @@ int main(int _argc, char** _argv)
 				// start returned, which is what the cold tool calls frame 0:
 				// the two reports compare directly.
 				const auto frame0 = rtos.frameCount() + 1;
+				const auto midiTx0 = rtos.serialTx0().size();	// MIDI OUT bytes before the transport start
 				const auto ticks0 = rtos.ticks();
 				const auto ackTail = rtos.acks().size();
 				if(pcRing)
@@ -2211,6 +2217,14 @@ int main(int _argc, char** _argv)
 					ran > 0 ? wall / (ran * ot::g_framePeriod / ot::g_sampleHz) : 0.0);
 				if(!midiFile.empty())
 					std::printf("midi in    : %zu byte(s) still queued at the end (0 = the firmware took them all)\n", rtos.midiPending());
+				if(!midiOut.empty())
+				{
+					// MIDI OUT as the firmware wrote it: its knob echo and CC FEEDBACK's dumps
+					const auto& tx = rtos.serialTx0();
+					std::ofstream f(midiOut, std::ios::binary);
+					f.write(reinterpret_cast<const char*>(tx.data()), static_cast<std::streamsize>(tx.size()));
+					std::printf("midi out   : %zu byte(s) on UART0 (%zu after the transport start) -> %s\n", tx.size(), tx.size() - midiTx0, midiOut.c_str());
+				}
 				static const char* const g_seqStop[] = {"REACHED", "TIME", "FAULT", "ILLEGAL"};
 				std::printf("sequencer  : playing bank %u pattern %u "
 					"(re-selected through the load's own last step)\n", seq.first, seq.second);

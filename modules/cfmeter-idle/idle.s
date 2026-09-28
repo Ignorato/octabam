@@ -6,9 +6,10 @@
 | METER's m_iacc; a longer one was taken by an interrupt or a task. The
 | shortest step goes to m_istep.
 |
-| The ColdFire port advances its clock only at main's stock `bras .`
-| (rtos.cpp, g_mainSpin), so an image with this loop does not load a
-| project under the port; on the unit time passes regardless.
+| The ColdFire port reads the `jmp` this detour leaves at 0x4001fc96 and
+| counts PCs in the loop as main's park (rtos.cpp, Rtos::atSpin, since 28
+| Sep 2026); a borrowed call returns to the stock `bras .` behind it and
+| main parks there, so the accounting stops at the first --call.
 
         .equ    DTCN3,      0xfc07c00c
 

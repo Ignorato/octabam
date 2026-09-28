@@ -261,6 +261,10 @@ def main():
     midi.write_text("\n".join(lines) + "\n")
 
     dumps = {k: OUT / f"{k}.bin" for k in ("ids", "records", "lanes")}
+    midi_out = OUT / "midi_out.bin" if "CC FEEDBACK" in mods else None
+    if midi_out:
+        # the stock emitter's per-channel cache and dirty bitmap, the engine's queue
+        dumps.update(cccache=OUT / "cccache.bin", ccbits=OUT / "ccbits.bin", engq=OUT / "engq.bin")
     blocks, cmds, log, card_after = OUT / "port.dump", OUT / "port.cmds", OUT / "port.txt", OUT / "card_after.img"
     if not (a.reuse and blocks.is_file() and all(p.is_file() for p in dumps.values())):
         card = OUT / "card.img"
@@ -270,9 +274,10 @@ def main():
                "--sequencer", "--internal-clock", "--frames", str(a.frames), "--load-ms", str(a.load_ms),
                "--dsp", "--main-level", "64", "--audio-in", "tones", "--poke-trig", "2", "--midi", str(midi),
                "--block-dump", str(blocks), "--cmd-log", str(cmds), "--card-out", str(card_after),
-               "--mem-dump", f"{LIVE_IDS:#x},16={dumps['ids']};{RECORDS:#x},512={dumps['records']};{LANES:#x},576={dumps['lanes']}",
+               "--mem-dump", f"{LIVE_IDS:#x},16={dumps['ids']};{RECORDS:#x},512={dumps['records']};{LANES:#x},576={dumps['lanes']}"
+               + (f";0x46c7bf2c,2048={dumps['cccache']};0x46c7d7d8,256={dumps['ccbits']};0x460d17ce,16={dumps['engq']}" if midi_out else ""),
                "--dsp-peek", "0:Y:36082,1;1:Y:36082,1;1:X:6229,1;1:X:6275,1;0:Y:36081,1;0:Y:9f4,1"] \
-            + a.extra.split()
+            + (["--midi-out", str(midi_out)] if midi_out else []) + a.extra.split()
         with open(log, "w") as f:
             f.write(" ".join(cmd) + "\n"); f.flush()
             r = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
@@ -367,6 +372,61 @@ def main():
     m = re.search(r"midi in    : (\d+) byte\(s\) still queued", text)
     check("midi: the firmware took every byte", m is not None and m.group(1) == "0",
           f"{m.group(1) if m else '?'} queued at the end")
+    if midi_out:
+        # CC FEEDBACK (modules/cc-feedback). The stock emitter 0x40033e3c
+        # queues: its cache 0x46c7bf2c + ch*128 + cc holds the last value
+        # queued per (channel, CC), its bitmap the CCs not yet on the wire,
+        # and the drainer paces the wire to MIDI bandwidth (DTIM2 re-armed
+        # for the batch's wire time). The module's contract is the CACHE:
+        # every mapped lane byte (page 1 = CC 16-45, FX1 page 2 = 68-73,
+        # FX2 page 2 = 62-67) equals it within eight UI ticks while the
+        # engine is idle. The wire is checked for shape: every CC sent is a
+        # mapped slot on a track's channel, with the cache's value at the
+        # time (the stream carries only values the cache held).
+        cfmap = [(i, 16 + i) for i in range(30)] + [(0x32 + i, 68 + i) for i in range(6)] + [(0x38 + i, 62 + i) for i in range(6)]
+        cache, bits, engq = dumps["cccache"].read_bytes(), dumps["ccbits"].read_bytes(), dumps["engq"].read_bytes()
+        engine_idle = int.from_bytes(engq[12:16], "big") != 0
+        pending = sum(bin(int.from_bytes(bits[ch * 16 + 4 * k:ch * 16 + 4 * k + 4], "big")).count("1") for ch in range(16) for k in range(4))
+        msgs, st, buf = [], None, []
+        for x in (midi_out.read_bytes() if midi_out.is_file() else b""):
+            if x >= 0xf8:
+                continue
+            if x & 0x80:
+                st, buf = x, []
+            else:
+                buf.append(x)
+                if st is not None and st >> 4 == 0xb and len(buf) == 2:
+                    msgs.append((st & 15, buf[0], buf[1])); buf = []
+        ch_track = {chans[t] & 0xf: t for t in range(8) if chans[t] >= 0}
+        mapped = {cc for _, cc in cfmap}
+        # CC 48 is stock's own crossfader echo (MIDI.md section 4), sent on the
+        # current track's channel from the panel path, not the module's
+        stray = [(ch, cc) for ch, cc, _ in msgs if cc != 48 and (ch not in ch_track or cc not in mapped)]
+        wrong = []
+        for t in range(8):
+            if chans[t] < 0:
+                continue
+            ch = chans[t] & 0xf
+            for off, cc in cfmap:
+                want, got = lanes[72 * t + off], cache[ch * 128 + cc]
+                if got != want:
+                    wrong.append(f"T{t + 1} CC {cc} cache {got} lane {want}")
+        check(f"midi out: every CC sent is a mapped slot on a track's channel ({len(msgs)} CCs on {len({(c, n) for c, n, _ in msgs})} slots)",
+              bool(msgs) and not stray, f"stray {sorted(set(stray))[:6]}" if stray else "")
+        if engine_idle:
+            check("midi out: the emitter's cache holds every mapped lane byte (CC FEEDBACK swept every change)",
+                  not wrong, "; ".join(wrong[:6]))
+        else:
+            print(f"  [N/A] midi out: the engine was running a command at the end; the sweep waits, {len(wrong)} slot(s) differ")
+        # Informational: the bytes after the transport start are the dump's
+        # tail (the load's part, dumped once the engine is idle, drained at
+        # MIDI bandwidth), the echo of the CCs sent in, and any change the
+        # pattern made. A step-rate stream from locks would show here; this
+        # fixture plays no locks under the port (no pattern trig fires,
+        # EMU.md).
+        m = re.search(r"midi out   : (\d+) byte\(s\) on UART0 \((\d+) after the transport start\)", text)
+        print(f"  [info] midi out: {m.group(1) if m else '?'} bytes on UART0, {m.group(2) if m else '?'} after the transport start, "
+              f"{pending} CC(s) still queued, {a.frames} frames")
 
     # audio
     import blockdump as bd, recloop as rl

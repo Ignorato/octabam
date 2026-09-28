@@ -8,8 +8,8 @@ Two ways to run the Octatrack's OS without a flash:
   emu-live`. Everything from "Build" to "Speed" below.
 - **Tier-0** (`tools/emu/emu_bringup.py`, Unicorn): boots to the RTOS
   handoff and calls the firmware's draw and formatter code directly. The
-  label gates in `make verify` (`verify_labels`, `verify_modenames`,
-  `verify_hidden`, `verify_ccmap`), `verify_repitch_ui`,
+  label gates in `make check` (`verify_labels`, `verify_modenames`,
+  `verify_hidden`; CC MAP's `verify_ccmap`), REPITCH's `verify_repitch_ui`,
   `tools/build/stock_labels.py` and the remixer's UNIT pane use it.
 
 Route A (`emu_rtos.py`: the firmware's scheduler run by hand on Unicorn,
@@ -88,7 +88,8 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
 - Watches: `--watch-mem ADDR,LEN[;ADDR,LEN...]` (every write, with the
   PC), `--watch-read`, `--watch-pc`, `--dsp-watch core:X|Y|P:addr`,
   `--dsp-pcwatch core:pc` (the last 24 arrivals with a, b, x, y, r0, r4, r6, n4, sp, r2, m2, r1, n1, r7, m7, m0 and, since 21 Sep 2026, n7 -- the frame count of a call), `--dsp-peek core:X|Y|P:addr,len` (upper-case
-  space letter), `--mem-dump addr,len=file`.
+  space letter), `--mem-dump addr,len=file`, `--midi-out FILE` (UART0's
+  transmit bytes, raw: the firmware's CC echo and CC FEEDBACK's dumps).
 - The record a track's DSP instances read is `0x80000110 + 64·t` (32
   halfwords, `docs/firmware/MIDI.md`); the page-2 lane `0x80000810 + 72·t`.
 - `--card-out FILE` writes the card as the firmware left it;
@@ -161,21 +162,63 @@ bank B, 15 Sep 2026).
   write to `0x80000002` follows the parse and those remixes load (ok-ms's
   set gate: 0 failures at 8 and at 32). Why the latency changes the order
   is inferred (the engine blocks longer per sector, so `sys` drains its
-  queue earlier), not traced. One `--watch-mem` range per run: the last
-  flag wins.
-- **No card-sample voice has started under the port on this machine.**
-  `verify_repitch`'s and `verify_euclid`'s playback fixtures (FLEX and
-  STATIC, two source projects, stored banks synced or not, MIDI sync off)
-  render silence: the sequencer steps (`0x4009d1e8` per step, at the
-  pattern's 1/2X), the sample loads (30,558 ATA reads, no FLEX error in
-  the card's LOG), a MIDI note-on writes trig words, and the voice END
-  write `0x40001612` never runs while the frame builder runs 8 per frame
-  and every voice slot zero-fills. `verify_set`'s audio comes from THRU
-  tracks fed by `--audio-in` and `--poke-trig`, never from a card sample.
-  The runs that heard FLEX under the port (the mixer model, the SOS
-  recorder work) used fixtures not on this machine; the projects here
-  reference 115 samples, none on disk. A positive control needs a project
-  with its samples present.
+  queue earlier), not traced. The same check tripped at 8 samples on 28 Sep
+  2026 when CC FEEDBACK's first build transmitted 272 CCs (UART0
+  interrupts) inside the load; the module now waits for the engine's queue
+  to be idle (`0x460d17ce+0xc`) and the load passes at 8 again. A module
+  that adds interrupts or work during LOAD PROJECT under Octakit is exposed
+  to this ordering. One `--watch-mem` range per run: the last flag wins.
+- **A card-sample voice plays under the port, and its audio stops at the
+  DSP's main mixdown (measured 28 Sep 2026, `verify_repitch`'s FLEX
+  fixture on the repitch and bus images).** Retracting the 27 Sep reading
+  "no voice has started": the voice starts at the transport (`0x4000f824`
+  resets its position, then `0x40008898` advances it 16 per frame for the
+  whole run), the fetch through the voice struct returns the FLEX arena
+  chunk with the staged sine in it (`0x400086c0`: 16 frames a call), the
+  format-3 copy loop (`0x40008768`) fills the 84-word track record with
+  the samples, the host port pushes it, core 1 renders it and its post-FX
+  read-back (`0x80003190`, 25 % non-zero, rms 6,699) and the 512-word
+  forward to core 0 carry it. Core 0's summing mixdown (`P:0x259..0x275`,
+  the `y:(r5)+` gains from `Y:0x40` against the track blocks at
+  `X:0x2400..`) multiplies the track's samples by a gain that reads 0
+  (`--dsp-pcwatch 0:0x25e`: x0 = the sine, y0 = 0), so the TX DMA ring at
+  `X:0x8000` (`DSR2 0x8000, DDR2 M_TX0`) stays zero and every ESAI word is
+  0. `Y:0x40` is written 0 each frame by the record unpack at `P:0x3c7`
+  from the record's fields; the same voice on T5 (core 0) is silent the
+  same way. The record arrives on the DSP as one 24-bit word per
+  halfword with `0x03` in the high byte (`X:0x2080: 030000 030400 ..
+  038000 03ee9a`). `FW_TRIG_WORDS` (0x46104d26) stays 0 in audible runs
+  too and is not a trig indicator.
+  Every fixture on this machine is silent at TX0: the repitch and euclid
+  playback fixtures, the set gate's THRU tracks on the setgate project
+  (restock, bus, repitch images), and the acceptance stress project under
+  the plain port flags, with `--audio-in tones` and with `--poke-trig 2`.
+  The one audible configuration (`verify_set` on the stress project, bus
+  image: TX0 ring words 2-5 non-zero on 14,223 of 14,400 samples, also a
+  27 Sep charsave run) adds the MIDI sends into the hosts, so those words
+  are the engines' wet, not any track's dry. `verify_set` prints the TX0
+  census as info and does not check it; the level-law and SOS runs that
+  heard FLEX under the port were not re-run here. Open: which record field
+  the unpack turns into the mixdown gain and why it is 0 for every track
+  (a port defect in the record delivery or in the ColdFire level chain at
+  `0x4000cc96`, whose 6 longs per record are the EMAC's `msacw` products;
+  the FLEX voice's word 18 reads `0x0040`, a THRU's `0x047f`), against the
+  DSP's own unpack (`P:0x3ac..0x3f7`, gains into `L:0x40..`, ramps into
+  `X/Y:0x80..`). The level bytes `0x8000005e/0x8000005f` the dispatcher
+  copies into the record's words 0x32/0x33 are what the project parse
+  stores from `METRONOME_CUE_VOLUME` / `METRONOME_MAIN_VOLUME`
+  (`0x40087b14`, `0x40087b58`); `MAIN_LEVEL` / `CUE_LEVEL` land at
+  `0x80000035` / `0x80000036` (`0x40087348`, `0x4008738c`); poking either
+  pair after the load changes nothing here.
+
+- **A detoured idle park is followed (28 Sep 2026).** `Rtos::install`
+  reads `g_mainSpin-6`: a `jmp abs.l` there (CF METER IDLE's `m_idle`)
+  makes `[target, target+0x80)` count as main's park for the idle skip,
+  the burst end, `runToMainSpin` and `callAsMain`'s entry check
+  (`atSpin`, `spinRange`; the narrative prints `main's park is detoured
+  to ...`). A borrowed call still returns to the stock `bras .`, intact
+  behind the detour, and main parks there afterwards. `cfmeter`'s set
+  gate: 0 failures (before: card ready 0, LOAD PROJECT never posted).
 
 ## The screen itself (the port, 17 Sep 2026)
 
@@ -275,8 +318,8 @@ read-back bank swap -- octemu's open hypothesis for its mid-stream clicks
 under the port: its trampoline hooks `fs_card_detect_poll` (`0x4003f174`),
 the firmware routine the card-detect GPIO poll reaches, and the port mounts
 the card by posting the mount message directly, so that routine never runs
-(0 hits on a PC watch across a 800-frame run). The modules `usbmidi` and
-`usbaudio` carry the same code on octabam's loader instead, and
+(0 hits on a PC watch across a 800-frame run). The modules `usb-midi` and
+`usb-audio-*` carry the same code on octabam's loader instead, and
 `verify_usb` streams from them: the bench polls an isochronous endpoint
 on the endpoint's own schedule in DEVICE time (`isoPoll`, `isoPollHz`:
 250 us at high speed for bInterval 2, 1 ms at full speed), which is what a

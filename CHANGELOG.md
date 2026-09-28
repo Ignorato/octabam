@@ -7,6 +7,71 @@ flashed image was built from.
 
 ## Unreleased (main after image 43; image 53 built)
 
+- CC FEEDBACK (28 Sep 2026, `modules/cc-feedback`): the OT transmits a
+  CC for every live knob byte that changes -- a pattern or part change, a
+  project load, MODE DEFAULTS, an incoming CC, a page-2 turn -- so a
+  controller's encoders follow the unit; stock echoes page-1 panel turns
+  only. One track per UI tick (a detour on the keyrepeat task's loop),
+  the live lane against the stock emitter's own last-sent cache
+  (`0x46c7bf2c`), page 1 as CC 16-45 and page 2 as CC MAP's 62-73. In
+  `bottleservice` and `usb-audio`. `ot_emu --midi-out FILE` dumps UART0's
+  transmit bytes; `verify_set` checks them against the lane.
+- The port follows a detoured idle park (28 Sep 2026): `Rtos::install`
+  reads a `jmp abs.l` at `0x4001fc96` (CF METER IDLE's `m_idle`) and counts
+  the loop's first 0x80 bytes as main's park for the idle skip, the burst
+  end and run-to-park; a borrowed call still returns to the stock `bras .`.
+  `cfmeter`'s set gate passes (card ready, load handled 7.9 s after the
+  post; before: never posted).
+- SCENES P2's page-2 editor-entry detours displace eight bytes, the span
+  Octakit's own entry write takes (28 Sep 2026): at twelve the build
+  nopped the stock slot load at entry+8, where her trampoline continues,
+  and every page-2 knob turn under Octakit + SCENES P2 (rig-kits,
+  bottleservice) halted in `gk_track_setup_byte_fatal`. Measured under
+  the port from the panel; never flashed. `verify_modedefaults` and
+  `verify_scenesp2` no longer SKIP under Octakit
+  (`docs/remixer/FAILURE_MODES.md`).
+- `make reach` places a file by what depends on it (28 Sep 2026): the
+  Python imports and the `tools/x/y.py` paths the code runs or reads (not
+  the ones in comments, docstrings or messages) form a graph over
+  `tools/`; a change reaches the gates that transitively depend on it. A
+  gate of the shared half reaches `make check-shared` alone (155 s, was
+  every remix's per-remix half too); a gate of the per-remix half every
+  `check-remix` without the shared half; a file no gate depends on
+  (`tools/hw/bcr2000.py`, a render tool) nothing, named as such. The
+  Makefile is placed by which targets changed against the base: only the
+  check graph, a variable or a define reaches every remix; two new Ghidra
+  targets (#483) reach nothing. Before, `tools/harness/`, `tools/hw/`,
+  `scripts/` and any Makefile edit reached every remix.
+- The build's memo (28 Sep 2026): `tools/remix/runtime_build.py` keeps the
+  aPLib packer's output by the sha256 of its input and a `Runtime`'s three
+  artifacts (raw, packed, append) plus symbols by the sha256 of the recipe,
+  every source file, the stock image, the compiler version and the skipped
+  guards, under `out/cache/` (`OCTABAM_CACHE=<dir>`, `OCTABAM_NO_CACHE=1`
+  builds cold). A runtime hit is re-verified against the recipe's own
+  identities before use. bottleservice: 9 s cold, 1.7 s warm, image and
+  report byte-identical; `scripts/refhash.sh check` 24/24 cold and warm.
+  Every `make check-remix` builds its image about eight times (the recipe,
+  the DRAM boot, the set, the three select probes, the burn) and the
+  selftest and `verify_replaces` build every remix; all of it was the same
+  bytes. `verify_scenesp2` runs its three boots side by side (83 s wall,
+  was 220 s under Octakit; verdicts identical): a pool poked once the
+  transport has started never reaches the live lane, with or without a
+  transport restart (measured), so the three cannot share a boot.
+- The gate run, once each (28 Sep 2026): `make accept REMIXES="a b c"`
+  runs the remix-independent half of `make check` once and `make
+  check-remix` per remix (report v2: gates `check_shared` and
+  `check_remix` where v1 had `check`, reports at `<out>/<remix>/` with
+  `summary.json`); it had run the whole `make check` per remix, so a
+  `make reach RUN=1` over N remixes ran the shared half N+1 times and the
+  per-remix half twice. `make reach` lists one accept line for the
+  accepted remixes and, with `STRESS_SOURCE` set, no separate check lines
+  for them; `KEEP=1` runs every gate and prints one table; `JOBS=n` runs
+  the check-remix lines through `tools/verify/check_shards.py` (`make
+  check-remixes`), n detached worktrees of the tree with their own port
+  builds, remixes handed out from one queue. `pressure.py render` renders
+  its 20 layouts `--jobs` at a time (the cores, at most 8) with both
+  payloads dumped once and handed to `rig_render --mem/--memB`; it was
+  serial, 9 to 22 minutes of every accept.
 - The port's load runs until the engine is idle (28 Sep 2026): LOAD
   PROJECT entered and the engine back at its queue receive with nothing
   queued, reported as `LOAD PROJECT handled, N ms after the post`;

@@ -9,7 +9,8 @@ the memory.
 
 The repo is organised as **modules** (`modules/<name>/manifest.py` declares one
 contribution) composed into **remixes** (`remixes/<name>/remix.py` selects a
-set, `README.md` beside it says where it has run).
+set, `README.md` beside it says where it has run; `remixes/test/<name>/`
+carries one module for its gates).
 `make modules` lists them, with the compatibility matrix; `make remix`
 composes one. `docs/remixer/MODULES.md` is the contributor guide and
 `CONTRIBUTING.md` the contract. The build refuses to start when two selected
@@ -32,7 +33,7 @@ rewriting; run their build against the shared stock image first.
 
 **If you change the BUILD rather than a module, prove it changed nothing:**
 `scripts/refhash.sh save` on a tree you trust, then `scripts/refhash.sh check`
-— 26 configurations, artifacts and build reports, bit-identical. Every step
+— 24 configurations, artifacts and build reports, bit-identical. Every step
 of the DRAM platform landed under that gate. (Since 10 Sep 2026 the report
 prints tool paths; a path change is a report change and needs a re-save
 after the artifacts are shown identical.)
@@ -48,7 +49,7 @@ make modules                    # the index, the compatibility matrix, the remix
 make check REMIX=<name>         # build + cycles + every gate + boot under the port, no hardware
 OT_PROJECT=<dir> [OT_BANK=2] make check REMIX=<name>   # + that project on the image under the port: ids, page-2 delivery, chain audio, main out
 make bus REMIX=<name>           # THE build (XBUS=1 SPEC=1) -> out/mainos_bus.bin
-make render                     # hear the bus locally, ~6x real time
+make render REMIX=<name>        # hear the bus locally, ~6x real time
 make reverb IN=loop.wav ARGS='--wet --mode all'
 ```
 
@@ -82,6 +83,9 @@ symlink `out/emu`**: its CMake cache names the main checkout's sources,
 so `cmake --build` there compiles THEIR `tools/emu/ot_emu`, not yours
 (14 Sep 2026: a port edit "built" fine and the binary did not have it).
 Build the port into the worktree: `make emu-cf` (a fresh cache, ~1 min).
+`out/cache/` is the build's memo (the packed runtimes, keyed by the sha256
+of their inputs; `tools/remix/runtime_build.py`), per worktree and safe to
+delete; `OCTABAM_NO_CACHE=1` builds cold when a build result is in doubt.
 **The same holds for `dsp_host` and `dsp_asm`:** `scripts/setup.sh` builds
 them from a COPY staged into `vendor/dsp56300/source/dsp_host/`, so in a
 worktree the shared binary is the main checkout's, whatever the branch's

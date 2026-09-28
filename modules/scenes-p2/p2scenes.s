@@ -287,6 +287,12 @@ udone:  rts
 | displaced prologue, then the stock body); with her, the SCENES P2 KITS
 | bridge overrides her writes at the two entries and the build defines
 | the symbols as her wrappers, so her editor protocol runs whole.
+| The detours displace EIGHT bytes (lea + movem), the span her own entry
+| write takes: her trampoline replays those eight and continues at
+| entry+8, where the stock `moveal %sp@(32),%a2` must still be. Padded
+| to twelve (until 28 Sep 2026) that instruction was a nop under her,
+| the body read a garbage slot, skipped its store, and her marker check
+| halted the unit on every page-2 turn (rig-kits, bottleservice).
         .include "remix.inc"
 fx2_edit_hook:
         tstl    SCENE_HELD
@@ -301,8 +307,7 @@ fx2_next:
 fx2_stock:
         lea     %sp@(-28),%sp          | the displaced prologue, then on
         movem.l %d2-%d5/%a2-%a4,%sp@
-        moveal  %sp@(32),%a2
-        jmp     0x4003a9e8
+        jmp     0x4003a9e4
 fx1_edit_hook:
         tstl    SCENE_HELD
         beq.s   fx1_next
@@ -316,8 +321,7 @@ fx1_next:
 fx1_stock:
         lea     %sp@(-28),%sp
         movem.l %d2-%d5/%a2-%a4,%sp@
-        moveal  %sp@(32),%a2
-        jmp     0x4003abf0
+        jmp     0x4003abec
 
 | edit: d0 = kind (1 FX2, 0 FX1). d2 slot2, d3 ticks, d4 track, d5 part,
 | d6 kind, d7 held scene; a2 descriptor, a3 part window, a4 pool, a5 entry.

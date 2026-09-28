@@ -1159,9 +1159,10 @@ class Remix:
     tools/remix/stock.py. A stock effect NOT listed is not removed from the
     image -- its code, descriptor and dispatch stay stock, so an old project
     that selects it still runs it -- it just has no chooser row, which is
-    what every remix did to all fourteen of them before. Only
-    the three reverbs are actually consumed (their code is the donor region
-    every module packs into) and they cannot be listed.
+    what every remix did to all fourteen of them before. An effect on
+    neither chooser gives up its words (stock.harvested); the three reverbs
+    are the default room, and a listed effect the placer reaches is refused
+    by the build.
 
     THE FALLBACK IS NOT OPTIONAL, and it is the question a selective build
     forces. The FX2 chooser is one list shared by all eight tracks, and a

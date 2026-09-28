@@ -59,11 +59,14 @@ README.md       what it is, what was MEASURED, what is INFERRED, what is open
 <sources>       .s for the ColdFire, .asm for the DSP -- or `upstream/`, a submodule
 ```
 
-plus a remix that carries it (`remixes/<name>/remix.py` and a `README.md`
-beside it: what is in it, where it has run) and, for anything with
-behaviour worth pinning, a gate (`tools/verify/verify_<name>.py`, added to
-`make verify`). Nothing else registers it: the registry discovers every
-`modules/*/manifest.py`, and refuses two modules on one key or one FX2 id.
+plus a remix that carries it (`remixes/<name>/remix.py`, or
+`remixes/test/<name>/remix.py` for a remix of that one module, and a
+`README.md` beside it: what is in it, where it has run;
+`docs/remixes/BUILDING.md` §8) and, for anything with behaviour worth pinning, a gate
+(`tools/verify/verify_<name>.py`, named in the manifest's `gates`, run by
+`make check` for every remix that carries the module). Nothing else
+registers it: the registry discovers every `modules/*/manifest.py`, and
+refuses two modules on one key or one FX2 id.
 
 The manifest's `category`, `author`, `author_url`, `proof` and `proof_note`
 are the README's module table (`make docs` renders it and the remix index
@@ -71,7 +74,7 @@ from the manifests and the selections; the selftest refuses a module
 without them, `verify_docs` a stale copy). `proof` is one of `CHECK`,
 `RENDER`, `PORT`, `HARDWARE`; the note names the unit, image and date, or
 the gate. A remix declares `family` (`rig`, `effects`, `mods`,
-`reference`) and the same `proof` pair.
+`reference`, `probes`) and the same `proof` pair.
 
 Settings a module keeps on the card (a checkbox, a profile) go in the
 shared OTX store once it exists, not in a file of the module's own;
@@ -174,7 +177,7 @@ report fields, coverage and hardware limitations.
 
 **If you changed the build rather than a module, prove it changed
 nothing**: `scripts/refhash.sh save` on a tree you trust, then
-`scripts/refhash.sh check` — 26 configurations, artifacts *and* build
+`scripts/refhash.sh check` — 24 configurations, artifacts *and* build
 reports, bit-identical. Every step of the DRAM platform landed under it.
 
 **Say what was measured and what was inferred**, in the README, with what
@@ -199,23 +202,29 @@ that #415 had renamed).
 git fetch upstream && git rebase upstream/main
 make reach BASE=upstream/main        # the gates this diff reaches, in order
 STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1   # run them
+STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1 KEEP=1 JOBS=4
+#   KEEP=1: every gate, then one table (instead of stopping at the first failure)
+#   JOBS=4: the check-remix lines over four worktrees at a time (make check-remixes)
 ```
 
 What `make reach` lists, by what changed:
 
 | changed | gates |
 |---|---|
-| `modules/<name>/` (a pin bump too) | `make check` and `make accept` for every remix that carries the module |
-| `remixes/<name>/remix.py` | `make check`, `make accept` for that remix |
-| `tools/verify/verify_<x>.py` | `make check` for the remixes of the modules whose manifests name it; every remix for a shared gate |
-| `tools/build/`, `tools/remix/`, `dsp/` | `scripts/refhash.sh check` (save the baseline on main first), `make test-acceptance`, `make check` on every remix |
-| `tools/harness/dsp_host/`, `tools/patches/` | `make ci-dsp`, then `make check` on every remix (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md) |
-| `tools/emu/` | `make ci-emu`, `make emu-cf`, `make check` on every remix, with OT_PROJECT |
-| the acceptance runner, the stress generator, `pressure.py` | `make test-acceptance`, `make check` and `make accept` on every remix |
+| `modules/<name>/` (a pin bump too) | `make accept` for every remix that carries the module (one `REMIXES="..."` line; it runs both halves of `make check` itself, the shared half once) |
+| `remixes/<name>/remix.py`, `remixes/test/<name>/remix.py` | `make accept` for that remix |
+| a file under `tools/` or `scripts/` | by dependency: the Python imports and the `tools/x/y.py` paths the code runs or reads form a graph, and a change reaches the gates that depend on it. The build (`build_bus.py`, `cycle_count.py`, `dsp/`) and what it imports: `scripts/refhash.sh check` (save the baseline on main first), `python3 tools/verify/image_identity.py` (every remix built from the base and from this tree; `RUN=1` then checks the remixes whose image moved), `make test-acceptance`, `make check-shared` once for the cover. A gate of the shared half (the selftest, slots, replaces, docs, label_fmt, the knob census, a manifest gate with `remix_arg=False`): `make check-shared` once (for the cover) or for the owners' remixes. A gate of the per-remix half (dirtystate, initregs, dram_boot, labels, modenames, hidden, menu, set, usb): `make check-remix` for the cover. A manifest gate with `remix_arg=True`: its owners' remixes. The acceptance runner, the stress generator, `pressure.py`: `make test-acceptance`, `make accept` on the cover. A file no gate depends on: nothing, and the listing says so |
+| `tools/harness/dsp_host/`, `tools/patches/`, `scripts/setup.sh`, `scripts/vendor.sh` | `make ci-dsp`, then the cover (rebuild the toolchain first; a `dsp_host` change builds in an isolated tree, AGENTS.md; identity cannot see a toolchain change, both trees build with the same binary) |
+| `tools/emu/ot_emu/` | `make ci-emu`, `make emu-cf`, the cover's per-remix half, with OT_PROJECT |
+| `Makefile` | by target, against the base: a target of the check graph (`bus`, `cycles`, `verify*`, `check*`), a variable or a `define`: identity, the cover and `make ci`; `accept`, `reach`, `check-remixes`, `test-acceptance`: the runner tests; a ci target: `make ci`; any other target: nothing |
 | `docs/`, `*.md` | `python3 tools/verify/verify_docs.py` |
-| `Makefile`, `.github/` | `make check` on every remix, `make ci` |
-| anything else | `make check` on every remix, named as unclassified |
+| `.github/` | `make ci` |
+| anything else | the cover, named as unclassified |
 
+**The cover** is the fewest remixes that between them carry every module, computed from the registry each run (9 of 27 on 28 Sep 2026: `cfmeter`, `bottleservice`, `recfix`, `mods`, `euclid`, `miniverb`, `repitch`, `tapeecho`, `usb-full`), so every module's gates and every kind of per-remix gate run at least once. A remix outside it is a subset of one inside. `make reach REACHARGS=--all` makes the floor every remix. **Identity** (`tools/verify/image_identity.py`) builds every remix from the merge-base (a kept worktree under `out/identity/base`) and from this tree with the shipping flags and compares image and report byte for byte; a remix whose bytes did not move has nothing new for a gate that reads the image.
+
+Without `STRESS_SOURCE` the accept line cannot run, so the list carries
+the `make check` lines separately and names the accept line as blocked.
 A remix with a DSP module that declares no `dear` makes `make accept`
 report `blocked` with the module's name; say so in the PR. List each
 command and its result in the PR body (`make reach`'s output is the list).

@@ -20,7 +20,8 @@ Issues are disabled and there is no request queue. The licence is MIT; a
 fork that takes requests and tracks issues is allowed.
 
 **[docs/remixes/BUILDING.md](docs/remixes/BUILDING.md)** is the step-by-step
-guide from a fresh machine to a flashed unit.
+guide from a fresh machine to a flashed unit; its §8 is how to write a
+remix of your own.
 **[docs/remixes/README.md](docs/remixes/README.md)** lists every remix with
 its contents and how far it has been proven; each remix's own README is
 beside its selection in `remixes/<name>/`.
@@ -88,6 +89,7 @@ unit, image and date.
 
 | module | author | what it does | proof |
 |---|---|---|---|
+| [**CC FEEDBACK**](modules/cc-feedback/README.md) | [sambanks](https://github.com/sambanks) | Every knob value change is transmitted as its CC (page 1: 16-45; page 2: CC MAP's 62-73), so a controller's encoders follow the unit. | port-gated: `verify_ccfeedback` (Unicorn) and `verify_set` (the port's MIDI OUT bytes) |
 | [**CC MAP**](modules/cc-map/README.md) | [sambanks](https://github.com/sambanks) | MIDI CC 62-67 drive the FX2 engine's page-2 slots 6-11; CC 68-73 the FX1 station's. | on hardware: Sam's MKII (tag 13) |
 | [**USB AUDIO EXTENDED**](modules/usb-audio-extended/README.md) | [markandrus/octemu](https://github.com/markandrus/octemu) | Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu). | on hardware: Sam's MKII (image 64, 25 Sep 2026); Tim's MKI (OCTATRICK9, 26 Sep 2026) |
 | [**USB AUDIO FULL**](modules/usb-audio-full/README.md) | [markandrus/octemu](https://github.com/markandrus/octemu) | Sixteen 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, no MAIN/CUE; the stereo sum at full speed (markandrus/octemu). | port-gated: `verify_usb` under the port (27 Sep 2026); this build not on hardware (image 69 ran the 16-channel layout from earlier source) |
@@ -132,6 +134,7 @@ local ColdFire emulator. `make remix` opens the TUI remixer
 ```
 modules/<name>/manifest.py   what a module is and what it claims (yours, or a pointer into an author's repo)
 remixes/<name>/remix.py      which modules, in which chooser order; README.md beside it
+remixes/test/<name>/         a remix of one module, for that module's gates
 tools/remix/ledger.py        refuses two modules that claim one address, hook, id or buffer, by name
 tools/build/build_bus.py     the build: assembles, links, places, wires, verifies -> out/mainos_bus.bin
 tools/verify/*               the gates: oracles, the boot under the ColdFire port, menu, cycles, identity
@@ -221,6 +224,7 @@ AGENTS.md          instructions and traps for coding agents (CLAUDE.md imports i
 .github/           CI (Ubuntu + macOS, SHA-pinned actions), the PR template
 modules/           the contributions, one directory each
 remixes/           one directory per remix: remix.py (the selection, in chooser order) and README.md
+remixes/test/      the one-module remixes, for their modules' gates (make check REMIX=<name>)
 docs/remixes/      the build guide and the rendered remix index
 tools/remix/       the toolkit: schema, registry, ledger, the loader, the DRAM platform, the TUI
 tools/build/       the image build (build_bus.py) and the tools that understand the OS layout

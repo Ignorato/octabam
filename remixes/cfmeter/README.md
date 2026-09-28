@@ -9,11 +9,10 @@ not matter).
 
 ## Status
 
-Not flashed. `make check REMIX=cfmeter` passes every gate up to
-`verify_usb`, which cannot finish with the idle loop in the image (the
-port's clock, [CF METER IDLE](../../modules/cfmeter-idle/README.md));
-`cfmeter-port`, the same selection without the loop, passes all of them
-with a project under the port.
+Not flashed. `OT_PROJECT=<dir> make check REMIX=cfmeter` passes every
+gate since 28 Sep 2026 (the port follows the idle loop's detour,
+[CF METER IDLE](../../modules/cfmeter-idle/README.md)); `cfmeter-port`,
+the same selection without the loop, is the variant that passed before.
 
 ## Procedure
 
