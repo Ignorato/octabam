@@ -143,8 +143,9 @@ def run_remix(shard, remix, logdir):
 
 
 def remix_jobs(remix_name, shard):
-    """The per-remix half as independent jobs: (name, [argv, ...], env).
-    Mirrors `make verify-remix` + `make cycles`; `check_recipe` refuses drift."""
+    """The per-remix half as independent jobs: (name, [argv, ...], env,
+    {recipe scripts the job stands for}). Mirrors `make verify-remix` +
+    `make cycles`; `check_recipe` refuses drift."""
     sys.path.insert(0, str(ROOT / "tools")); import toolpath  # noqa: E402,F401
     from remix import registry  # noqa: E402
     import module_gates  # noqa: E402
@@ -154,15 +155,18 @@ def remix_jobs(remix_name, shard):
     PY = str(venv) if has_venv else py        # the Makefile's $(PY)
     env = {"REMIX": remix_name, "BUILD": os.environ.get("BUILD", "0")}
     V = "tools/verify"
+    def job(name, cmds, *scripts):
+        return (name, cmds, env, set(scripts))
     jobs = [
-        ("cycles", [["make", "cycles", f"REMIX={remix_name}"]], env),
-        ("dirtystate", [[py, f"{V}/verify_dirtystate.py", remix_name]], env),
-        ("initregs", [[py, f"{V}/verify_initregs.py", remix_name]], env),
-        ("dram_boot", [[py, f"{V}/verify_dram_boot.py"]], env),
+        job("cycles", [["make", "cycles", f"REMIX={remix_name}"]]),
+        job("dirtystate", [[py, f"{V}/verify_dirtystate.py", remix_name]], f"{V}/verify_dirtystate.py"),
+        job("initregs", [[py, f"{V}/verify_initregs.py", remix_name]], f"{V}/verify_initregs.py"),
+        job("dram_boot", [[py, f"{V}/verify_dram_boot.py"]], f"{V}/verify_dram_boot.py"),
     ]
     for name in ("labels", "modenames", "hidden"):
-        jobs.append((name, [[str(venv), f"{V}/verify_{name}.py", remix_name]] if has_venv
-                     else [["echo", f"  [SKIP] {name}: no .venv (make emu-setup)"]], env))
+        # as the Makefile: SKIP without the .venv, and the job still stands for the script
+        jobs.append(job(name, [[str(venv), f"{V}/verify_{name}.py", remix_name]] if has_venv
+                        else [["echo", f"  [SKIP] {name}: no .venv (make emu-setup)"]], f"{V}/verify_{name}.py"))
     remix = registry.remix(remix_name)
     for key, g in module_gates.collect(registry.selected(remix), "isolated", True):
         # As `make verify-remix` runs them: module_gates.py under $(PY), so a
@@ -171,12 +175,13 @@ def remix_jobs(remix_name, shard):
         cmd = module_gates.command(g, remix_name, root=ROOT)
         cmd[0] = cmd[0] if g.venv else PY
         cmd[1] = str(g.script)
-        jobs.append((f"gate:{pathlib.Path(g.script).stem}", [cmd], env))
-    jobs.append(("menu", [[py, f"{V}/verify_menu.py"]], env))
-    jobs.append(("set", [[py, f"{V}/verify_set.py", remix_name],
-                         ["make", "bus", f"REMIX={remix_name}"],
-                         [PY, f"{V}/module_gates.py", remix_name, "--stage", "image"]], env))
-    jobs.append(("usb", [[py, f"{V}/verify_usb.py"]], env))
+        jobs.append(job(f"gate:{pathlib.Path(g.script).stem}", [cmd], f"{V}/module_gates.py"))
+    jobs.append(job("menu", [[py, f"{V}/verify_menu.py"]], f"{V}/verify_menu.py"))
+    jobs.append(job("set", [[py, f"{V}/verify_set.py", remix_name],
+                            ["make", "bus", f"REMIX={remix_name}"],
+                            [PY, f"{V}/module_gates.py", remix_name, "--stage", "image"]],
+                    f"{V}/verify_set.py", f"{V}/module_gates.py"))
+    jobs.append(job("usb", [[py, f"{V}/verify_usb.py"]], f"{V}/verify_usb.py"))
     return jobs
 
 
@@ -186,7 +191,7 @@ def check_recipe(jobs):
     sys.path.insert(0, str(ROOT / "tools/verify"))
     from reach import recipe_scripts  # noqa: E402
     recipe = recipe_scripts((ROOT / "Makefile").read_text(), "verify-remix")
-    named = {str(c[1]) for _n, cmds, _e in jobs for c in cmds if len(c) > 1} | {"tools/verify/module_gates.py"}
+    named = set().union(*(scripts for _n, _c, _e, scripts in jobs))
     missing = recipe - named
     if missing:
         raise SystemExit(f"check_shards: verify-remix runs {sorted(missing)} and the by-gate job list does not; "
@@ -194,7 +199,7 @@ def check_recipe(jobs):
 
 
 def run_job(shard, remix, job, logdir):
-    name, cmds, env_add = job
+    name, cmds, env_add, _scripts = job
     log = logdir / f"{name.replace(':', '_')}.log"
     env = clean_env()
     env.update(env_add)
