@@ -88,7 +88,7 @@ MODULE = Module(
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.HARDWARE, proof_note="Sam's MKII",
-    doc="BamSep26 station: a modulation pedal -- Juno, Dimension, flanger, phaser, comb; FX1 only.",
+    doc="FX1 station: a modulation pedal -- Juno, Dimension, flanger, phaser, comb; FX1 only.",
     menu=MenuEntry(
         fx2_id=0x12,
         replaces="CHORUS",

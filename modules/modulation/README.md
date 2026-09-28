@@ -77,6 +77,9 @@ lines persist.
 
 ## Measured
 
+- **On the unit, image 88 (Sam's MKII, 27 Sep 2026):** a fourth MODULATION
+  beside the reverb overran the DSP; three fit. The cycle pass below
+  prices four inside the budget, not measured on the unit since.
 - **27 Sep 2026, the cycle pass** (PR: mod-cycles): pricer per loop LINE
   404 → 354, PHSR 394 → 298, COMB 339 → 329 words/sample; the rig's priced
   worst core 2,781 → 2,585 (four Characters beside the reverb now bound it;
@@ -139,7 +142,7 @@ Sam listening): JUNO "good", DIM "good", FLNG "good" at RATE 8 (the view was
 14: "slower please"), COMB "sounds like what you describe" — kept, PHSR
 "pretty good". LOFI (same day): two placements rendered on JUNO over the
 loop at 90 — on the wet before MIX, and at the line write — Sam: "c please"
-(the line write). Not yet heard on the unit.
+(the line write). Not listened to on the unit.
 
 ## Open
 

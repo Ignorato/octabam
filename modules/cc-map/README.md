@@ -125,7 +125,7 @@ cave must match the busverb and busdelay page-2 counts.
 
 - FX2 page 2 of any FX2 effect other than BusDelay/BusVerb: the cave skips
   those tracks.
-- MIDI CC through the SCENES KITS chain on hardware (the port has no MIDI
-  input on that path).
-- Whether an FX1 page-2 edit reaches the DSP on a THRU track
-  (`docs/remixer/FAILURE_MODES.md`).
+- MIDI CC through the SCENES KITS chain on hardware (under the port CC 68
+  reaches page 2 through the chain, above).
+- An FX1 page-2 edit reaching the DSP on a THRU track, on hardware
+  (measured under the port: `docs/remixer/FAILURE_MODES.md`, image 24).

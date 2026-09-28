@@ -76,7 +76,8 @@ replays eight bytes and continues at entry+8, so under her the body ran
 with a garbage slot in a2, took its slot>5 exit before the store, her
 marker count read 0 and `gk_track_setup_byte_fatal` halted the unit on
 every page-2 knob turn (rig-kits, bottleservice; measured under the port
-from the panel, never flashed). The same halt was what the direct `--call`
+from the panel; the twelve-byte build was carried by image 88 on Sam's
+MKII and the halt was not reported from the unit). The same halt was what the direct `--call`
 of the editors met, which had been read as her wrapper refusing a call
 without UI context.
 
@@ -98,11 +99,9 @@ without UI context.
 
 ## Not measured
 
-- Anything on hardware.
+- Anything on hardware beyond being carried by image 88 (pre-fix), not
+  exercised there.
 - The dial hook (a draw; the port's LCD was not driven to the page).
-- Octakit's unheld editor path through the bridge: her wrapper refuses a
-  `--call` (no UI context; plain rig-kits faults identically), so it needs
-  a panel-driven edit.
 - Whether SAVE KIT saves after page-2 lock edits alone.
 - The undo row's writer is inferred to be `0x40025b40(0x460bf218, ...)`
   from the paste row's shape; the write hook was exercised with that call.

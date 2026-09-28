@@ -17,6 +17,13 @@ returns at proc entry (r7 0x6100/0x6400/0x6700/0x6a00, image 48), so an
 empty FX1 slot neither sends nor touches the rotation tracker
 (`docs/effects/XBUS.md`).
 
+## Measured
+
+Carried by every flashed bus image (`CHANGELOG.md`); the two-knob form
+(DEL and REV, 25 Sep 2026) by image 88 on Sam's MKII (27 Sep 2026). The
+auto-gain numbers below are `dsp_host` measurements; the T8 refusal and
+the FX1-NONE return were measured under the ColdFire port.
+
 ## The auto-gain
 
 Each accumulator (DEL's and REV's) is scaled by 1/√N of its own registered clients, so eight

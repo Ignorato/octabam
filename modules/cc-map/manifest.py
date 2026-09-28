@@ -94,7 +94,7 @@ MODULE = Module(
     key="CC MAP",
     kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.HARDWARE, proof_note="Sam's MKII (tag 13)",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII (image 96, 13 Sep 2026)",
     doc="MIDI CC 62-67 drive the FX2 engine's page-2 slots 6-11; CC 68-73 the FX1 station's.",
     cf_patches=(CavePatch(
         label="CC->FX2/FX1 page-2 cave + dispatch repoint",

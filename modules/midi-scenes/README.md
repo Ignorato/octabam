@@ -20,8 +20,8 @@ image. His `voice_reload` cave has no caller since 8.2 and is not linked.
 
 ## How it is built
 
-His caves are written in his Python encoder (`tools/ot3_asm.py`) and placed
-at fixed addresses by his `build.py`. His `tools/gas_port.py` drives the same
+His caves are written in his Python encoder (`upstream/tools/ot3_asm.py`) and placed
+at fixed addresses by his `build.py`. His `upstream/tools/gas_port.py` drives the same
 builders with an encoder subclass that records one GNU-as line per
 instruction, writes `gas/*.s`, then assembles and links every region at his
 address and compares. Cross-cave references are linker symbols, so octabam

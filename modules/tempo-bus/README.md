@@ -96,7 +96,8 @@ Two units, both pinned in measured free runs:
 
 ## Not measured
 
-- Anything on hardware.
+- Anything on hardware beyond being carried by image 88 (Sam's MKII, 27
+  Sep 2026), not exercised there.
 - The MKII keymap: the port boots the MKI one. TEMPO, LEFT and RIGHT have
   the same codes in both.
 - EXT SYNC: the header prints the internal tempo, where the stock window
