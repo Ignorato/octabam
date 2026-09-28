@@ -38,7 +38,7 @@ twenty channels above), FULL (the sixteen track channels, remix
 
    Optional first: `make emu-cf` then `make check REMIX=usb-audio`. `verify_usb` enumerates the image under the emulator and streams from it.
 3. Back up the card and flash from it: [BUILDING.md](../../docs/remixes/BUILDING.md) §4–5. Recovery: §6.
-4. Old projects: [`bottleservice` — Before you flash](../bottleservice/README.md#before-you-flash) (`ot_project.py host` and `stamp-defaults`).
+4. Old projects: [`bottleservice` — How to flash](../bottleservice/README.md#how-to-flash) (`ot_project.py host` and `stamp-defaults`).
 
 OS upgrades still need DIN MIDI or the card. They do not work over USB MIDI.
 
