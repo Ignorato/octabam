@@ -171,7 +171,7 @@ XFADER_ROW = 0x40           # the panel's fader report: `0x40 <adc 0..255>` on t
                             # calibration record at 0x1ffffe (magic 0x1234; none under emulation ->
                             # value >> 1) and posts sys message kind 4 (0x40092fac -> 0x40092f2c ->
                             # handler 0x40061e0a, which stores it, rebuilds the weights and redraws
-                            # the fader icon at LCD x 104-108 / y 59-61). PANEL_LINK.md.
+                            # the fader icon at LCD x 104-108 / y 59-61). docs/firmware/PANEL.md §9.
 SCENE_A_OFF, SCENE_B_OFF = 0x8ed90, 0x8ed91   # the Part's assigned scenes (0-based), base-relative
 PARAM_MAP_FILE = pathlib.Path(__file__).parent / "param_map.json"
 

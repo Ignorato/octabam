@@ -29,8 +29,8 @@ make ci                          what GitHub Actions runs (no firmware, so no re
 Inputs every gate assumes: `out/raw/section_3_MAIN_OS.bin` (`make os && make
 recon`, from your own 1.40C), the submodules (`git submodule update
 --init`), and for the set gates a real project directory in `OT_PROJECT`
-or `~/.octabam_project`. `docs/remixer/HARNESS.md` is `dsp_host` in depth,
-`docs/remixer/EMU.md` the port and Tier-0.
+or `~/.octabam_project`. `tools/harness/README.md` is `dsp_host` in depth,
+`tools/emu/README.md` the port and Tier-0.
 
 **The verdict vocabulary.** A gate prints `[ok]`/`[PASS]` per check and
 exits non-zero on any `[FAIL]`. `[SKIP]` means an instrument, a project
@@ -321,7 +321,7 @@ pressure render (the dearest six and four random layouts per core on all
 eight tracks under `dsp_host -guard -dirty`, metered). A failed or blocked
 stage leaves its dependents `not_run`. Every report carries
 `hardware_validated: false`. `docs/remixer/ACCEPTANCE.md` has the report
-fields; `tools/harness/STRESS_PROJECT.md` the generated project.
+fields; `tools/harness/README.md` (stress_project.py) the generated project.
 
 ## 9. Bit-identity: proving a change changed nothing
 
@@ -397,7 +397,7 @@ their results go in the PR body.
   one its old bytes. Stamp projects after a layout change.
 - **The port's audio and DMA gaps.** The stock DELAY's rings and the
   recorder's DMA are not modelled; the port's main mixdown reads a gain of
-  0, so playback gates skip their audio checks (`docs/remixer/EMU.md`).
+  0, so playback gates skip their audio checks (`tools/emu/README.md`).
 - **The bench's clock under load.** `verify_usb` and `verify_usb_in` count
   overruns and underruns against a scripted host; with shards and another
   run on the machine the host falls behind and a remix fails that passes
@@ -407,7 +407,7 @@ their results go in the PR body.
   reverb smears a per-sample fault. Ask what the instrument cannot see
   before trusting a null result.
 - **Ears.** GRAIN's right-channel hiss passed every gate and was found by
-  listening (`docs/remixer/HARNESS.md`, the listening protocol).
+  listening (`tools/harness/README.md`, the listening protocol).
 
 `docs/remixer/FAILURE_MODES.md` is the register of what has gone wrong on a
 unit; `AGENTS.md` the traps that produced clean assembly of wrong machine

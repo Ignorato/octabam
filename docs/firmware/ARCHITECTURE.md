@@ -230,6 +230,39 @@ via `FUN_40005178` with flags (`0x80` start, `0x10`/`0x8010`/`0xf010` =
 one-shot/hold/stop/retrig, labels unverified; the recorder's TRIG-mode
 branch at `0x40083544` posts the same bits).
 
+### ColdFire time per frame
+
+Jannik Aßfalg's exclusive profile (23 Sep 2026). 🟡: his port build carries a
+`--work-profile` PC counter that is not in this tree.
+- Fixture: eight FLEX tracks looping a 440 Hz sample at 120 BPM, trigs on
+  steps 1–4, DELAY on T1–T7, PLATE on T8.
+- 5,600 frames after a 20 s load.
+- The counts are instructions, not cycles.
+
+| ColdFire scope | instructions / frame | share |
+|---|---:|---:|
+| frame ISR `0x4000aad0..0x4000d9b0` | 10,720 | 26.2% |
+| eight-track delay `0x400031a0..0x4000385a` | 7,665 | 18.7% |
+| sample analysis `0x40098388..0x400985ac` | 5,643 | 13.8% |
+| voice renderer `0x40007960..0x40008f82` | 5,605 | 13.7% |
+| correlation search | 2,196 | 5.4% |
+| total | 40,903 | |
+
+Ranges are half-open and exclude callees. The four boundaries were checked
+by objdump ✅:
+- the ISR ends in `rte` at `0x4000d9ae`;
+- the delay ends in `rts` at `0x40003858`;
+- the renderer ends in `rts` at `0x40008f80`;
+- the analysis routine is a `lea -36(%sp)` frame ending in `rts` at
+  `0x400985aa`.
+
+What "sample analysis" and the "correlation search" do is his reading,
+unverified here.
+
+The lockstep port measured 23,946 instructions per 16-sample frame
+(17 Sep 2026, stock, the rig project). The hottest loop is the stock
+delay's EMAC mix at `0x40003734` (`COLDFIRE_DELAY.md`).
+
 ## 7. Memory map
 
 | Window | Use |

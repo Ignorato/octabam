@@ -34,7 +34,7 @@ OT_PROJECT ?= $(shell cat $(HOME)/.octabam_project 2>/dev/null)
 export OT_PROJECT
 
 # The tools run on bare python3 (stdlib only). The ONE exception is the local
-# ColdFire emulator (docs/remixer/EMU.md), which needs `unicorn` from the uv-managed
+# ColdFire emulator (tools/emu/README.md), which needs `unicorn` from the uv-managed
 # `.venv` (the `emu` extra). Prefer that venv when present, else bare python3 —
 # where the emulator view degrades to "unavailable" and everything else works.
 PY := $(shell [ -x .venv/bin/python3 ] && echo .venv/bin/python3 || echo python3)
@@ -444,7 +444,7 @@ ci: test-acceptance verify-docs ci-dsp ci-emu ## Everything CI runs, locally
 .PHONY: emu-setup
 emu-setup: ## Provision the remixer deps (unicorn + textual) into .venv via uv
 	uv sync --extra emu
-	@echo "remixer ready — 'make remix' (docs/remixer/EMU.md for the emulator view)"
+	@echo "remixer ready — 'make remix' (tools/emu/README.md for the emulator view)"
 	@echo "Tier-0 (emu_bringup) uses the EMAC-fixed Unicorn when it is built: make emu-unicorn"
 
 # A Unicorn whose ColdFire EMAC multiplies like the MCF5445x (stock 2.1.4
@@ -460,7 +460,7 @@ emu-unicorn: ## Build the EMAC-fixed Unicorn library for Tier-0 (needs cmake)
 	scripts/build_unicorn.sh
 
 # The card: build a FAT16 image from a project directory, boot, mount it with
-# the firmware's own storage stack and load the project (docs/remixer/EMU.md M4).
+# the firmware's own storage stack and load the project (tools/emu/README.md, "The card").
 #   make emu-card PROJECT=~/octa/backups/<snapshot>/<project> [SET=OCTABAM NAME=RIG]
 PROJECT ?=
 SET ?= OCTABAM

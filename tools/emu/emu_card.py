@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CompactFlash card emulation for the ColdFire emulator (docs/remixer/EMU.md, M4).
+"""CompactFlash card emulation for the ColdFire emulator (tools/emu/README.md, "The card").
 
 Three pieces:
 

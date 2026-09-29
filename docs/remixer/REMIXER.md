@@ -188,26 +188,14 @@ CHORUS, COMB at `MIX 0`; SPATIALIZER, DELAY at `SEND 0`): stock defaults
 are the firmware's own, and the UNIT pane says `⚠ MIX is 0 — this renders
 DRY`.
 
-The audition backend, per effect:
-
-| effect | path |
-|---|---|
-| busverb | `tools/harness/render_reverb.py`, its own fingerprinted engine cache |
-| busdelay | the DEV hatch (`DEV=1 XBUS=1` → `out/dsp/mem_dev_A.mem`, rebuilt when stale), then `send_probe --layout DS` |
-| inserts, stations | a per-insert scratch image (the insert + SEND), dumped to `out/dsp/_audition_<name>_A.mem`; the user's `out/mainos_bus.bin` is saved and restored around the scratch build |
-| stock | a dump of the stock image's payload A, `-alloc 1 -audio 0` |
-
-An id absent from an image dispatches to the fallback; `send_probe`'s
-SEND-alias guard refuses to measure it. Every render and A/B mark is
-journalled to `out/_audition/log.jsonl` (track, effect, source, every
-knob).
+How each effect is rendered: [`tools/remix/README.md`](../../tools/remix/README.md).
 
 ## The image follows the selection
 
 Every selection change rebuilds (~0.3 s) and re-boots the ColdFire
 emulator (~5 s) in the background; the panel on the right draws what
 CHOOSERS says. The emulator draws the FX1 and FX2 choosers and an effect's
-page with the firmware's own code. Its limits (`docs/remixer/EMU.md`): no
+page with the firmware's own code. Its limits (`tools/emu/README.md`): no
 audio, no key matrix, and item-level menu descent needs the real key
 handler.
 
@@ -224,18 +212,6 @@ under `modules/`).
 the box's own; green fits, ochre is a trade or caution, red blocks; a
 knob's level is a warm ramp by where the value sits in its range; the
 source wav muted blue; the fallback soft purple; the panel frame grey.
-
-## Architecture
-
-| layer | file | job |
-|---|---|---|
-| composer | `tools/remix/state.py` | selection, `problems()`, `measure()`, scratch builds |
-| rig | `tools/remix/rig.py` | category + track-range derivation, knob docs/labels/maxima |
-| rendering | `tools/remix/audition.py` | the per-effect dispatch above, the journal, a `__main__` for headless renders |
-| shell | `tools/remix/app.py` | Textual only: screens, keys, workers |
-
-The panel render is cached on (page, effect id, build) and `problems()` is
-computed once per pass (3.6 ms per knob step).
 
 ## Known gaps
 

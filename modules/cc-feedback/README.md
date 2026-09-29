@@ -67,7 +67,7 @@ part change transmits nothing until it has settled, as stock does. This
 gate was added after the first port run: 272 UART interrupts inside LOAD
 PROJECT re-ordered `sys` against the engine and tripped Octakit's
 part-byte lifecycle check (`gk_lifecycle_activation_publication_report_fatal`,
-the ATA-latency ordering `docs/remixer/EMU.md` records); the same image
+the ATA-latency ordering `tools/emu/README.md` records); the same image
 loaded at `--ata-latency 32`, and the rig without Octakit loaded at the
 default.
 

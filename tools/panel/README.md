@@ -4,7 +4,7 @@ By **Tim Hastie**, from his fork of octabam,
 [timhastie/octa-panel](https://github.com/timhastie/octa-panel) at
 `be68244` (10-25 Sep 2026; MIT, as octabam). The panel (`tools/panel/`),
 the macOS app (`tools/panel/app/`), the key/LED map and its evidence
-(`KEYMAP.md`, `PANEL_LINK.md`, `key_map.json`, `param_map.json`) and the
+(`KEYMAP.md`, `docs/firmware/PANEL.md` §9, `key_map.json`, `param_map.json`) and the
 port features the panel runs on (`tools/emu/ot_emu`: `--interactive`,
 pacing, the RTC, the DMA timers, bursts, the page table, `--dsp-rt`, card
 write-back, the memory-to-memory eDMA, per-track taps; the dsp56300 hunks
@@ -23,7 +23,7 @@ REC3 have no MKI equivalent.
 
 ## In octabam
 
-`docs/remixer/EMU.md` lists the other ways to run the port (`make
+`tools/emu/README.md` lists the other ways to run the port (`make
 emu-live`, scripted runs, the gates).
 
 Route A (`emu_rtos.py`) was retired on 26 Sep 2026: the panel runs the
@@ -158,7 +158,7 @@ readouts and takes list are gone -- scripts have `/key`, `/knob`, `/run`,
 
 **The screen** is decoded from what the firmware sends the panel processor
 over UART@`0xfc064000` (`tools/panel/panel_link.py`, protocol in
-`PANEL_LINK.md`): `0x10`–`0x17 <column> <8 bytes>` LCD blocks (page = opcode
+`docs/firmware/PANEL.md` §9): `0x10`–`0x17 <column> <8 bytes>` LCD blocks (page = opcode
 & 7, page 7 on top, bit 0 the top pixel of a band), `0x2r <mask>` LED bitmap
 rows, `0x3n <id>` LED levels, a few one-byte commands. Rendering the RAM
 framebuffer at `0x460d1f80` instead comes out with lines rotated (the
@@ -670,7 +670,7 @@ double-click, logs / JSON / `S_*` `R_*` screens beside them; the evidence
 is in `KEYMAP.md` and `param_map.json`).
 
 **The crossfader is the panel board's pot, reported as `0x40 <adc>` on the
-panel UART** (the same wire as the keys and encoders: PANEL_LINK.md). The
+panel UART** (the same wire as the keys and encoders: docs/firmware/PANEL.md §9). The
 firmware scales the byte by a calibration record in its boot flash
 (`0x1ffffe`, none under emulation, so `value >> 1`), posts sys message kind
 4, stores the position in `0x460d16c8` (127 = scene A, 0 = scene B),

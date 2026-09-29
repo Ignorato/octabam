@@ -177,9 +177,9 @@ settings store for all modules, OTX, is specified in
 Everything is checked on your machine against your own 1.40C
 ([docs/remixer/TESTING.md](docs/remixer/TESTING.md)). The DSP side renders
 locally on the assembled instruction stream (`make render`, `make render-rig`;
-[docs/remixer/HARNESS.md](docs/remixer/HARNESS.md)). The whole machine, the
+[tools/harness/README.md](tools/harness/README.md)). The whole machine, the
 ColdFire, both DSP cores, the card, the panel, MIDI and USB, runs under a
-port of it (`tools/emu/ot_emu`, `make emu-cf`; [docs/remixer/EMU.md](docs/remixer/EMU.md)):
+port of it (`tools/emu/ot_emu`, `make emu-cf`; [tools/emu/README.md](tools/emu/README.md)):
 
 ```bash
 make check REMIX=<name>             # build + every gate + boot under the port; OT_PROJECT=<dir> adds a real project
@@ -234,7 +234,7 @@ For contributors:
 | [docs/remixer/MODULES.md](docs/remixer/MODULES.md) | writing a module: manifests, descriptors, DSP and ColdFire declarations, the ledger |
 | [docs/remixer/TESTING.md](docs/remixer/TESTING.md) | how the testing works: the two halves of `make check`, module gates, `make reach`, shards, `make accept`, bit-identity, CI, blind spots |
 | [docs/remixer/PLACEMENT.md](docs/remixer/PLACEMENT.md) | where a module's code goes and what is free, measured |
-| [docs/remixer/HARNESS.md](docs/remixer/HARNESS.md), [EMU.md](docs/remixer/EMU.md) | hearing and measuring the DSP side locally; the ColdFire emulators |
+| [tools/harness/README.md](tools/harness/README.md), [tools/emu/README.md](tools/emu/README.md) | hearing and measuring the DSP side locally; the ColdFire emulators |
 | [docs/remixer/TOOLING.md](docs/remixer/TOOLING.md) | every tool, end to end |
 | [docs/remixer/ACCEPTANCE.md](docs/remixer/ACCEPTANCE.md) | `make accept`'s report and coverage |
 | [docs/effects/](docs/effects/) | the bus (XBUS), the reverb, the master, the borrowed voicings |
