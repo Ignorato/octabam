@@ -14,8 +14,8 @@ flashed image was built from.
   memo, 402 s cold.
 - `make reach` is QUICK by default (29 Sep 2026): the remixes users flash
   that carry the change, one floor remix for tool and build changes, no
-  identity, no `make accept`, two shards, background priority on macOS
-  (`taskpolicy -b`). `FULL=1` is the previous behaviour, a manual choice
+  identity, no `make accept`, two shards, nice 10 (background QoS was tried
+  first and ran on the efficiency cores, several times slower). `FULL=1` is the previous behaviour, a manual choice
   that nothing requires. A USB MIDI change:
   26 commands full, 2 quick.
 
