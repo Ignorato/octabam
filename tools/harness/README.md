@@ -207,7 +207,7 @@ fallback SEND on T8) 1,570 instructions/sample at its worst block; core 1
 wall was triangulated in `cycle_count.py`'s units (words in the sample
 loop), so the static sum is the comparable floor. The ColdFire port
 measured the same rig under the firmware's own dispatch (`--dsp-stopwatch`,
-`docs/history/COLDFIRE_PORT.md`): core 0 24,654 a frame against the
+`git show 3ceba41:docs/history/COLDFIRE_PORT.md` O13): core 0 24,654 a frame against the
 meter's 24,971, core 1 15,177 against 14,880: the meter reads the real
 load within 2 %.
 
@@ -317,6 +317,37 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/stress-run/card.img \
 ```
 
 Check for `run ended REACHED` and nonzero audio. On hardware, copy the generated `.work` and `.strd` files into a project directory under your set, and keep the generated `AUDIO` folder inside that project so `AUDIO/STRESS_LOOP.wav` resolves. Select A01, then switch through A02-A04. Lower monitoring level before starting: eight tracks at their dearest settings sum loudly. Watch for a freeze, dropout, incorrect Part/effect mode, or a parameter that stops following locks or LFOs. Repeat after each feature change and compare with the same image and project. The emulator run checks loading and short playback; a long hardware soak and manual pattern switching remain separate checks.
+
+## The burn knob (hardware)
+
+`make burn` / `make burn-image BUILD=N` (`BURN=1` with `SPEC=1`: the
+shipping remix plus a `BURN` knob on SEND's second slot). SEND is on every
+track of every core, so either core's ceiling can be measured on demand:
+set up the configuration, sweep that SEND's `BURN` until the audio breaks,
+and `24 × BURN` = cycles/sample spare on that core in that configuration
+(a three-word body, `dsp/burn_send.inc`; the reverb's old two-block probe
+was 32/step, the original 16). `verify_burn.py` proves the knob inert at 0
+and 127 and the step exact on both cores. The difference between two
+configurations is the cost of the change, the only way to price a stock
+effect (instruction count is not cycles: one rewrite moved instructions
+508 → 512 while cycles fell 735 → 731). A configuration that freezes at
+`BURN = 0` is already over budget. The current numbers it produced are
+`docs/firmware/CHIP.md` §2.
+
+Measured with the original probe (before the 22 Sep 2026 clock
+measurement, on a 4,535-cycle frame):
+
+| configuration | result | spare |
+|---|---|---|
+| FILTER on all four tracks | froze at `BURN = 87` (16× scale) | 1,392 ✅ |
+| FILTER disabled everywhere | froze at `BURN = 76` (32× scale) | 2,432 ✅ |
+
+Four FILTERs cost 1,040 cycles/sample by difference (❌ superseded: one
+FILTER measures 192, `CHIP.md` §2). FX2 bank (static) 957
++ 4 × FILTER 1,040 + burn at the freeze 1,392 = 3,389 accounted; stock's
+own per-track work by difference ~1,150 of 4,535. The 16× probe topped out
+at 2,032 and the filters-off configuration passed it, so the absolute
+ceiling is unmeasured by it. ❌ "There is not real headroom": retracted.
 
 ## What the harness cannot see
 

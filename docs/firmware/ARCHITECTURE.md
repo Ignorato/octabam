@@ -147,7 +147,7 @@ No third-party RTOS signatures (banner `ElektronOctatrack DPS-1`).
 Scheduler (`FUN_4000056e`, reached by `TRAP #0` and by the timer): saves
 D0-D7, A0-A7 into the current TCB at `0x0c`-`0x4b` (SP at `0x48`; SR
 travels in the exception frame the `rte` pops; layout in
-`docs/history/RTOS_FORK.md` §2); takes the highest-priority ready task;
+`git show 3ceba41:docs/history/RTOS_FORK.md` §2); takes the highest-priority ready task;
 clears the reschedule bit and re-arms the PIT `0xFC08_0000` (reload
 `0xb3f`), the time-slice quantum; switches `_DAT_800068fc` and restores.
 The ATA async queues and the audio voice mailboxes are its message
@@ -201,7 +201,7 @@ sequencer trig
 of the core the GPIO byte at `0xfc0a400c` selects: one byte register per
 4-byte stride on a 16-bit FlexBus port (CS2, `CSCR2 = 0x180`); a 16-bit
 bus cycle delivers its two bytes to two adjacent registers (measured under
-the port, `docs/history/COLDFIRE_PORT.md`; an earlier reading of "command
+the port, `git show 3ceba41:docs/history/COLDFIRE_PORT.md`; an earlier reading of "command
 0x81 / 0x8C, status bit 6" is retracted):
 
 - `0x2000_0000` ICR: `0x81` = INIT|RREQ, an interface reset before each
@@ -281,11 +281,7 @@ Image load base `0x40000400` (1,441 string pointers resolve with it).
 
 ## 8. Tools
 
-`scripts/fetch-os.sh` / `analyze.sh` (download, entropy, binwalk,
-decompression), `tools/build/bin_decode.py` (the ELUP `.bin`),
-`tools/build/find_base.py` (the load base), `scripts/disasm.sh` (radare2 at
-the right arch and base; `emac` for objdump, the only decoder that reads
-the ColdFire V4e extensions). In git history: `decode_elek.c` (the ELEK
+`docs/contributing/TOOLING.md`. In git history: `decode_elek.c` (the ELEK
 container), `string_func_map.py`, the `Ghidra*.java` headless scripts.
 
 ## 9. Open

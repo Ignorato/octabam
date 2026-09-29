@@ -635,7 +635,7 @@ class TakeWriter:
 # L/R, 4/5 = cue L/R, 0/1 and 6/7 whatever the DSP puts there, zero on the
 # fixture) followed by the EIGHT PER-TRACK STEMS (T1 L, T1 R, ... T8 L,
 # T8 R: each track's own term of the DSP's main mix, tapped inside the
-# emulator's mixdown -- COLDFIRE_PORT.md O23), 24 words a frame; an older
+# emulator's mixdown -- git show 666b6154:docs/firmware/COLDFIRE_PORT.md O23), 24 words a frame; an older
 # child without `tracks` gets `all` (8 words). The drain de-interleaves main
 # L/R for the ring, the takes and /audio/pcm -- byte for byte what `audio
 # start main` gives -- and hands the whole frame to the output, which lays

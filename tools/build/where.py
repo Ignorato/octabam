@@ -9,8 +9,8 @@ tools/**/*.md and modules/*/README.md that cites the exact address (file:line fi
 nearest other cited addresses within 0x200, and an EMAC-correct
 disassembly window from scripts/disasm.sh. The docs are scanned on each
 call; nothing is cached or duplicated. A new finding about an address goes
-in the topical doc (docs/firmware/CONTRIBUTIONS.md says where), which is
-what the next call prints.
+in the topical doc under docs/firmware/, which is what the next call
+prints.
 """
 import argparse, pathlib, re, subprocess, sys
 

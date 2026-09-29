@@ -38,7 +38,13 @@ is stock's record word (tempo24 at `r6+$13`, halfword 31 of every track's
 record); the MIDI-clock period is derived per block on the DSP (24-step
 `div`, `y:$090d`). The held MIDI note arrives from the
 [`tempo-sync`](../tempo-sync/) note cave at `r6+$1` bits 8-15; the panel
-label comes from its formatter cave.
+label comes from its formatter cave. BusDelay latches the note in
+`y:>$090a` (HOLD: the last note sticks after note-off; a never-received
+note leaves the PTCH knob in force). In GRAIN the note drives the
+continuous pitch, `2^((note−84)/12)`, ±24 semitones.
+`tools/verify/verify_midi.py` checks the note against the PTCH knob path
+(bit-identical at unison, spectral elsewhere); `DNOTE=n` is the local
+override. On the unit: +12/+6/0/−5/−12 within 1/4 semitone.
 
 TIME glides toward the knob (1/1024 per block), the glided value ramps
 across each block a sixteenth of the step per sample (the whole step at the

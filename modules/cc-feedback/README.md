@@ -87,6 +87,11 @@ default.
   the transport start 9 messages in 900 frames (the eight CCs the gate
   sends in, echoed, and a MODE DEFAULTS neighbour): no step-rate
   transmission on that project.
+- The port (`verify_set`, bottleservice, 28 Sep 2026): 277 CCs queued by
+  the sweep left UART0 as 573 bytes with running status; the transmit
+  interrupt (0x5a) was acknowledged once per message, the soft-timer
+  dispatcher (0x62) 35 times over the load. `ot_emu --midi-out FILE`
+  writes the bytes.
 - The port, the acceptance stress fixture (bottleservice, 900 frames):
   469 CCs; at the end channel 7's bitmap held 15 CCs with the busy flag
   set -- T7's part changed late in the run, the sweep queued the new

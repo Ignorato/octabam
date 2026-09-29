@@ -54,10 +54,10 @@ silent").
 A slot named `---` is an empty encoder position. `E+0xd2` is a count, not
 a maximum.
 
-Cross-check: `NOTES.md` found the arp key-scale min `0x400d4066` = 0 and
+Cross-check: `git show 3ceba41:docs/history/NOTES.md` found the arp key-scale min `0x400d4066` = 0 and
 count `0x400d4096` = 25 by tracing the F-knob handler `FUN_4007a2ec`;
 `ARPEGGIATOR E+0xa2 + 11×4` and `E+0xd2 + 11×4` are those addresses.
-`build.py`'s `ARP_COUNT_AT = 0x400d4096` (25 → 145) is parameter 11's
+`git show 74a84e0f:tools/build.py`'s `ARP_COUNT_AT = 0x400d4096` (25 → 145) is parameter 11's
 count in this descriptor.
 
 ## 3. The entries
@@ -104,7 +104,7 @@ are where a module's id goes (`MODULES.md`); a stock id is also an FX1 id
 ### PLAYBACK entries = machine types
 
 Index = machine type (`FUN_40097168 → 0..4`; ✅ 7 Sep 2026: type 0 reads
-the STATIC arena, type 1 the FLEX arena, `docs/history/RTOS_FORK.md` §10.13;
+the STATIC arena, type 1 the FLEX arena, `git show 3ceba41:docs/history/RTOS_FORK.md` §10.13;
 2–4 🟡 from the parameter sets).
 
 | # | page 1 | page 2 | type |
@@ -395,18 +395,7 @@ the per-type variation). `DSP.md` §5 for the delay.
 
 ### 5f. Adding an effect: five tables
 
-| # | table | keyed by | if missing |
-|---|---|---|---|
-| 1 | id lookup `0x400d5f58` (FX1) / `0x400d5fdc` (FX2) | id | descriptor unresolvable |
-| 2 | chooser list `0x400d6060` (FX1) / `0x400d6090` (FX2) | position | not offered |
-| 3 | its own 402 B descriptor, copied from `P` | — | copied from `E`: correct name and id, no knobs (the enable bitmap falls off the end) |
-| 4 | the id byte at `P+0x03` | — | two list entries sharing a descriptor are one effect |
-| 5 | id → cursor position `0x400d6150` | id | selecting it jumps to NONE |
-
-(3)/(4): `FUN_40052474` does `*(Part+0x8ed88) = (char)*(int*)list[cursor]`,
-the low byte of the word at `P+0`. (5): `FUN_4005996c` counts the list to
-its terminator, then seeds the cursor from `0x400d6150[id]` (`FLTR`→1,
-`EQ`→2, … `DARK`→14); an id absent from it selects position 0 = NONE.
+`docs/contributing/MODULES.md` "The five tables an effect needs".
 
 ### 5g. Step records, trig words and the lock stores (octalab, MKI, 13 Sep 2026) ✅
 
@@ -465,7 +454,7 @@ effects while it read bits 0–7 (fixed `7a4f96b`). Retracted 4 Sep 2026: "a
 stepped control can only live on 7, 9 or 11" (stock puts CHORUS TAPS on 6,
 FILTER HP/ENV/Q2 on 6/8/10, 128-value knobs on 9 and 11). Both bus
 engines' MODE moved to slot 6 (4 Sep 2026) because the main-menu page-2 knob
-editor (`MAINMENU.md` §9c-ii) writes even slots only; ✅ tag 84: MODE steps
+editor (`MAINMENU.md` §7) writes even slots only; ✅ tag 84: MODE steps
 as a select on slot 6, SHMR/MDEP sweep 0–127 from slot 7 (a count-128 knob
 in a companion field works; the 10 Aug "near-boolean companion" reading was
 the inherited formatter). The first play after the move stalled on stored

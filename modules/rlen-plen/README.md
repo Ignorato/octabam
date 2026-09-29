@@ -28,6 +28,24 @@ recording track's. Three entries in one cave:
 - pokes `0x40002c72`/`0x40002c78`: the part validator's hard-coded RLEN max
   64 → 65 (it runs on every bank load and would rewrite a stored 65 to MAX).
 
+What the cave relies on (read from the image for the module, 26 Sep 2026):
+- The per-frame converter `0x40006da6..0x40006e12` runs while the record's
+  length word (`fp@(32)`) is zero; `raw + 1 ≤ 64` takes the tempo product,
+  anything above the MAX branch (`d0 = 0x41` at `0x40006db2` on stock). The
+  end of a fixed-length recording is posted at `0x40005e8e` (LIMIT
+  `0x46c7fe24[track]` := the length); a MAX recording never posts it.
+- The stored byte is validated on every bank load at `0x40002c6e` with a
+  hard-coded 64 (the file parser `0x400165dc` stores 65, the validator
+  writes 64 over it); the setup editor clamps with the descriptor's `min +
+  count − 1` (`0x4002efd2`). RECORDING SETUP pushes the RLEN formatter
+  itself (`pea 0x4002f224` at `0x4002fb12`; the descriptor's slot-2
+  formatter word is 0).
+- Pattern length and scale, from the sequencer's step function
+  `0x4009da20`: record `0x400eb034 + p × 0x8ed8 + b × 0x9b340` (scale at
+  +0, length at −1, a flag at +1 selecting the track record `0x400e21e0 +
+  t × 0x91a` + the same offset, length +0x50, scale +0x51); ticks per step
+  from `0x400aba50`; the blob pointer `[0x46c82456]` read `0x400e21e0`.
+
 Raw 0..64 keep their meaning; saved parts need no restamp. RECORDER SPACING
 is bypassed on the PLEN path (its next-arm model is for chained sequencer
 passes).
@@ -46,7 +64,7 @@ passes).
 - The length path is exercised by a sequencer recorder trig, which takes
   the same converter as a manual press.
 
-`docs/firmware/RECORDER.md` §2b has the watches.
+The watches are `docs/firmware/RECORDER.md` §2a's.
 
 ## Not measured
 

@@ -1,7 +1,7 @@
 // The machine RUNNING: the firmware's own scheduler, its tasks, its timers.
 //
 // This is the C++ counterpart of `tools/emu/emu_rtos.py`'s `Rtos` class, and route
-// A is the oracle (`docs/firmware/COLDFIRE_PORT.md`). Everything here is a translation
+// A is the oracle (`git show 3ceba41:docs/history/COLDFIRE_PORT.md`; route A retired 26 Sep 2026, 60509404). Everything here is a translation
 // of a named piece of that file, with its measurements and its warnings
 // carried across rather than summarised.
 //

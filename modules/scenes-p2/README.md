@@ -13,6 +13,26 @@ Page 2 (slots 6..11) has no byte and the loop stops at halfword 17
 (0..127) rebuilds a weight table `0x80003c60` (a long per track, hi word
 `-xf*258`, Q15): `xf = 127` is scene A, `xf = 0` scene B.
 
+## Why not stock's scene block
+
+Widening stock's scene block to page 2 means changing all of these
+together (`docs/firmware/MIDI.md` Appendix C):
+
+1. Block size: 0x20 bytes/track/scene in the project (`0x8f3e2` stride, 24 code
+   sites incl. copy/paste/undo at `0x40025b40`, `0x400274cc`, `0x400275a0`).
+2. Working copy `0x80000ed4`: 0x40/track, 32 pairs, all fillers assume 32.
+3. Frame-builder extents: `moveq #6` (page block) and `moveq #9` (voice
+   record) at `0x4000ccb6/0x4000cd0e`, `0x4000cd96/0x4000cdea`,
+   `0x4000ce5e/0x4000cee8`; skip at `0x4000cef6`. Halfwords 24..26 are 7 longs
+   past where the record pass stops.
+4. The scene editor's slot→byte map (`0x40053a2c` region) and the two
+   encoder-hook descriptors at `P+0x12a` that call the STRT/LEN morph.
+5. The arithmetic itself, to leave the low byte alone.
+
+Two spare bytes per track could host **one** extra halfword, not three, and
+the DSP-side companion packing would still be lost at every intermediate
+position.
+
 ## What this adds
 
 - **The pool.** Each Part window carries 144 bytes at `+0x90522`: `u16`

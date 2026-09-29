@@ -202,6 +202,25 @@ state things you might assume:
   LFO-modulated. The schema rejects both over-lengths and `build_bus.py`
   re-checks the string it writes, tag included.
 
+### The five tables an effect needs
+
+| # | table | keyed by | if missing |
+|---|---|---|---|
+| 1 | id lookup `0x400d5f58` (FX1) / `0x400d5fdc` (FX2) | id | descriptor unresolvable |
+| 2 | chooser list `0x400d6060` (FX1) / `0x400d6090` (FX2) | position | not offered |
+| 3 | its own 402 B descriptor, copied from `P` | — | copied from `E`: correct name and id, no knobs (the enable bitmap falls off the end) |
+| 4 | the id byte at `P+0x03` | — | two list entries sharing a descriptor are one effect |
+| 5 | id → cursor position `0x400d6150` | id | selecting it jumps to NONE |
+
+(3)/(4): `FUN_40052474` does `*(Part+0x8ed88) = (char)*(int*)list[cursor]`,
+the low byte of the word at `P+0`. (5): `FUN_4005996c` counts the list to
+its terminator, then seeds the cursor from `0x400d6150[id]` (`FLTR`→1,
+`EQ`→2, … `DARK`→14); an id absent from it selects position 0 = NONE.
+
+`tools/build/build_bus.py` writes them (`FX1_IDS`/`FX2_IDS`,
+`FX1_LIST`/`FX2_LIST`, the descriptor clone, `ID2POS`) from the module's
+`MenuEntry`.
+
 ### Page 2: even slots are knob fields, odd slots are companion fields
 
 Slots 6/8/10 are delivered in bits 16-23 of `r6+$c/$d/$e` and slots 7/9/11
@@ -425,6 +444,26 @@ dsp=DspSection(
   at the frame head, P:0x88, on payload A. The ledger refuses two sections
   on one site of one payload.
 - **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
+
+### Rules for DSP code, each established on hardware
+
+`AGENTS.md` has the assembler and arithmetic traps (`mpy`/`a0`, `mpysu`,
+labels by prefix, Tcc and the condition codes) and the dispatcher rule
+(measure r7/r6/X:0x213 facts under the port). Beside those:
+
+- Let the AGU do address work; hand-rolled modulo cost 135 cycles/sample.
+- `dsp_asm` also mis-encodes illegal parallel moves silently: `x:(rN+disp)`
+  is never parallel; `mpy y0,x0,a` takes a parallel move, `mpy x0,y0,a`
+  discards it; XY dual moves need the X pointer in R0–R3 and Y in R4–R7.
+- Two data moves between writing an address register and using it, never
+  an M-register write there; no M-register write inside the sample loop.
+- A modulo offset larger than the buffer is undefined, and silent.
+- Absolute Y scratch at `0x800` or above; `X:0x213` is valid in init only.
+- When a register holding a constant is repurposed, grep every read.
+- Check the assembler's exit status, not the generator's; `| grep` masks a
+  failed assemble.
+- With an impulse input, a flat RMS envelope is instability, not a long
+  tail.
 
 ## Declaring a ColdFire module
 

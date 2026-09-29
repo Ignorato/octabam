@@ -16,7 +16,8 @@ There are two ways to run the Octatrack's OS without flashing it:
 
 The records of how they were built:
 - the port: `git show 3ceba41:docs/history/COLDFIRE_PORT.md` (O1–O14) and
-  `docs/firmware/COLDFIRE_PORT.md` (O14i–O24, Tim Hastie's);
+  `git show 666b6154:docs/firmware/COLDFIRE_PORT.md` (O14i–O24, Tim
+  Hastie's; what is still in the port is [Port features](#port-features));
 - Tier-0: `git show 3ceba41:docs/history/EMU_BRINGUP.md` and `RTOS_FORK.md`.
 
 Route A (`emu_rtos.py`) was retired on 26 Sep 2026 (60509404).
@@ -277,6 +278,80 @@ tools/harness/usb_host.py /tmp/ot-usb.sock audio 3 2.0 capture.pcm 4
     never runs. The `usb-*` modules carry that code on octabam's loader
     instead.
 
+## Port features
+
+Every option is in `./out/emu/ot_emu --help`. The `--interactive`
+commands' reply formats are the header comment of `main.cpp`
+(`serveInteractive`). All but `--mkii` came from Tim Hastie's fork
+(O14i–O23, 11–13 Sep 2026; `THIRD_PARTY.md`).
+
+- **`--interactive`** (what `make panel` runs). After the batch's boot and
+  load the port prints `ready sample=<n> frames=<n>` and answers one line
+  per command on stdin. Integers are decimal or `0x..` (a leading zero is
+  not octal). Anything malformed answers `err <message>` and the loop
+  continues; EOF exits 0. `--main-level` defaults to 64 here; the batch
+  posts no level unless asked.
+  - `run <ms> [wall <s>]` is the only command that advances emulated time;
+    `stop=` in its reply is `time`, `gate`, `fault`, `illegal` or `wall`.
+  - `key <row> <mask>`, `knob <row> <delta>` (two bytes into UART A's
+    receive queue), `midi <hex>...` (UART0), `tx` (UART A's transmit bytes
+    since the last `tx`), `peek`/`poke` (≤ 4096 bytes; unmapped answers
+    `err`), `frame on|off`, `status`, `quit`.
+  - `pace on [rate]` / `pace off` / `pacestatus`: while stdin is empty the
+    port advances in 10 ms slices to track wall clock × rate, sleeping
+    inside `poll()` on stdin when ahead and re-anchoring when more than
+    250 ms behind.
+  - `audio start [main|cue|all|tracks]`, `audio read [<maxframes>]`,
+    `audio status`, `audio stop` (needs `--dsp`): core 0's ESAI TX0
+    frames as little-endian 16-bit (the 24-bit word >> 8) in a 60 s ring
+    (overwrites counted as `dropped`). `main` = ring words 2/3, `cue` =
+    4/5, `all` = the eight words, `tracks` = the eight words then the
+    sixteen per-track stems T1 L … T8 R, tapped at `P:0x2d5` (the buffers:
+    `docs/firmware/DSP.md` "Core 0's frame").
+  - `card status`, `card flush` (with a card).
+  - Instruments: `watch <addr>[,…]` / `hits` (PC hits with registers and
+    stack), `watchmem <addr> <len>` / `writes` (a watched SDRAM range is
+    given as its cached alias `0x8xxxxxxx`), `dsp watch|pcwatch|peek`
+    (lockstep only), `rtstatus` (`--dsp-rt`), `cfstatus`, `edmastatus`.
+- **`--dsp-rt`** (needs `--interactive`): the two DSP cores run under the
+  vendored JIT on worker threads, on the lockstep schedule (`dsp.cpp`,
+  "THE REAL-TIME MODE"); the ColdFire stays the master of emulated time.
+  On the clean OTLIVE fixture its capture was bit-identical to lockstep's
+  (13 Sep 2026: 0 mismatches of 199,358 samples, three runs). The
+  per-instruction DSP instruments do not observe it; every batch mode
+  keeps the lockstep interpreter.
+- **`--dsp-lazy N`**: the pair's ticks are booked and replayed in chunks
+  of up to N DSP instructions at the ColdFire's touch points; the default
+  in every mode, byte-identical to `0` (the per-tick path).
+- **`--rtc host|off|EPOCH`**: DSPI chip-select 2 answers as a DS1390-style
+  clock (BCD registers `0x01`–`0x07`, plus `0x00` and `0x0e`). `off`, the
+  batch default, is the loopback (the dialog reads 2000-00-00); `host` is
+  the `--interactive` default; an epoch is a frozen UTC instant. A
+  written register is kept and stops advancing.
+- **`--card-rw`** (needs `--card`): every committed sector is `pwrite()`n
+  to the image file before its WRITE completes; `card flush`, `quit`, EOF
+  and exit `fsync`. Without it the card lives in memory.
+- **`--mkii`**: the GPIO loopback the boot probe tests and the MKII panel's
+  replies (`docs/firmware/PANEL.md` §4c).
+- **DMA timers** DTIM0–3 (`0xfc070000 + 0x4000·n`, INTC0 sources 32–35);
+  DTIM1 is the firmware's 8.333 ms UI/LED tick. The 2.8 s boot logo on
+  DTIM3 is skipped unless `--boot-logo`.
+- **The frame edge.** With `--dsp` the frame interrupt is the DSP's bank
+  word (O9b), so a stalled core freezes the sequencer on trig 1;
+  `--frame-timer` restores the 16-sample timer, and `--frame` uses the
+  timer without the cores.
+- **Memory-to-memory eDMA.** At the kick, a channel with neither end in the
+  host-port window (`0x20000000–0x20000fff`) is copied per its TCD
+  (`Rtos::copyMemToMem`: NBYTES per minor loop, SSIZE/DSIZE at
+  SOFF/DOFF, SMOD/DMOD, CITER loops; TCD+4 is ATTR, +6 is SOFF). This
+  carries the Echo Freeze Delay's tap fetches and ring writes
+  (`docs/firmware/COLDFIRE_DELAY.md`), 32 blocks a frame. Counted under
+  `--block-log` or `OT_M2M_REPORT=1`; `--edma-log FILE` logs every kick.
+- **Build speed-ups**, all bit-exact under the oracle
+  (`tools/emu/ot_emu/oracle/README.md`): event-horizon bursts, the
+  page-table memory fast path, LTO, and opt-in profile-guided optimisation
+  (`tools/emu/ot_emu/pgo.sh`).
+
 ## Speed
 
 - The port runs in event-horizon bursts (bit-exact).
@@ -297,9 +372,25 @@ tools/harness/usb_host.py /tmp/ot-usb.sock audio 3 2.0 capture.pcm 4
   knew only the fractional layout. Found by Jannik Aßfalg; `test_emac.cpp`
   holds both layouts.
 - **MACSR S/U** is bit 6 and selects 16-bit rounding in fractional mode
-  (see `AGENTS.md`); `test_emac.cpp`.
+  (see `AGENTS.md`); `test_emac.cpp`. The firmware sets `MACSR = 0x20`
+  (fractional) at `0x4000cf60` and `0x4000d3ae`; the level chain at
+  `0x4000ccae` runs at `0x60`.
 - **The uncached aliases** `0x4F…` and `0x4E…` are folded onto the cached
   regions (`machine.h`).
+- **EMAC −1.0 × −1.0** in fractional mode overflowed to −2³⁹; the product
+  is `>> 23` in one shift now (`v4e.cpp`, Tim Hastie, 13 Sep 2026).
+- **The eDMA TCD's ATTR and SOFF** were read swapped (ATTR is TCD+4, SOFF
+  TCD+6), so every memory-to-memory copy moved single bytes (Tim Hastie,
+  13 Sep 2026).
+
+## Firmware behaviour an emulator has to reproduce
+
+- The mount's INTRQ is not instantaneous and the firmware depends on it;
+  a "stall" at 1,407 ATA commands was a line-A exception the UART hid
+  (`git show 3ceba41:docs/history/COLDFIRE_PORT.md` O7).
+- Route A did not fault on unmapped memory; the port's early "serial byte
+  count" difference from it was memory the port had not mapped (O5 in the
+  same record).
 
 # Tier-0 (Unicorn)
 

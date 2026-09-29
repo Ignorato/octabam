@@ -149,7 +149,12 @@ claims any DSP delay memory.
 
 CPU cost is not yet hardware-qualified. Eight instances are verified for
 correctness, **not** certified to meet deadlines alongside timestretch,
-recording and streaming. Emulator instruction counts are not hardware cycles.
+recording and streaming. Emulator instruction counts are not hardware
+cycles: the port's meter prices an uncached SDRAM access at one cycle and
+sees no cache, DMA stall or scheduler. The frame period is 363 µs, ~95,800
+cycles at 264 MHz, shared with everything else the ColdFire runs; the
+hardware freezes (Status, below) are the only bracket on the routine's
+budget.
 
 ## Local gates and audition
 

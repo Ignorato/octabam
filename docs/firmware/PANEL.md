@@ -288,14 +288,7 @@ levels after boot + 500 ms); new on the wire: `60 02 70 00`, `74 00`,
 `60 00`, and 204 `0xb5` messages (`0x4003f430` called from
 `0x40061af2` / `0x40061b22` only when the flag is set).
 
-Where it is wired: `ot_emu --mkii`; `tools/panel/panel_server.py` passes it
-by default (`--mki` to run as an MKI; `/map` says `"model"`), and
-`panel.html` draws PROJ/PART/AED/ARR/REC3 and the PAGE legend when it is
-an MKII; `tools/emu/live.py` passes it by default (`--mki`);
-`tools/panel/key_map.json` `proj`/`part`/`aed`/`arr`/`rec3`/`page`;
-`panel_check.py` opens the PROJECT menu with PROJ on an MKII (✅ FUNC +
-MIXER does not open it there; both models pass all five checks). The
-gates (`verify_set`, the port's self-tests) run as an MKI, unchanged.
+Where it is wired (the panel, `live.py`, the gates): `tools/panel/README.md`.
 
 ## 5. The cursor idiom — and the arranger's giant one
 
