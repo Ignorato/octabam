@@ -52,6 +52,11 @@ flowchart LR
 - **SEND** at DEL 0 and REV 0 is the same as no effect. Every level knob
   is auto-gained so eight senders drive an engine as hard as one.
   Module: [`send`](../../modules/send/README.md).
+- Tracks 1 and 5 have been tested as THRU tracks with no trigs of their
+  own. Sounds programmed on track 1 alongside the delay pop and click
+  (reported 29 Sep 2026, cause open,
+  [FAILURE_MODES.md](../../docs/remixer/FAILURE_MODES.md)); track 5 with
+  trigs has not been tested.
 - A new project is born wired this way ([`rig-hosts`](../../modules/rig-hosts/README.md));
   the engines are hidden from the FX2 chooser and locked to their tracks.
   An older project keeps its stored ids until you run the `host` command
