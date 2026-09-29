@@ -225,7 +225,7 @@ verify-shared: ## The gates that do not depend on the remix: ledger selftest, sl
 	@test -n "$(REMIXES)" || { echo "REMIXES is unset: make $@ REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
 	python3 tools/remix/selftest.py
 	python3 tools/verify/verify_slots.py
-	python3 tools/verify/verify_replaces.py
+	python3 tools/verify/verify_replaces.py --static
 	python3 tools/verify/verify_docs.py
 	python3 tools/build/label_fmt.py
 	@# The knob click census: every continuous knob of the rig fixture's DSP
@@ -262,6 +262,9 @@ verify-remix: ## The selected remix's own gates: dirty state, init regs, DRAM bo
 	@# Restore the selected image before inspecting its chooser tables.
 	$(MAKE) bus REMIX=$(REMIX)
 	REMIX=$(REMIX) python3 tools/verify/verify_menu.py
+	@# No stock effect id taken over without `replaces`, on this image (the
+	@# registry half ran in verify-shared).
+	python3 tools/verify/verify_replaces.py --image $(REMIX)
 	@# A real project on the built image under the ColdFire port (ids, page-2
 	@# delivery, chain audio, the main out); SKIPs without OT_PROJECT (above).
 	python3 tools/verify/verify_set.py $(REMIX)
