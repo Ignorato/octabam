@@ -1,7 +1,7 @@
 # MODE DEFAULTS
 
 Turning a MODE on the panel re-defaults the knobs around it to that mode's
-`ModeView` (`docs/remixer/MODULES.md`, "Per-mode knob names and defaults").
+`ModeView` (`docs/contributing/MODULES.md`, "Per-mode knob names and defaults").
 
 ## Hook
 

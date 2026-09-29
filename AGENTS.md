@@ -3,7 +3,7 @@
 octabam is a remixer for the Octatrack's OS: it composes modules, each
 credited to its author, into one image built from the user's own 1.40C.
 `README.md` says what each module and remix is and where it has run;
-`CHANGELOG.md` records each flashed image. `docs/remixer/PLACEMENT.md` is
+`CHANGELOG.md` records each flashed image. `docs/contributing/PLACEMENT.md` is
 the architecture record for where code goes and what is measured about
 the memory.
 
@@ -12,7 +12,7 @@ contribution) composed into **remixes** (`remixes/<name>/remix.py` selects a
 set, `README.md` beside it says where it has run; `remixes/test/<name>/`
 carries one module for its gates).
 `make modules` lists them, with the compatibility matrix; `make remix`
-composes one. `docs/remixer/MODULES.md` is the contributor guide and
+composes one. `docs/contributing/MODULES.md` is the contributor guide and
 `CONTRIBUTING.md` the contract. The build refuses to start when two selected
 modules claim the same FX2 id, cave, hook site, detour site, poke, runtime
 write, core-private Y word, or the per-core FX2 buffer region — by name.
@@ -54,7 +54,7 @@ make reverb IN=loop.wav ARGS='--wet --mode all'
 ```
 
 Never claim something works because it assembled or linked. `make check` is
-the floor; `docs/remixer/TESTING.md` says what each gate proves and what
+the floor; `docs/contributing/TESTING.md` says what each gate proves and what
 none of them can see.
 
 **Before opening a PR, and again before merging one:** rebase onto
@@ -578,7 +578,7 @@ See `docs/firmware/PARAM_PAGES.md`.
 **Flash cycles are expensive** — each one is a manual firmware write. Render
 locally and measure instead of guessing. This is why the emulator path exists.
 
-**When the unit misbehaves, check `docs/remixer/FAILURE_MODES.md` first** — the
+**When the unit misbehaves, check `docs/contributing/FAILURE_MODES.md` first** — the
 register of hardware failure modes (symptom -> cause -> fix). Add any new one
 the moment it is seen; do not let it live only in a commit message.
 

@@ -48,7 +48,7 @@ completely separate instruction set and toolchain.
 
 ## 1. Toolchain (`make setup`, `scripts/setup.sh`)
 
-Idempotent. What to install before it: [BUILDING.md §0](../remixes/BUILDING.md#0-what-you-need). It builds:
+Idempotent. What to install before it: [BUILDING.md §0](../guide/BUILDING.md#0-what-you-need). It builds:
 
 | tool | from | what it is |
 |---|---|---|
@@ -144,7 +144,7 @@ no default; `make modules` lists the modules and the remixes,
 `make remix` composes one interactively). Each `modules/<name>/manifest.py`
 declares one contribution against `tools/remix/schema.py`, and
 `tools/remix/ledger.py` refuses a selection whose modules collide.
-`docs/remixer/MODULES.md` is the contributor guide. The builder assembles
+`docs/contributing/MODULES.md` is the contributor guide. The builder assembles
 the selected effects, places them into each payload's donor region in
 priority order, wires the dispatch tables, patches the ColdFire-side menu
 descriptors, installs caves, detours and the DRAM platform, and
@@ -152,7 +152,7 @@ census-checks itself. It is driven by env flags (`DEV`, `NOSHIM`, `MODE`,
 `DNOTE`, `TPROBE`, …; grep `environ` in the file); the render cache
 fingerprints every one (`tools/harness/README.md`). `make image` repacks
 the result into a card-flashable `.bin` with the build number stamped into
-the OS version string. `docs/remixer/FLASHING.md` before writing to
+the OS version string. `docs/guide/BUILDING.md` before writing to
 hardware.
 
 ## 5. Hearing and measuring locally
@@ -173,7 +173,7 @@ Render on the desktop at ~6× real time instead of flashing.
 
 ## 6. Verifying
 
-`make check` is the floor for any change; `docs/remixer/TESTING.md` is the
+`make check` is the floor for any change; `docs/contributing/TESTING.md` is the
 mechanism (the two halves, module gates, `make reach`, shards, `make accept`,
 CI). The family, and what each proves:
 

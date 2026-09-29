@@ -69,7 +69,7 @@ bus-plain: ## Build without specialization (both servers on both cores)
 	REMIX=$(REMIX) python3 tools/build/build_bus.py
 
 .PHONY: image
-image: bus ## Repack the build into a card-flashable .bin (see docs/remixer/FLASHING.md); BUILD=N is required
+image: bus ## Repack the build into a card-flashable .bin (see docs/guide/BUILDING.md); BUILD=N is required
 	$(need-remix)
 	@test "$(origin BUILD)" != "file" || { echo "make image needs BUILD=N (the version the panel shows; bump it every flash)"; exit 1; }
 	@test -f $(SYX) || { echo "missing $(SYX) — run 'make os'"; exit 1; }
@@ -86,7 +86,7 @@ image: bus ## Repack the build into a card-flashable .bin (see docs/remixer/FLAS
 	@echo
 	@echo "  card image: out/OCTATRACK_$(VERSION).bin"
 	@echo "  MIDI image: out/OCTATRACK_OS1.40C_$(VERSION).syx"
-	@echo "  -> docs/remixer/FLASHING.md before you write either to hardware."
+	@echo "  -> docs/guide/BUILDING.md before you write either to hardware."
 
 # ------------------------------------------------- audition without flashing --
 
@@ -389,7 +389,7 @@ modules: ## List the module index and the available remixes
 	python3 tools/remix/index.py
 
 .PHONY: docs
-docs: ## Render README.md's module table and docs/remixes/README.md from the manifests and the selections
+docs: ## Render README.md's module table and remixes/README.md from the manifests and the selections
 	python3 tools/remix/index.py --write
 
 .PHONY: remix

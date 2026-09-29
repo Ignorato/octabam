@@ -1,10 +1,17 @@
 # Building a remix, step by step
 
-Every image is built on your own computer from your own copy of Octatrack
-OS 1.40C. Nothing built here may be shared: a built `.bin` or `.syx`
-contains Elektron's OS.
+From a fresh machine to a flashed unit, and back to stock. Every image is
+built on your own computer from your own copy of Octatrack OS 1.40C.
 
-Pick a remix from [README.md](README.md). The commands below use `ok-ms`
+> **This is not official Elektron firmware.** Flashing a modified OS can
+> leave the unit unusable until you recover it (§7), and puts your warranty
+> in question. Nothing here is endorsed by, supported by, or affiliated
+> with Elektron. You flash at your own risk.
+>
+> **Do not share a built image.** A built `.bin` or `.syx` contains
+> Elektron's OS.
+
+Pick a remix from [the remix index](../../remixes/README.md). The commands below use `ok-ms`
 (Octakit + MIDI SCENES on the stock effects, the smallest remix that has
 run on a unit); substitute any remix name.
 
@@ -17,14 +24,18 @@ run on a unit); substitute any remix name.
 - `cmake` and [uv](https://docs.astral.sh/uv/): `brew install cmake uv`.
   uv provisions `.venv` (`make emu-setup`: `unicorn`, `textual`,
   `sounddevice`) for `make remix` and the label gates in `make check`.
-- An Octatrack MKI or MKII on OS 1.40C. The stock 1.40C image is one file
-  for both marks; octabam's own effects have only been tested on an MKII,
-  and the DRAM platform has run on both (MKI: octalab, 11 Sep 2026; MKII:
-  OKMS1, 14 Sep 2026).
+- An Octatrack MKI or MKII on OS 1.40C. Elektron's MKI and MKII download
+  pages serve the byte-identical file (compared 19 Aug 2026). octabam's own
+  effects have only been tested on an MKII; the DRAM platform has run on
+  both (MKI: octalab, 11 Sep 2026; MKII: OKMS1, 14 Sep 2026). octabam
+  images keep 1.40C's internal version code 0178, which the updater's
+  "MK1 not allowed" check (error −5, against "0156") accepts.
 - A CompactFlash card in the unit (the fast flashing path).
-- For recovery only: a 5-pin DIN MIDI interface and an app that sends
-  `.syx` files (SysEx Librarian on macOS). USB-MIDI to the OT's own USB
-  port does not work for OS upgrades.
+- For recovery and the MIDI flashing path: a 5-pin DIN MIDI interface into
+  the Octatrack's MIDI IN and an app that sends `.syx` files (SysEx
+  Librarian on macOS), or `make midi-flash`. The OT's own USB port does not
+  take an OS upgrade.
+- Stable power. Do not move the unit while it flashes.
 
 ## 1. Get the repository and the toolchain
 
@@ -81,13 +92,13 @@ source $HOME/.local/bin/env
   disassembler here under a different name, hence the symlink.
   `scripts/disasm.sh emac` shells out to `m68k-elf-objdump`; without it
   the only decoder left is radare2, which silently invents code on this
-  CPU (`docs/remixer/TOOLING.md` §3). Check it:
+  CPU (`docs/contributing/TOOLING.md` §3). Check it:
   `scripts/disasm.sh emac 0x40003664 8` must print `msacl`, not
   `invalid`. The symlink goes in `/usr/local/bin`: `~/.local/bin` is on
   PATH only in login shells, and `wsl.exe -d Ubuntu -- bash script.sh`
   from Windows is not one (observed 10 Sep 2026).
 - `make remix` wants a real terminal: run it from Windows Terminal on the
-  Ubuntu profile. Its playback is `afplay` (macOS only); `docs/remixer/REMIXER.md`
+  Ubuntu profile. Its playback is `afplay` (macOS only); `docs/guide/REMIXER.md`
   has the two-line wrapper that points it at WSLg's PulseAudio.
 
 **Not verified on this route since 9 Sep 2026.** The build now needs the
@@ -154,17 +165,13 @@ make check REMIX=ok-ms      # build + every gate + boot under the emulator
 depend on the remix: the ledger selftest, the stock-id audit that builds
 every remix, the docs, the knob census, the module gates that build their
 own image) and `make check-remix` (the selected remix's build, cycles and
-its own gates). [docs/remixer/TESTING.md](../remixer/TESTING.md) says what
+its own gates). [docs/contributing/TESTING.md](../contributing/TESTING.md) says what
 each step proves. Measured on one machine, 27 Sep 2026, over the 25
 remixes of the day: 475 s for the shared half, 223 s per remix on average
 (`lofi-amf-fix` 51 s, `bottleservice` 1,143 s). Without `make emu-setup`
 (the `.venv`) the label gates (`verify_labels`, `verify_modenames`,
 `verify_hidden`) report `[SKIP]`; without `make emu-cf` the set gates do;
-without a project in `OT_PROJECT` the set gates do too. Run from a fresh
-clone on 16 Sep 2026: `scripts/setup.sh` → `make os` → `make recon` →
-`make check REMIX=bamsep26` (that day's rig remix; `bottleservice` is its
-successor) green with exactly those SKIP lines (Homebrew tools already
-installed on that machine; the `brew install` branch was not exercised).
+without a project in `OT_PROJECT` the set gates do too.
 
 ## 4. Back up
 
@@ -177,112 +184,86 @@ warning).
 
 1. On the unit: **PROJECT → SYSTEM → USB DISK MODE → YES**. The card mounts
    on the computer.
-2. Copy `out/OCTATRACK_OCTABAM1.bin` to the **root** of the card.
+2. Copy `out/OCTATRACK_OCTABAM1.bin` to the **root** of the card, not
+   inside a folder.
 3. Eject the card on the computer, then leave USB DISK MODE on the unit.
-4. **PROJECT → SYSTEM → OS UPGRADE → YES** and confirm.
-5. Wait for the unit to finish and restart. **Power-cycle it once more
-   before judging anything**: an OS upgrade does not clear DSP RAM, and
-   twice the first boot has played garbled audio that a reboot cleared.
+   Without the eject the copy can still be in the computer's cache and the
+   unit reads a truncated file.
+4. **PROJECT → SYSTEM → OS UPGRADE → YES** and confirm. The active project
+   is synced to the card first.
+5. Wait for the unit to finish and restart, then **power-cycle it once
+   more before judging anything**. An OS upgrade does not clear DSP RAM:
+   twice the first boot played garbled audio that a reboot cleared
+   (inferred mechanism: an engine's warm-up tag, BusVerb `$2c0000` at
+   `r7+$82` or BusDelay `$2e0000`, survives and the engine skips its
+   warm-up).
 
-The boot screen and **SYSTEM STATUS → OS VERSION** now read `OCTABAM1`. If
-it still says `1.40C`, the stock OS is running.
+This path needs a unit that boots; otherwise §5b.
 
-## 6. If it goes wrong
+`tools/build/make_bin.py` builds the `.bin`; `tools/build/bin_decode.py`
+decodes the official file, validates its checksum and round-trips ours.
 
-The Startup Menu lives in flash the OS upgrade never touches, so the unit
-can always be returned to stock:
+### 5b. Flash over MIDI
+
+1. Your interface's MIDI OUT → the Octatrack's **MIDI IN** (DIN).
+2. On the Octatrack: power off, hold **FUNC**, power on → **STARTUP MENU**.
+3. **TRIG 3** (MIDI UPGRADE) → "READY TO RECEIVE MIDI UPGRADE".
+4. Send `out/OCTATRACK_OS1.40C_OCTABAM1.syx`: from a SysEx app, or
+   `make midi-flash PORT=<port> SYX=<file.syx>` (`tools/hw/midi_flash.py`),
+   which paces the ~7,460 messages at the DIN rate. Filter MIDI clock on
+   that port. If the unit loses sync, re-enter the Startup Menu and send
+   again slower (`--ms 60`, or 100–300 ms between messages in a SysEx app).
+5. Wait through PREPARING FLASH → UPDATING FLASH. Do not power off or
+   disconnect during either.
+6. The unit may update its bootstrap. Let it finish booting, then
+   power-cycle (§5 step 5).
+
+## 6. After the flash
+
+1. **The version.** The boot screen and **SYSTEM STATUS → OS VERSION** read
+   `OCTABAM1`. If it still says `1.40C`, the stock OS is running.
+2. **Stamp old projects** after flashing a remix that changes an effect's
+   parameter layout (the bus engines, the rig's hosts):
+
+   ```bash
+   python3 tools/hw/ot_project.py stamp-defaults "<card>/<set>/<project>" <remix>
+   ```
+
+   A part saved under an older layout feeds the new one its old bytes; a
+   select whose stored value is outside its count is used as an index and
+   the sequencer stalls on the first play. Re-selecting the effect on one
+   track is not enough: the sequencer runs every track of the part. A
+   project made on the unit after the flash needs no stamp.
+3. **The bus engines** (bottleservice): the delay runs on tracks 1–4, the
+   reverb on tracks 5–8; a host on the wrong half falls back to a SEND
+   (`stamp-defaults` warns per part). SEND's `DEL` and `REV` knobs are the
+   two sends; each engine's wet comes out on the track that hosts it.
+
+If the unit misbehaves, [FAILURE_MODES.md](../contributing/FAILURE_MODES.md)
+is the register of what has gone wrong on a unit and why.
+
+## 7. If it goes wrong
+
+The Startup Menu is the bootloader and lives in flash the OS upgrade never
+touches, so the unit can always be returned to stock, even with a corrupt
+OS ("Z" screen, no boot, a hang):
 
 1. Power off. Hold **FUNC** and power on → **STARTUP MENU**.
 2. **TRIG 3 → MIDI UPGRADE** → "READY TO RECEIVE MIDI UPGRADE".
 3. Send `downloads/extracted/OCTATRACK_OS1.40C.syx` (the stock OS, from
-   `make os`) from your SysEx app over DIN MIDI.
+   `make os`) over DIN MIDI, from a SysEx app or
+   `make midi-flash PORT=<port> SYX=downloads/extracted/OCTATRACK_OS1.40C.syx`.
 4. Wait through PREPARING FLASH → UPDATING FLASH. Do not power off.
 
 `TRIG 2 → EMPTY RESET` clears battery-backed RAM and settings, not the
-card. [docs/remixer/FAILURE_MODES.md](../remixer/FAILURE_MODES.md) is the
-register of what has gone wrong on a unit and why.
+card.
 
-## 7. Going back to a different remix
+## 8. Back to stock, or another remix
 
-Build and flash another image the same way, or flash Elektron's OS 1.40C
-to return to stock. After any remix that changes an effect's
-parameter layout (the rig family), stamp every project before playing:
-`python3 tools/hw/ot_project.py stamp-defaults <project dir on the card> <remix>`.
+- **Stock:** flash `downloads/extracted/OCTATRACK_OS1.40C.syx` over MIDI
+  (§7), or copy the official `.bin` from Elektron's zip to the card and
+  flash it as in §5. The card and projects are not touched.
+- **Another remix:** build and flash it the same way, then stamp projects
+  as in §6.
 
-## 8. Your own remix
-
-A remix is one directory, `remixes/<name>/`: `remix.py` holds the
-selection, `README.md` says what is in it and where it has run. The
-registry discovers every `remixes/*/remix.py` and `remixes/test/*/remix.py`;
-nothing else registers it. A remix that carries one module for that
-module's gates goes in `remixes/test/<name>/`; names are unique across
-both, and every tool takes the bare name (`make check REMIX=miniverb`).
-
-Two ways to write one:
-
-- **`make remix`**, the TUI (`docs/remixer/REMIXER.md`; needs `make
-  emu-setup`): `l` loads an existing remix or `stock`, `enter` adds and
-  removes modules, `1` gives an effect an FX1 row, `s` writes
-  `remixes/<name>/remix.py` and a README stub. The written file carries
-  `name`, `doc`, `modules`, `fallback` and, when it differs from stock's,
-  `fx1`.
-- **Copy an existing `remix.py`** and edit it. `remixes/bottleservice/remix.py`
-  is the bus with stations, hosts and ColdFire mods,
-  `remixes/test/euclid/remix.py` an insert beside the stock effects,
-  `remixes/ok-ms/remix.py` two ColdFire mods and no DSP code.
-
-```python
-from remix.schema import Proof, Remix
-
-REMIX = Remix(
-    name="mine",                       # == the directory name
-    doc="One line: what is in it.",
-    family="effects",                  # index section: rig, effects, mods, reference, probes
-    proof=Proof.CHECK,                 # CHECK, RENDER, PORT, HARDWARE
-    proof_note="make check, 28 Sep 2026",
-    modules=("REVERB SERVER", "DELAY SERVER", "SEND", "TEMPO SYNC",
-             "FILTER", "LO-FI"),       # the FX2 chooser, in row order
-    fallback="SEND",                   # or "NONE"
-    # fx1=("FILTER", "EQUALIZER", "SPECTRUM"),   # the FX1 chooser; omitted = stock's ten
-)
-```
-
-- `modules` is the FX2 chooser in row order. A key is a module's `key`
-  (`make modules` prints them) or a stock effect's name: FILTER,
-  EQUALIZER, DJ EQ, PHASER, FLANGER, CHORUS, SPATIALIZER, COMB FILTER,
-  COMPRESSOR, LO-FI, DELAY, PLATE REV, SPRING REV, DARK REV. A module with
-  no chooser row (a ColdFire mod, a bridge, TEMPO SYNC) sits anywhere in
-  the list. A stock effect on neither chooser keeps its code and
-  descriptor (an old project still runs it) and its words become room for
-  modules; the three reverbs are the default room, 2,724 words. The build
-  refuses a listed stock effect whose words a placed module reached, and
-  an overrun by payload: `payload B: SPECTRUM overruns the region (3599 >
-  2724 words)`.
-- `fallback` is where an FX2 id the image does not implement dispatches,
-  id 0 of a fresh part included: `"SEND"` for a remix with a bus server
-  (the track becomes a send), `"NONE"` for one without (the firmware's
-  own NONE). `NONE` beside a bus server is refused.
-- `fx1` is the FX1 chooser in row order; omitted, FX1 stays stock's ten.
-  Only a buffer-free insert may take a row; the build refuses the rest by
-  name. A row costs no words and does cost cycles: four more slots per
-  core.
-- `family`, `proof`, `proof_note` are the columns of the remix index.
-  Without them the remix lists under Reference with proof `?`.
-- Seven FX2 rows fit in place; up to 32 go to a longer list, whose
-  scrolling on the panel is inferred from stock's fifteen-row list, not
-  measured.
-- Two selected modules that claim one address, id, hook or buffer are
-  refused by name; `make modules` prints the pairwise matrix.
-- `hidden`, `named`, `grains`: `docs/remixer/MODULES.md`.
-
-Then:
-
-```bash
-make docs                       # re-render docs/remixes/README.md (make check refuses a stale index)
-make check REMIX=mine           # build + cycles + every gate + boot under the port
-make image REMIX=mine BUILD=2   # -> out/OCTATRACK_OCTABAM2.bin
-```
-
-`make check` also refuses a remix directory without a `README.md`. A remix
-whose parameter layout differs from the one a project was saved under
-needs the stamp before play (§7).
+Composing your own remix: [REMIXER.md](REMIXER.md).

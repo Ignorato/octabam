@@ -3,8 +3,8 @@
 The code that turns `modules/<name>/manifest.py` files and a
 `remixes/<name>/remix.py` selection into an image, checks it, and the
 `make remix` front end. The user guide for the front end is
-[`docs/remixer/REMIXER.md`](../../docs/remixer/REMIXER.md); writing a module is
-[`docs/remixer/MODULES.md`](../../docs/remixer/MODULES.md).
+[`docs/guide/REMIXER.md`](../../docs/guide/REMIXER.md); writing a module is
+[`docs/contributing/MODULES.md`](../../docs/contributing/MODULES.md).
 
 | file | does |
 |---|---|

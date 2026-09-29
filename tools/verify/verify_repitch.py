@@ -23,7 +23,7 @@ project tempo by speed, live.
              frames per output sample. The pitch alone cannot tell REPITCH
              from a timestretch: image 80 played 330 Hz with the position
              still advancing at 1.0, skipping a quarter of every chunk
-             (docs/remixer/FAILURE_MODES.md). The renderer's resolved TSTR
+             (docs/contributing/FAILURE_MODES.md). The renderer's resolved TSTR
              (voice +24) must read OFF on a REPITCH track.
 
 Playback cases (a live change 120 -> 90 BPM; R = 0.75):

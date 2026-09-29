@@ -48,7 +48,7 @@ Chain, fixed: fold → saturate → tilt → compress → width → mix.
   level, from 13 to 20 Sep 2026: on T8 by dispatch position the last live
   engine's wet entered at the front of the chain and the hosts were stamped
   quiet. The return was degraded on the unit and clean under the port
-  (`docs/remixer/FAILURE_MODES.md`) and went; each engine prints its wet
+  (`docs/contributing/FAILURE_MODES.md`) and went; each engine prints its wet
   on its own host. WDTH is page-1 slot 2 (TXTR's until 22 Sep 2026).
 
 Defaults are a bit-exact passthrough (DRV 0, FOLD 0, TONE 64, COMP 0, MIX

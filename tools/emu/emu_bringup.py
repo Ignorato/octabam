@@ -14,7 +14,7 @@ real peripherals, no scheduler. Two uses:
 
 Needs `unicorn` with the CFV4E model — `make emu-setup` provisions it into
 the uv-managed `.venv` (the `emu` extra). The DEFAULT m68k core is plain-68k
-and will NOT decode this CPU (mvz/mvs/EMAC) — docs/remixer/TOOLING.md §3. Boot
+and will NOT decode this CPU (mvz/mvs/EMAC) — docs/contributing/TOOLING.md §3. Boot
 details and the fork past the trap: tools/emu/README.md.
 """
 import collections

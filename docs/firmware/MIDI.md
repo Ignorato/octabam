@@ -101,7 +101,7 @@ BusDelay reads tempo24 at `r6+$13` (`+0x3e`) and derives the MIDI-clock
 period (42,336,000 / tempo24, Q12.4) per block. Until 15 Sep 2026 the cave
 stored tempo24, the period, fader+1 and the note at `+0x24..+0x2a` (FX2
 ids 6 and 7), which clobbered the FX1 page 2 and the AMP page 2's first
-halfword on every host track (`docs/remixer/FAILURE_MODES.md`).
+halfword on every host track (`docs/contributing/FAILURE_MODES.md`).
 
 The track index is `a0 − 0x80000110` (`moveal %d4,%a0 ; addal
 #0x80000110,%a0` at `0x40004d38`).
@@ -374,7 +374,7 @@ page-2 editor"), so CCs corrupted the track's PLAYBACK page-2 byte and never
 touched FX2's; confirmed fixed on image 96 (CC 63 on channel 5 moved SHMR
 on the panel and the tail's 2-8 kHz bands). Not measured: whether an FX1
 page-2 edit at the panel reaches the DSP on a THRU track
-(`docs/remixer/FAILURE_MODES.md`).
+(`docs/contributing/FAILURE_MODES.md`).
 
 Tooling: `tools/hw/hw_bus_test.py` (synchronous paired A/B over MIDI with
 capture, a page-1 control proving the harness each run), an emulator

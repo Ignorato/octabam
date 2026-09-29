@@ -25,7 +25,7 @@ Since 24 Aug 2026 as a tempo/period/fader/note publish into
 halfwords 18-21; note-only since 15 Sep 2026 (image 24): halfwords 18-20
 are the FX1 instance's page 2 and 21 the AMP page 2's first halfword, so
 on a delay or reverb host every FX1 effect's page 2 read the tempo bytes
-(`docs/remixer/FAILURE_MODES.md`, "An FX1 station's page 2 does not reach
+(`docs/contributing/FAILURE_MODES.md`, "An FX1 station's page 2 does not reach
 the DSP on a bus host").
 
 ## Open

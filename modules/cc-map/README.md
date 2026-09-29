@@ -118,8 +118,8 @@ cave must match the busverb and busdelay page-2 counts.
 
 - Image 96: CC 63 on channel 5 moved SHMR on the panel and raised the
   reverb tail's 2–8 kHz bands 5–8 dB. Images before 96 wrote the PLAYBACK
-  page-2 byte (`docs/remixer/FAILURE_MODES.md`).
-- Image 97: the station voicing sweep set FX1 MODE over CC 69 (`docs/remixer/FAILURE_MODES.md`).
+  page-2 byte (`docs/contributing/FAILURE_MODES.md`).
+- Image 97: the station voicing sweep set FX1 MODE over CC 69 (`docs/contributing/FAILURE_MODES.md`).
 
 ## Open
 
@@ -128,4 +128,4 @@ cave must match the busverb and busdelay page-2 counts.
 - MIDI CC through the SCENES KITS chain on hardware (under the port CC 68
   reaches page 2 through the chain, above).
 - An FX1 page-2 edit reaching the DSP on a THRU track, on hardware
-  (measured under the port: `docs/remixer/FAILURE_MODES.md`, image 24).
+  (measured under the port: `docs/contributing/FAILURE_MODES.md`, image 24).

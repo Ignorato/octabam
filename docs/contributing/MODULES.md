@@ -20,7 +20,7 @@ Decide first which kind you are writing.
   MIDI, bug fixes) and touches no audio; midisc (`modules/midi-scenes`)
   and Octakit (`modules/octakit`) are this shape. Skeleton
   `modules/_template_cf/`, worked example `modules/repitch/`, section
-  "Declaring a ColdFire module" below; `docs/remixer/PLACEMENT.md` says
+  "Declaring a ColdFire module" below; `docs/contributing/PLACEMENT.md` says
   where the bytes land.
 
 ## The worked example: CHARACTER
@@ -107,7 +107,7 @@ runs before the selected image is restored; an `"image"` gate reads
 (`verify_tempobus` reads the card `verify_set` staged). A script that
 does not exist fails; the gates every remix gets (the ledger selftest,
 the docs, the knob census, the dirty-state render, the menu, the set
-under the port) stay in the Makefile (`docs/remixer/TESTING.md`). Until 27 Sep 2026 the Makefile listed every
+under the port) stay in the Makefile (`docs/contributing/TESTING.md`). Until 27 Sep 2026 the Makefile listed every
 module's verifier by hand, each one written to SKIP when the remix
 lacked its module.
 
@@ -120,7 +120,7 @@ each name against `params` when the manifest loads, so a knob rename
 refuses the build rather than failing a fixture after the merge.
 
 `make remix` opens the remixer (`tools/remix/app.py`, Textual, provisioned
-by `make emu-setup`; manual `docs/remixer/REMIXER.md`). It derives a
+by `make emu-setup`; manual `docs/guide/REMIXER.md`). It derives a
 placement role and a track range for every module (`tools/remix/rig.py`):
 
 - **bus effect** (`harness.is_server`): one payload, declared in
@@ -462,7 +462,7 @@ units before it). `dram=True` puts it in the platform runtime: every DRAM
 unit in the remix linked as one image at the base of the platform's arena
 reserve (1,707 pages, 10 MiB off the bottom of stock's audio page arena,
 the placement Octakit and octamax have both proven on hardware;
-`tools/remix/arena.py`, `docs/remixer/PLACEMENT.md`), packed, appended
+`tools/remix/arena.py`, `docs/contributing/PLACEMENT.md`), packed, appended
 behind octabam's loader and depacked there at boot. The cost is 10 MB of
 the unit's 85.5 MB sample/recorder pool. `dram=False` places the unit in
 one of the OS image's free zero runs (~8 KB, shared with everyone). Prefer
@@ -810,13 +810,10 @@ catches each collision it claims to.
 
 ## Before you open a PR
 
-- `make check REMIX=<name>` is the floor; there is no default remix.
-  Never claim an effect works because it assembled. `make reach` lists
-  the gates the branch's diff reaches; `RUN=1` runs them.
+The gates and the rebase: [CONTRIBUTING.md "Before you open a PR"](../../CONTRIBUTING.md#before-you-open-a-pr).
+Specific to a module:
+
 - Your gates and your `dear` settings go in the manifest, in the same PR.
-- If you changed the build rather than a module: `scripts/refhash.sh save`
-  on a tree you trust, make the change, `scripts/refhash.sh check`; 24
-  configurations, artifacts and build reports, bit-identical.
 - Voicing is judged by ear, level-matched, A/B/A/B, wet-only
   (`docs/history/VOICING.md`). Render locally rather than flashing.
 - A `layout_char` makes your module placeable by `send_probe`, which
@@ -824,7 +821,6 @@ catches each collision it claims to.
   says `is_server`; render an insert with `--direct`.
 - Disassemble what you assemble: `dsp_asm` mis-encodes several instructions
   silently (`AGENTS.md`).
-- Never attach a built image to an issue or PR.
 
 `dsp_host` boots both payloads (`-memB`; `tools/harness/rig_render.py` for
 the whole rig), so a server on core 1 renders on core 1 with the shared

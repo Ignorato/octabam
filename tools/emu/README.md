@@ -41,7 +41,7 @@ or from `~/.octabam_project`.
 
 ## Build
 
-Needs `make setup` and `make os && make recon` ([BUILDING.md §0–2](../../docs/remixes/BUILDING.md)), plus `cmake`.
+Needs `make setup` and `make os && make recon` ([BUILDING.md §0–2](../../docs/guide/BUILDING.md)), plus `cmake`.
 
 ```sh
 make emu-cf                          # cmake into out/emu, then boots stock 1.40C to the RTOS handoff
