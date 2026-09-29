@@ -8,7 +8,7 @@ MIDI port + a 20-channel 44.1 kHz 24-bit audio input (tracks 1-16, MAIN
 DSP payloads and their dispatch stay stock (fallback NONE, the usb-out-tracks-main-cue
 pattern). The synth's voice engine and the USB units share the platform
 reserve. Build with `make image REMIX=octatrick-usb BUILD=N`;
-remixes/usb/README.md has the use steps.
+remixes/test/usb/README.md has the use steps.
 """
 
 from remix.schema import Proof, Remix

@@ -164,7 +164,7 @@ def setup_window_open(uc):
 ARM_ALL_GEOMETRY = (0x25, 0x17, 0xb8, 0x12)
 DISARM_ALL_GEOMETRY = (0x1e, 0x17, 0xc6, 0x12)
 XFADER = 0x460d16c8         # the crossfader position the morph reads, long 0..127: 127 = scene A
-                            # (leftmost), 0 = scene B (docs/firmware/midi_re_scene.md; measured
+                            # (leftmost), 0 = scene B (docs/firmware/MIDI.md appendix C; measured
                             # 13 Sep 2026: the weight table 0x80003c60 reads 0x8000_0000 at 127)
 XFADER_ROW = 0x40           # the panel's fader report: `0x40 <adc 0..255>` on the panel UART; the RX
                             # parser (0x4009228c, class 0x40 with row nibble 0) scales the byte by the

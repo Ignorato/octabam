@@ -39,7 +39,7 @@
 
 namespace ot
 {
-	// The kernel, byte-exact (docs/firmware/RTOS_FORK.md §2, and route A's own header).
+	// The kernel, byte-exact (docs/history/RTOS_FORK.md §2, and route A's own header).
 	inline constexpr uint32_t g_vbr       = 0x40000000;		// [0x400b9668], set at 0x40000db6
 	inline constexpr uint32_t g_sched     = 0x40000550;		// one handler for trap #0 and PIT0
 	inline constexpr uint32_t g_schedRte  = 0x400005a6;		// the scheduler's rte: a task is (re)entered
