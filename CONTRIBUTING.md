@@ -161,8 +161,8 @@ claim something works because it assembled.
 the gates it reaches, in order; `RUN=1` runs them. By default it runs the
 QUICK tier (the remixes users flash that carry the change, no identity, no
 `make accept`, two shards, background priority); `FULL=1` runs every gate
-at full speed and is required for a change to the build or a DSP module
-(`docs/remixer/TESTING.md` §6 says what quick gives up). It refuses a tree that
+at full speed, when you choose to (`docs/remixer/TESTING.md` §6 says what
+quick gives up). It refuses a tree that
 is not rebased onto the base. A change to a module reaches every remix
 that carries it; a change to the build reaches `scripts/refhash.sh check`,
 `make identity` and the cover (the fewest remixes that carry every
@@ -206,7 +206,7 @@ that #415 had renamed).
 git fetch upstream && git rebase upstream/main
 make reach BASE=upstream/main RUN=1 KEEP=1      # QUICK: every module or tool change
 STRESS_SOURCE=<a local project> make reach BASE=upstream/main FULL=1 RUN=1 KEEP=1 JOBS=3
-#   FULL=1: the build or a DSP module changed (and before a flash)
+#   FULL=1 (optional): every gate, identity and accept included, at full speed
 #   KEEP=1: every gate, then one table (instead of stopping at the first failure)
 #   JOBS=3: the per-remix lines over three worktrees at a time
 ```

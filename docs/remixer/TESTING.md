@@ -208,8 +208,8 @@ modules; a build change runs refhash but not `make identity`; no
 full speed. What QUICK gives up: the pressure stages (the dearest layouts
 priced and rendered, which catch a module that overruns beside others),
 identity's image comparison, and the test remixes and other cover remixes
-a change also reaches. Run `FULL=1` before flashing an image, and for the
-PR of any change that touches the build or a DSP module.
+a change also reaches. `FULL=1` is a manual choice, never required: use it
+when you want those, before a flash for instance.
 
 `tools/verify/reach.py` reads the branch's diff against `origin/main`
 (`BASE=` for another base) and prints the gates in run order. `RUN=1` runs
@@ -409,7 +409,7 @@ code.
 ```bash
 git fetch upstream && git rebase upstream/main
 make reach BASE=upstream/main RUN=1 KEEP=1                                          # quick, while working
-STRESS_SOURCE=<a local project> make reach BASE=upstream/main FULL=1 RUN=1 KEEP=1 JOBS=3   # build or DSP change, or before a flash
+STRESS_SOURCE=<a local project> make reach BASE=upstream/main FULL=1 RUN=1 KEEP=1 JOBS=3   # optional: everything, at full speed
 ```
 
 Paste each command and its result into the PR body (the template asks for

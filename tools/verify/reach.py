@@ -8,9 +8,8 @@ the one cover remix carrying the most modules; a build change runs refhash
 but not `make identity` (every remix built twice); no `make accept` (the
 stress fixture and the pressure stages); two shards; every command at
 background priority on macOS (`taskpolicy -b`), so the machine stays usable.
-FULL (`make reach FULL=1`, `--full`) is everything below, at full speed:
-before flashing an image, and in the PR body for a change that touches the
-build or a DSP module.
+FULL (`make reach FULL=1`, `--full`) is everything below, at full speed, and
+only ever a manual choice.
 
 Which gates a change reaches: the diff against main, classified by what
 depends on each changed file.
