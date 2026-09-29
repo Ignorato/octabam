@@ -205,8 +205,9 @@ machine: a module change checks the remixes users flash that carry it
 floor for tool and build changes is the one cover remix carrying the most
 modules; a build change runs refhash but not `make identity`; no
 `make accept`; two shards; every command at nice 10 (the performance cores,
-below the desktop; background QoS put it on the efficiency cores and was
-several times slower). `FULL=1` is everything below at
+below the desktop; measured on the M3: a CPU task 2.8 s at nice 0 and at
+nice 10, 19.9 s under background QoS, `taskpolicy -b`). Both tiers run under
+`caffeinate -i` on macOS, so the Mac does not sleep partway through a run. `FULL=1` is everything below at
 full speed. What QUICK gives up: the pressure stages (the dearest layouts
 priced and rendered, which catch a module that overruns beside others),
 identity's image comparison, and the test remixes and other cover remixes
