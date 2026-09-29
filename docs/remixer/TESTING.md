@@ -199,6 +199,13 @@ dear={"DRV": 127, "FOLD": 127, "COMP": 127, "MIX": 127, "WDTH": 127, "SAT": 0},
 
 ## 6. `make reach`: which gates a change reaches
 
+**The test remixes are left out** (30 Sep 2026): no remix under
+`remixes/test/` is picked by `make reach` in either tier, as a carrier, the
+floor, the cover or identity. A change to a module that only test remixes
+carry (CF METER, EUCLID, MINIVERB, TAPE ECHO, most USB AUDIO IN/OUT
+variants) reaches the selftest and no remix check, and the listing says
+so; `TESTS=1` brings the test remixes back.
+
 **Two tiers.** The default is QUICK, for working without losing the
 machine: a module change checks the remixes users flash that carry it
 (`remixes/`), or the smallest test remix when only test remixes do; the
