@@ -373,8 +373,8 @@ BASE ?= origin/main
 identity: ## Which remixes' images this branch moved: every remix built from BASE (a kept worktree under out/identity/base) and from this tree, compared byte for byte
 	python3 tools/verify/image_identity.py --base $(BASE)
 .PHONY: reach
-reach: ## The gates this branch's changes reach (the diff against BASE=origin/main); RUN=1 runs them in order, KEEP=1 every one then a table, JOBS=n the check-remix lines over n worktrees
-	python3 tools/verify/reach.py --base $(BASE) $(if $(RUN),--run,) $(if $(KEEP),--keep-going,) $(if $(JOBS),--jobs $(JOBS),) $(REACHARGS)
+reach: ## The gates this branch's changes reach (the diff against BASE=origin/main), QUICK by default (the carrying remixes, no identity or accept, 2 shards, background priority); FULL=1 every gate at full speed; RUN=1 runs them, KEEP=1 every one then a table, JOBS=n the per-remix work over n worktrees
+	python3 tools/verify/reach.py --base $(BASE) $(if $(FULL),--full,) $(if $(RUN),--run,) $(if $(KEEP),--keep-going,) $(if $(JOBS),--jobs $(JOBS),) $(REACHARGS)
 
 .PHONY: modules
 modules: ## List the module index and the available remixes

@@ -15,7 +15,7 @@ Remixes reached: <!-- every remix that carries a changed module -->
 
 <!-- `make reach` prints the list for this diff; paste each command with its result. -->
 
-- `make reach`:
+- `make reach` (quick, or `FULL=1` for a build or DSP-module change):
 - `make check REMIX=<name>`:
 - `make test-acceptance`:
 - `make accept REMIX=<name> …`:

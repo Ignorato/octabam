@@ -7,6 +7,12 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- `make reach` is QUICK by default (29 Sep 2026): the remixes users flash
+  that carry the change, one floor remix for tool and build changes, no
+  identity, no `make accept`, two shards, background priority on macOS
+  (`taskpolicy -b`). `FULL=1` is the previous behaviour. A USB MIDI change:
+  26 commands full, 2 quick.
+
 - The image-stage gates on their own shard (29 Sep 2026): `verify_set
   --stage-only` stages the image and card without running; the image-stage
   module gates (TEMPO BUS reads its host ids from its own run now) are one

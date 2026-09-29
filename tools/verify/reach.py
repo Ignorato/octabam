@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""Which gates a change reaches: the diff against main, classified by what
+"""Which gates a change reaches, in two tiers.
+
+QUICK (the default, 29 Sep 2026) is for working: a module change checks the
+remixes carrying it that users flash (remixes/), or, when only test remixes
+carry it, the smallest of those; the floor for tool and build changes is
+the one cover remix carrying the most modules; a build change runs refhash
+but not `make identity` (every remix built twice); no `make accept` (the
+stress fixture and the pressure stages); two shards; every command at
+background priority on macOS (`taskpolicy -b`), so the machine stays usable.
+FULL (`make reach FULL=1`, `--full`) is everything below, at full speed:
+before flashing an image, and in the PR body for a change that touches the
+build or a DSP module.
+
+Which gates a change reaches: the diff against main, classified by what
 depends on each changed file.
 
     python3 tools/verify/reach.py [--base origin/main] [--run] [--paths ...]
@@ -86,6 +99,7 @@ lines through `check_shards.py`, N worktrees at a time.
 """
 import argparse
 import ast
+import shutil
 import json
 import os
 import pathlib
@@ -109,6 +123,10 @@ BUILD_ROOTS = ("tools/build/build_bus.py", "tools/build/cycle_count.py")
 ACCEPTANCE = ("tools/verify/acceptance.py", "tools/verify/module_gates.py",
               "tools/harness/stress_project.py", "tools/harness/pressure.py")
 CLASSIFIER = ("tools/verify/reach.py",)
+# QUICK runs every command at background priority on macOS (taskpolicy -b:
+# background QoS, scheduled on the efficiency cores) so the machine stays
+# usable; FULL runs at full speed.
+BACKGROUND = "taskpolicy -b" if sys.platform == "darwin" and shutil.which("taskpolicy") else ""
 # Makefile targets by what a change to them reaches.
 MAKE_CHECK = {"bus", "cycles", "verify", "verify-shared", "verify-remix", "check", "check-shared", "check-remix",
               "need-remix", "os", "recon"}
@@ -306,7 +324,7 @@ class Context:
 
     def __init__(self, module_key, remixes_of, gate_owners, remixes, exists=None, deps=None,
                  shared_scripts=(), remix_scripts=(), gate_shared=None, make_base=None, make_head=None,
-                 all_remixes=False, read=None, read_base=None):
+                 all_remixes=False, read=None, read_base=None, quick=False, test_remixes=()):
         self.module_key = module_key        # module directory -> key
         self.remixes_of = remixes_of        # key -> sorted remix names carrying it
         self.gate_owners = gate_owners      # verifier path -> keys whose manifests name it
@@ -315,7 +333,13 @@ class Context:
         # --all, else the cover -- the fewest remixes that between them carry
         # every module, so every module's gates and every kind of per-remix
         # gate run at least once (28 Sep 2026; 9 of 27 that day).
+        self.quick = quick
+        self.test_remixes = set(test_remixes)
         self.floor = list(remixes) if all_remixes else self.cover()
+        if quick and not all_remixes and self.floor:
+            # QUICK: the one cover remix carrying the most modules stands for
+            # the cover (FULL=1 runs the cover)
+            self.floor = [max(self.floor, key=lambda r: (self._modules_of().get(r, 0), r))]
         self.exists = exists or (lambda path: (ROOT / path).exists())
         self.deps = deps or {}              # file -> files it depends on
         self.shared_scripts = set(shared_scripts) - set(ACCEPTANCE)   # the verify-shared recipe's
@@ -325,6 +349,24 @@ class Context:
         self.read = read or (lambda path: (ROOT / path).read_text() if (ROOT / path).is_file() else None)
         self.read_base = read_base or (lambda path: None)   # the file at the base commit, or None
         self._dependents = None
+
+    def _modules_of(self):
+        n = {}
+        for names in self.remixes_of.values():
+            for r in names:
+                n[r] = n.get(r, 0) + 1
+        return n
+
+    def carriers(self, remixes):
+        """The remixes a module change checks: all of them (FULL), or
+        (quick) the user-facing ones, else the smallest test remix."""
+        if not self.quick or len(remixes) <= 1:
+            return remixes
+        user = [r for r in remixes if r not in self.test_remixes]
+        if user:
+            return user
+        count = self._modules_of()
+        return [min(remixes, key=lambda r: (count.get(r, 0), r))]
 
     def cover(self):
         """Greedy set cover of the modules by the remixes: the remix adding
@@ -360,6 +402,10 @@ class Context:
         """A change to the build: refhash (the flag matrix), identity (the
         remixes whose image moved, checked by --run), the shared half once
         for the floor."""
+        if self.quick:
+            # QUICK: refhash pins the build's flag matrix; `make identity`
+            # (every remix built twice) is FULL=1's
+            return [CMD["refhash"], CMD["test-acceptance"], cmd_check_shared(self.floor)]
         return [CMD["refhash"], CMD["identity"], CMD["test-acceptance"], cmd_check_shared(self.floor)]
 
     def dependents(self, path):
@@ -379,7 +425,7 @@ class Context:
         return seen
 
     @classmethod
-    def from_registry(cls, base=None, all_remixes=False):
+    def from_registry(cls, base=None, all_remixes=False, quick=False):
         from remix import registry
         mods = registry.modules()
         module_key = {m.name: m.key for m in mods.values()}
@@ -406,7 +452,8 @@ class Context:
                    shared_scripts=recipe_scripts(make_head, "verify-shared"),
                    remix_scripts=recipe_scripts(make_head, "verify-remix"),
                    gate_shared=gate_shared, make_base=make_base, make_head=make_head,
-                   all_remixes=all_remixes, read_base=read_base)
+                   all_remixes=all_remixes, read_base=read_base, quick=quick,
+                   test_remixes=[n for n in registry.remix_names() if registry.is_test(n)])
 
 
 def route_tool(path, ctx):
@@ -442,7 +489,7 @@ def route_tool(path, ctx):
         notes.append(f"a gate of the per-remix half, run for {ctx.floor_note()}: " + ", ".join(sorted(pathlib.PurePosixPath(u).stem for u in users & ctx.remix_scripts)))
     for script in sorted(users & set(ctx.gate_owners)):
         owners = ctx.gate_owners[script]
-        remixes = sorted({r for k in owners for r in ctx.remixes_of.get(k, [])})
+        remixes = sorted({r for k in owners for r in ctx.carriers(ctx.remixes_of.get(k, []))})
         if not remixes:
             continue
         if ctx.gate_shared.get(script):
@@ -556,7 +603,7 @@ def classify(paths, ctx):
                 note = f"{ctx.module_key[d]}: display fields only"
             elif d in ctx.module_key:
                 key = ctx.module_key[d]
-                remixes = ctx.remixes_of.get(key, [])
+                remixes = ctx.carriers(ctx.remixes_of.get(key, []))
                 if remixes:
                     gates = [cmd_check(r) for r in remixes] + [cmd_accept(r) for r in remixes]
                     note = f"{key} -> " + ", ".join(remixes)
@@ -743,6 +790,9 @@ def main(argv=None):
     ap.add_argument("--keep-going", action="store_true", help="with --run: run every command, then one table")
     ap.add_argument("--jobs", type=int, default=1,
                     help="with --run: the check-remix lines through check_shards.py, N worktrees at a time")
+    ap.add_argument("--full", action="store_true",
+                    help="every gate a change reaches: the cover, identity, accept, every carrying remix, full speed "
+                         "(the default is quick: see the module docstring)")
     ap.add_argument("--all", action="store_true",
                     help="the floor is every remix instead of the cover (the remixes that between them carry every module)")
     a = ap.parse_args(argv)
@@ -750,7 +800,10 @@ def main(argv=None):
         merge_base, paths = None, sorted(set(a.paths))
     else:
         merge_base, paths = changed_paths(a.base)
-    ctx = Context.from_registry(base=merge_base or a.base, all_remixes=a.all)
+    quick = not a.full
+    if quick and a.jobs == 1:
+        a.jobs = 2
+    ctx = Context.from_registry(base=merge_base or a.base, all_remixes=a.all, quick=quick)
     rows = classify(paths, ctx)
     if merge_base:
         print(f"reach: {len(paths)} changed path{'s' if len(paths) != 1 else ''} against {a.base} ({merge_base[:10]})")
@@ -762,7 +815,9 @@ def main(argv=None):
     print("\nremixes reached: " + (", ".join(remixes_reached(rows)) or "none"))
     print("\ngates, in order:")
     stress = os.environ.get("STRESS_SOURCE")
-    items = plan(rows, accept_runs_check=bool(stress))
+    items = plan(rows, accept_runs_check=bool(stress) and not quick)
+    if quick:
+        items = [it for it in items if it[0] != "accept"]
     if a.jobs > 1:
         items = sharded(items, a.jobs)
     for kind, command, from_paths in items:
@@ -772,6 +827,8 @@ def main(argv=None):
         print("  (none: no gate depends on what changed)")
     if any(k == "identity" for k, _, _ in items):
         print(f"  then: make check REMIX=<r> for each remix image_identity names (--run does this; the floor is {ctx.floor_note()})")
+    print(f"\n{'QUICK' if quick else 'FULL'}: " + ("the carrying remixes (user-facing first), one floor remix, no identity, "
+          "no accept, two shards, background priority; FULL=1 for the lot" if quick else "every gate the change reaches"))
     if any(k == "accept" for k, _, _ in items) and not stress:
         print("\nSTRESS_SOURCE is unset: point it at a local project (never committed) for the accept line"
               " (it then runs the accepted remixes' checks itself).")
@@ -794,6 +851,8 @@ def main(argv=None):
             continue
         print(f"reach: running {cmd}", flush=True)
         t0 = time.monotonic()
+        if quick and BACKGROUND:
+            cmd = f"{BACKGROUND} {cmd}"      # macOS: background QoS, the efficiency cores; the desktop stays usable
         r = subprocess.run(cmd, shell=True, cwd=ROOT)
         results.append((command, "ok" if r.returncode == 0 else f"FAILED ({r.returncode})", time.monotonic() - t0))
         if r.returncode:
