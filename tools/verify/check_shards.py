@@ -24,6 +24,17 @@ CMake cache (nothing recompiles unless tools/emu changed) -- which turns
 ~220 s of setup (four worktrees, four `cmake --fresh` builds) into a few
 seconds. `--fresh` rebuilds them from nothing; `--rm` removes them after.
 
+THE LONG POLE IS SPLIT (29 Sep 2026). A remix whose half would set the
+wall time runs as its gate jobs (as `--by-gate` below) in the same queue as
+the other remixes' whole halves, longest first, so it no longer takes one
+shard for the whole run while the others idle. Which remixes: `--split
+auto` (the default) splits a remix whose last recorded time
+(out/check_shards/times.json, written after every run) exceeds both 300 s
+and the run's total over the shard count; with no record, the remixes that
+carry OCTAKIT (every project load under it is ~32 s emulated; bottleservice
+and mods were the floor of every run on 28-29 Sep 2026). `--split none`
+runs every remix whole; `--split a,b` names them.
+
 `--by-gate` shards ONE remix's per-remix half by gate instead: every gate
 of `make verify-remix` (plus `make cycles`) is its own job, each shard
 restores the remix's image with `make bus` before its job, and the wall
@@ -35,6 +46,7 @@ the `verify-remix` recipe and refuses to run when the two name different
 scripts.
 """
 import argparse
+import json
 import os
 import pathlib
 import queue
@@ -185,6 +197,23 @@ def remix_jobs(remix_name, shard):
     return jobs
 
 
+def choose_split(remixes, spec, times, jobs):
+    """The remixes to run as gate jobs: named, none, or (auto) those whose
+    last recorded time would set the wall time; with no record, those that
+    carry OCTAKIT."""
+    if spec == "none":
+        return set()
+    if spec != "auto":
+        return {r for r in spec.split(",") if r in remixes}
+    known = {r: times[r] for r in remixes if r in times}
+    if len(known) == len(remixes):
+        floor = max(300.0, sum(known.values()) / jobs)
+        return {r for r, s in known.items() if s > floor}
+    sys.path.insert(0, str(ROOT / "tools")); import toolpath  # noqa: E402,F401
+    from remix import registry  # noqa: E402
+    return {r for r in remixes if "OCTAKIT" in registry.remix(r).modules}
+
+
 def check_recipe(jobs):
     """Every script the Makefile's verify-remix recipe runs is in the job
     list (module_gates.py stands for the gates it runs)."""
@@ -228,6 +257,9 @@ def main(argv=None):
     ap.add_argument("--rm", action="store_true", help="remove the shards after the run")
     ap.add_argument("--by-gate", action="store_true",
                     help="one remix: its per-remix half as one job per gate over the shards")
+    ap.add_argument("--split", default="auto",
+                    help="auto (the default): split the remixes that would set the wall time into gate jobs; "
+                         "none; or a comma-separated list")
     a = ap.parse_args(argv)
     remixes = list(dict.fromkeys(a.remixes))
     if not (ROOT / "out/raw/section_3_MAIN_OS.bin").is_file():
@@ -237,14 +269,38 @@ def main(argv=None):
             sys.exit("check_shards: --by-gate takes exactly one remix")
         gate_jobs = remix_jobs(remixes[0], a.shards / "0")
         check_recipe(gate_jobs)
-    work = gate_jobs if a.by_gate else remixes
+    times_path = ROOT / "out/check_shards/times.json"
+    try:
+        times = json.loads(times_path.read_text())
+    except (OSError, ValueError):
+        times = {}
+    split = set()
+    if not a.by_gate and len(remixes) > 1 and a.jobs > 1:
+        split = choose_split(remixes, a.split, times, a.jobs)
+    if a.by_gate:
+        work = [("gate", remixes[0], j) for j in gate_jobs]
+    else:
+        work = []
+        for r in remixes:
+            if r in split:
+                gj = remix_jobs(r, a.shards / "0")
+                check_recipe(gj)
+                work += [("gate", r, j) for j in gj]
+            else:
+                work.append(("remix", r, None))
+        # longest first (the last recorded times; unknown last, in the given order)
+        est = lambda w: times.get(w[1] if w[0] == "remix" else f"{w[1]}:{w[2][0]}", -1.0)
+        work.sort(key=est, reverse=True)
     jobs = max(1, min(a.jobs, len(work)))
     a.shards.mkdir(parents=True, exist_ok=True)
     logdir = ROOT / "out/check_shards" / (remixes[0] if a.by_gate else "")
     logdir.mkdir(parents=True, exist_ok=True)
+    for r in split:
+        (ROOT / "out/check_shards" / r).mkdir(parents=True, exist_ok=True)
     shards = [a.shards / str(i) for i in range(jobs)]
 
-    what = f"{len(work)} gates of {remixes[0]}" if a.by_gate else f"{len(remixes)} remixes"
+    what = (f"{len(work)} gates of {remixes[0]}" if a.by_gate else f"{len(remixes)} remixes"
+            + (f" ({', '.join(sorted(split))} split into gate jobs)" if split else ""))
     print(f"check_shards: {what} over {jobs} shards under {a.shards} "
           f"({'refreshing kept shards' if all(shard_ok(s) for s in shards) and not a.fresh else 'setup: worktree + submodules + port build each'})", flush=True)
     t_setup = time.monotonic()
@@ -276,11 +332,12 @@ def main(argv=None):
                 item = todo.get_nowait()
             except queue.Empty:
                 return
-            if a.by_gate:
-                res = run_job(shards[i], remixes[0], item, logdir)
-                remix = item[0]
+            kind, rname, job = item
+            if kind == "gate":
+                res = run_job(shards[i], rname, job, ROOT / "out/check_shards" / rname)
+                remix = job[0] if a.by_gate else f"{rname}:{job[0]}"
             else:
-                remix = item
+                remix = rname
                 res = run_remix(shards[i], remix, logdir)
             res["shard"] = i
             status = "ok" if res["rc"] == 0 else f"FAILED ({res['rc']})"
@@ -296,7 +353,22 @@ def main(argv=None):
         t.join()
     wall = time.monotonic() - t0
 
-    names = [j[0] for j in work] if a.by_gate else remixes
+    names = [w[2][0] if a.by_gate else (w[1] if w[0] == "remix" else f"{w[1]}:{w[2][0]}") for w in work]
+    # the durations for the next run's split and order: every job by its
+    # key ("remix" or "remix:gate"), and a split remix's total
+    run = {}
+    for n, r in results.items():
+        key = f"{remixes[0]}:{n}" if a.by_gate else n
+        run[key] = r["seconds"]
+    for rname in ({remixes[0]} if a.by_gate else split):
+        parts = [s for k, s in run.items() if k.startswith(rname + ":")]
+        if parts:
+            run[rname] = sum(parts)
+    times.update({k: round(v, 1) for k, v in run.items()})
+    try:
+        times_path.write_text(json.dumps(dict(sorted(times.items())), indent=1) + "\n")
+    except OSError:
+        pass
     print(f"\ncheck_shards: results ({wall:.0f} s wall, {sum(r['seconds'] for r in results.values()):.0f} s of "
           f"{'gate' if a.by_gate else 'remix'} time)")
     for remix in names:
@@ -309,7 +381,7 @@ def main(argv=None):
         for s in shards:
             remove_shard(s)
     bad = [r for r in results.values() if r["rc"]]
-    unit = "gates" if a.by_gate else "remixes"
+    unit = "gates" if a.by_gate else ("jobs" if split else "remixes")
     if bad:
         print(f"check_shards: {len(bad)} of {len(results)} {unit} failed")
         return 1

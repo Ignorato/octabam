@@ -62,3 +62,22 @@ class ByGate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Split(unittest.TestCase):
+    """Which remixes run as gate jobs (check_shards.choose_split)."""
+
+    def test_none_and_named(self):
+        self.assertEqual(check_shards.choose_split(["a", "b"], "none", {}, 3), set())
+        self.assertEqual(check_shards.choose_split(["a", "b"], "b,zz", {}, 3), {"b"})
+
+    def test_recorded_times_pick_the_long_pole(self):
+        times = {"bottleservice": 780.0, "usb": 140.0, "miniverb": 80.0, "euclid": 130.0}
+        self.assertEqual(check_shards.choose_split(list(times), "auto", times, 3), {"bottleservice"})
+        # nothing over 300 s: nothing split
+        small = {k: 100.0 for k in times}
+        self.assertEqual(check_shards.choose_split(list(small), "auto", small, 3), set())
+
+    def test_without_a_record_the_octakit_remixes(self):
+        got = check_shards.choose_split(["bottleservice", "usb", "restock"], "auto", {}, 3)
+        self.assertEqual(got, {"bottleservice"})

@@ -249,6 +249,17 @@ are kept between runs and refreshed in place (seconds; `--fresh`
 recreates, `--rm` removes). Remixes are handed out from one queue. Logs:
 `out/check_shards/<remix>.log`.
 
+**The long pole is split.** A remix whose half would set the wall time
+runs as its gate jobs in the same queue as the other remixes' whole
+halves, and the queue runs longest first. check_shards records every job's
+duration in `out/check_shards/times.json` after each run; `--split auto`
+(the default) splits a remix whose last time exceeds both 300 s and the
+run's total over the shard count, and with no record the remixes carrying
+OCTAKIT. `--split none` or `--split a,b` overrides. Measured on the cover
+with three shards (29 Sep 2026): 681 s whole, 574 s split, for 1,621 s of
+work (the floor for three shards is 540 s); the longest job left is
+bottleservice's `set` (verify_set, then TEMPO BUS on its card), 217 s.
+
 `make check-remix-gates REMIX=<name>` (`--by-gate`) splits one remix's
 half into one job per gate over the shards and prints each gate's time:
 the instrument for finding the expensive gate.
@@ -306,7 +317,7 @@ with the load average noted because it moves every number:
 | per-remix half, a USB test remix | 115-260 s |
 | per-remix half, bottleservice | 468 s (29 Sep 2026, 3 shards; 788 s before the scenesp2 fork, 1,143 s on 27 Sep) |
 | per-remix half, mods | 432-627 s (2,580 s before `verify_repitch` stopped loading seven times) |
-| the cover's per-remix halves, `JOBS=3` | 681 s (986 s before the scenesp2 fork) |
+| the cover's per-remix halves, `JOBS=3` | 574 s with the long pole split (681 s whole, 986 s before the scenesp2 fork) |
 | `verify_scenesp2` on bottleservice, quiet machine | 109-111 s one load per run, 73-74 s one load and forked scenarios |
 | `verify_tempobus`, quiet machine | 49 s wall-clock paced, 34 s scripted |
 
