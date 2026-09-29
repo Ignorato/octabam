@@ -7,6 +7,11 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- The long pole split (29 Sep 2026): check_shards runs a remix that would
+  set the wall time as its gate jobs beside the other remixes, longest first,
+  from the durations it records in `out/check_shards/times.json`. The cover
+  over three shards: 681 s to 574 s, for 1,621 s of work.
+
 - The fork is the snapshot (29 Sep 2026): `ot_emu --scenario "LOG ARGS..."`
   loads a project once and forks one child per run, each from the identical
   loaded machine. The vendored DSP memory is a `shm` object mapped shared
