@@ -354,7 +354,7 @@ ceiling is unmeasured by it. ❌ "There is not real headroom": retracted.
 - **The hardware's cross-core timing.** Two emulated cores run lock-step or
   under a chosen interleave, never under the chip's skew, and no SRAM
   contention is modelled. A local clean under every `-skew` is not evidence
-  a race fix holds (`docs/effects/XBUS.md`).
+  a race fix holds (`modules/send/README.md`).
 - **The cycle budget.** The emulator renders an engine the chip cannot
   afford. `make cycles` bounds it; hardware proves it.
 - **The ColdFire side.** `-params` pokes r6 directly, bypassing menus,

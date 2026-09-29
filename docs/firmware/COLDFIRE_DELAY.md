@@ -126,7 +126,7 @@ frame):
 
 Tape Echo's instruction counts per frame against stock DELAY's, and what
 the meter cannot see: `modules/tapeecho/README.md` "CPU integration" and
-`modules/tapeecho/VOICING.md`.
+`git show 666b6154:modules/tapeecho/VOICING.md`.
 
 ## 5. Consequences for the bus
 

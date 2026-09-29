@@ -26,9 +26,18 @@ time (`.incbin`, `make os`).
 Retired transcriptions (in history only): jpcima `string-machine` (BSL-1.0,
 the Solina ensemble, removed 16 Sep 2026).
 
-`docs/effects/PORTS.md` is the survey behind the modulation and station
-ports, with the sources that were read for laws only (GPL code was never
-transcribed).
+Surveyed for the modulation and station ports and not transcribed (GPL
+code was read for laws only, never transcribed); each module's README has
+the laws (`modules/modulation/README.md` "Sources"):
+
+| source | licence | use |
+|---|---|---|
+| Airwindows Chorus, ChorusEnsemble, StereoChorus, Vibrato, GalacticVibe, Flutter2, Ensemble | MIT | surveyed |
+| jpcima `bbd-delay-experimental`, `ensemble-chorus` | BSL-1.0 | surveyed |
+| Mutable Instruments Rings `chorus.h`, `ensemble.h` | MIT | surveyed |
+| Faust `phaflangers.lib` `phaser2`, `flanger_mono` (J.O. Smith) | STK-4.3 (MIT-style) | laws (`flanger_mono` beside Dattorro for FLNG) |
+| TAL-NoiseMaker chorus, Surge XT chorus/Ensemble, JunoX, chowdsp BBD | GPL | laws only |
+| Rakarrack/guitarix Vibe, BYOD Solo-Vibe, Zyn APhaser | GPL | laws only |
 
 ## Firmware modifications built from their authors' repositories (git submodules)
 
