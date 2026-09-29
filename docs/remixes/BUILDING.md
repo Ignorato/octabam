@@ -88,9 +88,52 @@ source $HOME/.local/bin/env
 MIDI SCENES, the USB modules, every DRAM module) refuses without them, and
 `scripts/setup.sh` adds `m68k-elf-gcc` to its Homebrew list when it's
 missing, so on a machine without Homebrew `make setup` stops at `brew:
-command not found`. Ubuntu's packages ship the tools under another prefix.
-This route was run with them, measured on Ubuntu 26.04 under WSL2 (10 and
-27 Sep 2026, on branch `stem-rec-v2`):
+command not found`.
+
+**Build the bare-metal toolchain (recommended).** Upstream's authors use
+Homebrew's `m68k-elf-binutils` and `m68k-elf-gcc`. The same toolchain
+builds from GNU's sources on Linux, with the formulae's configure flags:
+binutils 2.47 (Homebrew's current) and GCC 16.1.0 (the version Octakit's
+recipe pins; Homebrew is on 16.2.0). Measured on Ubuntu 26.04 under WSL2,
+28 Sep 2026; about an hour with two compile jobs:
+
+```bash
+sudo apt install -y libgmp-dev libmpfr-dev libmpc-dev libisl-dev zlib1g-dev libzstd-dev pkgconf texinfo
+# binutils-2.47.tar.xz and gcc-16.1.0.tar.xz from https://ftp.gnu.org/gnu/, each checked:
+#   gpgv --keyring ./gnu-keyring.gpg <file>.sig <file>
+mkdir build-binutils && cd build-binutils
+../binutils-2.47/configure --target=m68k-elf --prefix=/opt/m68k-elf --with-system-zlib --with-zstd --disable-nls
+make -j2 && sudo make install && cd ..
+export PATH=/opt/m68k-elf/bin:$PATH
+mkdir build-gcc && cd build-gcc
+../gcc-16.1.0/configure --target=m68k-elf --prefix=/opt/m68k-elf --disable-nls --without-headers \
+  --with-as=/opt/m68k-elf/bin/m68k-elf-as --with-ld=/opt/m68k-elf/bin/m68k-elf-ld \
+  --enable-languages=c --with-system-zlib --with-zstd
+make -j2 all-gcc && sudo make install-gcc
+make -j2 all-target-libgcc && sudo make install-target-libgcc
+for f in /opt/m68k-elf/bin/m68k-elf-*; do sudo ln -sf "$f" /usr/local/bin/; done
+```
+
+- `pkgconf` is needed: without `pkg-config`, binutils' configure stops on
+  `--with-zstd was given, but pkgconfig/libzstd.pc is not found`.
+- ✅ Octakit's runtime rebuilds to its author's bytes: "rebuilt runtime,
+  packed runtime and append all match the recipe" (`make bus REMIX=ok-ms`).
+- ✅ USB MIDI's linked unit matches its author's build at `0x400d24f0`,
+  1,124 bytes (`make bus REMIX=octatrick-usb`).
+- ✅ This repository's pinned ColdFire bytes still match
+  (`tools/build/label_fmt.py`), and `scripts/disasm.sh emac 0x40003664 8`
+  still prints `msacl`.
+- ✅ A module that isn't checked against an author's bytes can change: the
+  bare-metal assembler reads a same-section global PC-relative, where
+  Ubuntu's keeps an absolute address. STEM REC's runtime came out 48 bytes
+  shorter, and its gates pass on both (`docs/firmware/STEM_REC.md` 15.5).
+- On a VM with 3.8 GB, never compile beside a port run: on 28 Sep 2026 an
+  8-job port build there set off the kernel's OOM killer, which killed the
+  verifier.
+
+**The older route: Ubuntu's Linux-target tools.** Ubuntu's packages ship
+the tools under another prefix. This route was run with them, measured on
+Ubuntu 26.04 under WSL2 (10 and 27 Sep 2026, on branch `stem-rec-v2`):
 
 ```bash
 sudo apt install -y gcc-m68k-linux-gnu      # GCC 15.2.0; binutils 2.46 comes with it
@@ -114,16 +157,15 @@ done
   local label assembles at any offset.
 - ❌ USB MIDI's linked unit links to 1,130 bytes that aren't its author's
   (sha256 `b49af01e…`, not `6291d91e…`), so the build refuses it.
-- 🟡 Inferred: both refusals are the toolchain, because the same trees
-  pass on a Homebrew `m68k-elf` toolchain. Falsifier: a bare-metal
-  `m68k-elf` binutils and GCC 16.1.0 on Linux that still miss the
-  authors' bytes.
+- ✅ Both refusals are the toolchain: the bare-metal toolchain above
+  builds both to their authors' bytes from the same trees (28 Sep 2026).
+  This line was inferred until then.
 
-So `make check` passes here, and the every-remix sweeps skip the remixes
-this machine can't build, by name, with the reason
-(`tools/remix/prereq.py`). `make accept` doesn't pass here: it refuses any
-`[SKIP]`, so its `check_shared` stage fails for every remix until the
-toolchain builds Octakit and USB MIDI. ❌ Retracted: this paragraph said
+With these tools `make check` passes, and the every-remix sweeps skip the
+remixes the machine can't build, by name, with the reason
+(`tools/remix/prereq.py`). `make accept` doesn't pass with them: it
+refuses any `[SKIP]`, so its `check_shared` stage fails for every remix.
+Use the bare-metal toolchain instead. ❌ Retracted: this paragraph said
 until 28 Sep 2026 that the symlinked tools had "not been tried" and that
 `make check` on Linux was unverified.
 

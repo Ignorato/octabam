@@ -6995,3 +6995,57 @@ recording. A growth without a ± had an error under 1 frame a second.
   frames at eight tracks, about 3 s, so a 1.2 s stall fits in the ring if
   the card writes fast enough between stalls to empty it again. So this
   table gives steady-rate limits only; flash A measures the real card.
+
+### 15.5 The bare-metal toolchain ✅
+
+Every value above was measured on STEM REC assembled by Ubuntu's
+`m68k-linux-gnu` binutils 2.46, symlinked as `m68k-elf-*`. Upstream's
+authors build with Homebrew's bare-metal `m68k-elf` tools. On 28 Sep 2026
+this machine got the same kind of toolchain, built from source: binutils
+2.47 and GCC 16.1.0 in `/opt/m68k-elf` (`docs/remixes/BUILDING.md` 1a).
+
+**STEM REC's bytes move.** ✅ The bare-metal assembler reads a global
+symbol of the same section PC-relative: `tstl %pc@(d)`, 4 bytes. Ubuntu's
+keeps an absolute read with an `R_68K_32` relocation, 6 bytes, because a
+Linux target leaves a global symbol preemptible. The instructions and their
+order are the same; only their lengths change. Measured by assembling
+`stems.s` with both and diffing the disassembly:
+
+| | Ubuntu's `m68k-linux-gnu` 2.46 | bare-metal `m68k-elf` 2.47 |
+|---|---|---|
+| `stems.s` `.text` | `0xdb4` | `0xd84` (48 bytes shorter) |
+| `stems_frame_hook` | `0x40a95a2c` | `0x40a95a28` |
+| `stems_ata_first` | `0x40a95c52` | `0x40a95c38` |
+| the packed loader append | 1,989 B | 2,000 B |
+| the runtime's stage end | `0x40a976dd` | `0x40a976e8` |
+
+**Piece 2's gates pass on it.** ✅ `make check-remix REMIX=stems` at
+`b0688c8` (29 Sep 2026, log `v3-p3-newtc-check.log`): `verify_stems` 152
+PASS, 0 FAIL, 0 SKIP, the same 152 checks as piece 2's last run on
+Ubuntu's toolchain (`4601774`). Besides the addresses above and the
+template's folder, five values moved:
+
+| check | Ubuntu's | bare-metal |
+|---|---|---|
+| `stream`'s `stems_peak` | 525 | 526 |
+| `mask01`'s | 520 | 522 |
+| `mask03`'s | 527 | 526 |
+| `maskff`'s | 535 | 534 |
+| `cardfail`'s DRQ polls | 3,460,318 | 3,473,007 |
+
+Every peak still equals the largest fill rebuilt from the write log,
+exactly, which is what each check tests.
+
+- ✅ Measured: the boot to the RTOS handoff runs 861 fewer ColdFire
+  instructions on the new build (11,588,561 against 11,587,700), and the
+  difference carries through the project load to the arm. `mask01`'s arm
+  lands at the same emulated sample, 521,130.5, at instruction 801,552,285
+  instead of 801,553,146.
+- 🟡 Inferred: the port paces emulated time by instruction counts, so the
+  writer task runs at a slightly shifted phase against the frame
+  interrupt. That can move which frame a chunk write ends in, hence a peak
+  one or two frames off, and the number of polls that fit in `cardfail`'s
+  fixed window. Piece 2 saw the same effect the other way: an image 13
+  bytes larger cost the load 859 instructions and moved `cardfail` by 11
+  polls (15.2). Falsifier, not run: pad the new runtime until the boot's
+  count matches, and the peaks go back to 525, 520, 527 and 535.
