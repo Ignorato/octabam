@@ -98,7 +98,7 @@ The two tables above.
 | `verify_tapeecho_cpu` | TAPE ECHO | image | the C reference against the compiled ColdFire port, through the stock delay routine and its DMA protocol | `.venv`, `cc`, port |
 | `verify_modedefaults` | MODE DEFAULTS | per remix | a MODE turn through the panel's editor, and a MODE over CC MAP, lands that mode's view in the live lane (one boot, `--step`) | port, project |
 | `verify_scenesp2` | SCENES P2 | per remix | page-2 scene locks reach the DSP frame through the crossfader (snap for a select, lerp for a knob); a page-2 turn with a scene held writes the pool, not the Part (one load, four forked scenarios, `--scenario`) | port, project |
-| `verify_tempobus` | TEMPO BUS | image | the TEMPO key opens the bus window, its rows edit the hosts, LEVEL and FUNC + LEVEL set the BPM, the window closes clean (a panel script, `--live-script`, on `verify_set`'s staged card) | port |
+| `verify_tempobus` | TEMPO BUS | image | the TEMPO key opens the bus window, its rows edit the hosts, LEVEL and FUNC + LEVEL set the BPM, the window closes clean (a panel script, `--live-script`, on the image and card `verify_set` stages; `verify_set --stage-only` stages them without running) | port |
 | `verify_repitch` | REPITCH | per remix | the hook contracts, the page (Tier-0), and playback pitch and position speed through a live tempo change, seven cases | port, `.venv`, project |
 | `verify_ccmap` | CC MAP | shared | the CC cave re-assembles to its pinned bytes; CC 62-73 write page 2 and clamp to the count; page-1 CCs reach stock | `.venv` |
 | `verify_ccfeedback` | CC FEEDBACK | shared | the knob-change sweep enters the stock CC emitter once per changed byte, gated as stock gates | `.venv` |
@@ -177,9 +177,14 @@ dear={"DRV": 127, "FOLD": 127, "COMP": 127, "MIX": 127, "WDTH": 127, "SAT": 0},
 | a panel sequence (keys, encoders, the level pot) | `--live-script FILE`: lines of `<emulated ms> key\|enc\|pot\|midi\|quit ...`, transport stopped, applied at emulated times | `verify_tempobus`: 65 panel lines, 7.1 s emulated, no wall-clock sleeps, the same on a loaded machine |
 | several runs that each need the machine exactly as it was after the load | `--scenario "LOG ARGS..."`, repeatable, `--scenario-jobs N` (default 3): the port loads once and forks one child per scenario; each child writes its stdout to LOG and takes ARGS as its post-load options (`--sequencer`, `--frames`, `--step`, `--poke`, `--call`, `--midi`, `--mem-dump`, `--live-script`, ...) | `verify_scenesp2`: three frame runs and the editor pass from one load |
 
-   Boot-time options (`--dsp`, `--block-dump`, `--audio-out`'s capture,
-   the image, the card) belong in the shared part of a `--scenario` command,
-   not inside a scenario. The fork is the snapshot: after `fork()` the port
+   Boot-time options (`--dsp`, `--audio-in`, `--audio-out`'s capture, the
+   image, the card) belong in the shared part of a `--scenario` command,
+   not inside a scenario. `--block-dump` is opened at boot: the scenario
+   that names the same path keeps writing it, every other child closes its
+   copy. A scenario inherits the DSP cores: a panel-only run forked from a
+   `--dsp` load emulates both cores throughout, which cost more than a
+   separate load for `verify_tempobus` (measured 29 Sep 2026, 115 s against
+   109 s), and detaching the cores after the fork stalls the frame engine. The fork is the snapshot: after `fork()` the port
    copies the DSP cores' shared memory into private objects
    (`unshareRanges` in `tools/emu/ot_emu/main.cpp`; the vendored DSP memory
    is a `shm` object mapped several times, which forked children would
@@ -257,8 +262,10 @@ duration in `out/check_shards/times.json` after each run; `--split auto`
 run's total over the shard count, and with no record the remixes carrying
 OCTAKIT. `--split none` or `--split a,b` overrides. Measured on the cover
 with three shards (29 Sep 2026): 681 s whole, 574 s split, for 1,621 s of
-work (the floor for three shards is 540 s); the longest job left is
-bottleservice's `set` (verify_set, then TEMPO BUS on its card), 217 s.
+work (the floor for three shards is 540 s). The image-stage module gates
+then became their own job (`verify_set.py --stage-only` stages the image and
+card without running; TEMPO BUS reads its host ids from its own run): 530 s
+for 1,585 s of work, at the three-shard floor of 528 s.
 
 `make check-remix-gates REMIX=<name>` (`--by-gate`) splits one remix's
 half into one job per gate over the shards and prints each gate's time:
@@ -317,7 +324,7 @@ with the load average noted because it moves every number:
 | per-remix half, a USB test remix | 115-260 s |
 | per-remix half, bottleservice | 468 s (29 Sep 2026, 3 shards; 788 s before the scenesp2 fork, 1,143 s on 27 Sep) |
 | per-remix half, mods | 432-627 s (2,580 s before `verify_repitch` stopped loading seven times) |
-| the cover's per-remix halves, `JOBS=3` | 574 s with the long pole split (681 s whole, 986 s before the scenesp2 fork) |
+| the cover's per-remix halves, `JOBS=3` | 530 s (574 s before the image job was split out, 681 s whole, 986 s before the scenesp2 fork) |
 | `verify_scenesp2` on bottleservice, quiet machine | 109-111 s one load per run, 73-74 s one load and forked scenarios |
 | `verify_tempobus`, quiet machine | 49 s wall-clock paced, 34 s scripted |
 

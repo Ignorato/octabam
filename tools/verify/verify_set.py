@@ -163,6 +163,9 @@ def main():
     ap.add_argument("--name", default="RIG")
     ap.add_argument("--image-mb", type=int, default=64)
     ap.add_argument("--reuse", action="store_true", help="skip the port run when its dumps are there")
+    ap.add_argument("--stage-only", action="store_true",
+                    help="stage the image and the card and record the command line, run nothing: what the "
+                         "image-stage gates that boot this card (TEMPO BUS) need, as their own shard job")
     ap.add_argument("--image", default="", help="a built image to boot instead of building the remix (a bisect)")
     ap.add_argument("--extra", default="", help="extra ot_emu arguments, e.g. '--dsp-dirty' (garbage DSP RAM, as hardware)")
     ap.add_argument("--midi-file", default="", help="extra MIDI IN lines appended to the gate's own "
@@ -278,6 +281,10 @@ def main():
                + (f";0x46c7bf2c,2048={dumps['cccache']};0x46c7d7d8,256={dumps['ccbits']};0x460d17ce,16={dumps['engq']}" if midi_out else ""),
                "--dsp-peek", "0:Y:36082,1;1:Y:36082,1;1:X:6229,1;1:X:6275,1;0:Y:36081,1;0:Y:9f4,1"] \
             + (["--midi-out", str(midi_out)] if midi_out else []) + a.extra.split()
+        if a.stage_only:
+            log.write_text(" ".join(cmd) + "\n")
+            print(f"verify_set: staged {image.name} and {card.name} for bank {bank} part {part_no}, nothing run -- {OUT}")
+            return 0
         with open(log, "w") as f:
             f.write(" ".join(cmd) + "\n"); f.flush()
             r = subprocess.run(cmd, cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)

@@ -520,6 +520,8 @@ namespace ot
 		// (a later peek cannot tell "nothing sent" from "consumed"). Record:
 		// u8 dir('>'/'<'), u32 frame, u16 ch, u8 core, u32 ram, u32 nwords, u16[nwords].
 		void setBlockDump(const std::string& _path) { m_blockDump.open(_path, std::ios::binary); }
+		void flushBlockDump() { if(m_blockDump.is_open()) m_blockDump.flush(); }
+		void closeBlockDump() { if(m_blockDump.is_open()) m_blockDump.close(); }
 		const std::vector<std::string>& blockLog() const { return m_blockLog; }
 		uint64_t ataInterrupts() const { return m_ataInterrupts; }
 		bool ataLineAsserted() const { return m_ataIrq; }
