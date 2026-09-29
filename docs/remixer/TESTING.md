@@ -9,7 +9,7 @@ a pull request signs; this page is how it is met.
 
 ```
 make check REMIX=<name>          one remix: build, cycles, the shared gates, the remix's own gates
-make reach [RUN=1]               the gates this branch's diff reaches, in order; RUN=1 runs them
+make reach [RUN=1] [FULL=1]      the gates this branch's diff reaches, in order; RUN=1 runs them; quick unless FULL=1
 make accept REMIXES="..." ...    the same gates under a strict runner that writes a JSON report
 make test-acceptance             the runner's, the classifier's and the shard runner's own tests (no firmware)
 make identity                    which remixes' images this branch moved, byte for byte
@@ -197,6 +197,19 @@ dear={"DRV": 127, "FOLD": 127, "COMP": 127, "MIX": 127, "WDTH": 127, "SAT": 0},
    not cover.
 
 ## 6. `make reach`: which gates a change reaches
+
+**Two tiers.** The default is QUICK, for working without losing the
+machine: a module change checks the remixes users flash that carry it
+(`remixes/`), or the smallest test remix when only test remixes do; the
+floor for tool and build changes is the one cover remix carrying the most
+modules; a build change runs refhash but not `make identity`; no
+`make accept`; two shards; on macOS every command at background priority
+(`taskpolicy -b`, the efficiency cores). `FULL=1` is everything below at
+full speed. What QUICK gives up: the pressure stages (the dearest layouts
+priced and rendered, which catch a module that overruns beside others),
+identity's image comparison, and the test remixes and other cover remixes
+a change also reaches. Run `FULL=1` before flashing an image, and for the
+PR of any change that touches the build or a DSP module.
 
 `tools/verify/reach.py` reads the branch's diff against `origin/main`
 (`BASE=` for another base) and prints the gates in run order. `RUN=1` runs
@@ -395,8 +408,8 @@ code.
 
 ```bash
 git fetch upstream && git rebase upstream/main
-make reach BASE=upstream/main
-STRESS_SOURCE=<a local project> make reach BASE=upstream/main RUN=1 KEEP=1 JOBS=3
+make reach BASE=upstream/main RUN=1 KEEP=1                                          # quick, while working
+STRESS_SOURCE=<a local project> make reach BASE=upstream/main FULL=1 RUN=1 KEEP=1 JOBS=3   # build or DSP change, or before a flash
 ```
 
 Paste each command and its result into the PR body (the template asks for

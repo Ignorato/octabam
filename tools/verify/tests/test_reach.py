@@ -365,3 +365,36 @@ open("scripts/opened.sh")
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuickTests(unittest.TestCase):
+    """The quick tier: fewer remixes, no identity, no accept."""
+
+    def quick(self):
+        c = ctx()
+        c.quick = True
+        c.test_remixes = {"miniverb"}
+        c.floor = [max(c.floor, key=lambda r: (c._modules_of().get(r, 0), r))]
+        return c
+
+    def test_a_module_checks_its_user_facing_carriers(self):
+        c = self.quick()
+        self.assertEqual(c.carriers(["bamsep26", "usb"]), ["bamsep26", "usb"])
+        self.assertEqual(c.carriers(["miniverb"]), ["miniverb"])
+
+    def test_only_test_carriers_check_the_smallest(self):
+        c = self.quick()
+        c.test_remixes = {"bamsep26", "usb", "miniverb"}
+        self.assertEqual(len(c.carriers(["bamsep26", "usb"])), 1)
+
+    def test_the_floor_is_one_remix_and_a_build_change_skips_identity(self):
+        c = self.quick()
+        self.assertEqual(len(c.floor), 1)
+        kinds = [k for k, _ in c.build_change()]
+        self.assertIn("refhash", kinds)
+        self.assertNotIn("identity", kinds)
+
+    def test_full_is_unchanged(self):
+        c = ctx()
+        self.assertEqual(c.carriers(["bamsep26", "usb"]), ["bamsep26", "usb"])
+        self.assertIn("identity", [k for k, _ in c.build_change()])
