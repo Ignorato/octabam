@@ -29,6 +29,7 @@ the unit before the first flash (piece 4). The roadmap asks for:
 | The category's name | `STEMS`: seven characters, like the longest stock name. |
 | How it's built | A category made of data, whose row labels STEM REC rewrites in memory (section 4). A screen of its own is left for piece 7; a pop-up list can't redraw by itself. |
 | After a take ends | Back to READY: one take per REC, as today. The next PLAY doesn't record unless REC is pressed again. Staying armed would need seconds in the folder name first. |
+| The menu doesn't redraw by itself (measured 29 Sep 2026, `STEM_REC.md` 16.1) | The status refreshes on any key: opening the menu, or a key inside it, shows it current. The labels the actions change show at once, since a key press redraws the menu. A status that ticks by itself is left for piece 7. |
 
 ## 3. What you see
 
@@ -88,7 +89,9 @@ doesn't fit takes a shorter form, fixed in the plan: for example
 
 **Other rules.**
 
-- Closing the menu doesn't stop a take; reopening it shows the live status.
+- Closing the menu doesn't stop a take; reopening it shows the status as
+  it is then. While the menu stays open, the status is as of the last key
+  (section 2).
 - Nothing is saved: every boot starts with all eight tracks on and READY.
 - A card that hangs on a write freezes the status timer. The stock card
   driver has no timeout, and recovery is a power cycle, as today

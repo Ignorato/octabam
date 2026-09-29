@@ -7049,3 +7049,48 @@ exactly, which is what each check tests.
   bytes larger cost the load 859 instructions and moved `cardfail` by 11
   polls (15.2). Falsifier, not run: pad the new runtime until the boot's
   count matches, and the peaks go back to 525, 520, 527 and 535.
+
+## 16. The STEMS category in MAIN MENU
+
+Piece 3 of the roadmap: `docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md`
+and its plan, `docs/superpowers/plans/2026-09-28-stem-rec-menu.md`.
+
+### 16.1 What the design stands on, measured ✅ under the port
+
+`tools/verify/stems_menu_probe.py` boots the stems image (STEM REC still
+in CONTROL) on the one-track fixture card under `ot_emu --interactive`,
+presses real keys through `tools/verify/stems_panel.py`, and reads the
+screen from the bytes the CPU sends the panel. Run on 29 Sep 2026 as an
+MKII (`v3-p3-probe-mkii3.log`) and as an MKI (`v3-p3-probe-mki.log`); the
+two agree on every item. The PNGs are `out/stems_runs/probe-mkii-*.png`
+and `probe-mki-*.png`.
+
+| # | question | answer, MKII and MKI |
+|---|---|---|
+| 1 | Does MAIN MENU open on the root? | ✅ PROJ (MKII) and FUNC+MIXER (MKI): focus `0x400cbd8c`, row 0 |
+| 2 | Which keys enter and leave a list? | ✅ YES and RIGHT enter (focus `0x400cbd54` on CONTROL); LEFT leaves |
+| 3 | Does a changed label redraw with no key? | ❌ No: a label pointer changed while the menu shows it stayed off the screen for 3 s. After RIGHT and LEFT it was drawn |
+| 4 | Where does text clip? | ✅ The list pane at x = 118 and the root column at x = 56 |
+| 5 | Does the cursor skip a row with action 0? | ✅ Yes, both ways: `[0, 2, 0]`, and the row draws as plain text |
+| 6 | Do PLAY and STOP work with the menu open? | ✅ Transport 0 → 1 → 0, the menu stays open |
+| 7 | What does NO do inside a list? | ✅ It closes the whole menu; the focus pointer keeps the list |
+
+The texts STEMS can show, each drawn in a row of the pane: `T8 [X]` ends at
+x = 79, `PEAK 100%` at 93, `DONE 60:00` at 95, `SAME MINUTE` at 101,
+`WRITE FAILED` and `CLOSE FAILED` at 105, all left of 118. `STEMS` ends at
+45 in the root column, left of 56. So the long error names stay.
+
+**Item 3 changes the design.** The spec assumed the menu redraws by
+itself, as octalab's `MENU.md` reports; its labels changed from a row's
+action, which a key press runs, so a key always followed. Under the port,
+a label STEM REC changes on its own reaches the screen at the next key
+that redraws the menu: the take starting on PLAY (ARMED to `REC 00:00`),
+the seconds, `SAVING` to `DONE`, `RING FULL`. Yves chose (29 Sep 2026) to
+keep the design and let the status refresh on any key: opening the menu, or
+a key inside it, shows it current. A status that ticks by itself needs a
+redraw request from outside a key handler, which is left for piece 7's
+recording window.
+
+The first probe run pressed NO to leave CONTROL, which closed the menu, so
+its items 3 to 5 measured a closed menu; that run is void, and item 7
+records NO.
