@@ -207,7 +207,9 @@
 .endif
 .set STEP_HS,      11025        | 11.025 frames per 250 us packet, x1000 (every layout)
 .set STEP_FS,      44100        | 44.1 frames per 1 ms packet, x1000
-.set SERVO_STEP,   100          | +-0.1 frame per packet, x1000
+.set SERVO_SHIFT,  1            | proportional gain G = 2^SERVO_SHIFT: x1000
+                                | frames per packet per frame of fill error
+.set SERVO_MAX,    200          | correction clamp: +-0.2 frame per packet, x1000
 
 | Four queue slots, so the host always finds a packet waiting: four packets
 | cover 1 ms of polls. The frame ISR (every 363 us) is the only context that
@@ -221,10 +223,10 @@
 | cached addresses (the USB controller reads the packet buffers), so the
 | rings need no cache maintenance.
 .set AUD_FRAMES,   1024
-.set AUD_TARGET,   512          | ring fill the stream starts at and the servo
-                                    | steers towards: ~12 ms, so a momentary
-                                    | producer stall is absorbed
-.set AUD_BAND,     128          | servo deadband, so it does not hunt
+.set AUD_TARGET,   64           | ring fill the stream starts at and the servo
+                                    | holds: ~1.5 ms (512 before the proportional
+                                    | servo; the unit held +-13 around 256 and
+                                    | 128 under a busy project, 28 Sep 2026)
 
 .set PORTSC1,    0xfc0b0184         | bits 27:26 = port speed, 2 = high
 
@@ -508,17 +510,30 @@ audio_pkt_build:
     | clock and the host adapts. The host's polls run on ITS clock, so a fixed
     | 11.025 frames per poll would drain the ring faster or slower than the
     | producer fills it, by the two clocks' drift, and the ring would under-
-    | or overrun within minutes. The servo nudges the drain by +-0.1 frame per
-    | packet against a target fill, which is exactly "send what is produced".
+    | or overrun within minutes. The servo is proportional: each packet drains
+    | nominal + G x (fill - AUD_TARGET) / 1000 frames, clamped to +-SERVO_MAX,
+    | which is "send what is produced" at the device's clock. The fill decays
+    | to the target with a time constant of 1000/G packets (G = 2: 500, about
+    | 125 ms at high speed) and drift eps leaves eps x STEP / G frames of
+    | error (0.06 at the 11 ppm Bryan T's Mac showed). Held there, the fill no
+    | longer wanders, so USB AUDIO IN's ring, whose fill with this one's sums to
+    | a constant under implicit feedback, holds too.
     movel   aud_step,%d5            | nominal frames per packet, x1000
-    cmpil   #(AUD_TARGET+AUD_BAND),%d2
-    bcss    .Lsrv_low
-    addil   #SERVO_STEP,%d5
-    bras    .Lsrv_done
-.Lsrv_low:
-    cmpil   #(AUD_TARGET-AUD_BAND),%d2
-    bccs    .Lsrv_done
-    subil   #SERVO_STEP,%d5
+    tstb    aud_await               | until the host's first poll anchors the
+    bnes    .Lsrv_done              | ring, send nominal: the bring-up burst's
+                                    | fill falls 11 per packet, not a clock error
+    movel   %d2,%d0
+    subil   #AUD_TARGET,%d0         | fill error, signed
+    asll    #SERVO_SHIFT,%d0        | x G
+    cmpil   #SERVO_MAX,%d0
+    bles    .Lsrv_hi
+    movel   #SERVO_MAX,%d0
+.Lsrv_hi:
+    cmpil   #-SERVO_MAX,%d0
+    bges    .Lsrv_lo
+    movel   #-SERVO_MAX,%d0
+.Lsrv_lo:
+    addl    %d0,%d5                 | step + correction (> 0: STEP_HS - SERVO_MAX)
 .Lsrv_done:
     addl    %d5,%d3
     movel   #1000,%d7
