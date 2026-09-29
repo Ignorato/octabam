@@ -554,7 +554,7 @@ def main():
     # DONE. "On neither chooser" gives every shipped remix exactly the three
     # reverbs -- FX1 lists ten of the thirteen and the reverbs are FX2-only
     # -- which is the whole reason removing the explicit field was safe.
-    # restock lists all fourteen and places nothing, so it gives up nothing.
+    # mods lists all fourteen and places nothing, so it gives up nothing.
     _sp = stock.p_spans("A")
     _fx1_all = {k for k in _sp
                 if registry.modules()[k].menu.fx2_id in stock.fx1_ids()}
@@ -566,7 +566,7 @@ def main():
     _rig = ("FILTER", "SPATIALIZER", "EQUALIZER", "PHASER", "FLANGER", "CHORUS",
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
-    _want = {"restock": (), "mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
+    _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
              "octatrick": (), "octatrick-usb": (), "usb-out-main-cue": (), "usb-out-main": (),     # stock effects + ColdFire modules, no DSP words
              "repitch": (),
              # the twelve io remixes: the IN module's RX inject is placed in SPATIALIZER's words

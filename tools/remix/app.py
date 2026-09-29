@@ -406,7 +406,7 @@ Add a module before giving anything up and the ⚠ says so, with `x` dropping th
 [bold]a reverb you keep listed is spending words[/]
 PLATE, SPRING and DARK REV's code IS the donor region, so the `held by` line is the live trade: what they are holding, and what dropping the next one buys. The region packs from PLATE upward, so holding a LOW reverb also makes the space above it unreachable — keeping PLATE alone leaves 2,130 words by size and 0 you can actually place.
 
-You CAN keep them. The build takes only the reverbs your modules actually reach, and the pane says which went (`— Plate Rev  donor, taken`). `remixes/restock.py` is thirteen stock effects plus SEND: the smallest buildable image, costing only PLATE. (Until 2 Sep 2026 all three were nulled unconditionally and the honest answer here was "you cannot, ever". That is no longer true.)
+You CAN keep them. The build takes only the reverbs your modules actually reach, and the pane says which went (`— Plate Rev  donor, taken`). (Until 2 Sep 2026 all three were nulled unconditionally and the honest answer here was "you cannot, ever". That is no longer true.)
 
 [bold]there is one FX2 buffer per track[/]
 "Free" there means "no module has pinned it", not "unused": a track whose buffer no module claims still HAS that buffer, ready for whatever is selected on it. Only a MODULE claims one for the life of the image. BusVerb holds all four of its core's, BusDelay two of its core's — and they go in PAIRS, so "4 free" is two pairs, not four independent slots.
