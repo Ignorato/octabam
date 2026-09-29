@@ -10,7 +10,8 @@ flashed image was built from.
 - `make reach` is QUICK by default (29 Sep 2026): the remixes users flash
   that carry the change, one floor remix for tool and build changes, no
   identity, no `make accept`, two shards, background priority on macOS
-  (`taskpolicy -b`). `FULL=1` is the previous behaviour. A USB MIDI change:
+  (`taskpolicy -b`). `FULL=1` is the previous behaviour, a manual choice
+  that nothing requires. A USB MIDI change:
   26 commands full, 2 quick.
 
 - The image-stage gates on their own shard (29 Sep 2026): `verify_set
