@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """STEM REC -- the row, the tap and the file, checked without hardware.
 
-    python3 tools/verify/verify_stems.py [remix] [--long] [--fat32]   (default: stems)
+    python3 tools/verify/verify_stems.py [remix] [--long] [--fat32] [--static] [--only=NAME,...]
 
-Static, from the built image: CONTROL has seven rows, the six stock ones
-byte for byte, the seventh labelled STEM REC with the module's action and
-id 0; the frame site jumps to the hook; the ring and the stack sit at the
-top of the platform reserve, above the runtime's stage. Then, when the
+Static, from the built image: MAIN MENU has five categories, the four
+stock ones byte for byte and STEMS fifth, with its icon and its list;
+CONTROL is stock; the STEMS list ships filled in, its eleven rows with
+their actions, headings and labels as at boot; the frame site jumps to the
+hook; the ring and the stack sit at the top of the platform reserve, above
+the runtime's stage. `--static` stops there; `--only=NAME,...` runs only
+the named port runs (their names are main()'s table). Then, when the
 port is built, the fixtures are built from the project template
 (tools/verify/stems_fixture.py; STEMS_TEMPLATE=<dir>, default
 out/projects/Ultimate FX 1.5.3) and the port runs of the proof of concept,
@@ -35,6 +38,8 @@ STOCK = pathlib.Path("out/raw/section_3_MAIN_OS.bin")
 RUNTIME_ELF = pathlib.Path("out/platform/runtime/runtime.elf")
 LAYOUT_DIR = pathlib.Path("out/platform")      # platform_build.LAYOUT lives here, by name
 CONTROL_DESC, CONTROL_ROWS, ROW_LEN, STOCK_N = 0x400cbd54, 0x400cc5a8, 24, 6
+ROOT_DESC, ROOT_ROWS, ROOT_N = 0x400cbd8c, 0x400cc698, 4      # MAIN MENU's root (MAINMENU.md 2)
+MENU_ROWS, ROW_TRK0, MENU_VISIBLE = 11, 3, 7                   # stems.s: the STEMS list
 FRAME_SITE = 0x40004b12
 ATA_FIRST_SITE = 0x40014cfe  # the stock PIO write's first sector (STEM_REC.md 11.7)
 
@@ -80,16 +85,19 @@ def rd32(img, a):
 
 
 def static(img, stock, s):
-    check("CONTROL count is 7", rd32(img, CONTROL_DESC) == 7, f"{rd32(img, CONTROL_DESC)}")
-    rows = rd32(img, CONTROL_DESC + 0x18)
-    check("CONTROL rows moved", rows != CONTROL_ROWS, f"0x{rows:08x}")
-    a, b = rows - BASE, CONTROL_ROWS - BASE
-    check("the six stock rows came across byte for byte",
-          img[a:a + ROW_LEN * STOCK_N] == stock[b:b + ROW_LEN * STOCK_N])
-    r7 = [rd32(img, rows + ROW_LEN * STOCK_N + 4 * k) for k in range(6)]
-    check("row 7 label is stems_label", r7[0] == s["stems_label"], f"0x{r7[0]:08x}")
-    check("row 7 action is stems_action", r7[2] == s["stems_action"], f"0x{r7[2]:08x}")
-    check("row 7 window, pad, child and id are 0", r7[1] == r7[3] == r7[4] == r7[5] == 0, f"{r7}")
+    n = rd32(img, ROOT_DESC)
+    check("MAIN MENU has five categories", n == 5, f"{n}")
+    rows = rd32(img, ROOT_DESC + 0x18)
+    check("the root rows moved", rows != ROOT_ROWS, f"0x{rows:08x}")
+    a, b = rows - BASE, ROOT_ROWS - BASE
+    check("the four stock categories came across byte for byte",
+          img[a:a + ROW_LEN * ROOT_N] == stock[b:b + ROW_LEN * ROOT_N])
+    r5 = [rd32(img, rows + ROW_LEN * ROOT_N + 4 * k) for k in range(6)]
+    check("category 5 is STEMS: its label, its icon and its list; no action, getter or id",
+          r5 == [s["stems_cat_label"], s["stems_icon"], 0, 0, s["stems_list"], 0], f"{[hex(x) for x in r5]}")
+    c = CONTROL_DESC - BASE
+    check("CONTROL is stock: its descriptor byte for byte (six rows, its own row array)",
+          img[c:c + 0x1c] == stock[c:c + 0x1c], f"count {rd32(img, CONTROL_DESC)}")
     want = b"\x4e\xb9" + s["stems_frame_hook"].to_bytes(4, "big") + b"\x4e\x71"
     got = img[FRAME_SITE - BASE:FRAME_SITE - BASE + 8]
     check("0x40004b12 is jsr stems_frame_hook; nop", got == want, got.hex())
@@ -111,13 +119,48 @@ def regions(s):
           f"stage end 0x{lay['stage_end']:08x}")
 
 
-def runtime_long(s, name):
-    """A long of the linked runtime as built (out/platform/runtime.raw), by symbol."""
+def runtime_at(s, addr, n):
+    """n bytes of the linked runtime as built (out/platform/runtime.raw), by address."""
     from remix import platform_build
     lay = json.loads((LAYOUT_DIR / platform_build.LAYOUT).read_text())
     raw = (LAYOUT_DIR / "runtime.raw").read_bytes()
-    off = s[name] - lay["base"]
-    return int.from_bytes(raw[off:off + 4], "big")
+    return raw[addr - lay["base"]:addr - lay["base"] + n]
+
+
+def runtime_long(s, name):
+    """A long of the linked runtime as built, by symbol."""
+    return int.from_bytes(runtime_at(s, s[name], 4), "big")
+
+
+def menu_static(s):
+    """The STEMS list as it ships: filled in (the boot's set-up covers only
+    the stock lists), eleven rows, REC's and the tracks' actions, two
+    headings, every label as at boot, the record-dot icon."""
+    lng = lambda a: int.from_bytes(runtime_at(s, a, 4), "big")  # noqa: E731
+    txt = lambda a: runtime_at(s, a, 32).split(b"\0")[0].decode("latin1")  # noqa: E731
+    lst = [lng(s["stems_list"] + 4 * k) for k in range(7)]
+    check("the STEMS list ships filled in: 11 rows, 7 visible, its rows",
+          lst == [MENU_ROWS, 0, 0, 0, MENU_VISIBLE, MENU_ROWS, s["stems_rows"]], f"{[hex(x) for x in lst]}")
+    rows = [[lng(s["stems_rows"] + ROW_LEN * r + 4 * k) for k in range(6)] for r in range(MENU_ROWS)]
+    check("row 1 runs stems_action, rows 2 and 3 are headings, T1-T8 run stems_track_action",
+          [r[2] for r in rows] == [s["stems_action"], 0, 0] + [s["stems_track_action"]] * 8,
+          f"{[hex(r[2]) for r in rows]}")
+    check("no row has a window, a getter, a child or a page id",
+          all(r[1] == r[3] == r[4] == r[5] == 0 for r in rows))
+    texts = [txt(r[0]) for r in rows]
+    check("the rows ship as REC, READY, PEAK 0%, T1 [X] .. T8 [X]",
+          texts == ["REC", "READY", "PEAK 0%"] + [f"T{k} [X]" for k in range(1, 9)], f"{texts}")
+    check("the category is labelled STEMS", txt(s["stems_cat_label"]) == "STEMS")
+    icon = [lng(s["stems_icon"] + 4 * k) for k in range(5)]
+    p0 = [lng(s["stems_icon_p0"] + 4 * k) for k in range(19)]
+    p1 = [lng(s["stems_icon_p1"] + 4 * k) for k in range(19)]
+    # Which bit of a column is the top row isn't settled (MAINMENU.md 1), so
+    # the dot must read the same either way up, and left to right.
+    rev7 = lambda b: int(f"{b:07b}"[::-1], 2)  # noqa: E731
+    check("the icon is 19 x 9 with two planes, a dot symmetric both ways, the stock mask",
+          icon == [0x13, 9, 1, s["stems_icon_p0"], s["stems_icon_p1"]] and p0 == p0[::-1]
+          and all(c & 0x80ffffff == 0 and rev7(c >> 24) == c >> 24 for c in p0) and any(p0)
+          and p1 == [0xff800000] * 19, f"{[hex(c >> 24) for c in p0]}")
 
 
 def rebuilt_peak(ws):
@@ -977,43 +1020,37 @@ def main():
         sys.exit(f"{name}: build failed: {tail[-1] if tail else '?'}")
     img, stock, s = IMAGE.read_bytes(), STOCK.read_bytes(), syms()
     static(img, stock, s)
+    menu_static(s)
     regions(s)
     check("the card-out parse reads upstream's line and refuses crosscheck's",
           card_out_sectors(CARD_OUT_UPSTREAM) == 23 and card_out_sectors(CARD_OUT_CROSSCHECK) is None)
     check("the build records all eight tracks by default", runtime_long(s, "stems_tracks") == 0xFF,
           f"0x{runtime_long(s, 'stems_tracks'):02x}")
     check("stems_peak is in the runtime, 0 at boot", "stems_peak" in s and runtime_long(s, "stems_peak") == 0)
+    if "--static" in sys.argv:
+        return 1 if fails else 0
+    only = next((a.split("=", 1)[1].split(",") for a in sys.argv if a.startswith("--only=")), None)
+    runs = [("probe", probe), ("thru", thru), ("tap", tap), ("full", full), ("rowstop", rowstop),
+            ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
+    runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
+             for m in (0x01, 0x03, 0x0F, 0xFF, 0xA5)]
+    runs += [("cut", cut), ("exists", exists), ("overflow", overflow), ("cardfail", cardfail)]
+    if "--long" in sys.argv:
+        runs += [("limit", limit)]
+        runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
+                 for m in (0x07, 0x1F, 0x3F, 0x7F, 0x80)]
+        runs += [("latch", latch), ("wrap8", wrap8), ("overflow8", overflow8), ("slow8", slow8)]
+    if "--fat32" in sys.argv:
+        runs += [("fat32", fat32)]
     if not EMU.exists():
         print("  [SKIP] port runs: build the port (make emu-cf)")
     elif not TEMPLATE.is_dir():
         print(f"  [SKIP] port runs: no project template at {TEMPLATE} "
               "(STEMS_TEMPLATE=<dir>, a local copy of EZBot's Ultimate FX 1.5.3)")
     elif fixtures():
-        probe(s)
-        thru(s)
-        tap(s)
-        full(s)
-        rowstop(s)
-        stream(s)
-        wrap(s)
-        cap(s)
-        eight(s)
-        for mask in (0x01, 0x03, 0x0F, 0xFF, 0xA5):
-            mask_take(s, mask, f"mask{mask:02x}")
-        cut(s)
-        exists(s)
-        overflow(s)
-        cardfail(s)
-        if "--long" in sys.argv:
-            limit(s)
-            for mask in (0x07, 0x1F, 0x3F, 0x7F, 0x80):
-                mask_take(s, mask, f"mask{mask:02x}")
-            latch(s)
-            wrap8(s)
-            overflow8(s)
-            slow8(s)
-        if "--fat32" in sys.argv:
-            fat32(s)
+        for run_name, fn in runs:
+            if only is None or run_name in only:
+                fn(s)
     return 1 if fails else 0
 
 

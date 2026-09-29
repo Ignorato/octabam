@@ -6,7 +6,7 @@
 | Every stock address below, with its evidence: docs/firmware/STEM_REC.md.
 |
 | Three parts share the state words below:
-|   stems_action      MAIN MENU > CONTROL > STEM REC, in the UI task
+|   stems_action      MAIN MENU > STEMS > REC, in the UI task; stems_track_action T1-T8
 |   stems_frame_hook  the per-frame tap, in the audio interrupt at IPL 5
 |   stems_task        our own RTOS task: the ring to the card, while recording
 | The state is one aligned long, so every read and write of it is one
@@ -142,11 +142,85 @@ fmt_file:  .asciz  "/T%d.wav"
 probe_name: .asciz "/PROBE.BIN"
         .balign 2
 
-| ---- the menu row -------------------------------------------------------
-        .global stems_label, stems_zero
-        .equ    stems_zero, 0       | the row's window, pad, child and id
-stems_label:
-        .asciz  "STEM REC"
+| ---- the STEMS category (docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md)
+| A fifth MAIN MENU category. The manifest's TableGrow gives the root a row
+| pointing at stems_cat_label, stems_icon and stems_list. The list and its
+| rows live here, in DRAM: the menu engine writes the list's cursor
+| fields, and STEM REC rewrites the rows' labels. A label changes by one
+| aligned long write to the row's +0x00, so a redraw reads a whole old
+| label or a whole new one. The menu redraws on keys only (STEM_REC.md
+| 16.1): a label the task changes shows at the next key.
+        .equ    ROW_LEN,       24           | a menu row (MAINMENU.md 1)
+        .equ    MENU_ROWS,     11
+        .equ    MENU_VISIBLE,  7            | a submenu pane's rows
+        .equ    ROW_TRK0,      3            | T1's row
+        .equ    LIST_SEL,      0x0c         | a list's absolute selection: the row under the cursor
+        .global stems_cat_label, stems_icon, stems_icon_p0, stems_icon_p1, stems_list, stems_rows, stems_zero
+        .equ    stems_zero, 0               | the root row's action, getter and id
+stems_cat_label:
+        .asciz  "STEMS"
+        .balign 4
+stems_icon:                                 | 19 x 9, two planes (MAINMENU.md 1)
+        .long   0x13, 0x09, 0x01, stems_icon_p0, stems_icon_p1
+stems_icon_p0:                              | a record dot: one long a column, the column in its top byte
+        .long   0, 0, 0, 0, 0, 0
+        .long   0x1c000000, 0x3e000000, 0x7f000000, 0x7f000000, 0x7f000000, 0x3e000000, 0x1c000000
+        .long   0, 0, 0, 0, 0, 0
+stems_icon_p1:                              | the stock icons' second plane, every column
+        .rept   19
+        .long   0xff800000
+        .endr
+stems_list:                                 | shipped filled in: the boot's set-up covers only stock lists
+        .long   MENU_ROWS, 0, 0, 0, MENU_VISIBLE, MENU_ROWS, stems_rows
+stems_rows:                                 | label, window, action, getter, child, page id
+        .long   lbl_rec,   0, stems_action, 0, 0, 0
+        .long   lbl_ready, 0, 0, 0, 0, 0    | the status: action 0, a heading the cursor skips
+        .long   lbl_peak0, 0, 0, 0, 0, 0    | PEAK: a heading
+        .long   trk1_on, 0, stems_track_action, 0, 0, 0
+        .long   trk2_on, 0, stems_track_action, 0, 0, 0
+        .long   trk3_on, 0, stems_track_action, 0, 0, 0
+        .long   trk4_on, 0, stems_track_action, 0, 0, 0
+        .long   trk5_on, 0, stems_track_action, 0, 0, 0
+        .long   trk6_on, 0, stems_track_action, 0, 0, 0
+        .long   trk7_on, 0, stems_track_action, 0, 0, 0
+        .long   trk8_on, 0, stems_track_action, 0, 0, 0
+rec_by_state:   .long   lbl_rec, lbl_cancel, lbl_stop, lbl_saving       | row 1, by state
+st_by_state:    .long   lbl_ready, lbl_armed, 0, lbl_saving             | the status; RECORDING is the task's
+err_names:      .long   0, err_ring, err_path, err_open, err_exists, err_write, err_seek, err_close, err_task
+trk_on:         .long   trk1_on, trk2_on, trk3_on, trk4_on, trk5_on, trk6_on, trk7_on, trk8_on
+trk_off:        .long   trk1_off, trk2_off, trk3_off, trk4_off, trk5_off, trk6_off, trk7_off, trk8_off
+lbl_rec:        .asciz  "REC"
+lbl_cancel:     .asciz  "CANCEL"
+lbl_stop:       .asciz  "STOP"
+lbl_saving:     .asciz  "SAVING"
+lbl_ready:      .asciz  "READY"
+lbl_armed:      .asciz  "ARMED"
+lbl_nocard:     .asciz  "NO CARD"
+lbl_peak0:      .asciz  "PEAK 0%"
+err_ring:       .asciz  "RING FULL"         | ERR_OVERFLOW
+err_path:       .asciz  "PATH FAILED"       | ERR_PATH
+err_open:       .asciz  "OPEN FAILED"       | ERR_OPEN
+err_exists:     .asciz  "SAME MINUTE"       | ERR_EXISTS
+err_write:      .asciz  "WRITE FAILED"      | ERR_WRITE
+err_seek:       .asciz  "SEEK FAILED"       | ERR_SEEK
+err_close:      .asciz  "CLOSE FAILED"      | ERR_CLOSE
+err_task:       .asciz  "TASK FAILED"       | ERR_TASK
+trk1_on:  .asciz "T1 [X]"
+trk1_off: .asciz "T1 [ ]"
+trk2_on:  .asciz "T2 [X]"
+trk2_off: .asciz "T2 [ ]"
+trk3_on:  .asciz "T3 [X]"
+trk3_off: .asciz "T3 [ ]"
+trk4_on:  .asciz "T4 [X]"
+trk4_off: .asciz "T4 [ ]"
+trk5_on:  .asciz "T5 [X]"
+trk5_off: .asciz "T5 [ ]"
+trk6_on:  .asciz "T6 [X]"
+trk6_off: .asciz "T6 [ ]"
+trk7_on:  .asciz "T7 [X]"
+trk7_off: .asciz "T7 [ ]"
+trk8_on:  .asciz "T8 [X]"
+trk8_off: .asciz "T8 [ ]"
         .balign 2
 
 | ---- the menu action: action(0), in the UI task ------------------------
@@ -199,6 +273,58 @@ stems_action:
 .La_unmask:
         move.w  %d2,%sr
 .La_out:
+        movem.l (%sp),%d2-%d3
+        lea     8(%sp),%sp
+        rts
+
+| ---- a track row's action: action(0), in the UI task --------------------
+| The row under the cursor names the track (the list's absolute selection,
+| less T1's row, as octalab's checkbox rows do). Locked while a take
+| records or saves: the take keeps the mask it latched at its start, and
+| the rows show what records. The last track that's on stays on, so a take
+| always has a track the rows show. The test and the flip run with
+| interrupts masked, so the hook can't latch between them.
+        .global stems_track_action
+stems_track_action:
+        lea     -8(%sp),%sp
+        movem.l %d2-%d3,(%sp)
+        move.l  stems_list+LIST_SEL,%d3
+        subq.l  #ROW_TRK0,%d3               | track k, 0..7
+        moveq   #8,%d0
+        cmp.l   %d0,%d3
+        bcc.s   .Lk_out                     | not a track row (unsigned: below T1 too)
+        move.w  %sr,%d2
+        move.w  #0x2700,%sr
+        move.l  stems_state,%d1
+        moveq   #ST_RECORDING,%d0
+        cmp.l   %d0,%d1
+        bcc.s   .Lk_keep                    | RECORDING or FINISHING: locked
+        moveq   #1,%d0
+        lsl.l   %d3,%d0                     | the track's bit
+        move.l  stems_tracks,%d1
+        eor.l   %d0,%d1
+        tst.b   %d1
+        beq.s   .Lk_keep                    | the last track on: it stays on
+        move.l  %d1,stems_tracks
+        move.w  %d2,%sr
+        lea     trk_off,%a0
+        and.l   %d0,%d1
+        beq.s   .Lk_label
+        lea     trk_on,%a0
+.Lk_label:
+        move.l  (%a0,%d3.l*4),%d0           | the label
+        move.l  %d3,%d1
+        addq.l  #ROW_TRK0,%d1
+        lsl.l   #3,%d1                      | row * 8
+        movea.l %d1,%a1
+        adda.l  %d1,%a1
+        adda.l  %d1,%a1                     | row * 24
+        adda.l  #stems_rows,%a1
+        move.l  %d0,(%a1)                   | the row's label pointer
+        bra.s   .Lk_out
+.Lk_keep:
+        move.w  %d2,%sr
+.Lk_out:
         movem.l (%sp),%d2-%d3
         lea     8(%sp),%sp
         rts
