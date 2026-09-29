@@ -162,7 +162,8 @@ the gates it reaches, in order; `RUN=1` runs them. By default it runs the
 QUICK tier (the remixes users flash that carry the change, no identity, no
 `make accept`, two shards, nice 10); `FULL=1` runs every gate
 at full speed, when you choose to (`docs/remixer/TESTING.md` §6 says what
-quick gives up). It refuses a tree that
+quick gives up). Remixes under `remixes/test/` are left out unless
+`TESTS=1`. It refuses a tree that
 is not rebased onto the base. A change to a module reaches every remix
 that carries it; a change to the build reaches `scripts/refhash.sh check`,
 `make identity` and the cover (the fewest remixes that carry every

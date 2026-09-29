@@ -7,6 +7,11 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- `make reach` leaves out `remixes/test/` (30 Sep 2026) in both tiers:
+  carriers, the floor, the cover and identity. A module that only test
+  remixes carry gets the selftest and no remix check; `TESTS=1` includes
+  them.
+
 - The shared half stops building every remix (29 Sep 2026): `verify_replaces`
   checks the registry in the shared half (`--static`, under a second) and
   each remix's own image in its per-remix half (`--image`, after `make bus`).
