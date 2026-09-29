@@ -23,7 +23,7 @@ Two remixes built from [timhastie/octatrick-modules](https://github.com/timhasti
 
 ## Build and flash
 
-1. Set up the repository and the stock OS: [BUILDING.md](../../docs/remixes/BUILDING.md) §1–2 (`make setup`, `make os`, `make recon`); clone with `--recurse-submodules` or run `git submodule update --init` so `modules/*/upstream` is populated.
+1. Set up the repository and the stock OS: [BUILDING.md](../../docs/remixes/BUILDING.md) §0–2 (what to install first, then `make setup`, `make emu-setup`, `make os`, `make recon`); clone with `--recurse-submodules` or run `git submodule update --init` so `modules/*/upstream` is populated.
 2. Build:
 
    ```bash

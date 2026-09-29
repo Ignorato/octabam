@@ -134,7 +134,25 @@ def remix_index() -> str:
              "`README.md` says what is in it and where it has run. "
              "`remixes/test/<name>/` holds the remixes that carry one module "
              "for that module's gates. This index is rendered from the "
-             "selections (`make docs`). BUILDING.md §8 says how to write one.", ""]
+             "selections (`make docs`). BUILDING.md §8 says how to write one.", "",
+             "## What you need", "",
+             "- macOS: the Xcode Command Line Tools (`xcode-select --install`: "
+             "`git`, `make`, a C compiler) and [Homebrew](https://brew.sh). "
+             "Linux / WSL2: [BUILDING.md §1a](BUILDING.md#1a-linux-and-wsl2) "
+             "has the package list.",
+             "- `python3` 3.10+.",
+             "- `cmake` and [uv](https://docs.astral.sh/uv/): "
+             "`brew install cmake uv`.",
+             "- `make setup` installs `binwalk`, `radare2` and `m68k-elf-gcc` "
+             "with Homebrew and builds the vendored tools. `make emu-setup` "
+             "(uv) puts `unicorn`, `textual` and `sounddevice` in `.venv`, "
+             "for `make remix` and the label gates in `make check`. "
+             "`make emu-cf` builds the ColdFire emulator `make check` boots "
+             "the image in.",
+             "- An Octatrack MKI or MKII on OS 1.40C and its CompactFlash card.",
+             "- To go back to stock: a 5-pin DIN MIDI interface and a SysEx "
+             "app (SysEx Librarian on macOS). The OT's own USB port does not "
+             "take an OS upgrade.", ""]
     remixes = [registry.remix(n) for n in registry.remix_names()]
     tests = [r for r in remixes if registry.is_test(r.name)]
     remixes = [r for r in remixes if not registry.is_test(r.name)]

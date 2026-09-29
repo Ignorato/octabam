@@ -198,9 +198,9 @@ has not been measured on the unit.
 ## How to flash
 
 1. **Set up once.** Clone the repository and fetch the stock OS:
-   [BUILDING.md](../../docs/remixes/BUILDING.md) §1–2 (`make setup`,
-   `make os`, `make recon`). You need an MKI or MKII on 1.40C and its CF
-   card.
+   [BUILDING.md](../../docs/remixes/BUILDING.md) §0–2 (what to install
+   first, then `make setup`, `make emu-setup`, `make os`, `make recon`).
+   You need an MKI or MKII on 1.40C and its CF card.
 2. **Build the image.** Pick a build number; it becomes the OS version the
    unit shows and the suffix on every octabam effect's name. Bump it each
    time you flash.

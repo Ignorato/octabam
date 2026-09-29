@@ -33,12 +33,14 @@ licence is MIT; a fork that takes requests and tracks issues is allowed.
 ## Quick start
 
 macOS with Homebrew, or Linux / WSL2 ([BUILDING.md §0](docs/remixes/BUILDING.md#0-what-you-need)
-says what each needs). `git`, `python3` 3.10+, `cmake`.
+says what each needs). On macOS: the Xcode Command Line Tools
+(`xcode-select --install`), `python3` 3.10+, and `brew install cmake uv`.
 
 ```bash
 git clone --recurse-submodules https://github.com/sambanks/octabam
 cd octabam
 make setup                              # the toolchain: vendored tools at their pins, patched, built
+make emu-setup                          # .venv via uv: make remix and the label gates in make check
 make os && make recon                   # your own 1.40C -> out/raw/section_3_MAIN_OS.bin
 make modules                            # every module, the compatibility matrix, every remix
 make image REMIX=bottleservice BUILD=1  # -> out/OCTATRACK_OCTABAM1.bin, the card image
