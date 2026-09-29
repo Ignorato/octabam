@@ -112,6 +112,14 @@ stems_fpos:      .space  32         | bytes of each file on the card
 stems_tcb:       .space  TCB_SIZE   | zero until the one create (STEM_REC.md 3.8)
 stems_probe:     .long   0          | test seam: non-zero runs stems_probe_run once
 stems_probe_res: .space  28
+        .global stems_took, stems_ui_bufs
+stems_took:      .long   0          | a take ended since the last arm: IDLE shows its result
+ui_key:          .long   -1         | what the labels last showed, packed (stems_ui)
+stems_ui_bufs:                      | two buffers for each formatted line
+stat_buf0:       .space  16
+stat_buf1:       .space  16
+peak_buf0:       .space  16
+peak_buf1:       .space  16
 stems_name:      .space  16         | YYMMDD-HHMM
 stems_path:      .space  PATH_MAX   | <set>/AUDIO/<name>
 stems_fpath:     .space  PATH_MAX   | <set>/AUDIO/<name>/T<n>.wav
@@ -221,6 +229,10 @@ trk7_on:  .asciz "T7 [X]"
 trk7_off: .asciz "T7 [ ]"
 trk8_on:  .asciz "T8 [X]"
 trk8_off: .asciz "T8 [ ]"
+fmt_rec:        .asciz  "REC %02d:%02d"
+fmt_done:       .asciz  "DONE %02d:%02d"
+fmt_peak:       .asciz  "PEAK %d%s"         | "%" as an argument: %% is untested in the stock sprintf
+pct_sign:       .asciz  "%"
         .balign 2
 
 | ---- the menu action: action(0), in the UI task ------------------------
@@ -233,13 +245,13 @@ trk8_off: .asciz "T8 [ ]"
 stems_action:
         lea     -8(%sp),%sp
         movem.l %d2-%d3,(%sp)
-        tst.l   CARD_MOUNTED        | no card: do nothing at all
-        beq.s   .La_out
+        tst.l   CARD_MOUNTED        | no card: say so, and change nothing else
+        beq.w   .La_nocard
         tst.l   stems_task_made     | the writer task, created once (STEM_REC.md 3.8)
         bne.s   .La_made
         bsr.w   stems_task_create   | d0 = 1 when the task exists
         tst.l   %d0
-        beq.w   .La_out             | could not create it: stay IDLE
+        beq.w   .La_notask          | could not create it: stay IDLE, say so
         moveq   #1,%d0
         move.l  %d0,stems_task_made
 .La_made:
@@ -253,6 +265,7 @@ stems_action:
         clr.l   stems_frames
         clr.l   stems_peak
         clr.l   stems_status
+        clr.l   stems_took          | the new take's result replaces the last one's
         clr.l   stems_wr_off
         clr.l   stems_rd_off
         moveq   #ST_ARMED,%d1
@@ -272,9 +285,40 @@ stems_action:
         move.l  %d1,stems_state
 .La_unmask:
         move.w  %d2,%sr
+        bsr.w   stems_ui_state      | row 1 and the status, at once
 .La_out:
         movem.l (%sp),%d2-%d3
         lea     8(%sp),%sp
+        rts
+.La_nocard:                         | no card: say so, and change nothing else
+        lea     lbl_nocard,%a0
+        move.l  %a0,stems_rows+ROW_LEN
+        bra.s   .La_out
+.La_notask:                         | the task couldn't be made: stay IDLE, say so
+        lea     err_task,%a0
+        move.l  %a0,stems_rows+ROW_LEN
+        bra.s   .La_out
+
+| ---- row 1 and the status from the state, at once (the actions) ---------
+| Fixed strings only, in the UI task. The action never leaves the state
+| RECORDING (the hook makes it), so st_by_state's RECORDING entry is 0: the
+| task's line, left alone. Arming also shows a new take's PEAK 0%.
+stems_ui_state:
+        move.l  stems_state,%d0
+        lea     rec_by_state,%a0
+        move.l  (%a0,%d0.l*4),%d1
+        move.l  %d1,stems_rows
+        lea     st_by_state,%a0
+        move.l  (%a0,%d0.l*4),%d1
+        beq.s   .Lv_peak
+        move.l  %d1,stems_rows+ROW_LEN
+.Lv_peak:
+        moveq   #ST_ARMED,%d1
+        cmp.l   %d1,%d0
+        bne.s   .Lv_out
+        lea     lbl_peak0,%a0
+        move.l  %a0,stems_rows+2*ROW_LEN
+.Lv_out:
         rts
 
 | ---- a track row's action: action(0), in the UI task --------------------
@@ -550,6 +594,7 @@ stems_task:
         pea     TASK_SLEEP_US
         jsr     K_DELAY             | d0 = -1 when the timer was busy: just loop
         addq.l  #8,%sp
+        bsr.w   stems_ui            | the menu's labels, every pass
         tst.l   stems_probe
         beq.s   .Lt_noprobe
         bsr.w   stems_probe_run
@@ -574,8 +619,10 @@ stems_task:
 .Lt_fin:
         bsr.w   stems_finish
 .Lt_idle:
+        moveq   #1,%d0
+        move.l  %d0,stems_took      | the take ended: IDLE shows its result
         clr.l   stems_state
-        bra.s   .Lt_loop
+        bra.w   .Lt_loop
 .Lt_rec:
         tst.l   stems_hold
         bne.s   .Lt_loop            | test seam: hold the writer
@@ -593,8 +640,113 @@ stems_task:
         move.l  %d0,stems_state
         bra.w   .Lt_loop
 .Lt_drop:                           | no files could be made: drop the take
+        moveq   #1,%d0
+        move.l  %d0,stems_took      | the take ended: IDLE shows its error
         clr.l   stems_state         | the next arm resets wr and rd; writing rd here
         bra.w   .Lt_loop            | could land after a new arm and corrupt that take
+
+| ---- the labels, from the task (every pass) -----------------------------
+| Row 1, the status and PEAK from the state. A line is rewritten only when
+| what it shows changes: the state, whether a take has ended, the error,
+| the take's whole seconds and the PEAK percent, packed into ui_key. A
+| number is formatted into the buffer its row isn't showing, and the row's
+| label pointer then switches. NO CARD and TASK FAILED change nothing in
+| the key, so they stay until the next change. The screen shows a change
+| at the next key (STEM_REC.md 16.1).
+stems_ui:
+        lea     -28(%sp),%sp
+        movem.l %d2-%d6/%a2-%a3,(%sp)
+        move.l  stems_state,%d2             | d2: the state
+        move.l  stems_frames,%d3
+        lsl.l   #4,%d3                      | 16 samples a frame
+        move.l  #44100,%d0
+        divu.l  %d0,%d3                     | d3: whole seconds
+        moveq   #0,%d4                      | d4: PEAK percent, 0 before any take
+        move.l  stems_rframes,%d0
+        beq.s   .Lu_pct
+        move.l  stems_peak,%d4
+        moveq   #100,%d1
+        mulu.l  %d1,%d4
+        divu.l  %d0,%d4
+.Lu_pct:
+        move.l  %d3,%d5                     | d5: secs<<16 | pct<<8 | status<<3 | took<<2 | state
+        moveq   #16,%d0
+        lsl.l   %d0,%d5
+        move.l  %d4,%d0
+        lsl.l   #8,%d0
+        or.l    %d0,%d5
+        move.l  stems_status,%d0
+        lsl.l   #3,%d0
+        or.l    %d0,%d5
+        move.l  stems_took,%d0
+        lsl.l   #2,%d0
+        or.l    %d0,%d5
+        or.l    %d2,%d5
+        cmp.l   ui_key,%d5
+        beq.w   .Lu_out
+        move.l  %d5,ui_key
+        lea     rec_by_state,%a0            | row 1
+        move.l  (%a0,%d2.l*4),%d0
+        move.l  %d0,stems_rows
+        moveq   #ST_RECORDING,%d0           | the status
+        cmp.l   %d0,%d2
+        beq.s   .Lu_rec
+        tst.l   %d2
+        bne.s   .Lu_fixed                   | ARMED, SAVING
+        tst.l   stems_took
+        beq.s   .Lu_fixed                   | IDLE, no take since the arm: READY
+        move.l  stems_status,%d0
+        beq.s   .Lu_done
+        lea     err_names,%a0               | IDLE after a take that failed: its error
+        move.l  (%a0,%d0.l*4),%d0
+        bra.s   .Lu_stat
+.Lu_fixed:
+        lea     st_by_state,%a0
+        move.l  (%a0,%d2.l*4),%d0
+        bra.s   .Lu_stat
+.Lu_rec:
+        lea     fmt_rec,%a3
+        bra.s   .Lu_time
+.Lu_done:
+        lea     fmt_done,%a3
+.Lu_time:
+        lea     stat_buf0,%a2               | the buffer the row isn't showing
+        cmpa.l  stems_rows+ROW_LEN,%a2
+        bne.s   .Lu_sbuf
+        lea     stat_buf1,%a2
+.Lu_sbuf:
+        move.l  %d3,%d6
+        moveq   #60,%d1
+        divu.l  %d1,%d6                     | minutes
+        move.l  %d6,%d0
+        mulu.l  %d1,%d0
+        move.l  %d3,%d1
+        sub.l   %d0,%d1                     | seconds
+        move.l  %d1,-(%sp)
+        move.l  %d6,-(%sp)
+        move.l  %a3,-(%sp)
+        move.l  %a2,-(%sp)
+        jsr     SPRINTF
+        lea     16(%sp),%sp
+        move.l  %a2,%d0
+.Lu_stat:
+        move.l  %d0,stems_rows+ROW_LEN
+        lea     peak_buf0,%a2               | PEAK, formatted with every change
+        cmpa.l  stems_rows+2*ROW_LEN,%a2
+        bne.s   .Lu_pbuf
+        lea     peak_buf1,%a2
+.Lu_pbuf:
+        pea     pct_sign
+        move.l  %d4,-(%sp)
+        pea     fmt_peak
+        move.l  %a2,-(%sp)
+        jsr     SPRINTF
+        lea     16(%sp),%sp
+        move.l  %a2,stems_rows+2*ROW_LEN
+.Lu_out:
+        movem.l (%sp),%d2-%d6/%a2-%a3
+        lea     28(%sp),%sp
+        rts
 
 | ---- the name: YYMMDD-HHMM, from the clock -----------------------------
         .macro  CLOCK field

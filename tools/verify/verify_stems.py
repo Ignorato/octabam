@@ -204,7 +204,7 @@ def core1_slot_peaks(dump_path):
 
 def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
          card_in=None, dump_blocks=True, stack=False, mems=(), calls_before=None, fixture=None,
-         pokes_before=(), mask=0x01, load_ms=20000):
+         pokes_before=(), mask=0x01, load_ms=20000, steps=()):
     """One fixture run under the port: the module's action called before
     play (`--call-before-play`: the action arms, and the hook takes the
     ARMED-to-RECORDING edge on the first playing frame), STOP at `stop_at`
@@ -233,8 +233,13 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     the build's all-eight default); None pokes nothing. `load_ms` is the
     port's budget for LOAD PROJECT, in emulated ms: the load ends as soon
     as the engine is idle, so a larger budget costs nothing when the load
-    is quicker, and a slow emulated card needs one (stems_sweep.py)."""
+    is quicker, and a slow emulated card needs one (stems_sweep.py).
+
+    `steps` are upstream's `--step FRAME:call|poke|dump:SPEC` scripts,
+    frames counted from the transport start like `calls`.
+    `calls_before=()` arms nothing (None: the action, the default)."""
     tag = f"{tag}{SUFFIX}"
+    before = (s["stems_action"],) if calls_before is None else tuple(calls_before)
     fx = json.loads(pathlib.Path(fixture or FIXTURE).read_text())
     pokes_before = ([(s["stems_tracks"] + 3, mask)] if mask is not None else []) + list(pokes_before)
     work = pathlib.Path("out/stems_runs"); work.mkdir(parents=True, exist_ok=True)
@@ -257,7 +262,7 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
             "--frames", str(frames), "--load-ms", str(load_ms), "--dsp", "--main-level", "64",
             "--pre-roll", str(PRE_ROLL), "--poke-trig", "2",
             *(["--block-dump", str(dump)] if dump_blocks else []),
-            "--call-before-play", ",".join(f"0x{a:x}:0" for a in (calls_before or (s["stems_action"],))),
+            *(["--call-before-play", ",".join(f"0x{a:x}:0" for a in before)] if before else []),
             "--card-out", str(card), "--mem-dump", dumps, *extra]
     if fx.get("audio_in"):
         args += ["--audio-in", fx["audio_in"]]
@@ -269,6 +274,8 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
         args += ["--poke", ";".join(f"0x{a:x}={b}" for a, b in pk)]
     if pokes_before:
         args += ["--poke-before-play", ";".join(f"0x{a:x}={b}" for a, b in pokes_before)]
+    for st in steps:
+        args += ["--step", st]
     r = subprocess.run(args, capture_output=True, text=True)
     (work / f"{tag}.log").write_text(r.stdout + r.stderr)   # the port's report, for the call timing
     m = mem.read_bytes() if mem.exists() else b"\0" * 24
@@ -476,12 +483,16 @@ def cap(s):
     the action. The hook must end the take by itself, with no error."""
     v = MAX_FRAMES - 50
     pokes = [(s[w] + i, (v >> (24 - 8 * i)) & 0xff) for w in ("stems_wr", "stems_rd") for i in range(4)]
-    log, _, card, words, _ = port(s, 300, tag="cap", pokes=pokes, dump_blocks=False, extra=watched(s))
+    log, _, card, words, _ = port(s, 300, tag="cap", pokes=pokes, dump_blocks=False, extra=watched(s),
+                                  mems=ui_mems(s, "end"))
     st, status, _, wr, rd, nfr = words
     check("cap: the hook ended the take at the cap", wr == MAX_FRAMES and st == ST_IDLE and status == 0,
           f"wr {wr}, state {st}, status {status}")
     data = take(card) or b""
     check("cap: the file holds the 50 frames", len(data) == 44 + 50 * 64, f"{len(data)} bytes")
+    t, _ = ui_read(s, "cap", "end")
+    check("cap: the status reads DONE 60:00", t is not None and t[:2] == ["REC", "DONE 60:00"],
+          f"{t[:2] if t else None}")
 
 
 def cut(s):
@@ -504,6 +515,53 @@ def cut(s):
           f"state {st}, {nfr} frames recorded, {rd} streamed, T1.wav {None if data is None else len(data)} bytes")
 
 
+LABEL_STOP, LABEL_FRAMES = 3000, 3400
+
+
+def labels(s):
+    """The labels one take shows, read from memory at frames 100 and 2,900
+    and at the end. While it records: STOP, and REC mm:ss with the take's
+    whole seconds or one less (the writer task rewrites the line at most a
+    pass late), rising from 00:00 to 00:01. After it: REC, DONE mm:ss with
+    the take's length, and PEAK n% from the recorder's own peak (one track:
+    a 65,536-frame ring). The menu isn't open: the rows are memory, and the
+    screen draws them at the next key (STEM_REC.md 16.1)."""
+    tag = "labels"
+    port(s, LABEL_FRAMES, stop_at=LABEL_STOP, tag=tag, dump_blocks=False,
+         steps=[ui_step(s, 100, tag, "a"), ui_step(s, 2900, tag, "b")], mems=ui_mems(s, "end"))
+    secs = []
+    for when in ("a", "b"):
+        t, w = ui_read(s, tag, when)
+        if t is None:
+            check(f"labels: the frame dump '{when}' exists", False)
+            return
+        now = w[5] * 16 // 44100
+        allowed = {f"REC {mmss(w[5])}", f"REC {(now - 1) // 60:02d}:{(now - 1) % 60:02d}"}
+        check(f"labels ({when}): STOP, and REC with the take's seconds", t[0] == "STOP" and t[1] in allowed,
+              f"{t[:3]}, {w[5]} frames")
+        secs.append(int(t[1][-2:]) if t[1].startswith("REC ") else -1)
+    check("labels: the seconds rise while it records", secs[0] == 0 and secs[1] >= 1, f"{secs}")
+    t, w = ui_read(s, tag, "end")
+    pct = w[6] * 100 // (RING_SIZE_T1 // 64) if w else None
+    check("labels (end): REC, DONE with the take's length, PEAK from its peak",
+          t is not None and w[0] == ST_IDLE and t[:3] == ["REC", f"DONE {mmss(w[5])}", f"PEAK {pct}%"],
+          f"{t[:3] if t else None}, {w[5] if w else None} frames, peak {w[6] if w else None}")
+
+
+def nocard(s):
+    """REC with no card: the status reads NO CARD and nothing else changes
+    (IDLE, no task made). Nothing is armed before play; the card-mounted
+    word is poked to 0 at frame 30 and the action runs at 31."""
+    tag = "nocard"
+    zero = ";".join(f"0x{CARD_READY + i:x}=0" for i in range(4))
+    port(s, 120, tag=tag, calls_before=(), dump_blocks=False, steps=[f"30:poke:{zero}"],
+         calls=((31, s["stems_action"]),), mems=ui_mems(s, "end"))
+    t, w = ui_read(s, tag, "end")
+    check("nocard: REC shows NO CARD, the state stays IDLE, no task is made",
+          t is not None and t[:2] == ["REC", "NO CARD"] and w[0] == ST_IDLE and w[2] == 0,
+          f"{t[:2] if t else None}, state {w[0] if w else None}, task {w[2] if w else None}")
+
+
 FIXTURE8 = pathlib.Path("out/stems_fixture8.json")   # tools/verify/stems_fixture.py --eight
 FIXTURE32 = pathlib.Path("out/stems_fixture32.json")   # tools/verify/stems_fixture.py --fat32
 FIXTURE_THRU = pathlib.Path("out/stems_fixture_thru.json")   # stems_fixture.py --thru
@@ -514,6 +572,46 @@ SUFFIX = ""                 # appended to every run's tag: "32" while the FAT32 
 def run_path(tag, ext):
     """A file a run wrote: out/stems_runs/<tag><SUFFIX>.<ext>."""
     return pathlib.Path("out/stems_runs") / f"{tag}{SUFFIX}.{ext}"
+
+
+UI_BUFS = 64        # stems.s: stems_ui_bufs, two status and two PEAK buffers of 16 bytes
+
+
+def ui_mems(s, when):
+    """port(mems=...) for the menu at the end of a run: the rows, the
+    buffers and the first seven state words, into <tag>.<when>.*"""
+    return ((s["stems_rows"], ROW_LEN * MENU_ROWS, f"{when}.rows"),
+            (s["stems_ui_bufs"], UI_BUFS, f"{when}.bufs"),
+            (s["stems_state"], 28, f"{when}.state"))
+
+
+def ui_step(s, frame, tag, when):
+    """The same dump as a --step, `frame` frames after the transport start."""
+    return f"{frame}:dump:" + ";".join(f"0x{a:x},{n}={run_path(tag, name)}" for a, n, name in ui_mems(s, when))
+
+
+def ui_read(s, tag, when):
+    """(the eleven rows' texts, the seven state words) from a ui_mems or
+    ui_step dump: a label pointing into the buffers is read from the dump,
+    any other from the linked runtime (the fixed strings never change).
+    (None, None) when the dump is missing."""
+    paths = [run_path(tag, f"{when}.{x}") for x in ("rows", "bufs", "state")]
+    if not all(p.exists() for p in paths):
+        return None, None
+    rows, bufs, st = (p.read_bytes() for p in paths)
+    texts = []
+    for k in range(MENU_ROWS):
+        ptr = int.from_bytes(rows[ROW_LEN * k:ROW_LEN * k + 4], "big")
+        b0 = s["stems_ui_bufs"]
+        src = bufs[ptr - b0:] if b0 <= ptr < b0 + UI_BUFS else runtime_at(s, ptr, 32)
+        texts.append(src.split(b"\0")[0].decode("latin1"))
+    return texts, [int.from_bytes(st[i:i + 4], "big") for i in range(0, 28, 4)]
+
+
+def mmss(frames):
+    """A take's length as the status shows it: whole seconds, mm:ss."""
+    t = frames * 16 // 44100
+    return f"{t // 60:02d}:{t % 60:02d}"
 
 
 def take_files(card_path, fixture=FIXTURE):
@@ -690,13 +788,16 @@ def exists(s):
         return
     before = take(first)
     log, _, card, words, _ = port(s, 700, stop_at=400, tag="exists", card_in=str(first),
-                                  dump_blocks=False)
+                                  dump_blocks=False, mems=ui_mems(s, "end"))
     st, status, _, wr, rd, nfr = words
     check("exists: refused with ERR_EXISTS, state IDLE", st == ST_IDLE and status == ERR_EXISTS,
           f"state {st}, status {status}")
     after = take(card)
     check("exists: the first take is byte-identical", before is not None and after == before,
           f"{len(before) if before else None} bytes before, {len(after) if after else None} after")
+    t, _ = ui_read(s, "exists", "end")
+    check("exists: the status names the refusal", t is not None and t[:2] == ["REC", "SAME MINUTE"],
+          f"{t[:2] if t else None}")
 
 
 def overflow(s):
@@ -712,11 +813,15 @@ def overflow(s):
     pokes = [(s["stems_hold"] + 3, 1)]
     pokes += [(s["stems_rd"] + i, (rd >> (24 - 8 * i)) & 0xff) for i in range(4)]
     pokes += [(s["stems_rd_off"] + i, (rd_off >> (24 - 8 * i)) & 0xff) for i in range(4)]
+    # REC pressed at frame 1000, inside the task's long FINISHING (the guard
+    # trips near frame 75; IDLE comes about frame 5,300): it must change
+    # nothing. The menu's words are dumped just before the re-arm and at the end.
     log, _, card, words, _ = port(s, OVERFLOW_FRAMES, stop_at=OVERFLOW_STOP, tag="overflow",
                                   pokes=pokes, dump_blocks=False,
-                                  calls=((OVERFLOW_FRAMES - 200, s["stems_action"]),),
+                                  calls=((1000, s["stems_action"]), (OVERFLOW_FRAMES - 200, s["stems_action"])),
                                   extra=watched(s, span=24),
-                                  mems=((s["stems_peak"], 4, "peak"),) if "stems_peak" in s else ())
+                                  steps=[ui_step(s, OVERFLOW_FRAMES - 210, "overflow", "pre")],
+                                  mems=ui_mems(s, "end") + ((s["stems_peak"], 4, "peak"),))
     st, status, _, wr, rd_end, _ = words
     ws = writes(s, log, span=24)
     statuses = [v for x, w, v in ws if w == 1]
@@ -735,6 +840,14 @@ def overflow(s):
         raw = run_path("overflow", "peak")
         peak = int.from_bytes(raw.read_bytes(), "big") if raw.exists() else None
         check("overflow: the re-arm reset stems_peak to 0", peak == 0, f"stems_peak {peak}")
+    check("overflow: REC while it saved changed nothing",
+          states == [ST_ARMED, ST_RECORDING, ST_FINISHING, ST_IDLE, ST_ARMED], f"state writes {states}")
+    t, _ = ui_read(s, "overflow", "pre")
+    check("overflow: the status names the full ring", t is not None and t[:2] == ["REC", "RING FULL"],
+          f"{t[:2] if t else None}")
+    t, _ = ui_read(s, "overflow", "end")
+    check("overflow: the re-arm shows CANCEL, ARMED and PEAK 0%",
+          t is not None and t[:3] == ["CANCEL", "ARMED", "PEAK 0%"], f"{t[:3] if t else None}")
 
 
 def cardfail(s):
@@ -1027,6 +1140,8 @@ def main():
     check("the build records all eight tracks by default", runtime_long(s, "stems_tracks") == 0xFF,
           f"0x{runtime_long(s, 'stems_tracks'):02x}")
     check("stems_peak is in the runtime, 0 at boot", "stems_peak" in s and runtime_long(s, "stems_peak") == 0)
+    check("the menu's words are in the runtime: stems_took 0, the buffers",
+          "stems_took" in s and runtime_long(s, "stems_took") == 0 and "stems_ui_bufs" in s)
     if "--static" in sys.argv:
         return 1 if fails else 0
     only = next((a.split("=", 1)[1].split(",") for a in sys.argv if a.startswith("--only=")), None)
@@ -1034,7 +1149,8 @@ def main():
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
              for m in (0x01, 0x03, 0x0F, 0xFF, 0xA5)]
-    runs += [("cut", cut), ("exists", exists), ("overflow", overflow), ("cardfail", cardfail)]
+    runs += [("cut", cut), ("labels", labels), ("nocard", nocard), ("exists", exists),
+             ("overflow", overflow), ("cardfail", cardfail)]
     if "--long" in sys.argv:
         runs += [("limit", limit)]
         runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
