@@ -11,7 +11,7 @@ Two kinds of reference are checked:
 
 Exempt: `docs/history/` (removed 16 Sep 2026; cited as provenance and read
 with `git show 3ceba41:docs/history/<file>`), a path right after
-`git show <sha>:`, a path holding a placeholder (`<name>`, `*`, `X`), and
+`git show <sha>:`, a path holding a placeholder (`<name>`, `*`, `X`, `...`), and
 CHANGELOG.md (a record of what was true at each image), and the tests'
 fixtures under tools/verify/tests/.
 """
@@ -68,7 +68,7 @@ def anchors(path):
 
 
 def placeholder(p):
-    return any(c in p for c in "<>*{}$") or re.search(r"(^|/)(X|x|N|NAME|name)(\.md|/)", p)
+    return "..." in p or any(c in p for c in "<>*{}$") or re.search(r"(^|/)(X|x|N|NAME|name)(\.md|/)", p)
 
 
 def check(root=ROOT):

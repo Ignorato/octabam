@@ -435,7 +435,7 @@ ci-emu: ## CI: build the ColdFire port (tools/emu/ot_emu) and run its unit tests
 	ctest --test-dir out/emu-ci --output-on-failure -E '^(rtos|dsp|repitch-stock|repitch-patch)$$'
 
 .PHONY: ci
-ci: reach test-acceptance ci-dsp ci-emu ## Everything CI runs, locally
+ci: reach test-acceptance verify-docs ci-dsp ci-emu ## Everything CI runs, locally
 
 .PHONY: emu-setup
 emu-setup: ## Provision the remixer deps (unicorn + textual) into .venv via uv

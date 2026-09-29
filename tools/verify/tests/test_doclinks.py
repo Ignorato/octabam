@@ -51,7 +51,7 @@ class DocLinks(unittest.TestCase):
     def test_history_git_show_placeholders_and_code_spans_pass(self):
         self.assertEqual(self.fails({
             "tools/x.py": "# docs/history/RTOS_FORK.md s10 and git show 3ceba41:docs/firmware/OLD.md\n"
-                          "# modules/<name>/README.md\n",
+                          "# modules/<name>/README.md, docs/...md\n",
             "README.md": "`lib.a[2](gpt.cpp.o)` and `[x](nowhere.md)`\n",
             "CHANGELOG.md": "[old](docs/TIMESTRETCH_PIPELINE.md)\n"}), [])
 
