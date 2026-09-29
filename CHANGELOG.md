@@ -7,6 +7,13 @@ flashed image was built from.
 
 ## Unreleased (main after image 43)
 
+- The image-stage gates on their own shard (29 Sep 2026): `verify_set
+  --stage-only` stages the image and card without running; the image-stage
+  module gates (TEMPO BUS reads its host ids from its own run now) are one
+  shard job apart from verify_set's. The cover over three shards: 574 s to
+  530 s, at the floor of 528 s for its 1,585 s of work. `ot_emu --scenario`
+  keeps a boot-time `--block-dump` in the one child that names it.
+
 - The long pole split (29 Sep 2026): check_shards runs a remix that would
   set the wall time as its gate jobs beside the other remixes, longest first,
   from the durations it records in `out/check_shards/times.json`. The cover

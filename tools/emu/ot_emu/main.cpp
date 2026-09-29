@@ -1975,6 +1975,7 @@ int main(int _argc, char** _argv)
 			{
 				std::fflush(stdout);
 				std::fflush(stderr);
+				rtos.flushBlockDump();		// or every child writes the buffered blocks again
 				size_t mine = scenarios.size();		// scenarios.size() = the parent
 				std::vector<std::pair<pid_t, size_t>> running;
 				std::vector<int> status(scenarios.size(), -1);
@@ -2035,14 +2036,28 @@ int main(int _argc, char** _argv)
 				av.push_back(toks[0].data());
 				for(size_t w = 2; w < toks.size(); ++w)
 					av.push_back(toks[w].data());
+				// The block dump is one stream opened at boot, its file offset
+				// shared by every child: only a scenario that names the same
+				// --block-dump path keeps writing it; the others close their copy.
+				const std::string bootBlockDump = blockDump;
+				blockDump.clear();
 				if(!parseArgs(static_cast<int>(av.size()), av.data()))
 					::_exit(2);
+				if(blockDump.empty() || blockDump != bootBlockDump)
+					rtos.closeBlockDump();
+
 				if(dspPair)
 				{
 					std::vector<std::pair<uint8_t*, size_t>> ranges;
 					dspPair->memoryRanges(ranges);
 					std::string why;
-					if(!unshareRanges(ranges, why))
+					const auto u0 = std::chrono::steady_clock::now();
+					size_t bytes = 0;
+					for(const auto& r : ranges) bytes += r.second;
+					const bool unshared = unshareRanges(ranges, why);
+					std::printf("scenario   : DSP memory unshared (%zu MB of address range) in %.0f ms\n", bytes >> 20,
+						std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - u0).count());
+					if(!unshared)
 					{
 						std::printf("scenario   : cannot unshare the DSP memory after the fork: %s\n", why.c_str());
 						std::fflush(stdout);

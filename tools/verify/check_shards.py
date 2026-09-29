@@ -39,9 +39,9 @@ runs every remix whole; `--split a,b` names them.
 of `make verify-remix` (plus `make cycles`) is its own job, each shard
 restores the remix's image with `make bus` before its job, and the wall
 is the longest gate rather than the whole list. The gates never read one
-another's results; they only ever shared out/. Two exceptions are kept in
-one job: verify_set stages the card that the image-stage module gates
-(TEMPO BUS) boot, so those follow it in its shard. The job list mirrors
+another's results; they only ever shared out/. The image-stage module
+gates boot the card verify_set stages (TEMPO BUS): their job stages it
+itself (`verify_set.py --stage-only`) and runs on its own shard. The job list mirrors
 the `verify-remix` recipe and refuses to run when the two name different
 scripts.
 """
@@ -189,10 +189,13 @@ def remix_jobs(remix_name, shard):
         cmd[1] = str(g.script)
         jobs.append(job(f"gate:{pathlib.Path(g.script).stem}", [cmd], f"{V}/module_gates.py"))
     jobs.append(job("menu", [[py, f"{V}/verify_menu.py"]], f"{V}/verify_menu.py"))
-    jobs.append(job("set", [[py, f"{V}/verify_set.py", remix_name],
-                            ["make", "bus", f"REMIX={remix_name}"],
-                            [PY, f"{V}/module_gates.py", remix_name, "--stage", "image"]],
-                    f"{V}/verify_set.py", f"{V}/module_gates.py"))
+    jobs.append(job("set", [[py, f"{V}/verify_set.py", remix_name]], f"{V}/verify_set.py"))
+    # The image-stage module gates (TEMPO BUS boots the card verify_set
+    # stages) as their own job: verify_set --stage-only stages the same
+    # image and card without running, so the two run on separate shards.
+    jobs.append(job("image", [[py, f"{V}/verify_set.py", remix_name, "--stage-only"],
+                              [PY, f"{V}/module_gates.py", remix_name, "--stage", "image"]],
+                    f"{V}/module_gates.py"))
     jobs.append(job("usb", [[py, f"{V}/verify_usb.py"]], f"{V}/verify_usb.py"))
     return jobs
 

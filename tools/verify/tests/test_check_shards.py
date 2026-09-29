@@ -29,15 +29,15 @@ class ByGate(unittest.TestCase):
             check_shards.check_recipe(jobs)
         self.assertIn("verify_usb.py", str(cm.exception))
 
-    def test_image_stage_follows_the_set_gate(self):
-        """TEMPO BUS boots the card verify_set stages: same job, after it,
-        with the image restored between."""
+    def test_image_stage_stages_its_own_card(self):
+        """TEMPO BUS boots the card verify_set stages: its job stages it
+        (--stage-only) and runs apart from verify_set's own run."""
         (_n, cmds, _e, _s), = [j for j in self.jobs() if j[0] == "set"]
-        scripts = [c[1] if c[0] != "make" else "make " + c[1] for c in cmds]
-        self.assertEqual(scripts, ["tools/verify/verify_set.py", "make bus",
-                                   "tools/verify/module_gates.py"])
-        self.assertIn("--stage", cmds[2])
-        self.assertEqual(cmds[2][cmds[2].index("--stage") + 1], "image")
+        self.assertEqual([c[1] for c in cmds], ["tools/verify/verify_set.py"])
+        (_n, cmds, _e, _s), = [j for j in self.jobs() if j[0] == "image"]
+        self.assertEqual([c[1] for c in cmds], ["tools/verify/verify_set.py", "tools/verify/module_gates.py"])
+        self.assertIn("--stage-only", cmds[0])
+        self.assertEqual(cmds[1][cmds[1].index("--stage") + 1], "image")
 
     def test_module_gates_are_one_job_each(self):
         names = [j[0] for j in self.jobs()]

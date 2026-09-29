@@ -51,6 +51,7 @@ DUMP_BASE, DUMP_LEN = 0x460d0000, 0xbb0000
 ROM_BASE, ROM_LEN = 0x400b0000, 0x28000        # the stock layers and ours live here
 KEY_TEMPO, KEY_NO, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_FUNC = 0x18, 0x32, 0x21, 0x33, 0x20, 0x2d
 TEMPO = 0x80000020
+LIVE_IDS = 0x80000ec4          # the live FX1/FX2 id arrays (verify_set.LIVE_IDS)
 
 
 def png(path, w, h, px, scale=4):
@@ -90,6 +91,7 @@ def main():
     script = work / "panel.txt"
     dump, lanes, rom, log = work / "ram.bin", work / "lanes.bin", work / "rom.bin", OUT / "port.txt"
     tmp = work / "tempo.bin"
+    ids = work / "ids.bin"
     # The panel script at EMULATED times (ot_emu --live-script): the same key
     # sequence the unit's user presses, with no wall-clock sleeps, so a
     # loaded machine runs it exactly as a quiet one. Gaps in emulated ms.
@@ -137,7 +139,7 @@ def main():
     cmd = [str(EMU), "--image", str(image), "--card", str(run_card), "--set", setname,
            "--project", name, "--load-ms", "90000", "--live-script", str(script),
            "--mem-dump", f"{DUMP_BASE:#x},{DUMP_LEN:#x}={dump};{LIVEB:#x},0x240={lanes};{TEMPO:#x},8={tmp};"
-                         f"{ROM_BASE:#x},{ROM_LEN:#x}={rom}"]
+                         f"{ROM_BASE:#x},{ROM_LEN:#x}={rom};{LIVE_IDS:#x},16={ids}"]
     with open(log, "w") as lf:
         lf.write(" ".join(cmd) + "\n"); lf.flush()
         subprocess.run(cmd, cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT, timeout=900)
@@ -159,8 +161,9 @@ def main():
         return ram[a - DUMP_BASE:a - DUMP_BASE + n]
     u32 = lambda a: struct.unpack(">I", rd(a, 4))[0]
 
-    # the host tracks: the part's live FX2 ids as verify_set dumped them
-    idb = (SET / "ids.bin").read_bytes()
+    # the host tracks: the part's live FX2 ids, from this run (the card
+    # verify_set staged; it need not have run: `verify_set --stage-only`)
+    idb = ids.read_bytes()
     fx2 = list(idb[8:16])
     dly = next((t for t, v in enumerate(fx2) if v == registry.by_key("DELAY SERVER").menu.fx2_id), None)
     vrb = next((t for t, v in enumerate(fx2) if v == registry.by_key("REVERB SERVER").menu.fx2_id), None)
