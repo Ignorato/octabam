@@ -197,8 +197,8 @@ register of what has gone wrong on a unit and why.
 
 ## 7. Going back to a different remix
 
-Build and flash another image the same way; `restock` is the stock
-chooser with nothing added. After any remix that changes an effect's
+Build and flash another image the same way, or flash Elektron's OS 1.40C
+to return to stock. After any remix that changes an effect's
 parameter layout (the rig family), stamp every project before playing:
 `python3 tools/hw/ot_project.py stamp-defaults <project dir on the card> <remix>`.
 

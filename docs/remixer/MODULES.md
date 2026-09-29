@@ -315,7 +315,7 @@ instance). The build writes its list row and cursor position;
 `verify_menu` checks that its descriptor and id entry are byte-identical to
 stock. A stock effect a remix leaves out is left alone entirely: an old
 project that selects it still runs it, it just has no row.
-`remixes/restock/remix.py` is the fourteen.
+`remixes/test/mods/remix.py` lists all fourteen.
 
 Two rules, both enforced:
 
