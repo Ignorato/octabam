@@ -512,11 +512,11 @@ def route_makefile(ctx):
     # flag default) or how a gate runs: identity names the moved images,
     # the floor runs the gates.
     if other:
-        gates += [CMD["identity"]] + ctx.every() + [CMD["ci"]]
+        gates += ([] if ctx.quick else [CMD["identity"]]) + ctx.every() + [CMD["ci"]]
         notes.append("variables or defines changed: " + ", ".join(other) + f": identity + {ctx.floor_note()}")
     check = [t for t in targets if t in MAKE_CHECK]
     if check:
-        gates += [CMD["identity"]] + ctx.every() + [CMD["ci"]]
+        gates += ([] if ctx.quick else [CMD["identity"]]) + ctx.every() + [CMD["ci"]]
         notes.append("the check graph: " + ", ".join(check) + f": identity + {ctx.floor_note()}")
     runner = [t for t in targets if t in MAKE_RUNNER]
     if runner:
