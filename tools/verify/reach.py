@@ -127,10 +127,6 @@ CLASSIFIER = ("tools/verify/reach.py",)
 # (Background QoS, taskpolicy -b, moved it onto the efficiency cores and was
 # several times slower: 28-29 Sep 2026.) FULL runs at nice 0.
 BACKGROUND = "nice -n 10" if shutil.which("nice") else ""
-# Every run, both tiers, holds the Mac awake while it runs (caffeinate -i:
-# no idle sleep for the command's life; 29 Sep 2026 a shared half took 990 s
-# where 179 s is usual because the machine slept partway).
-AWAKE = "caffeinate -i" if sys.platform == "darwin" and shutil.which("caffeinate") else ""
 # Makefile targets by what a change to them reaches.
 MAKE_CHECK = {"bus", "cycles", "verify", "verify-shared", "verify-remix", "check", "check-shared", "check-remix",
               "need-remix", "os", "recon"}
@@ -857,8 +853,6 @@ def main(argv=None):
         t0 = time.monotonic()
         if quick and BACKGROUND:
             cmd = f"{BACKGROUND} {cmd}"      # nice 10: the performance cores, below the desktop
-        if AWAKE:
-            cmd = f"{AWAKE} {cmd}"
         r = subprocess.run(cmd, shell=True, cwd=ROOT)
         results.append((command, "ok" if r.returncode == 0 else f"FAILED ({r.returncode})", time.monotonic() - t0))
         if r.returncode:
