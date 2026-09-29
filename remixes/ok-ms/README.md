@@ -27,7 +27,7 @@ make image REMIX=ok-ms BUILD=1      # -> out/OCTATRACK_OCTABAM1.bin (card) + out
 ```
 
 [BUILDING.md](../../docs/remixes/BUILDING.md) has each step from a fresh
-machine to a flashed unit (macOS, or Linux/WSL2 in its §1a) and the
+machine (§0: what to install first, uv included) to a flashed unit (macOS, or Linux/WSL2 in its §1a) and the
 recovery path; `make emu-cf` then `make check REMIX=ok-ms` runs every gate
 first. **Octakit migrates Parts into Kits on project load:** back up the
 card first; going back to stock can lose Kit data.

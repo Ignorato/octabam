@@ -10,8 +10,13 @@ run on a unit); substitute any remix name.
 
 ## 0. What you need
 
-- A Mac with [Homebrew](https://brew.sh), or Linux / WSL2 (§1a below).
-- `git`, `python3` (3.10+; stdlib only, no packages), `cmake` (`brew install cmake`).
+- A Mac with the Xcode Command Line Tools (`xcode-select --install`:
+  `git`, `make`, a C compiler) and [Homebrew](https://brew.sh), or Linux /
+  WSL2 (§1a below).
+- `python3` (3.10+; the build is stdlib only).
+- `cmake` and [uv](https://docs.astral.sh/uv/): `brew install cmake uv`.
+  uv provisions `.venv` (`make emu-setup`: `unicorn`, `textual`,
+  `sounddevice`) for `make remix` and the label gates in `make check`.
 - An Octatrack MKI or MKII on OS 1.40C. The stock 1.40C image is one file
   for both marks; octabam's own effects have only been tested on an MKII,
   and the DRAM platform has run on both (MKI: octalab, 11 Sep 2026; MKII:
@@ -27,6 +32,7 @@ run on a unit); substitute any remix name.
 git clone --recurse-submodules https://github.com/sambanks/octabam
 cd octabam
 make setup
+make emu-setup
 ```
 
 `--recurse-submodules` fetches the module authors' repositories
@@ -38,7 +44,8 @@ it: `git submodule update --init`.
 `make setup` installs `binwalk`, `radare2` and `m68k-elf-gcc` with
 Homebrew, checks out three pinned vendored tools (`vendor/`), applies the
 local patches and builds them. Re-running it is safe. It ends with
-`setup complete`.
+`setup complete`. `make emu-setup` runs `uv sync --extra emu` into
+`.venv`.
 
 ### 1a. Linux and WSL2
 
