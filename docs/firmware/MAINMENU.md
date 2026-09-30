@@ -110,7 +110,7 @@ append, repoint the rows pointer, bump the count in the descriptor. The
 menu widget reads the count at open time. Same move for a submenu
 (CONTROL: rows pointer `0x400cbd6c`, count `0x400cbd54`). Hardware
 precedent: PERSONALIZE extended by two items (`git show
-40a1f19:tools/patch_menu.s`, `docs/history/NOTES.md`); CONTROL > REVERB /
+40a1f19:tools/patch_menu.s`, `git show 3ceba41:docs/history/NOTES.md`); CONTROL > REVERB /
 DELAY rows on tags 85–90. Two modules that both grow one submenu cannot
 coexist (the build refuses the second: the count is no longer stock).
 Cave placement: the decoded free band `0x400d2000..0x400d8000`
@@ -157,7 +157,7 @@ the menu opener `FUN_40064c18` via `0x40064d78`). Page keys `0x22..0x26` →
 Menu-window destroy + setup-window create in one key dispatch is not a
 stock sequence; the deferral idiom is the timer callback `FUN_40000c3c`
 (used by `FUN_40063660`). The shortcut module ran on tags 85–90 and was
-retired 13 Sep 2026 (broken on the unit; `docs/history/MAINMENU_BUSSCREEN.md`).
+retired 13 Sep 2026 (broken on the unit; `git show 3ceba41:docs/history/MAINMENU_BUSSCREEN.md`).
 
 ### 6b. A page of one's own over GRID RECORDING (nordseele, MKI, 15 Sep 2026) ✅ theirs
 
@@ -302,7 +302,7 @@ prologue (`moveal %sp@(12),%a2` index, `movel %sp@(16),%d2` delta; `delta*7`
 fast-turn acceleration applied when `0x4003171c(index+56)` returns
 nonzero). A screen receives the raw step.
 
-Bus-screen facts that carried (tags 85–90, `docs/history/MAINMENU_BUSSCREEN.md`):
+Bus-screen facts that carried (tags 85–90, `git show 3ceba41:docs/history/MAINMENU_BUSSCREEN.md`):
 stock cursor bar via the rect-invert `0x40012254(window,x1,y1,x2,y2,-1)`;
 window ctor `FUN_4005829c`, list drawer `FUN_40037590`, `sprintf`
 `0x40013a08`; the FX2 page stages index 0, so a screen reading the Part's

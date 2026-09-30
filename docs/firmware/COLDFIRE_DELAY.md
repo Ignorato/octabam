@@ -10,7 +10,7 @@ back to core 0 at `X:0x4400`. The DSP side of that ruling is `DSP.md`
 Status key as `CHIP.md`: ✅ read from our image or measured · 🟡 adopted on
 the author's evidence · ❌ retracted.
 
-## 1. The routine (Bryan T, `octatrack-delay-architecture.md`, 30 Aug 2026) 🟡
+## 1. The routine (Bryan T, `octatrack-delay-architecture.md`: his notes, not in this repo; 30 Aug 2026) 🟡
 
 | | |
 |---|---|
@@ -122,29 +122,11 @@ frame):
   ordering and resulting bytes; it cannot show arbitration, overlap,
   coherency or stalls.
 
-## 4. Cost, and what is not measured
+## 4. Cost
 
-Per eight-track 16-sample frame under the port's instruction meter (his
-`tools/verify/verify_tapeecho_cpu.py`, PR #357):
-
-| case | instructions |
-|---|---|
-| stock DELAY ×8, original | 7,628 |
-| stock DELAY ×8, hooked, every track stock | 7,900 (7,892 in PR #357) |
-| Tape Echo ×8, settled full wet, WOW=44 | 15,283 (~23,000 in PR #357) |
-| Tape Echo ×8, MIX=90, moving TIME | 16,459 (25,271 before 23 Sep 2026) |
-| Tape Echo ×8, all controls moving | up to 21,547 (32,355 in PR #357) |
-
-✅ Current figures after Tape Echo's stock-style EMAC rewrite (23 Sep 2026,
-`modules/tapeecho/VOICING.md`); the PR's figures are kept beside them.
-
-Executed instructions, ColdFire, complete routine, not cycles: the meter
-prices an uncached SDRAM access at one cycle and sees no cache, DMA stall
-or scheduler. The frame period is 363 µs, ~95,800 cycles at 264 MHz,
-shared with everything else the ColdFire runs. His unit freezes as Tape
-Echo instances grow (`FAILURE_MODES.md`, "Freeze without an exception
-screen as ColdFire delay-routine work grows"); those freezes are the only
-bracket on the routine's budget.
+Tape Echo's instruction counts per frame against stock DELAY's, and what
+the meter cannot see: `modules/tapeecho/README.md` "CPU integration" and
+`modules/tapeecho/VOICING.md`.
 
 ## 5. Consequences for the bus
 

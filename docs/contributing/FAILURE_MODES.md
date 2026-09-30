@@ -224,7 +224,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 ## Cross-core bus glitch: the accumulators' race ✅ mechanism measured, fixed
 
 - **Seen:** a tear, stutter or hash on wet audio crossing cores, often smeared into a reverb tail.
-- **Cause (measured under the port, `docs/history/COLDFIRE_PORT.md` O12; [`docs/effects/XBUS.md`](../effects/XBUS.md)):** core 0's housekeeping flips the rotation word mid-way through core 1's frame; clients read the word directly, so a frame's sends split across two buffers.
+- **Cause (measured under the port, `git show 3ceba41:docs/history/COLDFIRE_PORT.md` O12; [`docs/effects/XBUS.md`](../effects/XBUS.md)):** core 0's housekeeping flips the rotation word mid-way through core 1's frame; clients read the word directly, so a frame's sends split across two buffers.
 - **Fix:** four ACC buffers and one rotation tracker per core (`build_bus.py` ROTLATCH, payload B); eight buffers since image 49 (above). No local test is evidence: `dsp_host` runs the cores lock-step or under a guessed interleave.
 
 ## CONTROL menu shows its stock six rows though the image carries eight 🔴

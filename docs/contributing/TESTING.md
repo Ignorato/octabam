@@ -32,6 +32,12 @@ recon`, from your own 1.40C), the submodules (`git submodule update
 or `~/.octabam_project`. `tools/harness/README.md` is `dsp_host` in depth,
 `tools/emu/README.md` the port and Tier-0.
 
+**The hardware lab's MIDI.** The Rytm is clock master over its own USB port
+(`ot_midi.py -p "Elektron Analog Rytm MKII" start|stop`); start/stop is
+never sent to the OT's own port. A Midihub reverts to its stored preset on
+a power or USB blip, so its session pipes are saved (FROM A →
+drop-realtime-only → OCTATRACK).
+
 **The verdict vocabulary.** A gate prints `[ok]`/`[PASS]` per check and
 exits non-zero on any `[FAIL]`. `[SKIP]` means an instrument, a project
 or a toolchain is missing: `make check` still exits 0, `make accept`

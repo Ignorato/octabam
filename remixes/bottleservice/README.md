@@ -171,6 +171,15 @@ On image 88 a fourth MODULATION beside the reverb overran the DSP and
 three fit; the cycle pass that followed prices four inside the budget and
 has not been measured on the unit.
 
+Metered on 15 Sep 2026 (`rig_render.py --project OCTABAM89 --bank 3
+--part 2`, the rig of that date with a T8 return; instructions/sample,
+worst block): 1,301 on core 0 and 561 on core 1 with every station at its
+passthrough and the delay on CLEAN; delay GRAIN takes core 1 to 1,276. The
+delay alone: CLEAN 476, GRAIN 1,191, REVERSE 497. A station at neutral
+knobs takes its bypass loop and costs its static price only once a knob
+leaves neutral. GRAIN's four grains per line are the largest lever:
+`Remix.grains=2` halves the reader, −350 on core 1.
+
 ## Where it has run
 
 - **Hardware:** Sam's MKII, image 88 (built from main `d6867bd`, 27 Sep

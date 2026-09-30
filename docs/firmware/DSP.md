@@ -25,7 +25,7 @@ move.l #0xfff0000,(0xfc00801c)               ; FlexBus / chip-select config
 
 Retracted 8 Sep 2026: "`0x81` = DSP control: start" (the window is the
 HI08 register file). The sequence runs in the ColdFire port against two
-emulated cores and lands every byte (`COLDFIRE_PORT.md` O8). Payload B's
+emulated cores and lands every byte (`git show 3ceba41:docs/history/COLDFIRE_PORT.md` O8). Payload B's
 entry `P:0x38000` is written by payload A's upload: the shared window is one
 memory for both cores, P/X/Y.
 
@@ -86,8 +86,8 @@ a dispatch table.
 
 Internal P is contiguous with no gaps: A 66 modules, 8,159 words, top
 `P:0x01fdf`; B 46 modules, 7,583 words, top `P:0x01d9f`. `P:0x2000` is
-executable (CHORUS relocated there ran on the unit, `tools/build_dsptest.py`
-in git history); upper bound unmeasured. No external memory; the shared
+executable (CHORUS relocated there ran on the unit,
+`git show dc788d3a:tools/build_dsptest.py`); upper bound unmeasured. No external memory; the shared
 window runs at internal speed (`CHIP.md`).
 
 Non-effect modules (payload A): `0x2bf` summing mixdown, `0x3a1` voice
@@ -192,7 +192,7 @@ Runs on the ColdFire: per-frame DMA descriptor arithmetic over per-track
 rings in SDRAM at `0x4F502C10` (10.8 MB, `0x477...` cached alias), EMAC loop
 for gain and mix, frame routine `0x400031a0` consuming the post-FX2 read-back
 block (§6c) and returning 512 words to core 0 at `X:0x4400` (🟡 adopted from
-Bryan T, 30 Aug 2026; `docs/history/RTOS_FORK.md` §10.16.2). The routine
+Bryan T, 30 Aug 2026; `git show 3ceba41:docs/history/RTOS_FORK.md` §10.16.2). The routine
 itself — its frame, the control-snapshot selector `0x80004804`, the track
 loop, the seam a replacement can take and its per-frame protocol — is
 `COLDFIRE_DELAY.md`. ❌ Until 22 Sep 2026 this read "per-track record
@@ -242,7 +242,7 @@ neighbour before overwriting it.
 Frame setup copies 72 words from `X:0x30000` to `y:0x1b8` and writes
 parameter values back into `X:0x30000` (`P:0xa8..0xb6`). The allocator
 also hands out `Y:0x30000` as an FX2 base. X, Y and P alias in the shared
-window `0x30000`–`0x3FFFF` (`dsp/alias_probe.asm`, `CHIP.md`); `dsp_host`
+window `0x30000`–`0x3FFFF` (`git show 93a787fc:dsp/alias_probe.asm`, `CHIP.md`); `dsp_host`
 keeps the spaces separate and cannot show aliasing.
 
 ## 6. Parameters ✅
@@ -269,8 +269,8 @@ to `x:(r7+$17)` and works from `#$a0` / `#>$110`.
 
 ### Page 2: `r6+$b..$e` ✅
 
-Not `r6+6` and not display order. Measured with `dsp/pagemap_probe.asm`
-and `dsp/page2_probe.asm` (git history), and the slot map in
+Not `r6+6` and not display order. Measured with `git show 8a358161:dsp/pagemap_probe.asm`
+and `git show 99f8baf5:dsp/page2_probe.asm`, and the slot map in
 `PARAM_PAGES.md` §6. The two instances of a track overlap: the FX2 block
 starts six words after the FX1 block, so `r6_FX2+$6..$8` IS the FX1
 effect's page 2 and `r6_FX2+$9..$b` the AMP page 2 (record halfwords
@@ -404,6 +404,35 @@ an immediate `cmp`/`tge` chain. The panel's `time_fmt.s` formatter prints
 the division (`PARAM_PAGES.md` §7); the DSP-side snap rule is in
 `modules/busdelay/README.md`.
 
+### Core 0's frame: the join, the gains, the mixdown ✅ (Tim Hastie, O23)
+
+Read from `out/dsp/payload_A.asm` and confirmed under the port (lockstep,
+13 Sep 2026; `git show 666b6154:docs/firmware/COLDFIRE_PORT.md` O23).
+Payload A, core 0; per-track blocks exist as data after the join and are
+not accumulated in place.
+
+| step | P | what |
+|---|---|---|
+| bank take | `0x4b-0x71` | waits `DSR2 == 0x8070` → bank A (`r0 = 0x8080`, `r2 = 0x4400`, `r4 = 0x4800`, `r5 = 0x4600`, `r6 = 0x4000`, `r7 = 0x4080`) or `0x80f0` → bank B (`r0 = 0x8000`, `r2 = 0x2400`, …); saved to `X:$203` (r0, the ring half), `X:$204` (r2), `X:$205` (r4), `X:$206` (r5), `X:$207` (r6), `X:$209` (r7). The DMA-in mask (P:0x75/0x77; `0x3fff` A, `0x5fff` B, patched into P:0x58c/0x59b) lands the host's `0x6400` in the other bank: the forward sent during frame N is consumed at frame N+1 |
+| host exchange | `0x73-0xe6` | bank word, HTDE wait, core 1's mailbox, the input ring copy |
+| hi/lo join | `0xe8-0xed` (`func_56a`, n0 = 0x100) | the 512 forwarded host words at `X:$204` (8 tracks × 16 samples × L/R × hi,lo; core 1's positions 0-3 = T1-T4 in slots 0-3, core 0's = T5-T8 in slots 4-7) become 256 24-bit words in place: track k's block is `X:$204 + 32k`, sample j's L at `+2j`, R at `+2j+1` |
+| level path | `0xf5-0x165` | per slot three 16-bit host words from `X:$205` → `X:0..0x1d` (×256), squared into `Y:0..0x13`, scaled by the tables at `X:0x6c00` and the two master squares |
+| gain ramp | `0x203-0x237` | per slot (8 tracks + 2 inputs) a two-segment ramp over 16 samples from the state at `X:0x3dd + 5k` into `Y:0x40 + 20j + k` (cue-bus gain of track k at sample j) and `Y:0x4a + 20j + k` (its MAIN gain); one mono gain per track |
+| mixdown | `0x238-0x2d4` | `m0 = 0xff` over `X:$204`; per sample `mpy/mac y0,x0` over the eight slots (`n0 = 0x1f`) plus the two input pairs (`x:(r2)+`), `asl #2`, to ring words 0/1 (cue bus, gains `Y:0x40..`), then the same over `Y:0x4a..` to ring words 2/3 = MAIN L/R. The plain path (P:0x259) and the MASTER TRACK path (P:0x292, bit 10 of `x:(r6+$7e)`: slots 0-6 summed into `X:0x4278..` for track 8, main = slot 7 alone) both end at P:0x2d5 |
+| after it | `0x2d5-0x2eb` | `func_55a` × 4: the main pair and the input pairs packed hi/lo into `X:0x4700..` (the recorder's sources, the 128-word ch 6 read-back) |
+| cue mix | `0x30a-0x359` | ring words 4/5 = `Y:0x40+2j` × words 0/1 + `Y:0x41+2j` × words 2/3; overwrites `Y:0x40-0x5f` at P:0x32d |
+| then | `0x36a-0x39f`, `0x3a1…` | the staging copy, the dispatch context, the voices and effects of the next frame's read-back |
+
+Measured on a card with T3/T4/T7/T8 sounding: the joined block's 32-word
+windows read rms 25 / 25 / 604,919 / 604,919 / 25 / 25 / 604,919 / 604,919
+for slots 0-7 while the other bank holds the next forward in hi/lo form;
+`Y:0x4a + 20j + k` = `0x16c800` (0.178) on every slot at level 64 (× 4 =
+0.712); P:0x2d5 arrives once per frame, 66,546 / 66,574 instructions apart;
+at P:0x205 `DSR2 = 0x807d / 0x807a` (A) and `0x80fd / 0x80fa` (B), about
+half a sample before DMA2 enters the half the mixdown wrote. The port's
+per-track taps (`audio start tracks`, `tools/emu/README.md`) read the
+blocks at P:0x2d5.
+
 ## 7. Memory ✅
 
 Effect code sizes (words): DARK 1,067, SPRING 1,063, FILTER 727, PLATE 594,
@@ -416,7 +445,7 @@ X: `0x01d9f–0x0483f` (10,913 words) delay region for PLATE/DARK;
 `0x05840–0x06bff` per-instance state (`x:0x20a` = `0x6000`); `0x07a92–0x0857f`
 2,798 words; `0x08d98–0x0ffff` 29,288 words unreferenced. `X:0x4000`,
 `0xc000`, `0xf000` respond on hardware (single-word probes), but 1024-word
-walking-value blocks at `0x0C000` and `0x0F000` (`dsp/xmem_probe.asm`,
+walking-value blocks at `0x0C000` and `0x0F000` (`git show 99f8baf5:dsp/xmem_probe.asm`,
 validated in `dsp_host` first) fail: high X is not usable memory. The
 stock reverbs compute buffer addresses at runtime (DARK's lengths from the
 table at `X:0x8cfb`: `28 36 58 82 126 190 250 408 646 922 1376 2047 608 896
@@ -424,7 +453,7 @@ table at `X:0x8cfb`: `28 36 58 82 126 190 250 408 646 922 1376 2047 608 896
 An effect's memory ceiling is its allocation: 16,384 words per FX2 slot as
 pooled, 65,536 shared-window words per server since the XBUS split.
 
-Y, measured end to end (`dsp/ymemprobe.asm`, wet-only echo, `base = (p0+1)
+Y, measured end to end (`git show e8edc940:dsp/ymemprobe.asm`, wet-only echo, `base = (p0+1)
 << 10` then `<< 12`):
 
 | Y range | what |
@@ -458,15 +487,10 @@ luck, two share an entry and one writes 14K words through memory it does
 not own). `base = x:(0x255 + ((r7 − 0x6000) >> 8))` is wrong (r7 `0x6200`
 pairs with entry 1, not 2). `r7+$84..$8a` do not persist across calls
 (hangs; DARK's init steps around `$85..$8a`); `r7+$83` and `r7+$71..$78`
-do. 🟡 Under the port (21 Sep 2026, OCTABAM89_setgate on bamsep26, `--dsp-watch
-1:X:0x6285 --dsp-dirty`) BusDelay's WET glide state at `r7+$85` has one
-writer, its own per-block store, and reads back what it wrote across
-sixteen consecutive calls (the value converges and holds); image 38 runs it
-on the unit. The hardware hang stands as recorded, and on 21 Sep 2026 the delay hosted
-on a track with a playing sample printed a white-noise wash on images 39
-and 40 while its WET state and four per-call words sat at `$84..$88`
-(`docs/contributing/FAILURE_MODES.md`); the port never showed it. Since image
-41 no module of ours writes `r7+$84` or above. The words belong to the
+do. Since image 41 no module of ours writes `r7+$84` or above; the wash on
+images 39–40 that prompted it had another cause
+(`docs/contributing/FAILURE_MODES.md`, "A white-noise wash from a sample
+host"). The words belong to the
 unit between calls when the track plays a voice; which structure is not
 isolated. A per-instance stash at `Y:(0x735 + (r7 >> 8))` works on payload A and
 lands inside a live coefficient table on payload B. `dsp_host -inst N
@@ -477,24 +501,4 @@ hardcoded entry offset.
 
 ## 8. Standing rules
 
-Each established on hardware:
-
-- `mpy` does not double when `a1` is read (0.5·0.5 = `$200000`); `a0`
-  exposes the shift (`AGENTS.md`).
-- Let the AGU do address work; hand-rolled modulo cost 135 cycles/sample.
-- `dsp_asm` mis-encodes illegal parallel moves silently: `x:(rN+disp)` is
-  never parallel; `mpy y0,x0,a` takes a parallel move, `mpy x0,y0,a`
-  discards it; XY dual moves need the X pointer in R0–R3 and Y in R4–R7.
-  Disassemble what you assemble.
-- Two data moves between writing an address register and using it, never
-  an M-register write there; no M-register write inside the sample loop.
-- A modulo offset larger than the buffer is undefined: silent, not an
-  error.
-- Absolute Y scratch at `0x800` or above; `X:0x213` valid in init only.
-- When a register holding a constant is repurposed, grep every read.
-- Check the assembler's exit status, not the generator's; `| grep` masks a
-  failed assemble.
-- With an impulse input, a flat RMS envelope is instability, not a long
-  tail.
-- A harness special case is not the dispatcher; measure dispatcher facts
-  under the port (`ot_emu --dsp-pcwatch`).
+`docs/contributing/MODULES.md` "Rules for DSP code" and `AGENTS.md`.

@@ -37,3 +37,17 @@ time the sender count doubles (1→2, 2→4, 4→8), stepped per block when a
 knob leaves 0; N counts knobs, not signal, per bus.
 
 [`docs/effects/XBUS.md`](../../docs/effects/XBUS.md).
+
+## Who uses what on the bus (Y memory)
+
+| | |
+|---|---|
+| BusVerb | `Y:0x4000–0xBFFF`, 32,768 words, hardcoded, both payloads (different cores) |
+| BusDelay | LineL `Y:0x38000–0x3FFFF` + LineR `Y:0x4000–0xBFFF` on core 1 ([`busdelay`](../busdelay/README.md) "Memory") |
+| bus scratch | `Y:0x900–0xad9`, 474 words; `send_client.asm` is the authoritative map (❌ `0x900–0x980`, "parity word", 4 wet buffers until 30 Aug 2026) |
+| per-instance base stash | `Y:0x795 + (r7>>8)`, one word per instance |
+| SEND | nothing; never touches its own slot |
+
+32,768 words of shared window is the ceiling per server; BusVerb is at it,
+and BusDelay adds the private region on its core. The Y map per core is
+`docs/firmware/CHIP.md` §3.
