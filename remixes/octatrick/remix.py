@@ -33,7 +33,7 @@ from remix.schema import Proof, Remix
 REMIX = Remix(
     name="octatrick",
     family="mods", proof=Proof.HARDWARE,
-    proof_note="Tim's MKI, test build 3.0 b40 (this selection at BUILD 40), 29 Sep 2026: USB AUDIO IN brings the Mac's audio onto the inputs in a one-minute check (long runs not yet tested). The same four modules with the 26 Sep USB AUDIO (out only) ran on the same MKI through the 2.9 test builds; the last two 2.9 fixes and the tuner's function are not yet confirmed on hardware",
+    proof_note="Tim's MKI, test build 3.0 b40 (this selection at BUILD 40), 29 Sep 2026: USB AUDIO IN brings the Mac's audio onto the inputs in a one-minute check (long runs not yet tested). The same four modules with the 26 Sep USB AUDIO (out only) ran on the same MKI through the 2.9 test builds; the tuner works there (UP + TEMPO, the same build); the last two 2.9 fixes are not yet confirmed on hardware",
     doc="SYNTH MACHINE + SCALE QUANTIZER + DIRECT JUMP + TUNER + USB MIDI + USB AUDIO (20 channels out, 4 in onto A-D) on the stock effects less SPATIALIZER.",
     modules=("DIRECT JUMP", "SCALE QUANTIZER", "SYNTH MACHINE", "TUNER",
              "USB MIDI", "USB AUDIO OUT TRACKS MAIN CUE", "USB CROSSBAR", "USB AUDIO IN ABCD",
