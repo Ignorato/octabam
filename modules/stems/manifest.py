@@ -80,7 +80,10 @@ MODULE = Module(
     # project template STEMS_TEMPLATE names, default out/projects/Ultimate FX
     # 1.5.3; it SKIPs the port runs by name without one) and runs the takes
     # under the port. The card reader's round trip is remix-independent:
-    # every take is read back through it.
+    # every take is read back through it. verify_stems_menu boots the image
+    # twice (MKII, MKI) under `ot_emu --interactive` and presses the menu's
+    # keys; it SKIPs by name without the port or the template.
     gates=(Gate("tools/verify/verify_card_reader.py", remix_arg=False, venv=True),
-           Gate("tools/verify/verify_stems.py", venv=True)),
+           Gate("tools/verify/verify_stems.py", venv=True),
+           Gate("tools/verify/verify_stems_menu.py", venv=True)),
 )
