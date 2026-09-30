@@ -24,6 +24,7 @@ Modules
 - USB AUDIO OUT MAIN: MAIN L/R alone every 250 µs (28 Sep).
 - USB AUDIO OUT TRACKS MAIN CUE writes MAIN/CUE one block behind the tracks' slot; `verify_usb_align` reads 0 lag under the port (28 Sep).
 - USB AUDIO OUT: consumer anchored at the host's first EP3 IN poll (28 Sep, #514); proportional servo, targets 64/96 frames, ~3.6 ms round trip (Bryan T, 30 Sep, #518).
+- USB AUDIO OUT TRACKS MAIN CUE / OUT MAIN CUE: CUE written two blocks later while MASTER TRACK is on, where the mixdown's master path had it 32 samples ahead of MAIN (Bryan T, 29 Sep, #533).
 - CC FEEDBACK: the OT transmits a CC for every live knob byte that changes, page 1 as CC 16-45, page 2 as 62-73 (28 Sep).
 - SCENES P2: the page-2 editor-entry detours displace eight bytes; at twelve every page-2 turn under Octakit halted (28 Sep, port).
 - Character: KEY (SELF / T1) and KLVL on page 2, the compressor keyed from T1's level (29 Sep, #521); 355 → 241 static cycles/sample, bit-identical (27 Sep).

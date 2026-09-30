@@ -100,6 +100,33 @@ change in the stream. octemu's own image (image 65, `USBAUDIO.BIN` on
 the card root) enumerated as the MIDI composite only; its payload never
 installed. So there was no A/B against his build.
 
+### CUE against MAIN with MASTER TRACK on
+
+With MASTER TRACK on, CUE led MAIN by 32 samples (two blocks); with it off
+they are sample-aligned. Measured on Bryan T's MKII (29 Sep 2026: a
+transient on a track sent to both, recorded over USB in Logic; master off
+0, master on CUE 43976 vs MAIN 44008). The cause is the mixdown, not USB:
+payload A tests bit 10 of `x:(X:$207+$7e)` at `P:0x257` and on the master
+path (`P:0x292`) builds the cue bus from slots 0-6 of this frame's blocks
+but MAIN from slot 7 alone, track 8's output of the mix it was sent two
+frames earlier. The ColdFire sets that bit from the MASTER TRACK byte
+`0x80000034` (the frame record builder, `0x4000498c`). The read-back's two
+packs (`P:0x2df` MAIN, `P:0x2e2` the cue bus) read the same ring half and
+samples, so the offset is already in the words.
+
+The producer writes CUE `CUE_MASTER_LAG_BLOCKS` = 2 blocks ahead of MAIN's
+slot while `0x80000034` is nonzero, and in MAIN's slot otherwise (channels
+19/20 here, 3/4 in OUT MAIN CUE). After it, on the same unit, CUE and MAIN
+land on the same sample with the master on and with it off. With the
+master on, CUE keeps its alignment with MAIN and leaves the tracks' by 32
+samples; MAIN itself sits 32 samples behind the tracks, which
+`MAIN_CUE_LAG_BLOCKS` does not cover. No gate covers the master-on case:
+`usb_align.py` stages the tone project with `MASTER_TRACK=0`, as
+`verify_set` does ([tools/emu/README.md](../../tools/emu/README.md)). With
+the master off the producer's words are unchanged and `verify_usb_align`
+reads 0. Toggling the master leaves up to 32 frames of stale CUE in the
+ring once.
+
 ## Open
 
 - **A burst of reordered samples 0.5–1.5 s after a host opens the
