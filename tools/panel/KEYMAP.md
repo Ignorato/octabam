@@ -6,7 +6,7 @@ then under the port; keys injected on the panel UART, the screen and LEDs
 read back from the firmware's own panel stream through
 `tools/panel/panel_link.PanelLink`). The investigation logs these tables
 came from, and their replay scripts, are `git show f5148320:tools/panel/KEYMAP.md`;
-the firmware facts they established are in `docs/firmware/PANEL.md` §8.
+the firmware facts they established are in `docs/firmware/PANEL.md` section 8.
 
 A tap is `<row> <1<<bit>` then 60 ms, `<row> 0` then 100 ms (`Lab.tap`);
 holds and chords keep per-row state exactly as `panel_server.key` does.
@@ -107,7 +107,7 @@ changed). Top row of the MIXER left to right = A B C, bottom row = D E F.
 `panel_link.PanelLink.led_rows` holds and `led_bits()` flattens to
 `row*8+bit`. It is NOT the `bits` string of `panel_server`'s `/leds`:
 `_parse_leds` fills that from `0x10 <off> <8 bytes>` frames, which are LCD
-page-0 blocks (docs/firmware/PANEL.md §9), so `panel.html`'s `ledOn([byte, bit])`
+page-0 blocks (docs/firmware/PANEL.md section 9), so `panel.html`'s `ledOn([byte, bit])`
 follows the bottom band of the screen, not an LED. Measured on an own
 server (port 8577, `srv_check.log`): at boot `bits[5]` bit 0 (led_t1) = 0
 and `bits[8]` bit 2 (led_pg_playback) = 0 while the LED rows say 5=a9 and
@@ -199,7 +199,7 @@ Measured under the port on the OTLIVE fixture (the BLANK fixture for the init va
 The RX parser `0x4009228c` classes a report by its first byte's high nibble:
 `0x2r` keys, `0x3r` encoders, **`0x40` the fader** (one payload byte, the pot's
 ADC value 0..255, row nibble must be 0), `0x7r` a nine-byte report
-(docs/firmware/PANEL.md §9 has the decode). The byte goes through a calibration record at
+(docs/firmware/PANEL.md section 9 has the decode). The byte goes through a calibration record at
 `0x1ffffe` (magic `0x1234`; absent under emulation, so `pos = byte >> 1`) into
 sys message kind 4 (`0x40092fac` -> `0x40092f2c` -> `0x40061e0a`), which
 stores `0x460d16c8` (127 = scene A, 0 = scene B: the weight table
@@ -277,7 +277,7 @@ edges, the same as the page sends):
 
 Measured under the port on the OTLIVE fixture.
 
-- **The parser has no push class.** `0x4009228c` (docs/firmware/PANEL.md §9) accepts
+- **The parser has no push class.** `0x4009228c` (docs/firmware/PANEL.md section 9) accepts
   exactly four first bytes: `0x2r` keys (1 payload byte), `0x3r` encoders
   (1), `0x40` the fader (1), `0x7r` (9); anything else leaves it in its
   header state (`0x40092350`). An encoder report's byte is ADDED to the
@@ -333,7 +333,7 @@ a double-click is still `/knob/reset`).
 
 ## MKII keys (`ot_emu --mkii`)
 
-Measured under the port booted as an MKII (`docs/firmware/PANEL.md` §4c)
+Measured under the port booted as an MKII (`docs/firmware/PANEL.md` section 4c)
 on bamsep26 + OCTABAM89_setgate; the same cells tapped under MKI reach
 the dispatcher `0x40031904` and draw nothing (the MKI key table has no
 record for them).

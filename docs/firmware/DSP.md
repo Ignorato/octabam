@@ -191,8 +191,8 @@ distinct from COMPRESSOR `0x18`.
 Runs on the ColdFire: per-frame DMA descriptor arithmetic over per-track
 rings in SDRAM at `0x4F502C10` (10.8 MB, `0x477...` cached alias), EMAC loop
 for gain and mix, frame routine `0x400031a0` consuming the post-FX2 read-back
-block (§6c) and returning 512 words to core 0 at `X:0x4400` (🟡 adopted from
-Bryan T, 30 Aug 2026; `git show 3ceba41:docs/history/RTOS_FORK.md` §10.16.2). The routine
+block (section 6c) and returning 512 words to core 0 at `X:0x4400` (🟡 adopted from
+Bryan T, 30 Aug 2026; `git show 3ceba41:docs/history/RTOS_FORK.md` section 10.16.2). The routine
 itself — its frame, the control-snapshot selector `0x80004804`, the track
 loop, the seam a replacement can take and its per-frame protocol — is
 `COLDFIRE_DELAY.md`. ❌ Until 22 Sep 2026 this read "per-track record
@@ -271,7 +271,7 @@ to `x:(r7+$17)` and works from `#$a0` / `#>$110`.
 
 Not `r6+6` and not display order. Measured with `git show 8a358161:dsp/pagemap_probe.asm`
 and `git show 99f8baf5:dsp/page2_probe.asm`, and the slot map in
-`PARAM_PAGES.md` §6. The two instances of a track overlap: the FX2 block
+`PARAM_PAGES.md` section 6. The two instances of a track overlap: the FX2 block
 starts six words after the FX1 block, so `r6_FX2+$6..$8` IS the FX1
 effect's page 2 and `r6_FX2+$9..$b` the AMP page 2 (record halfwords
 18-23). Retracted 15 Sep 2026: "`r6+$6..$a` are read by nothing on the
@@ -401,7 +401,7 @@ descriptor clones (`0x400d7000` in the shipping image). An init that built a
 division table in Y through `(r1)+` killed every voice on three flashes
 (R48–R50, 24 Aug 2026); `m1` is not guaranteed linear at init; replaced by
 an immediate `cmp`/`tge` chain. The panel's `time_fmt.s` formatter prints
-the division (`PARAM_PAGES.md` §7); the DSP-side snap rule is in
+the division (`PARAM_PAGES.md` section 7); the DSP-side snap rule is in
 `modules/busdelay/README.md`.
 
 ### Core 0's frame: the join, the gains, the mixdown ✅ (Tim Hastie, O23)
@@ -439,7 +439,7 @@ Effect code sizes (words): DARK 1,067, SPRING 1,063, FILTER 727, PLATE 594,
 LO-FI 537, DJ EQ 345, CHORUS 329, FLANGER 289, EQ 282, COMB 277, SPAT 261,
 PHASER 207, COMP 180. `do` loops per process routine: SPRING 26, DARK 22,
 PLATE 21, FILTER 12, PHASER 12, LO-FI 11, COMB 9, COMP 8. Two stock reverbs
-at once glitch (`PARAM_PAGES.md` §5e); the cycle budget is in `CHIP.md`.
+at once glitch (`PARAM_PAGES.md` section 5e); the cycle budget is in `CHIP.md`.
 
 X: `0x01d9f–0x0483f` (10,913 words) delay region for PLATE/DARK;
 `0x05840–0x06bff` per-instance state (`x:0x20a` = `0x6000`); `0x07a92–0x0857f`

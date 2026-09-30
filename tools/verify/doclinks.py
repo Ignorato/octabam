@@ -14,6 +14,9 @@ with `git show 3ceba41:docs/history/<file>`), a path right after
 `git show <sha>:`, a path holding a placeholder (`<name>`, `*`, `X`, `...`), and
 CHANGELOG.md (a record of what was true at each image), and the tests'
 fixtures under tools/verify/tests/.
+
+A `.md` file may not contain the section sign: "BUILDING.md section 5",
+never the symbol (30 Sep 2026: it reads like a mis-decoded character).
 """
 import pathlib
 import re
@@ -85,6 +88,8 @@ def check(root=ROOT):
         for n, line in enumerate(text.splitlines(), 1):
             if path.suffix == ".md" and FENCE.match(line):
                 fenced = not fenced
+            if path.suffix == ".md" and "\u00a7" in line:
+                fails.append(f"{rel}:{n}: the section sign -- write 'section N'")
             if path.suffix == ".md" and not fenced:
                 for target in MDLINK.findall(re.sub(r"`[^`]*`", "", line)):
                     if re.match(r"^[a-z][a-z0-9+.-]*:", target) or target.startswith("#"):

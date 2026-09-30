@@ -174,7 +174,7 @@ state things you might assume:
   balance dial. Declare `formatter=` per slot; `verify_menu` checks the
   renderer against the count.
 - **Four per-parameter arrays carry the drawing**, `P`-relative
-  (`docs/firmware/PARAM_PAGES.md` §2, §7): `P+0x9a` count (drawn on a
+  (`docs/firmware/PARAM_PAGES.md` section 2, section 7): `P+0x9a` count (drawn on a
   fixed 0–127 scale: count 16 = ⅛ of the travel), `P+0x0ca` formatter A,
   `P+0x0fa` widget B, `P+0x12a` (zero for a stepped control; 20 of 20
   stock stepped params). A clone inherits all four from its donor.
@@ -193,7 +193,7 @@ state things you might assume:
   such slots; modules do not claim the stock dial site themselves.
 - **`link=True` draws the panel's link element** between this knob and the
   one on its left (stock's STRT/LEN, BASE/WDTH): bit 1 of the slot's enable
-  nibble (`PARAM_PAGES.md` §3b). Display only; the pair must sit in one row
+  nibble (`PARAM_PAGES.md` section 3b). Display only; the pair must sit in one row
   of three (never across slots 2–3 or 8–9), and the left knob must be drawn.
   `verify_menu` checks the bit against the manifest.
 - **A default outside its own value count is used as an index** and stalls
@@ -244,7 +244,7 @@ Put a MODE on an even slot: the panel's page-2 knob editor (`0x4003a474`)
 writes even slots (slot 6 hardware-confirmed), so a select there is
 settable from a cave or a main-menu screen through the firmware's own
 routine. An emulator run showed the same editor writing all six page-2
-slots (`docs/firmware/MAINMENU.md` §9c-ii / §9e), so the odd-slot
+slots (`docs/firmware/MAINMENU.md` section 9c-ii / section 9e), so the odd-slot
 restriction is in doubt; an even slot is the proven choice. The DSP read
 must take the field the slot is delivered in.
 
@@ -488,7 +488,7 @@ Put a MODE on an even slot: the panel's page-2 knob editor (`0x4003a474`)
 writes even slots (slot 6 hardware-confirmed), so a select there is
 settable from a cave or a main-menu screen through the firmware's own
 routine. An emulator run showed the same editor writing all six page-2
-slots (`docs/firmware/MAINMENU.md` §9c-ii / §9e), so the odd-slot
+slots (`docs/firmware/MAINMENU.md` section 9c-ii / section 9e), so the odd-slot
 restriction is in doubt; an even slot is the proven choice. The DSP read
 must take the field the slot is delivered in.
 
@@ -959,11 +959,11 @@ settings=(
   for byte.
 
 What a module does not do: invent a settings file, a save hook or a menu
-root of its own for these values (`MAINMENU.md` §5: two modules that both
+root of its own for these values (`MAINMENU.md` section 5: two modules that both
 grow one submenu cannot coexist). Its personal-material files stay its
 own.
 
-Open on 27 Sep 2026 (the proposal's §5): the UNIT filename and recovery
+Open on 27 Sep 2026 (the proposal's section 5): the UNIT filename and recovery
 policy, size ceilings, the menu's name and row structure, whether the
 stock project-copy commands carry the pair, boot ordering for UNIT
 before USB enumeration, write latency under CAPTURE.
@@ -1093,7 +1093,7 @@ a word you mean to own but do not yet reference.
 That region is two FX2 instance slots per core; BusVerb's tank is
 hardcoded there, so two such modules on one core overwrite each other. A scan cannot tell an address from a mask (`and #>$7fff`), and
 static scanning could not locate the stock reverbs' buffers, which compute
-their bases at runtime (`docs/firmware/DSP.md` §7c).
+their bases at runtime (`docs/firmware/DSP.md` section 7c).
 
 The shared 64K window (`Y:0x30000`-`0x3FFFF`) is not checked: the servers'
 buffer extents there are not established well enough to write down.

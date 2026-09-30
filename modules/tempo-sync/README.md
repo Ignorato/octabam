@@ -38,6 +38,6 @@ tempo24, Q12.4) per block on the DSP.
 milliseconds). `TEMPOCAVE=replay` installs a cave that only replays the
 displaced instructions, isolating the hook mechanism from the store.
 
-Background: [`docs/firmware/DSP.md`](../../docs/firmware/DSP.md) §6c,
-[`docs/firmware/PARAM_PAGES.md`](../../docs/firmware/PARAM_PAGES.md) §7,
+Background: [`docs/firmware/DSP.md`](../../docs/firmware/DSP.md) section 6c,
+[`docs/firmware/PARAM_PAGES.md`](../../docs/firmware/PARAM_PAGES.md) section 7,
 [`docs/firmware/MIDI.md`](../../docs/firmware/MIDI.md).

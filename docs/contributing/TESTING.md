@@ -553,4 +553,4 @@ code.
 
 [CONTRIBUTING.md "Before you open a PR"](../../CONTRIBUTING.md#before-you-open-a-pr)
 is the list. Flashing your own unit is a separate step:
-[BUILDING.md §5](../guide/BUILDING.md#5-flash-from-the-card).
+[BUILDING.md section 5](../guide/BUILDING.md#5-flash-from-the-card).

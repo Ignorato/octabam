@@ -86,13 +86,13 @@ back as SEM at whatever SHPE it held. Once per project, before play:
   in the same shape: `mpy/mac … x:(rN)+,x0`, `x:(rN),x0`, `add … a,x0`,
   `a,y0`, `x0,b`, `x1,b`, `asl a a,x1`, `asl b y0,a`; `max a,b` for the
   peak). Displaced moves (`x:(r7+$nn)`, 3.98 cycles on the chip against 2.00
-  for a pointer or register move, probe 57, `docs/firmware/CHIP.md` §2) per
+  for a pointer or register move, probe 57, `docs/firmware/CHIP.md` section 2) per
   sample: 49 / 78 / 39 / 88 before the 22 Sep pointer rewrite, 9 / 7 / 10 /
   17 after it, 4 / 0 / 0 / 1 now (SVF's cutoff ramp and its two reads; ISO's
   WDTH). LADR's G' clamp at $7f0000 went: G = g/(1+g) is 0.645 at the
   table's top (0x748894) and the ramp stops at G. Both identity gates
   bit-identical across the pass; hardware cycles unmeasured (a station's
-  timer window is pre-empted by whole frames, CHIP.md §2). Program words:
+  timer window is pre-empted by whole frames, CHIP.md section 2). Program words:
   payload A FREE 848 → 621 (four loops carry their own width block).
 - `verify_menu`, `verify_replaces`, `verify_labels` pass on the rig.
 

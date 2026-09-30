@@ -3,7 +3,7 @@
 Maps MIDI CC numbers that stock ignores onto parameters stock CC cannot
 reach. Each **block** is a range of CC numbers written to one page's slots.
 Stock incoming CC reaches page 1 only (CC 16–45): the handler admits
-`cc−16 < 30` and derives `slot = flat % 6` (`docs/firmware/MIDI.md` §2).
+`cc−16 < 30` and derives `slot = flat % 6` (`docs/firmware/MIDI.md` section 2).
 
 | block | target |
 |---|---|
@@ -93,7 +93,7 @@ CC re-defaults the knobs around it. Otherwise they resolve to a stock `rts`
 ## CC numbers
 
 Stock audio-track CC map (handler `0x4000e79c`, `docs/firmware/MIDI.md`
-§1): 7, 8, 16–61 and 112–127 are used. 0–6, 9–15 and 62–111 fall through
+section 1): 7, 8, 16–61 and 112–127 are used. 0–6, 9–15 and 62–111 fall through
 to the handler's `rts`.
 
 | range | count | holder |
@@ -117,7 +117,7 @@ their standard MIDI meanings:
 
 1. Take CC numbers from the free list below.
 2. Trace the target page's editor: its Part, shadow and lane stores, its
-   clamp, and its dirty flags. `docs/firmware/MIDI.md` §6 has the table for
+   clamp, and its dirty flags. `docs/firmware/MIDI.md` section 6 has the table for
    the three page-2 editors traced so far (PLAYBACK `0x4003a474`, FX2, FX1).
 3. Widen the range test at `CAVE` (today `cc−62 ≤ 11`) and add a write path
    for the block.

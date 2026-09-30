@@ -35,7 +35,7 @@ from the user's image at build time.
    ```
 
 2. Install and build the toolchain, and unpack **your own** copy of OS
-   1.40C: [BUILDING.md §0–2](docs/guide/BUILDING.md#0-what-you-need)
+   1.40C: [BUILDING.md sections 0–2](docs/guide/BUILDING.md#0-what-you-need)
    (`make setup`, `make emu-setup`, `make os && make recon`; `make emu-cf`
    for the gates that boot the image). The OS never leaves your machine.
 4. Branch from `upstream/main`, write the module (next section), and run
@@ -60,7 +60,7 @@ README.md       what it is, what was MEASURED, what is INFERRED, what is open
 plus a remix that carries it (`remixes/<name>/remix.py`, or
 `remixes/test/<name>/remix.py` for a remix of that one module, and a
 `README.md` beside it: what is in it, where it has run;
-`docs/guide/BUILDING.md` §8) and, for anything with behaviour worth pinning, a gate
+`docs/guide/REMIXER.md`) and, for anything with behaviour worth pinning, a gate
 (`tools/verify/verify_<name>.py`, named in the manifest's `gates`, run by
 `make check` for every remix that carries the module). Nothing else
 registers it: the registry discovers every `modules/*/manifest.py`, and
@@ -159,14 +159,14 @@ claim something works because it assembled.
 the gates it reaches, in order; `RUN=1` runs them. By default it runs the
 QUICK tier (the remixes users flash that carry the change, no identity, no
 `make accept`, two shards, nice 10); `FULL=1` runs every gate
-at full speed, when you choose to (`docs/contributing/TESTING.md` §6 says what
+at full speed, when you choose to (`docs/contributing/TESTING.md` section 6 says what
 quick gives up). Remixes under `remixes/test/` are left out unless
 `TESTS=1`. It refuses a tree that
 is not rebased onto the base. A change to a module reaches every remix
 that carries it; a change to the build reaches `scripts/refhash.sh check`,
 `make identity` and the cover (the fewest remixes that carry every
 module); a change to a gate reaches the remixes that run it; a doc change
-reaches `verify_docs`. TESTING.md §4 has the full routing.
+reaches `verify_docs`. TESTING.md section 4 has the full routing.
 
 **`make accept`** is the strict form of the same gates: it refuses a
 `[SKIP]`, a swallowed failure or a missing instrument, prices every
@@ -220,7 +220,7 @@ the PR template asks for it).
 ## What CI checks
 
 `.github/workflows/ci.yml` runs on every PR, on `main` and by hand, with
-no Elektron bytes. [TESTING.md §11](docs/contributing/TESTING.md#11-what-github-actions-checks)
+no Elektron bytes. [TESTING.md section 11](docs/contributing/TESTING.md#11-what-github-actions-checks)
 lists each job and what it proves. **A green CI run says nothing about a
 remix**: building, booting and playing one needs 1.40C, which is why the
 gates above run on your machine. Actions are pinned to commit SHAs; a bump

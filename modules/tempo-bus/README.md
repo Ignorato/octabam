@@ -103,7 +103,7 @@ SYNC (`0x4006730c`) screens make:
 - rows at a 7-pixel pitch;
 - the invert bar `0x40012254`.
 
-The input layer format is in `docs/firmware/MAINMENU.md` §6c.
+The input layer format is in `docs/firmware/MAINMENU.md` section 6c.
 
 Two units, both pinned in measured free runs:
 - `helpers.s` (384 B, with the row list) at `0x400d24d0`, the start of the

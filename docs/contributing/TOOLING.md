@@ -25,14 +25,14 @@ line `verify_dram_boot.py` does.
 | directory | what is in it | its doc |
 |---|---|---|
 | `tools/remix/` | **the toolkit**: the module schema, the registry, the ledger, the stock-effect list, the loader (`loader.S`), the DRAM platform (`platform_build.py`), the recipe runtime builder (`runtime_build.py`), the TUI (`app.py`), auditioning, the index and the selftest | [`tools/remix/README.md`](../../tools/remix/README.md) |
-| `tools/build/` | **the build** (`build_bus.py`) and the tools that understand the OS layout: the DSP load map, disassembly, reachability, the ELUP/`.bin` codecs, label and formatter emitters, cycle pricing | §4 below |
+| `tools/build/` | **the build** (`build_bus.py`) and the tools that understand the OS layout: the DSP load map, disassembly, reachability, the ELUP/`.bin` codecs, label and formatter emitters, cycle pricing | section 4 below |
 | `tools/verify/` | **the gates**: one `verify_*.py` per property, run by `make verify` | [`TESTING.md`](TESTING.md) |
 | `tools/harness/` | **hearing and measuring the DSP side** locally: the emulator harness (`dsp_host/`), `send_probe`, `render_reverb`, `rig_render`, `pressure`, `stress_project` | [`tools/harness/README.md`](../../tools/harness/README.md) |
 | `tools/emu/` | **the ColdFire emulators**: the headless machine port (`ot_emu/`, C++) and the Unicorn bring-up (`emu_bringup`, `emu_card`) | [`tools/emu/README.md`](../../tools/emu/README.md) |
 | `tools/panel/` | **the virtual front panel** over the port: browser and macOS app | [`tools/panel/README.md`](../../tools/panel/README.md) |
 | `tools/ghidra/` | the Ghidra project import and the DSP56300 SLEIGH spec | [`tools/ghidra/README.md`](../../tools/ghidra/README.md) |
-| `tools/hw/` | **the unit and its card**: MIDI control, capture, sweeps, project files, MIDI flashing | §7 below |
-| `tools/patches/` | local patches to the vendored toolchains (dsp56300, elektron-firmware-tool, unicorn) | §1 below |
+| `tools/hw/` | **the unit and its card**: MIDI control, capture, sweeps, project files, MIDI flashing | section 7 below |
+| `tools/patches/` | local patches to the vendored toolchains (dsp56300, elektron-firmware-tool, unicorn) | section 1 below |
 
 ## The chip, in one paragraph
 
@@ -48,7 +48,7 @@ completely separate instruction set and toolchain.
 
 ## 1. Toolchain (`make setup`, `scripts/setup.sh`)
 
-Idempotent. What to install before it: [BUILDING.md §0](../guide/BUILDING.md#0-what-you-need). It builds:
+Idempotent. What to install before it: [BUILDING.md section 0](../guide/BUILDING.md#0-what-you-need). It builds:
 
 | tool | from | what it is |
 |---|---|---|
@@ -96,7 +96,7 @@ user's own copy.
 | `tools/build/find_base.py` | recovers a raw image's load address by pointer→string correlation (`0x40000400`) |
 
 The container formats themselves (ELUP/ELEK/aPLib) are documented in
-`docs/firmware/ARCHITECTURE.md` §3.
+`docs/firmware/ARCHITECTURE.md` section 3.
 
 ## 3. Understanding the firmware
 

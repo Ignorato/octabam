@@ -2,7 +2,7 @@
 
 OS 1.40C. The Echo Freeze DELAY (FX2 id `0x08`) does not run on the DSP.
 Its DSP dispatch is a passthrough; the audio goes to the ColdFire in the
-post-FX2 read-back (`DSP.md` §6c), a per-frame routine at `0x400031a0`
+post-FX2 read-back (`DSP.md` section 6c), a per-frame routine at `0x400031a0`
 runs all eight tracks over per-track rings in SDRAM, and the result comes
 back to core 0 at `X:0x4400`. The DSP side of that ruling is `DSP.md`
 "The stock DELAY" (reachability, the id-8 substitution on hardware).
@@ -33,12 +33,12 @@ sustain 4-second delays because each has its own ring in CPU SDRAM.
 (verified only for the audio ISR `0x4000aad0`). The staged delay-time
 word `0x80005fa0` is written by the routine itself at `0x40003284..88`
 from the staged record `0x80001a00 + 96·snapshot + 12·track` (✅ 31 Aug
-2026; ❌ "96·track" until 22 Sep 2026, §2). Open: the gain-to-knob mapping
+2026; ❌ "96·track" until 22 Sep 2026, section 2). Open: the gain-to-knob mapping
 in the EMAC block; the units of the staged word.
 
 ## 2. The frame, the snapshots and the track loop ✅ objdump (22 Sep 2026)
 
-Re-read with `scripts/disasm.sh emac` against Jannik Aßfalg's note (§3):
+Re-read with `scripts/disasm.sh emac` against Jannik Aßfalg's note (section 3):
 
 - Entry `0x400031a0`: `lea -148(%sp)`, `movem.l d2-d7/a2-fp`, the EMAC
   state (MACSR, ACCEXT01/23, acc0-3, MASK) saved at `sp+116`, then
@@ -55,7 +55,7 @@ Re-read with `scripts/disasm.sh emac` against Jannik Aßfalg's note (§3):
   track `sp+72 += 12` (knobs), `sp+76 += 8` and `sp+92 += 8` (setup),
   `sp+80/84/100/104 += 68` (state records), `sp+96 += d5` (audio),
   `sp+108 += 1`. So the routine walks all eight tracks every frame, and
-  §1's open "whether tracks 5–8 share the function" is closed.
+  section 1's open "whether tracks 5–8 share the function" is closed.
 
 The frame slots a hook sees:
 

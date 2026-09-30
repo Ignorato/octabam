@@ -233,9 +233,9 @@ a patch.
 
 ### Where the detail is
 
-- `git show 3ceba41:docs/history/RTOS_FORK.md` §10.53 (the diagnosis and
-  the tempo table), §10.55 (a fix that failed), §10.56-10.57 (the cave and
-  its gates), §10.58 (the hardware result)
+- `git show 3ceba41:docs/history/RTOS_FORK.md` section 10.53 (the diagnosis and
+  the tempo table), section 10.55 (a fix that failed), sections 10.56-10.57 (the cave and
+  its gates), section 10.58 (the hardware result)
 - `remixes/test/mods/remix.py`, `remixes/test/mods/README.md`
 - `out/hw/softretrig/tempo_seam.py`; the arithmetic gate (115,200 cases)
   was the scratch script `lever_e.py`, not in the repository

@@ -69,7 +69,7 @@ Not measured on the unit: every number.
   T8's live FX2 is CF METER: N_k
   into T8's FX2 page-2 lane bytes `+0x38/+0x39` (word `$c`) and 8192 into
   `+0x3a/+0x3b` (word `$d`). The copier `0x4000cae8` delivers them to the
-  DSP record (`docs/firmware/PARAM_PAGES.md` §5c, §6).
+  DSP record (`docs/firmware/PARAM_PAGES.md` section 5c, section 6).
 - **Readout.** The DSP insert (`meter_out.asm`, FX2 id `0x0e`, 29 words)
   writes L = word `$c` / 2 and R = word `$d` / 2 as a square wave that
   flips sign every block, replacing the track's audio. N = 8192 ×

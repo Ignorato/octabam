@@ -63,7 +63,7 @@ slot-11 byte (WOW, or 0) as TIME: stamp before play (`stamp-defaults
   (marker flash, 10 Aug 2026).
 - ✅ P, X and Y alias in the shared window; the stock allocator's slot
   table (`X:0x255`, both payloads of the raw image) hands the low half to
-  core 0 and the high half to core 1 (`docs/firmware/DSP.md` §7).
+  core 0 and the high half to core 1 (`docs/firmware/DSP.md` section 7).
 - Total bus latency is 3 blocks since 22 Sep 2026: 48 samples on hardware,
   45 in the harness's 15-frame blocks (2 blocks from 17 Aug to 21 Sep;
   `docs/history/TESTPASS.md`).
@@ -367,4 +367,4 @@ build guards the combination. The build report is the free-word ledger
 
 32,768 words of shared window is the ceiling per server; BusVerb is at it,
 and BusDelay adds the private region on its core. The Y map per core is
-`docs/firmware/CHIP.md` §3.
+`docs/firmware/CHIP.md` section 3.

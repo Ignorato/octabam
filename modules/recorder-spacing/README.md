@@ -9,7 +9,7 @@ The length converter returns one constant length for a whole loop (82,687 at
 exact fractional period, so consecutive arms are alternately 82,687 and
 82,688 samples apart. Where they disagree the buffer's wrap splices two input
 moments two samples apart: a −26 dB, ~1 ms scuff on alternate bars (measured
-on hardware as OCTABAM82; `git show 3ceba41:docs/history/RTOS_FORK.md` §10.53, §10.56).
+on hardware as OCTABAM82; `git show 3ceba41:docs/history/RTOS_FORK.md` section 10.53, section 10.56).
 The loop click and its four fixes: [`recorder-hold`](../recorder-hold/README.md#the-loop-click-what-it-is-and-how-to-test-it).
 
 ## Measured

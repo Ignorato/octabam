@@ -76,7 +76,7 @@ Page layout history: 16 Sep 2026 put MIX bottom right and SAT top left.
 - 22 Sep 2026: the sample loop reads its coefficients through two 16-word
   post-increment rings and its state through pointers; displaced `(r7+$..)`
   moves per sample path went TAPE 79 / TUBE 74 / INFL 62 -> 0. Probe 57
-  (`docs/firmware/CHIP.md` §2) timed a one-word displaced move at 3.98 cycles
+  (`docs/firmware/CHIP.md` section 2) timed a one-word displaced move at 3.98 cycles
   against 2.00 for a pointer or register move in a one-instruction DO loop,
   so the words the pricer counts understate the chip's cost of the old form.
   Nine renders (three modes x two knob sets, DRV 0 with FOLD, T8 GLUE, T8

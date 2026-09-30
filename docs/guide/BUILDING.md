@@ -4,7 +4,7 @@ From a fresh machine to a flashed unit, and back to stock. Every image is
 built on your own computer from your own copy of Octatrack OS 1.40C.
 
 > **This is not official Elektron firmware.** Flashing a modified OS can
-> leave the unit unusable until you recover it (§7), and puts your warranty
+> leave the unit unusable until you recover it (section 7), and puts your warranty
 > in question. Nothing here is endorsed by, supported by, or affiliated
 > with Elektron. You flash at your own risk.
 >
@@ -19,7 +19,7 @@ run on a unit); substitute any remix name.
 
 - A Mac with the Xcode Command Line Tools (`xcode-select --install`:
   `git`, `make`, a C compiler) and [Homebrew](https://brew.sh), or Linux /
-  WSL2 (§1a below).
+  WSL2 (section 1a below).
 - `python3` (3.10+; the build is stdlib only).
 - `cmake` and [uv](https://docs.astral.sh/uv/): `brew install cmake uv`.
   uv provisions `.venv` (`make emu-setup`: `unicorn`, `textual`,
@@ -92,7 +92,7 @@ source $HOME/.local/bin/env
   disassembler here under a different name, hence the symlink.
   `scripts/disasm.sh emac` shells out to `m68k-elf-objdump`; without it
   the only decoder left is radare2, which silently invents code on this
-  CPU (`docs/contributing/TOOLING.md` §3). Check it:
+  CPU (`docs/contributing/TOOLING.md` section 3). Check it:
   `scripts/disasm.sh emac 0x40003664 8` must print `msacl`, not
   `invalid`. The symlink goes in `/usr/local/bin`: `~/.local/bin` is on
   PATH only in login shells, and `wsl.exe -d Ubuntu -- bash script.sh`
@@ -198,7 +198,7 @@ warning).
    `r7+$82` or BusDelay `$2e0000`, survives and the engine skips its
    warm-up).
 
-This path needs a unit that boots; otherwise §5b.
+This path needs a unit that boots; otherwise section 5b.
 
 `tools/build/make_bin.py` builds the `.bin`; `tools/build/bin_decode.py`
 decodes the official file, validates its checksum and round-trips ours.
@@ -216,7 +216,7 @@ decodes the official file, validates its checksum and round-trips ours.
 5. Wait through PREPARING FLASH → UPDATING FLASH. Do not power off or
    disconnect during either.
 6. The unit may update its bootstrap. Let it finish booting, then
-   power-cycle (§5 step 5).
+   power-cycle (section 5 step 5).
 
 ## 6. After the flash
 
@@ -261,9 +261,9 @@ card.
 ## 8. Back to stock, or another remix
 
 - **Stock:** flash `downloads/extracted/OCTATRACK_OS1.40C.syx` over MIDI
-  (§7), or copy the official `.bin` from Elektron's zip to the card and
-  flash it as in §5. The card and projects are not touched.
+  (section 7), or copy the official `.bin` from Elektron's zip to the card and
+  flash it as in section 5. The card and projects are not touched.
 - **Another remix:** build and flash it the same way, then stamp projects
-  as in §6.
+  as in section 6.
 
 Composing your own remix: [REMIXER.md](REMIXER.md).

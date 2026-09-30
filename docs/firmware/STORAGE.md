@@ -1,6 +1,6 @@
 # The card, the project files and the slots
 
-OS 1.40C, ColdFire side, above the ATA stack (`ARCHITECTURE.md` §5): the
+OS 1.40C, ColdFire side, above the ATA stack (`ARCHITECTURE.md` section 5): the
 filesystem vtable, the sample-slot loader and its status records, where a
 Part lives, and what the unit writes to the card. Read by nordseele for
 octalab ([`nordseele/octalab-notes`](https://github.com/nordseele/octalab-notes),
@@ -54,7 +54,7 @@ patterns' at `0x1001614e`). A bank write alone is lost at boot.
 `0x40029a4c(src, part)` writes both, sets `bank + 0x95048` / `0x100b145e`,
 and re-applies with `0x40009094(bank, part)` (also copies scenes A/B at
 `part + 0x10/0x11` into `0x80000ed4`). The page arrays inside a Part are
-`PARAM_PAGES.md` §5.
+`PARAM_PAGES.md` section 5.
 
 ## 4. The card from the host (nordseele's `PROJECT_FILE.md`, MKI) ✅
 

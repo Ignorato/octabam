@@ -219,7 +219,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 ## "Z" screen / won't boot: corrupt OS
 
-- **Fix:** Startup Menu recovery: power off; hold [FUNC], power on; [TRIG 3] MIDI UPGRADE; send a good `.syx` (`make midi-flash PORT=A SYX=…`, or a SysEx app). [`docs/guide/BUILDING.md`](../guide/BUILDING.md) §7.
+- **Fix:** Startup Menu recovery: power off; hold [FUNC], power on; [TRIG 3] MIDI UPGRADE; send a good `.syx` (`make midi-flash PORT=A SYX=…`, or a SysEx app). [`docs/guide/BUILDING.md`](../guide/BUILDING.md) section 7.
 
 ## Cross-core bus glitch: the accumulators' race ✅ mechanism measured, fixed
 

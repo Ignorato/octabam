@@ -72,7 +72,7 @@ WDTH. `stamp-defaults` before play.
   constants streamed at r7+$48 and the states walked from r7+$23; 15
   renders across every MODE bit-identical. A one-word displaced move runs
   3.98 cycles on the chip against 2.00 for a pointer move (probe 57,
-  `docs/firmware/CHIP.md` §2), which the word count cannot show.
+  `docs/firmware/CHIP.md` section 2), which the word count cannot show.
 - The 14 Sep 2026 build against its reading estimates: words were
   estimated 700..900 and came in 300 higher (the phaser's unrolled tap
   weighting is ~180 words per channel pair, the Hermite read 90); cycles

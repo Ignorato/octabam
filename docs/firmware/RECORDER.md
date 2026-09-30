@@ -44,7 +44,7 @@ arm reads the FOUT slot is open.
 `+0x8e57`); `[0x80000004]` is the pattern. Pattern records are `0x8ed8`
 bytes (16 fill `blob + 0 .. 0x8ed80`), parts `0x18b2` from `blob + 0x8ed80`.
 `git show 3ceba41:docs/history/NOTES.md`'s `+0x8f385` "sequenced data" is the recorder TRIG byte. `DSP.md`
-§6c's `0x400060c4` is the PICKUP arm length (FOUT ÷ tempo24), not a
+section 6c's `0x400060c4` is the PICKUP arm length (FOUT ÷ tempo24), not a
 tempo→frame site; `0x80001820` is negative.
 
 🟡 Adopted: three storage tiers (bank `+0x8f382 + part×6322 + track×12`
@@ -96,7 +96,7 @@ An exact x.5 quotient rounds down (128/16 → 82,687). The truncating
 ❌ Retracted: buffers are not DMA siblings of the delay rings; the recorder
 write path is traced (still project-dependent for the emulator).
 ❌ Corrected from the sessions' reading: `0x40004860–0x40004bd0` on DMA
-channel 0 is the ColdFire→DSP frame transfer (`DSP.md` §6c), not
+channel 0 is the ColdFire→DSP frame transfer (`DSP.md` section 6c), not
 control-surface polling; the 198/16 row was a transcription slip (53,454,
 rounded down).
 
@@ -105,7 +105,7 @@ OS 1.40C project at default recorder settings, each of the eight recorder
 buffers held 460 blocks of 0x1800 bytes: 2,826,240 bytes, 16.0 s of 16-bit
 stereo at 44.1 kHz. The length and cap arrays are `0x461053a8` and
 `0x461053e8` (14 and 6 literal references in the image ✅). One
-configuration in an emulator; no `RESERVED_RECORDER_LENGTH` setting (§1's
+configuration in an emulator; no `RESERVED_RECORDER_LENGTH` setting (section 1's
 keys) has been measured on hardware.
 
 ### 2a. The MEMORY page and RLEN MAX (port, 26 Sep 2026) ✅
@@ -178,6 +178,6 @@ firmware's arithmetic:
 - ✅ At MAX the recording ends at the next trig.
 - ❓ "The filter introduces clicks at the loop point": open.
 - Under the emulator (7 Sep 2026,
-  `git show 3ceba41:docs/history/RTOS_FORK.md` §10.16): 128 BPM / RLEN 4
+  `git show 3ceba41:docs/history/RTOS_FORK.md` section 10.16): 128 BPM / RLEN 4
   writes 20,672 every pass with arm spacings 20,672 ×7 then 20,671; 128 /
   16 writes 82,687 with trigs at ⌊event⌋ (offsets 15, 15, 14, 14).

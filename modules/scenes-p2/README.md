@@ -77,7 +77,7 @@ position.
 - **The pool.** Each Part window carries 144 bytes at `+0x90522`: `u16`
   magic `P2`, `u8` count, then 3-byte entries `scene<<3 | track`,
   `fx1<<3 | slot2`, `value`; 47 at most. The window is copied whole by
-  Part Save, Part Reload and Project Save (`docs/firmware/STORAGE.md` §3)
+  Part Save, Part Reload and Project Save (`docs/firmware/STORAGE.md` section 3)
   and by Octakit's Kit operations (`gk_copy_payload_interruptible`,
   `GK_PART_PAYLOAD_SIZE / 4` longs; no digest over it), so the pool travels
   with the part. midisc's MIDI-track lock blob lives at the same offset:
