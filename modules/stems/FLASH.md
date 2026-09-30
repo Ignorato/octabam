@@ -7,14 +7,22 @@ section 0), on Yves's MKII. It proves the menu, measures the card at 1, 2, 4
 and 8 tracks from the peak fill, records with a static machine playing, and
 compares a take's level with the stock recorder's.
 
-**The image.** Branch `stem-rec-p3`, built with the bare-metal `m68k-elf`
-toolchain (`docs/remixes/BUILDING.md` 1a): `make image REMIX=stems
-BUILD=<n>` → `out/OCTATRACK_OCTABAM<n>.bin` (the card path) and
-`out/OCTATRACK_OS1.40C_OCTABAM<n>.syx` (the MIDI path). The commit, `BUILD`
-and both hashes are recorded here when it is built. Under the port on that
-code: `verify_stems` 168 checks and the menu gate 28 on the MKII and MKI, 0
-failures; `make check-remix REMIX=stems` 208 (`docs/firmware/STEM_REC.md`
-16.2). Never flashed.
+**The image.** Built 30 Sep 2026 from branch `stem-rec-p3` at `4ec1276`
+(a clean tree), with the bare-metal `m68k-elf` toolchain (binutils 2.47,
+GCC 16.1.0; `docs/remixes/BUILDING.md` 1a): `make image REMIX=stems
+BUILD=1 VERSION=STEMS1`. The unit's OS version reads `STEMS1`.
+
+| file | path | bytes | sha256 |
+|---|---|---|---|
+| card image | `out/OCTATRACK_STEMS1.bin` | 448,580 | `da54aad5cc29778972c1ba87ee0dcef2caa5998c67993409fb2efbcae55a5654` |
+| MIDI image | `out/OCTATRACK_OS1.40C_STEMS1.syx` | 626,601 | `36b145b88ca1ca5d8455f62dd934c7b21208c7a0035623b5bed1fa7ce4a78517` |
+
+Both are built from your own 1.40C and never enter the repository. Under
+the port on that code: `verify_stems` 168 checks and the menu gate 28 on
+the MKII and MKI, 0 failures; `make check-remix REMIX=stems` 208
+(`docs/firmware/STEM_REC.md` 16.2). Never flashed. The card path
+(`docs/remixer/FLASHING.md`): copy the `.bin` to the root of the card, then
+PROJECT → OS UPGRADE → [YES].
 
 **Before you flash.**
 
