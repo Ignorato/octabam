@@ -23,8 +23,8 @@ is on neither chooser: the IN module's RX inject is placed in its words on
 payload A (the build places it only in a stock effect's harvested words,
 and the usb-io remixes give up SPATIALIZER's), so a project that selects
 it runs NONE; every other effect and row stays stock. Build with `make
-image REMIX=octatrick BUILD=N`; remixes/test/usb/README.md has the USB use
-steps. Until 29 Sep 2026 this selection was split three ways (octatrick,
+image REMIX=octatrick BUILD=N`; remixes/test/usb-out-tracks-main-cue/README.md
+has the USB use steps. Until 29 Sep 2026 this selection was split three ways (octatrick,
 octatrick-usb, octatrick-tuner).
 """
 

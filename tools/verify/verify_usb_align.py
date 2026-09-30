@@ -2,9 +2,9 @@
 """MAIN/CUE aligned with the tracks in the twenty-channel USB stream, under the
 ColdFire port: tools/harness/usb_align.py must read a lag of 0 samples.
 
-Runs the tone project (usb_sig_project.py) on the `usb-audio` remix, whose
-FX modules the project stamps, whatever remix is under test: the property
-belongs to USB AUDIO OUT TRACKS MAIN CUE's producer, not to the remix.
+Runs the tone project (usb_sig_project.py) on the `usb-out-tracks-main-cue`
+remix, whatever remix is under test: the property belongs to USB AUDIO OUT
+TRACKS MAIN CUE's producer, not to the remix.
 SKIPs without a source project (OT_PROJECT or ~/.octabam_project), the port
 or the .venv.
 """
@@ -27,7 +27,7 @@ def main():
     if not (ROOT / "out/emu/ot_emu").is_file() or not (ROOT / ".venv/bin/python3").is_file():
         print("  [SKIP] verify_usb_align: needs the port (make emu-cf) and the .venv")
         return 0
-    # usb_align builds the usb-audio remix into out/, where the gates that run
+    # usb_align builds usb-out-tracks-main-cue into out/, where the gates that run
     # after this one read the remix under test: park those artifacts and put
     # them back (28 Sep 2026: verify_usb_in read the rig's runtime.elf and
     # found no IN unit in three shard runs).
@@ -39,7 +39,7 @@ def main():
             (shutil.copytree if k.is_dir() else shutil.copy2)(k, park / k.name)
     try:
         r = subprocess.run([str(ROOT / ".venv/bin/python3"), str(ROOT / "tools/harness/usb_align.py"),
-                            "--source", src, "--remix", "usb-audio"], cwd=ROOT, capture_output=True, text=True)
+                            "--source", src, "--remix", "usb-out-tracks-main-cue"], cwd=ROOT, capture_output=True, text=True)
     finally:
         for k in keep:
             if (park / k.name).exists():

@@ -22,7 +22,7 @@ Bryan T's (25 Sep 2026).
 
 ## Measured
 
-Under the port, `verify_usb` (in `make check REMIX=usb-audio`) runs with no card and
+Under the port, `verify_usb` (in `make check REMIX=usb-out-tracks-main-cue`) runs with no card and
 silent tracks. It checks:
 
 - EP `0x83` is isochronous, 960 bytes, bInterval 2.
@@ -146,7 +146,7 @@ ring once.
 
 ## Gates
 
-- `verify_usb` (`make check REMIX=usb-audio`): the checks under *Measured*.
+- `verify_usb` (`make check REMIX=usb-out-tracks-main-cue`): the checks under *Measured*.
 - `tools/verify/verify_usb_align.py` (the manifest's gate): MAIN/CUE against the tracks.
 
 ## Variants

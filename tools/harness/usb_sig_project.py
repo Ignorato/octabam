@@ -7,9 +7,9 @@ channel-mapping and click fixture (the shape of octemu's `sig8` set).
 Eight FLEX tracks, sample slot N on track N, one trig on step 1 of A01 with
 the sample looping, so each track sounds continuously once PLAY is
 pressed: track N's left channel at 200 + 100·N Hz, its right at +50 Hz
-(T1 300/350 … T8 1000/1050), −12 dBFS, two-second loops. FX1 and FX2 sit
-at their manifest defaults (the stations are bit-exact passthroughs there,
-SEND at 0), so what the USB stream carries is the tone itself: a steady
+(T1 300/350 … T8 1000/1050), −12 dBFS, two-second loops. FX1 and FX2 are
+NONE on every track, so the project runs on any remix and what the USB
+stream carries is the tone itself: a steady
 sine has a tiny 99th-percentile sample step, and a click stands out from
 it by orders of magnitude (`tools/harness/click_scan.py`). Channel 2N-1
 must carry 200 + 100·N Hz and channel 2N that plus 50, which is what
@@ -35,11 +35,8 @@ sys.path.insert(0, str(ROOT / "tools"))
 import toolpath  # noqa: E402,F401
 from hw import ot_bank as bank  # noqa: E402
 from hw import ot_project as otp  # noqa: E402
-from remix import registry  # noqa: E402
 
 FRAMES = 88200
-FX1 = ("MODULATION", "SPECTRUM", "MODULATION", "SPECTRUM", "CHARACTER", "CHARACTER", "CHARACTER", "CHARACTER")
-FX2 = ("DELAY SERVER", "SEND", "SEND", "SEND", "REVERB SERVER", "SEND", "SEND", "SEND")
 
 
 def tone(track):
@@ -102,25 +99,17 @@ def set_markers(dest):
 LOAD = False                        # --load: trigless locks on every step (ot_spec, by name), 200 BPM
 
 
-def sends_off(m):
-    """Every send knob the FX2 module has, at 0: the servers' SEND, SEND's
-    DEL and REV."""
-    return {k: 0 for k in ("SEND", "DEL", "REV") if k in m.knob_map_all()}
-
-
-def mutate_bank(data, bank_number, mods):
+def mutate_bank(data, bank_number):
     bank.check_tags(data)
     for part in range(otp.NPARTS_ALL):
         base = otp.PART_BASE + part * otp.PART_STRIDE
         for track in range(8):
-            fx1 = otp.module_defaults(mods[FX1[track]])
-            fx2 = otp.module_defaults(mods[FX2[track]], sends_off(mods[FX2[track]]))
-            data[base + otp.FX1_OFF + track] = mods[FX1[track]].menu.fx2_id
-            data[base + otp.FX2_OFF + track] = mods[FX2[track]].menu.fx2_id
+            data[base + otp.FX1_OFF + track] = 0             # NONE
+            data[base + otp.FX2_OFF + track] = 0
             p1 = base + otp.P1_OFF + track * otp.TRACK_STRIDE
             p2 = base + otp.P2_OFF + track * otp.P2_STRIDE
-            data[p1:p1 + 12] = fx1[:6] + fx2[:6]
-            data[p2:p2 + 12] = fx1[6:] + fx2[6:]
+            data[p1:p1 + 12] = bytes(12)
+            data[p2:p2 + 12] = bytes(12)
             data[base + otp.MTYPE_OFF + track] = 1          # FLEX
             data[base + 0x2d3 + track * 5 + 1] = track       # slot N on track N (0-based index)
             data[base + 0x01b + track * 2] = 100             # AMP VOL: the tones are -12 dBFS already
@@ -141,7 +130,7 @@ def mutate_bank(data, bank_number, mods):
                 data[off + 7] |= 1               # one trig on step 1: the loop carries on
 
 
-def verify(dest, mods):
+def verify(dest):
     for num in range(1, 17):
         for suffix in ("work", "strd"):
             path = dest / f"bank{num:02d}.{suffix}"
@@ -153,8 +142,8 @@ def verify(dest, mods):
             for part in range(otp.NPARTS_ALL):
                 base = otp.PART_BASE + part * otp.PART_STRIDE
                 for track in range(8):
-                    assert data[base + otp.FX1_OFF + track] == mods[FX1[track]].menu.fx2_id
-                    assert data[base + otp.FX2_OFF + track] == mods[FX2[track]].menu.fx2_id
+                    assert data[base + otp.FX1_OFF + track] == 0
+                    assert data[base + otp.FX2_OFF + track] == 0
                     assert data[base + 0x2d3 + track * 5 + 1] == track
             if suffix != "work":
                 continue
@@ -169,8 +158,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--source", type=pathlib.Path, required=True, help="a locally saved Octatrack project (the template)")
     ap.add_argument("--out", type=pathlib.Path, default=ROOT / "out/usb-sig-project")
-    ap.add_argument("--remix", default="usb-audio")
-    ap.add_argument("--load", action="store_true", help="trigless locks on 63 steps x 15 slots per track, 200 BPM")
+    ap.add_argument("--load", action="store_true", help="trigless locks on 63 steps x 3 slots per track, 200 BPM")
     args = ap.parse_args()
     global LOAD
     LOAD = args.load
@@ -179,10 +167,6 @@ def main():
         ap.error(f"{dest} exists; choose a new --out directory")
     if not (source / "project.work").is_file() or not (source / "bank01.work").is_file():
         ap.error("source needs project.work and bank01.work")
-    remix = registry.remix(args.remix)
-    mods = registry.modules()
-    if not all(k in remix.modules for k in set(FX1 + FX2)):
-        ap.error(f"{args.remix} no longer contains the required modules")
     dest.mkdir(parents=True)
     for src in source.iterdir():
         if src.is_file() and src.suffix in (".work", ".strd"):
@@ -190,30 +174,22 @@ def main():
     set_project_text(dest)
     set_markers(dest)
     for num in range(1, 17):
-        otp._bank_write(dest, num, lambda data, n=num: mutate_bank(data, n, mods), guard=False)
+        otp._bank_write(dest, num, lambda data, n=num: mutate_bank(data, n), guard=False)
     otp.write_stored(dest)
-    verify(dest, mods)
+    verify(dest)
     if LOAD:
         # Trigless locks on steps 2..64 of A01, every track, by knob name
-        # through tools/hw/ot_spec.py: the playback page (PTCH 64, RATE 127),
-        # AMP VOL 100, every FX1 knob at the module's default and every FX2 send at 0
-        # -- the values the part already holds, so the sequencer applies
-        # fourteen locks per step and the tone does not change.
+        # through tools/hw/ot_spec.py: the playback page (PTCH 64, RATE 127)
+        # and AMP VOL 100 -- the values the part already holds, so the
+        # sequencer applies three locks per step and the tone does not change.
         import json
         import subprocess
-        sys.path.insert(0, str(ROOT / "tools/hw"))
-        import ot_spec
         steps = {str(s): None for s in range(2, 65)}
         tracks = {}
         for track in range(8):
-            fid = mods[FX1[track]].menu.fx2_id
-            names = ot_spec.knob_names(fid)
-            fx1 = {names[i]: int(otp.module_defaults(mods[FX1[track]])[i]) for i in range(6) if not names[i].startswith("P")}
             tracks[str(track + 1)] = {"locks": {
                 "playback": {s: {"PTCH": 64, "RATE": 127} for s in steps},
-                "amp": {s: {"VOL": 100} for s in steps},
-                "fx1": {s: dict(fx1) for s in steps},
-                "fx2": {s: sends_off(mods[FX2[track]]) for s in steps}}}
+                "amp": {s: {"VOL": 100} for s in steps}}}
         spec = {"banks": [1], "patterns": {"1": {"tracks": tracks}}}
         spec_path = dest / "USBLOAD_spec.json"
         spec_path.write_text(json.dumps(spec))
