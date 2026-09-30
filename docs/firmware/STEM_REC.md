@@ -7138,6 +7138,16 @@ changes does it format a line, with the stock `sprintf`, into the buffer
 the row isn't showing. The frame hook is unchanged. The screen shows a
 change at the next key (16.1).
 
+**The stock `sprintf` from two tasks.** ✅ The writer task now calls
+`sprintf` (`0x40013a08`) about once a second while it records, and the UI
+task calls it for its own screens (the menu redraw at `0x40064db2` is
+one). Read from the image: `sprintf` passes its arguments to `0x40011104`,
+whose body (to `0x400115e6`, with the tail blocks that branch back into
+it) stores only through the caller's buffer and its own stack frame; the
+fixed-address stores that follow (`0x460babf0`/`0x460babf4`, from
+`0x400115f4` on) belong to the next routines. So it keeps no state of its
+own, and two tasks can use it at once.
+
 **The track rows.** A track row finds its track from the list's absolute
 selection (`+0x0c`) less row 2, with interrupts masked for the test and
 the flip. They refuse while a take records or saves, and the last track

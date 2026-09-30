@@ -1,10 +1,93 @@
-# STEM REC: crosscheck's flash plan, a record
+# STEM REC: flash A, and crosscheck's flash plan as a record
+
+## Flash A — `stems`: STEMS in MAIN MENU (staged 30 Sep 2026)
+
+Piece 4 of the roadmap (`docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`,
+section 0), on Yves's MKII. It proves the menu, measures the card at 1, 2, 4
+and 8 tracks from the peak fill, records with a static machine playing, and
+compares a take's level with the stock recorder's.
+
+**The image.** Branch `stem-rec-p3`, built with the bare-metal `m68k-elf`
+toolchain (`docs/remixes/BUILDING.md` 1a): `make image REMIX=stems
+BUILD=<n>` → `out/OCTATRACK_OCTABAM<n>.bin` (the card path) and
+`out/OCTATRACK_OS1.40C_OCTABAM<n>.syx` (the MIDI path). The commit, `BUILD`
+and both hashes are recorded here when it is built. Under the port on that
+code: `verify_stems` 168 checks and the menu gate 28 on the MKII and MKI, 0
+failures; `make check-remix REMIX=stems` 208 (`docs/firmware/STEM_REC.md`
+16.2). Never flashed.
+
+**Before you flash.**
+
+1. **Know the way back** (`docs/remixer/FLASHING.md` §1). Hold [FUNC] and
+   power on for the STARTUP MENU; [TRIG 3] is MIDI UPGRADE; send
+   `downloads/extracted/OCTATRACK_OS1.40C.syx` over a 5-pin MIDI interface.
+   The Startup Menu doesn't need MAIN MENU, so an image whose MAIN MENU
+   won't draw is still recoverable this way. Have the interface, the app
+   and the `.syx` ready before you start.
+2. **A spare card, with its contents backed up.** Your SanDisk Extreme
+   64 GB reports DMA, so every take goes through the stock WRITE DMA path,
+   which no emulator has run (crosscheck's notes below).
+3. **A `BUILD` number you haven't flashed**, so the unit's version maps to
+   one commit.
+4. **Once REC has been pressed since power-on, don't run an OS upgrade
+   without a power cycle first** (STEM_REC.md 4.7).
+
+**The tests, in order.** Photograph the screen where a test says so.
+
+1. **The menu.** Open MAIN MENU (the MAIN MENU key). **Report, with a
+   photo:** five categories, STEMS fifth under MIDI with a round dot for
+   its icon; SYSTEM still lists OS UPGRADE (don't press it); CONTROL shows
+   its six stock rows (AUDIO to METRONOME) and no STEM REC row. In STEMS:
+   REC, READY, T1 [X] to T8 [X], and PEAK 0% at the bottom. DOWN from REC
+   lands on T1, UP from T1 on REC, and DOWN from T8 stays on T8.
+2. **The track rows.** Turn T3 off and on: `T3 [ ]`, then `T3 [X]`. Turn
+   every track off: T8 stays on. Turn them back on.
+3. **A take from the menu.** REC (the status reads ARMED, the row CANCEL),
+   close the menu, PLAY, and let it record 60 s. Reopen STEMS: STOP and
+   `REC 01:0x`; press UP or DOWN and the time moves on. Press STOP (row 1):
+   SAVING, then, after a key, `DONE 01:0x`. **Report:** the folder name
+   against the unit's clock (the field order is checked for the first
+   time here, STEM_REC.md 11.2), one file per track, each file's length,
+   and whether each plays whole in a DAW.
+4. **The card's speed.** Takes of 60 s at 1, 2, 4 and 8 tracks (turn the
+   others off). **Report:** PEAK after each take, and any `RING FULL`. At
+   eight tracks the card must keep 1.41 MB/s; the ring holds about 3 s
+   (STEM_REC.md 15.4).
+5. **A static machine playing.** A take while a static machine streams
+   from the card. **Report:** whether its playback glitched, and whether
+   the take is whole.
+6. **The level.** Record the same pattern with the stock recorder
+   (resampling T1) and with STEMS. **Report:** the two levels. Under the
+   port T1 sits about 24 dB below its source (STEM_REC.md section 9,
+   unexplained).
+7. **Stock saves.** After the takes: save the project, save a sample,
+   power cycle, and load both. **Report:** both save and both load.
+
+**Stop conditions.**
+
+- **MAIN MENU won't open, draws wrong, or hangs:** power cycle. If the unit
+  won't come back to a working screen, go to the Startup Menu and send the
+  stock `.syx` (step 1 above).
+- **A hang when REC is pressed:** power cycle and stop the session
+  (`FAILURE_MODES.md`, "The unit hangs when STEM REC's REC is pressed").
+- **A take that never appears while card access stops working:**
+  STEM_REC.md 11.4. Power cycle, and don't use that card for this test
+  again.
+- **The whole unit freezing during or after a take:** power cycle, stop the
+  session, and report the card's make and model.
+
+**After the flash.** Every result, good and bad, goes into
+`docs/firmware/STEM_REC.md` (a new "Hardware" section), any new failure
+into `docs/remixer/FAILURE_MODES.md`, the image into `CHANGELOG.md`, and
+the Status of `remixes/stems/README.md` is updated.
+
+## Crosscheck's flash plan, a record
 
 Carried from `docs/effects/FLASHPLAN.md` on branch `crosscheck` (`7dee174`), which upstream does not have: upstream records flashed images in `CHANGELOG.md`, and this one has not been flashed. Read the old file with `git show 7dee174:docs/effects/FLASHPLAN.md`.
 
 ⚠️ **A record, not the plan for this branch.** It builds tag 28 from branch `crosscheck`, and what it says about the emulator is about crosscheck's port, which could not draw the screen; upstream's can (`--lcd`, `--live`). Flash A, piece 4 of the roadmap (`docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`), gets its own plan on this branch, built from this record.
 
-## Flash 13 — `stems`, tag 28: STEM REC streams T1 to the card (staged 13 Sep 2026, restaged 14 Sep, restaged for streaming 23 Sep)
+### Flash 13 — `stems`, tag 28: STEM REC streams T1 to the card (staged 13 Sep 2026, restaged 14 Sep, restaged for streaming 23 Sep)
 
 STEM REC alone (`modules/stems`, `modules/stems/README.md`), so a first
 flash can only fail in one module's ways. This is the streaming build: it
