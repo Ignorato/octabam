@@ -39,7 +39,7 @@ RUNTIME_ELF = pathlib.Path("out/platform/runtime/runtime.elf")
 LAYOUT_DIR = pathlib.Path("out/platform")      # platform_build.LAYOUT lives here, by name
 CONTROL_DESC, CONTROL_ROWS, ROW_LEN, STOCK_N = 0x400cbd54, 0x400cc5a8, 24, 6
 ROOT_DESC, ROOT_ROWS, ROOT_N = 0x400cbd8c, 0x400cc698, 4      # MAIN MENU's root (MAINMENU.md 2)
-MENU_ROWS, ROW_TRK0, MENU_VISIBLE = 11, 3, 7                   # stems.s: the STEMS list
+MENU_ROWS, ROW_TRK0, ROW_PEAK, MENU_VISIBLE = 11, 2, 10, 7     # stems.s: the STEMS list
 FRAME_SITE = 0x40004b12
 ATA_FIRST_SITE = 0x40014cfe  # the stock PIO write's first sector (STEM_REC.md 11.7)
 
@@ -135,21 +135,23 @@ def runtime_long(s, name):
 def menu_static(s):
     """The STEMS list as it ships: filled in (the boot's set-up covers only
     the stock lists), eleven rows, REC's and the tracks' actions, two
-    headings, every label as at boot, the record-dot icon."""
+    headings never next to each other (the engine skips one row with
+    action 0, not two in a row, and never moves onto a last one:
+    STEM_REC.md 16.1), every label as at boot, the record-dot icon."""
     lng = lambda a: int.from_bytes(runtime_at(s, a, 4), "big")  # noqa: E731
     txt = lambda a: runtime_at(s, a, 32).split(b"\0")[0].decode("latin1")  # noqa: E731
     lst = [lng(s["stems_list"] + 4 * k) for k in range(7)]
     check("the STEMS list ships filled in: 11 rows, 7 visible, its rows",
           lst == [MENU_ROWS, 0, 0, 0, MENU_VISIBLE, MENU_ROWS, s["stems_rows"]], f"{[hex(x) for x in lst]}")
     rows = [[lng(s["stems_rows"] + ROW_LEN * r + 4 * k) for k in range(6)] for r in range(MENU_ROWS)]
-    check("row 1 runs stems_action, rows 2 and 3 are headings, T1-T8 run stems_track_action",
-          [r[2] for r in rows] == [s["stems_action"], 0, 0] + [s["stems_track_action"]] * 8,
+    check("row 1 runs stems_action, row 2 and the last are headings, T1-T8 run stems_track_action",
+          [r[2] for r in rows] == [s["stems_action"], 0] + [s["stems_track_action"]] * 8 + [0],
           f"{[hex(r[2]) for r in rows]}")
     check("no row has a window, a getter, a child or a page id",
           all(r[1] == r[3] == r[4] == r[5] == 0 for r in rows))
     texts = [txt(r[0]) for r in rows]
-    check("the rows ship as REC, READY, PEAK 0%, T1 [X] .. T8 [X]",
-          texts == ["REC", "READY", "PEAK 0%"] + [f"T{k} [X]" for k in range(1, 9)], f"{texts}")
+    check("the rows ship as REC, READY, T1 [X] .. T8 [X], PEAK 0%",
+          texts == ["REC", "READY"] + [f"T{k} [X]" for k in range(1, 9)] + ["PEAK 0%"], f"{texts}")
     check("the category is labelled STEMS", txt(s["stems_cat_label"]) == "STEMS")
     icon = [lng(s["stems_icon"] + 4 * k) for k in range(5)]
     p0 = [lng(s["stems_icon_p0"] + 4 * k) for k in range(19)]
@@ -538,14 +540,15 @@ def labels(s):
         now = w[5] * 16 // 44100
         allowed = {f"REC {mmss(w[5])}", f"REC {(now - 1) // 60:02d}:{(now - 1) % 60:02d}"}
         check(f"labels ({when}): STOP, and REC with the take's seconds", t[0] == "STOP" and t[1] in allowed,
-              f"{t[:3]}, {w[5]} frames")
+              f"{[t[0], t[1], t[ROW_PEAK]]}, {w[5]} frames")
         secs.append(int(t[1][-2:]) if t[1].startswith("REC ") else -1)
     check("labels: the seconds rise while it records", secs[0] == 0 and secs[1] >= 1, f"{secs}")
     t, w = ui_read(s, tag, "end")
     pct = w[6] * 100 // (RING_SIZE_T1 // 64) if w else None
+    shown = [t[0], t[1], t[ROW_PEAK]] if t else None
     check("labels (end): REC, DONE with the take's length, PEAK from its peak",
-          t is not None and w[0] == ST_IDLE and t[:3] == ["REC", f"DONE {mmss(w[5])}", f"PEAK {pct}%"],
-          f"{t[:3] if t else None}, {w[5] if w else None} frames, peak {w[6] if w else None}")
+          t is not None and w[0] == ST_IDLE and shown == ["REC", f"DONE {mmss(w[5])}", f"PEAK {pct}%"],
+          f"{shown}, {w[5] if w else None} frames, peak {w[6] if w else None}")
 
 
 def nocard(s):
@@ -846,8 +849,9 @@ def overflow(s):
     check("overflow: the status names the full ring", t is not None and t[:2] == ["REC", "RING FULL"],
           f"{t[:2] if t else None}")
     t, _ = ui_read(s, "overflow", "end")
+    shown = [t[0], t[1], t[ROW_PEAK]] if t else None
     check("overflow: the re-arm shows CANCEL, ARMED and PEAK 0%",
-          t is not None and t[:3] == ["CANCEL", "ARMED", "PEAK 0%"], f"{t[:3] if t else None}")
+          shown == ["CANCEL", "ARMED", "PEAK 0%"], f"{shown}")
 
 
 def cardfail(s):

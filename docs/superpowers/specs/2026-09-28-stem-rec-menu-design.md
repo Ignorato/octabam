@@ -29,6 +29,7 @@ the unit before the first flash (piece 4). The roadmap asks for:
 | The category's name | `STEMS`: seven characters, like the longest stock name. |
 | How it's built | A category made of data, whose row labels STEM REC rewrites in memory (section 4). A screen of its own is left for piece 7; a pop-up list can't redraw by itself. |
 | After a take ends | Back to READY: one take per REC, as today. The next PLAY doesn't record unless REC is pressed again. Staying armed would need seconds in the folder name first. |
+| The cursor stopped on PEAK: the engine skips one row without an action, not two in a row (measured 29 Sep 2026) | PEAK moves to the bottom, the last row. The cursor never moves onto a last row without an action (measured), so it stays a plain row and can't be pressed. |
 | The menu doesn't redraw by itself (measured 29 Sep 2026, `STEM_REC.md` 16.1) | The status refreshes on any key: opening the menu, or a key inside it, shows it current. The labels the actions change show at once, since a key press redraws the menu. A status that ticks by itself is left for piece 7. |
 
 ## 3. What you see
@@ -44,8 +45,13 @@ scrolls.
 |---|---|---|
 | 1 | What pressing does: `REC`; `CANCEL` while armed; `STOP` while recording; `SAVING` while the files are finished | Arms, cancels, or stops the take. Nothing while saving |
 | 2 | The status: `READY`, `ARMED`, `REC 01:23`, `SAVING`, `DONE 12:34`, `NO CARD`, or an error by name | None: the cursor skips the row |
-| 3 | `PEAK 12%`: the take's largest ring fill, reset when a take is armed, kept after it | None: the cursor skips the row |
-| 4-11 | `T1 [X]` to `T8 [X]` | Turns the track on or off. Ignored while recording or saving |
+| 3-10 | `T1 [X]` to `T8 [X]` | Turns the track on or off. Ignored while recording or saving |
+| 11 | `PEAK 12%`: the take's largest ring fill, reset when a take is armed, kept after it | None: the last row, which the cursor never reaches |
+
+The two rows without an action are never next to each other: the menu
+engine skips one such row but not two in a row, and never moves onto a
+last one (measured, `STEM_REC.md` 16.1). PEAK was row 3 until the gate
+found the cursor stopping on it; Yves moved it to the bottom (29 Sep 2026).
 
 **The recorder, as today** (`modules/stems/README.md`):
 
@@ -121,9 +127,9 @@ octalab's `docs/MENU.md` (a fifth category, run on a MKI, 7 Sep 2026):
 - **The list descriptor** (0x1c bytes), shipped filled in, because the
   boot's set-up run covers only the stock descriptors: count 11, scroll 0,
   cursor 0, selection 0, visible 7, count 11, the rows pointer.
-- **Eleven rows** (0x18 bytes each). Rows 1 and 4-11 carry an action and
-  page id 0, so ENTER calls the action with one argument, 0. Rows 2 and 3
-  carry action 0: headings the cursor skips.
+- **Eleven rows** (0x18 bytes each). Rows 1 and 3-10 carry an action and
+  page id 0, so ENTER calls the action with one argument, 0. Rows 2 and 11
+  carry action 0: headings the cursor never lands on.
 - **The icon**: a window descriptor `{0x13, 0x09, 0x01, plane0, plane1}`,
   19 by 9 pixels, `plane1` the stock constant `0xff80` words.
 - **The label strings.**
@@ -190,7 +196,7 @@ and poke `stems_tracks`. Both stay where they are.
   - row 5 points at the STEMS label, the icon, and the list descriptor;
   - the list descriptor ships filled in: count 11, visible 7, the rows;
   - CONTROL is stock: count 6, its stock rows pointer;
-  - rows 2 and 3 have action 0; the others have their actions.
+  - rows 2 and 11 have action 0; the others have their actions.
 - The take runs stay, and check the labels, read from the runtime's memory:
   - during a take the status reads `REC mm:ss`, and the seconds rise;
   - after it, `DONE mm:ss` with the take's length, and row 1 reads `REC`;
@@ -212,8 +218,8 @@ MKI, each on the one-track fixture card:
    reads each one.
 2. **The recovery check:** SYSTEM opens and the cursor reaches OS UPGRADE.
    ENTER is never pressed there.
-3. In STEMS the cursor starts on REC, skips rows 2 and 3, and reaches T1
-   to T8.
+3. In STEMS the cursor starts on REC, skips row 2 both ways, reaches T1
+   to T8, and stays on T8: it never lands on row 11.
 4. T3 off: bit 2 of `stems_tracks` clears and the row reads `T3 [ ]`. On
    again: both restored.
 5. REC while stopped: ARMED, row 1 `CANCEL`. REC again: READY. Then REC,
@@ -270,7 +276,7 @@ command and its result go in the ledger and, later, in a PR body.
   on a MKI. Under the port both run; flash A proves the MKII.
 - **Text width is unknown until measured.** The plan measures it first;
   shorter forms are ready.
-- **How a heading row draws** (rows 2 and 3) is known only from octalab's
+- **How a heading row draws** (rows 2 and 11) is known only from octalab's
   MKI photos. The plan measures it under the port.
 - **The draw may read a label's pointer twice** in one redraw (to measure,
   then to draw). A switch between the two reads would draw one frame with

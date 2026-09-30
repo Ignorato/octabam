@@ -21,6 +21,9 @@ under `ot_emu --interactive`, and prints:
    the cursor goes from AUDIO to SEQUENCER, and the PNG shows its drawing.
 6. PLAY and STOP with the menu open: the transport word.
 7. NO inside a list: the screen and the focus pointer after it.
+8. The LAST row with action 0: DOWN twice from the row above it. The
+   engine skips one such row (item 5) but not two in a row (the gate, 29
+   Sep 2026); whether it can land on a last one decides STEMS's PEAK row.
 PNGs go to out/stems_runs/probe-<model>-*.png."""
 import json
 import os
@@ -100,7 +103,7 @@ def main():
         for text in ("SAME MINUTE", "WRITE FAILED", "CLOSE FAILED", "DONE 60:00", "PEAK 100%", "T8 [X]"):
             print(f"    {text!r}: box {diff_box(empty, label_box(p, rows, scratch, text))}")
         p.poke(rows, audio.to_bytes(4, "big"))
-        root_label = ROOT_ROWS + 3 * 24     # MIDI's label pointer (the stock root rows)
+        root_label = p.long(ROOT_DESC + 0x18) + 3 * 24   # MIDI's label pointer, in the live root rows
         stock = p.long(root_label)
         empty = label_box(p, root_label, scratch, "")
         wide = label_box(p, root_label, scratch, "W" * 24)
@@ -117,6 +120,22 @@ def main():
         seen.append(p.long(CONTROL_DESC + SEL))
         p.png(WORK / f"probe-{model}-heading.png")
         print(f"5. CONTROL selection: start, down, up = {seen} (a skipped heading reads [0, 2, 0])")
+        n = p.long(CONTROL_DESC)
+        p.poke(rows + 24 * (n - 1) + 8, bytes(4))     # the last row's action := 0 as well
+        p.press("down")                               # AUDIO -> SEQUENCER (INPUT skipped)
+        for _ in range(n):                            # to the row above the last, bounded
+            if p.long(CONTROL_DESC + SEL) >= n - 2:
+                break
+            p.press("down")
+        last = [p.long(CONTROL_DESC + SEL)]
+        for _ in range(2):
+            p.press("down")
+            last.append(p.long(CONTROL_DESC + SEL))
+        p.png(WORK / f"probe-{model}-last.png")
+        print(f"8. the last row ({n - 1}) with action 0: from row {n - 2}, DOWN, DOWN = {last} "
+              f"(it stays: [{n - 2}, {n - 2}, {n - 2}]; it lands: {n - 1} appears)")
+        p.press("up")
+        p.press("up")
         t0 = p.long(TRANSPORT)
         p.press("play", settle=600)
         t1 = p.long(TRANSPORT)

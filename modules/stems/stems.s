@@ -161,7 +161,11 @@ probe_name: .asciz "/PROBE.BIN"
         .equ    ROW_LEN,       24           | a menu row (MAINMENU.md 1)
         .equ    MENU_ROWS,     11
         .equ    MENU_VISIBLE,  7            | a submenu pane's rows
-        .equ    ROW_TRK0,      3            | T1's row
+        .equ    ROW_TRK0,      2            | T1's row
+        .equ    ROW_PEAK,      10           | PEAK: the last row
+| Rows with action 0 are headings. The engine skips ONE such row, not two
+| in a row, and never moves onto a last one (STEM_REC.md 16.1), so the
+| status row sits alone between REC and T1, and PEAK is the last row.
         .equ    LIST_SEL,      0x0c         | a list's absolute selection: the row under the cursor
         .global stems_cat_label, stems_icon, stems_icon_p0, stems_icon_p1, stems_list, stems_rows, stems_zero
         .equ    stems_zero, 0               | the root row's action, getter and id
@@ -183,7 +187,6 @@ stems_list:                                 | shipped filled in: the boot's set-
 stems_rows:                                 | label, window, action, getter, child, page id
         .long   lbl_rec,   0, stems_action, 0, 0, 0
         .long   lbl_ready, 0, 0, 0, 0, 0    | the status: action 0, a heading the cursor skips
-        .long   lbl_peak0, 0, 0, 0, 0, 0    | PEAK: a heading
         .long   trk1_on, 0, stems_track_action, 0, 0, 0
         .long   trk2_on, 0, stems_track_action, 0, 0, 0
         .long   trk3_on, 0, stems_track_action, 0, 0, 0
@@ -192,6 +195,7 @@ stems_rows:                                 | label, window, action, getter, chi
         .long   trk6_on, 0, stems_track_action, 0, 0, 0
         .long   trk7_on, 0, stems_track_action, 0, 0, 0
         .long   trk8_on, 0, stems_track_action, 0, 0, 0
+        .long   lbl_peak0, 0, 0, 0, 0, 0    | PEAK: a heading, the last row, which the cursor never reaches
 rec_by_state:   .long   lbl_rec, lbl_cancel, lbl_stop, lbl_saving       | row 1, by state
 st_by_state:    .long   lbl_ready, lbl_armed, 0, lbl_saving             | the status; RECORDING is the task's
 err_names:      .long   0, err_ring, err_path, err_open, err_exists, err_write, err_seek, err_close, err_task
@@ -317,7 +321,7 @@ stems_ui_state:
         cmp.l   %d1,%d0
         bne.s   .Lv_out
         lea     lbl_peak0,%a0
-        move.l  %a0,stems_rows+2*ROW_LEN
+        move.l  %a0,stems_rows+ROW_PEAK*ROW_LEN
 .Lv_out:
         rts
 
@@ -732,7 +736,7 @@ stems_ui:
 .Lu_stat:
         move.l  %d0,stems_rows+ROW_LEN
         lea     peak_buf0,%a2               | PEAK, formatted with every change
-        cmpa.l  stems_rows+2*ROW_LEN,%a2
+        cmpa.l  stems_rows+ROW_PEAK*ROW_LEN,%a2
         bne.s   .Lu_pbuf
         lea     peak_buf1,%a2
 .Lu_pbuf:
@@ -742,7 +746,7 @@ stems_ui:
         move.l  %a2,-(%sp)
         jsr     SPRINTF
         lea     16(%sp),%sp
-        move.l  %a2,stems_rows+2*ROW_LEN
+        move.l  %a2,stems_rows+ROW_PEAK*ROW_LEN
 .Lu_out:
         movem.l (%sp),%d2-%d6/%a2-%a3
         lea     28(%sp),%sp
