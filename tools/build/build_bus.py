@@ -734,7 +734,7 @@ def main():
         if _hz:
             sys.exit(f"{name}: replacing {rep} puts it on FX1 too, and "
                      f"{_hz}. Either take an id FX1 does not list, or make "
-                     f"it buffer-free (docs/remixer/MODULES.md, 'only a buffer-free "
+                     f"it buffer-free (docs/contributing/MODULES.md, 'only a buffer-free "
                      f"insert may take an FX1 row')")
         wr32(slot, clone_addr[name])
         # ...and the row the encoder scrolls, which holds the descriptor

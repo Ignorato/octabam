@@ -3,7 +3,7 @@
 Hardware, OS format, kernel, storage, audio engine, sequencer and memory
 map, as verified. ✓ = checksum from the firmware itself, byte-exact
 decompilation or direct disassembly; ~ = inferred. The DSP side is
-`docs/firmware/DSP.md`; the tools are in `docs/remixer/TOOLING.md`.
+`docs/firmware/DSP.md`; the tools are in `docs/contributing/TOOLING.md`.
 
 ## 1. Summary
 
@@ -21,7 +21,7 @@ pipeline.
 |---|---|---|
 | CPU | Freescale ColdFire **MCF5445AVR266** (32-bit, big-endian, 266 MHz) | ✓ (board photo; the on-chip ATA controller at MBAR `0xFC04_51xx` is the MCF5445x's) |
 | Audio DSP | Freescale Symphony **DSP56721** (`DSPB56721AG`): two DSP5636x cores, 200 MHz each, no external memory controller | ✓ (board photo) |
-| RAM | 128 MB SDRAM at `0x40000000` (`docs/remixer/PLACEMENT.md`) | ✓ |
+| RAM | 128 MB SDRAM at `0x40000000` (`docs/contributing/PLACEMENT.md`) | ✓ |
 | Storage | CompactFlash (FAT16/32), OS and data; boots to DEMO without CF | ✓ |
 | NOR flash | CS0 at `0x00000000`, 8 MB decode; Spansion S29GL-N ID check, size not read (§3a) | ~ |
 | Expansion bus | FlexBus (chip selects for ATA, DSP, RAM) | ✓ |
@@ -67,7 +67,7 @@ given for entry points there are ± a few bytes.
 **Chip select.** The bootstrap init (`0x400e0a1c..`) sets CSAR0 = 0,
 CSMR0 = `0x007F0001` (8 MB decode, valid), CSCR0 = `0x0C8015B0` (16-bit
 port, 5 wait states). A decode size is not a part size: SDCS0 decodes
-256 MB over a 128 MB SDRAM (`docs/remixer/PLACEMENT.md`). CS1 =
+256 MB over a 128 MB SDRAM (`docs/contributing/PLACEMENT.md`). CS1 =
 `0x10000000`, 1 MB decode; CS2 = `0x20000000`, 256 MB decode.
 
 **Part.** JEDEC command set: unlock writes at byte `0xAAAA`/`0x5554`
@@ -101,7 +101,7 @@ The current MAIN OS is 1,112,560 B, 53% of the 2,080,768 B window;
   from flash. Code stored in flash runs only after something copies it to
   RAM: the bootstrap does this for the OS region (inferred: the copy loop is not located); anything above
   `0x200000` needs its own loader (the DRAM platform's boot detour is
-  where one would sit, `docs/remixer/PLACEMENT.md`).
+  where one would sit, `docs/contributing/PLACEMENT.md`).
 - An image up to 2,080,768 B fits the region the OS already erases and
   programs. Past that, the image would overwrite the `0x1ffffa` words
   and the EFGH table, and the OS's sector table ends at `0x1f0000`.
@@ -269,7 +269,7 @@ delay's EMAC mix at `0x40003734` (`COLDFIRE_DELAY.md`).
 |---|---|
 | `0x00000000` | NOR flash, CS0, 8 MB decode (§3a) |
 | `0x10000000` | CS1, 1 MB decode |
-| `0x40000000` | SDRAM: code (OS image at `0x40000400`), data/BSS, the audio page arena, the delay rings (`docs/remixer/PLACEMENT.md`) |
+| `0x40000000` | SDRAM: code (OS image at `0x40000400`), data/BSS, the audio page arena, the delay rings (`docs/contributing/PLACEMENT.md`) |
 | `0x48000000` | the same SDRAM, uncached |
 | `0x20000000` | the DSP host port (HI08) |
 | `0x80000000` | fast/shared RAM: voice state, kernel TCBs, the double-buffered DSP frames |

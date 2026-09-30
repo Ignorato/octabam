@@ -140,12 +140,12 @@ and let a background task drain the ring to eight files.
 
 - Reuses: the file API, the writer's header layout, the 16-bit and 24-bit
   converters if their argument shape fits, the DRAM platform's detour and
-  runtime mechanism (`docs/remixer/PLACEMENT.md`).
+  runtime mechanism (`docs/contributing/PLACEMENT.md`).
 - New: one per-frame copy, one ring, one drainer task, one header fix-up.
 - Leaves the eight recorders free for the user.
 - Needs a DRAM placement for the ring. Measuring `0x46000000` to
   `0x47502c10` with samples loaded and the recorder running
-  (`docs/remixer/PLACEMENT.md`, unmeasured) is the prerequisite. The ring holds the raw 1,024-byte frames, so the
+  (`docs/contributing/PLACEMENT.md`, unmeasured) is the prerequisite. The ring holds the raw 1,024-byte frames, so the
   per-frame hook stays a memcpy and the packing to 24-bit happens in the
   drainer. At 2.82 MB/s a ring of 4 MiB holds 1.5 seconds of card stall,
   which is the budget a slow card gets before samples drop. Packing before
@@ -190,7 +190,7 @@ is real.
    sweep both. Decides where in the frame routine the hook goes.
 
 4. **DRAM for the ring.** The `0x46000000..0x47502c10` measurement
-   above (`docs/remixer/PLACEMENT.md`).
+   above (`docs/contributing/PLACEMENT.md`).
 
 5. **ColdFire headroom.** No figure exists. The "~64k instructions per
    frame" in `RTOS_FORK.md` §4 is 95,782 cycles/frame at an ASSUMED CPI of

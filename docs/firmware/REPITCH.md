@@ -7,7 +7,7 @@ string `OCTAPITCH`): the same MAIN OS as image 81, only the container's
 version field differs. Image 80
 (the second) drew the panel right but pitched the sample while keeping its
 tempo, and sounded time-stretched: the voice renderer still moved the
-sample at the old speed (`docs/remixer/FAILURE_MODES.md`). The first showed
+sample at the old speed (`docs/contributing/FAILURE_MODES.md`). The first showed
 a blank TSTR value. Markers as in `CHIP.md`: ✅ measured, 🟡 inferred.
 
 **MKI: the same image, untested there.** The MKI and MKII run one OS: the

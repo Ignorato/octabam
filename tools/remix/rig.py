@@ -105,7 +105,7 @@ def menus(mod, fx1_rows=()) -> tuple[str, ...]:
 
     Our own modules are FX2-only UNLESS THEY REPLACE A STOCK EFFECT, in
     which case they take that effect's FX1 row as well -- the build repoints
-    both FX1 tables (build_bus.py, docs/remixer/MODULES.md), confirmed by asking the
+    both FX1 tables (build_bus.py, docs/contributing/MODULES.md), confirmed by asking the
     emulated firmware to draw the page. Everything below is about a module
     wanting a NEW row rather than an existing one.
 

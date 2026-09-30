@@ -48,7 +48,7 @@ The fourteen stock FX2 effects are listed, so the chooser is stock's.
 make image REMIX=mods BUILD=1     # -> out/OCTATRACK_OCTABAM1.bin
 ```
 
-[BUILDING.md](../../../docs/remixes/BUILDING.md) is the walk-through from a
+[BUILDING.md](../../../docs/guide/BUILDING.md) is the walk-through from a
 fresh machine to a flashed unit; `make check REMIX=mods` runs every gate
 first. **Octakit migrates Parts into Kits on project load:** back up the
 card first; going back to stock can lose Kit data.

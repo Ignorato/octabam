@@ -64,7 +64,7 @@ part defaults FX1 = FILTER.
 | DSP cores | two DSP5636x cores, 200 MHz / 200 MIPS each (the part's maximum) | ✅ datasheet; ✅ 199.9 MHz = 4,532 cycles/sample on this board, measured 22 Sep 2026 (§2). ❌ 183.456 MHz / 4,160 (inferred from the payload's register writes, until 22 Sep 2026) |
 | External memory controller | none; all DSP memory is on-chip | ✅ datasheet |
 | Shared DSP memory | 8 blocks × 8 K words = 64 K words at `$030000`, reachable by both cores; P/X/Y alias there | ✅ reference manual + hardware |
-| ColdFire RAM | 128 MB SDRAM | ✅ `docs/remixer/PLACEMENT.md` |
+| ColdFire RAM | 128 MB SDRAM | ✅ `docs/contributing/PLACEMENT.md` |
 | Storage | CompactFlash (FAT16/32) | ✅ |
 
 ❌ "Two separate DSP chips": two cores of one part. ❌ "Y:0x30000-0x3FFFF is
@@ -309,7 +309,7 @@ disassemble before believing.
 `make bus REMIX=<name>` prints the live ledger (used / FREE per payload). Relocating the
 project's code is cheap (assembled with `-org`); relocating stock code is
 not (binary, absolute branch targets), so more space means taking a
-neighbour's whole module (`stock.harvested`, `docs/remixer/MODULES.md`).
+neighbour's whole module (`stock.harvested`, `docs/contributing/MODULES.md`).
 
 ## 5. Slots, tracks and parameters
 

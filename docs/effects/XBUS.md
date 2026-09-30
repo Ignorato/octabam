@@ -122,7 +122,7 @@ frames before the trig (`r0 = 0`, `n7 = split`) and a=1 for the rest
 at `r0 = 0`. Every bus participant takes its frame offset from `r0`
 (21 Sep 2026); until then the first call stashed a flag and the split in
 its block for the second, which is the suspected cause of the trig-host
-wash (`docs/remixer/FAILURE_MODES.md`).
+wash (`docs/contributing/FAILURE_MODES.md`).
 
 A track on SEND runs a client that, each block, adds its level-scaled
 audio into the current write accumulator and registers in the client

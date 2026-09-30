@@ -97,7 +97,7 @@ ISO and VOWL, whose MODE rename names the slot `---`, it prints the number:
 it reads slot 7's name from the clone (`CLONE_SPECTRUM` + 0x40, a build
 export), so its bytes depend on the clone's address and the source is the
 only truth (a build without the m68k toolchain refuses). It is pinned at
-`0x400c45b0`, the 338 B zero run (`docs/remixer/PLACEMENT.md`): the clone
+`0x400c45b0`, the 338 B zero run (`docs/contributing/PLACEMENT.md`): the clone
 window had 18 B left and the overflow run none, and floating it there
 pushed MODULATION's 454 B label formatter out of both (the build refused).
 midisc's own build used that run on hardware; in the remixer its
@@ -153,7 +153,7 @@ On Sam's unit since flash 4; the LADR voicing (PR #254) since image 21.
 ## Open
 
 - VOWL went silent once on the unit with RES up
-  (`docs/remixer/FAILURE_MODES.md`, seen once, not reproduced).
+  (`docs/contributing/FAILURE_MODES.md`, seen once, not reproduced).
 - The remaining displaced moves are the SVF's cutoff ramp (g2run += dg,
   read twice per sample) and ISO's WDTH read; the other modes step g2run
   per block by n7·dg (`fs_gramp`), the same end value.

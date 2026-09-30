@@ -75,7 +75,7 @@ image is byte-identical to the one built before the variants (27 Sep 2026).
 - **DMA memory.** The USB controller does not snoop the data cache, so the
   four dTDs and four 960-byte packet buffers are read and written only
   through the uncached SDRAM alias (address + `0x08000000`,
-  `docs/remixer/PLACEMENT.md`).
+  `docs/contributing/PLACEMENT.md`).
 - **Placement.** A DRAM unit: the loader places it in the platform reserve
   and zeroes its data, and every hook is a build-time detour. The unit is
   running before a host can enumerate, so no re-plug is needed. octemu's
@@ -183,7 +183,7 @@ on hardware is inferred from the port's structure, not measured on a unit.
   stream**, then in order for good; no frames are lost. At 24 bits it is
   on the right channel of every pair only. It was absent on one take in
   five. Whether it is the device's queue at stream start or the host's
-  stream start is not known. `docs/remixer/FAILURE_MODES.md` has the
+  stream start is not known. `docs/contributing/FAILURE_MODES.md` has the
   entry.
 - Not measured: Windows and Linux hosts; USB controller load from the
   250 µs packet rate beyond the takes above.

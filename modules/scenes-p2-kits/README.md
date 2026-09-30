@@ -21,4 +21,4 @@ her wrapper, whose protocol runs whole (marker 1, result validated), from
 a `--call` and from the panel alike. Until 28 Sep the detours displaced
 twelve bytes and that load was a nop under her: every unheld page-2 turn
 halted in `gk_track_setup_byte_fatal`, which had been read as her wrapper
-refusing a call without UI context (`docs/remixer/FAILURE_MODES.md`).
+refusing a call without UI context (`docs/contributing/FAILURE_MODES.md`).

@@ -1,23 +1,30 @@
-# The remixer: `make remix`
+# Composing a remix
 
-The interactive front end: compose a remix, hear any effect through the
-real DSP code, and see the firmware draw the choosers you composed in the
-local ColdFire emulator. Nothing in it touches hardware.
+A remix is a selection of modules: which effects the unit's FX1 and FX2
+choosers list, in which order, and which firmware mods ride along. Compose
+one in the remixer (`make remix`), or write `remixes/<name>/remix.py` by
+hand; then build and flash it as in [BUILDING.md](BUILDING.md) §3–6.
 
 ## Setup
 
+[BUILDING.md §0–2](BUILDING.md#0-what-you-need) first: the Xcode Command
+Line Tools, Homebrew, Python 3.10+, `brew install cmake uv`, then
+`make setup` and `make os && make recon`. The remixer also needs:
+
 ```bash
-make emu-setup      # uv provisions .venv with unicorn + textual
-make bus REMIX=<name>   # out/mainos_bus.bin, which the emulator view boots
-make remix
+make emu-setup                      # uv: textual, unicorn, sounddevice into .venv
+python3 scripts/make_test_audio.py  # dry wavs to audition on -> out/test_audio/
+REMIXER_SOURCES=out/test_audio make remix
 ```
 
-The frontend is `tools/remix/app.py` (Textual); `make remix` prefers
-`.venv/bin/python3` and exits with the setup hint on bare `python3`. The
-build and every check stay dependency-free. Playback is `afplay`
-(macOS); everything else runs wherever the DSP toolchain does. On Linux
-or WSL2 (`docs/remixes/BUILDING.md` §1a) `r` renders and nothing plays
-until `afplay` exists; WSLg already runs a PulseAudio server wired to
+| missing | what happens |
+|---|---|
+| `make emu-setup` | `make remix` exits: `the remixer frontend needs textual -- run: make emu-setup` |
+| `make setup` or `make os && make recon` | nothing builds or renders: every image starts from `out/raw/section_3_MAIN_OS.bin` and is assembled with `dsp_asm`, rendered with `dsp_host` |
+| a source folder | the SOURCE row is empty: it lists the wavs in `REMIXER_SOURCES`, else the folder `d` last chose, else `out/dry/`, which nothing creates |
+
+Playback is `afplay` (macOS). On Linux or WSL2 `r` renders and nothing
+plays until `afplay` exists; WSLg already runs a PulseAudio server wired to
 Windows audio, and `paplay` from `pulseaudio-utils` takes a wav:
 
 ```bash
@@ -28,24 +35,32 @@ SH
 sudo chmod +x /usr/local/bin/afplay
 ```
 
-`exec` matters: the remixer stops playback by killing that pid, and
-without it the wrapper dies while the sound plays on. `afplay` is looked
-up at play time, so no restart is needed.
+`exec` matters: the remixer stops playback by killing that pid.
 
-## One page, three panes
+## The remixer: three panes
+
+Nothing in it touches hardware. `ok-ms` loaded (`l`), the cursor in
+AVAILABLE, a 118-column terminal:
 
 ```
-┌ Available ───────┬ Choosers · bus ──┬ BusVerb ────────────────────┐
-│ ── Bus ──        │ FX1  10 rows           │ Bus · id 0x07 · tracks 5-8   │
-│    BusDelay FX2 │   1 Filter             │ TIME  64  [######......] p1  │
-│  ✓ BusVerb  FX2 │   2 Equalizer          │ MOD   30  [###.........] p1  │
-│ ── Insert ──     │   … 8 more             │ …                            │
-│    Spectrum  FX2 │ FX2  4 rows            │                              │
-│ ── Stock ──      │   1 BusVerb    2411w  │                              │
-│  ✓ Filter FX1+FX2│   2 BusDelay   2469w  │                              │
-│                  │ A 74 free · B 5 free   │                              │
-└──────────────────┴────────────────────────┴──────────────────────────────┘
+ Available                      Choosers · ok-ms                BusDelay
+── Effects: the bus ──           FX1  10 rows                   Effects: the bus · Bus · id 0x06 · FX2 · tracks 1-4
+   BusDelay           FX2         1 Filter                      Multi-mode delay: CLEAN / pitched GRAIN cloud / REVERSE, tape wow.
+   BusVerb            FX2         2 Equalizer                   FX1  no row — and cannot take one: a bus server is one per core
+   Mode Defaults      ✓           …                             FX2  pins all 4 buffer slots on the core serving tracks 1-4
+   Send               FX2        FX2  17 rows                    SOURCE …/out/test_audio
+── Effects: on a track ──         · Midi Scenes                  DEL      0    [............] p1
+   Character          FX1+FX2     · Octakit                      FDBK    60    [######......] p1
+   Spectrum           FX1+FX2     · Kits Reload                  WET    127    [############] p1
+── Machines and the sequencer ──  1 Filter                       MODE   CLEAN  [············] p2
+   Repitch            ✓           …                              TIME    20    [##..........] p2
+Budget free:  words A none  ·  words B none  ·  buf A 4/4  ·  buf B 4/4  ·  rows 17  ·  cave 4,412 B
 ```
+
+(Rendered from the app under Textual's test pilot on 30 Sep 2026, rows
+elided.) Three panes need 118 columns, two need 92; narrower shows one
+pane at a time, with a tab bar naming all three (`WIDE_COLS`,
+`TWO_UP_COLS` in `tools/remix/app.py`).
 
 | key | does |
 |---|---|
@@ -64,8 +79,9 @@ up at play time, so no restart is needed.
 | `?` / `q` | help / quit |
 
 **AVAILABLE** is everything that could be in an image: modules grouped
-bus / inserts / firmware mods / system, then the stock effects the unit
-ships. `✓` marks what the selection holds; for an effect the `FX1+FX2`
+as in the module table (the bus, on a track, machines and the sequencer,
+Parts/Kits/scenes, MIDI and USB, fixes, reference), then the stock effects
+the unit ships. `✓` marks what the selection holds; for an effect the `FX1+FX2`
 column is which choosers it *can* appear on (`stock.fx1_ids()` from the
 pristine image). A firmware mod (midisc, Octakit, the bridges, the fixes)
 has no chooser; its column is the ledger's verdict against what is loaded
@@ -212,6 +228,76 @@ under `modules/`).
 the box's own; green fits, ochre is a trade or caution, red blocks; a
 knob's level is a warm ramp by where the value sits in its range; the
 source wav muted blue; the fallback soft purple; the panel frame grey.
+
+## Writing `remix.py` by hand
+
+A remix is one directory, `remixes/<name>/`: `remix.py` holds the
+selection, `README.md` says what is in it and where it has run. The
+registry discovers every `remixes/*/remix.py` and `remixes/test/*/remix.py`;
+nothing else registers it. A remix that carries one module for that
+module's gates goes in `remixes/test/<name>/`; names are unique across
+both, and every tool takes the bare name (`make check REMIX=miniverb`).
+
+Copy an existing `remix.py` and edit it, or save one from the remixer (`s`). `remixes/bottleservice/remix.py`
+  is the bus with stations, hosts and ColdFire mods,
+  `remixes/test/euclid/remix.py` an insert beside the stock effects,
+  `remixes/ok-ms/remix.py` two ColdFire mods and no DSP code.
+
+```python
+from remix.schema import Proof, Remix
+
+REMIX = Remix(
+    name="mine",                       # == the directory name
+    doc="One line: what is in it.",
+    family="effects",                  # index section: rig, effects, mods, reference, probes
+    proof=Proof.CHECK,                 # CHECK, RENDER, PORT, HARDWARE
+    proof_note="make check, 28 Sep 2026",
+    modules=("REVERB SERVER", "DELAY SERVER", "SEND", "TEMPO SYNC",
+             "FILTER", "LO-FI"),       # the FX2 chooser, in row order
+    fallback="SEND",                   # or "NONE"
+    # fx1=("FILTER", "EQUALIZER", "SPECTRUM"),   # the FX1 chooser; omitted = stock's ten
+)
+```
+
+- `modules` is the FX2 chooser in row order. A key is a module's `key`
+  (`make modules` prints them) or a stock effect's name: FILTER,
+  EQUALIZER, DJ EQ, PHASER, FLANGER, CHORUS, SPATIALIZER, COMB FILTER,
+  COMPRESSOR, LO-FI, DELAY, PLATE REV, SPRING REV, DARK REV. A module with
+  no chooser row (a ColdFire mod, a bridge, TEMPO SYNC) sits anywhere in
+  the list. A stock effect on neither chooser keeps its code and
+  descriptor (an old project still runs it) and its words become room for
+  modules; the three reverbs are the default room, 2,724 words. The build
+  refuses a listed stock effect whose words a placed module reached, and
+  an overrun by payload: `payload B: SPECTRUM overruns the region (3599 >
+  2724 words)`.
+- `fallback` is where an FX2 id the image does not implement dispatches,
+  id 0 of a fresh part included: `"SEND"` for a remix with a bus server
+  (the track becomes a send), `"NONE"` for one without (the firmware's
+  own NONE). `NONE` beside a bus server is refused.
+- `fx1` is the FX1 chooser in row order; omitted, FX1 stays stock's ten.
+  Only a buffer-free insert may take a row; the build refuses the rest by
+  name. A row costs no words and does cost cycles: four more slots per
+  core.
+- `family`, `proof`, `proof_note` are the columns of the remix index.
+  Without them the remix lists under Reference with proof `?`.
+- Seven FX2 rows fit in place; up to 32 go to a longer list, whose
+  scrolling on the panel is inferred from stock's fifteen-row list, not
+  measured.
+- Two selected modules that claim one address, id, hook or buffer are
+  refused by name; `make modules` prints the pairwise matrix.
+- `hidden`, `named`, `grains`: [MODULES.md](../contributing/MODULES.md).
+
+Then:
+
+```bash
+make docs                       # re-render remixes/README.md (make check refuses a stale index)
+make check REMIX=mine           # build + cycles + every gate + boot under the port
+make image REMIX=mine BUILD=2   # -> out/OCTATRACK_OCTABAM2.bin
+```
+
+`make check` also refuses a remix directory without a `README.md`. A remix
+whose parameter layout differs from the one a project was saved under
+needs the stamp before play ([BUILDING.md §6](BUILDING.md#6-after-the-flash)).
 
 ## Known gaps
 

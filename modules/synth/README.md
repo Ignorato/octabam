@@ -28,7 +28,7 @@ from its own directory, so the same file builds at `modules/synth/` in
 Tim's tree and at `modules/synth/upstream/synth/` here. The engine is
 `Linked(dram=True)`: linked into the platform runtime with the other DRAM
 units and depacked at boot into the arena reserve
-(`docs/remixer/PLACEMENT.md`). The page is pinned at `0x400d24d0`, the
+(`docs/contributing/PLACEMENT.md`). The page is pinned at `0x400d24d0`, the
 start of the second free gap.
 
 ## Collisions

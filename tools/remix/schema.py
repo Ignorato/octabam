@@ -1179,7 +1179,7 @@ class Remix:
     modules: tuple[str, ...]
     fallback: str                # module KEY that unimplemented ids alias to,
                                  # or NO_FALLBACK for the firmware's own NONE
-    # ---- the remix index (docs/remixes/README.md, `make docs`) -----------
+    # ---- the remix index (remixes/README.md, `make docs`) -----------
     family: str = ""             # "rig", "effects", "mods", "reference"
     proof: Proof | None = None   # schema.Proof; as a module's
     proof_note: str = ""

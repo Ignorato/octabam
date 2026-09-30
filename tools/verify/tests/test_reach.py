@@ -230,7 +230,7 @@ class MakefileTests(unittest.TestCase):
 
 class PlanTests(unittest.TestCase):
     def test_docs_and_ci(self):
-        self.assertEqual(commands(["docs/remixer/MODULES.md", "README.md"]), ["python3 tools/verify/verify_docs.py"])
+        self.assertEqual(commands(["docs/contributing/MODULES.md", "README.md"]), ["python3 tools/verify/verify_docs.py"])
         self.assertEqual(commands([".github/workflows/ci.yml"]), ["make ci"])
 
     def test_unclassified_reaches_the_cover_and_says_so(self):

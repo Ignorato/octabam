@@ -8,7 +8,7 @@
 | here to a TABLE of payloads so that her Kit runtime and every other
 | module's DRAM code are equal payloads of one loader.
 |
-| Fixed facts (all measured, docs/remixer/PLACEMENT.md):
+| Fixed facts (all measured, docs/contributing/PLACEMENT.md):
 |   0x4010fdf0  this stub: the byte after the stock OS image (her BOOTSTRAP_LOAD)
 |   0x40001e50  the stock boot-continue call the boot site used to make;
 |               replayed first, exactly as her loader does

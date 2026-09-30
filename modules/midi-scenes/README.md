@@ -27,7 +27,7 @@ instruction, writes `gas/*.s`, then assembles and links every region at his
 address and compares. Cross-cave references are linker symbols, so octabam
 places each unit where it chooses: every unit is `dram=True`, linked into the
 platform runtime, appended behind octabam's loader and depacked at boot into
-the arena reserve (`docs/remixer/PLACEMENT.md`). Inside the OS the module
+the arena reserve (`docs/contributing/PLACEMENT.md`). Inside the OS the module
 changes only the detour and poke sites, plus the boot redirect when no other
 module supplies it.
 

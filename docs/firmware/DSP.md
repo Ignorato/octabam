@@ -4,7 +4,7 @@ Addresses are ColdFire virtual addresses (`file_offset = vaddr −
 0x40000400`) unless prefixed `P:` / `X:` / `Y:` (DSP word addresses).
 Markers as in `CHIP.md`: ✅ measured / read from the listing, 🟡 inferred.
 The build side of this (`DspSection`, ids, placement) is
-`docs/remixer/MODULES.md` and `docs/remixer/PLACEMENT.md`.
+`docs/contributing/MODULES.md` and `docs/contributing/PLACEMENT.md`.
 
 ## 1. Boot sequence ✅
 
@@ -277,7 +277,7 @@ effect's page 2 and `r6_FX2+$9..$b` the AMP page 2 (record halfwords
 18-23). Retracted 15 Sep 2026: "`r6+$6..$a` are read by nothing on the
 DSP" -- true of every FX2 effect, and the tempo cave that relied on it
 overwrote the FX1 station's page 2 on every delay and reverb host
-(`docs/remixer/FAILURE_MODES.md`).
+(`docs/contributing/FAILURE_MODES.md`).
 
 | display slot | field |
 |---|---|
@@ -328,7 +328,7 @@ Read-back: the dispatcher (`P:0x54`/`0x64`) loads `r5 = X:0x4600` (A) /
 word `$6600` lands in the SAME buffer: one buffer per frame, and the
 pull (DMA channel 1, armed at `P:0x37c` in B) must finish before the first
 FX2 copy overwrites it. ✅ Measured on the unit 25 Sep 2026 (images
-32-38, `docs/remixer/FAILURE_MODES.md`): core 1's pull reaches T1's 64
+32-38, `docs/contributing/FAILURE_MODES.md`): core 1's pull reaches T1's 64
 words about 4.5 samples after T1's proc entry, jittering by half a
 sample or more with the pattern position (the port models +0.26). A
 module whose proc ends inside it tears its block; BusDelay pads its exit
@@ -465,7 +465,7 @@ sixteen consecutive calls (the value converges and holds); image 38 runs it
 on the unit. The hardware hang stands as recorded, and on 21 Sep 2026 the delay hosted
 on a track with a playing sample printed a white-noise wash on images 39
 and 40 while its WET state and four per-call words sat at `$84..$88`
-(`docs/remixer/FAILURE_MODES.md`); the port never showed it. Since image
+(`docs/contributing/FAILURE_MODES.md`); the port never showed it. Since image
 41 no module of ours writes `r7+$84` or above. The words belong to the
 unit between calls when the track plays a voice; which structure is not
 isolated. A per-instance stash at `Y:(0x735 + (r7 >> 8))` works on payload A and

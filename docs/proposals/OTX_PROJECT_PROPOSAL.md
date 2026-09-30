@@ -111,7 +111,7 @@ settings. Concretely:
 
 ### 2.1 Where settings live now
 
-- **In the Part** — every FX module's twelve parameters. ✅ [`MODULES.md`](../remixer/MODULES.md) names the trap: "a stored value does the same, and the schema cannot see
+- **In the Part** — every FX module's twelve parameters. ✅ [`MODULES.md`](../contributing/MODULES.md) names the trap: "a stored value does the same, and the schema cannot see
   it". A Part saved under an older layout gives the new layout its old bytes,
   and a value outside the new count stalls the sequencer. Part parameters
   stay where they are. This proposal is for everything that is *not* a Part
