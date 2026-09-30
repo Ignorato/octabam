@@ -435,7 +435,11 @@ ci-emu: ## CI: build the ColdFire port (tools/emu/ot_emu) and run its unit tests
 	ctest --test-dir out/emu-ci --output-on-failure -E '^(rtos|dsp|repitch-stock|repitch-patch)$$'
 
 .PHONY: ci
-ci: reach test-acceptance verify-docs ci-dsp ci-emu ## Everything CI runs, locally
+ci: test-acceptance verify-docs ci-dsp ci-emu ## Everything CI runs, locally
+	@# The gate list only, as the CI job prints it: `make reach RUN=1` runs
+	@# `make ci` when the Makefile or the workflow changes, and an inherited
+	@# RUN=1 made this reach run the whole list again, recursively.
+	$(MAKE) reach RUN= KEEP= JOBS= FULL=
 
 .PHONY: emu-setup
 emu-setup: ## Provision the remixer deps (unicorn + textual) into .venv via uv
