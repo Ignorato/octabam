@@ -75,13 +75,42 @@ def link_runtime(units, work: pathlib.Path, defsyms: dict, base: int, includes=N
     return raw.read_bytes(), _nm(elf, work)
 
 
-def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, includes=None):
+def preboot_layout(layout, entries):
+    """Declare cached-address extents and reject overlap with the runtime/stage."""
+    if not entries:
+        return []
+    if not all(k in layout for k in ('base', 'runtime_end', 'stage', 'stage_end', 'ceiling')):
+        raise ValueError('pre-boot payloads require a declared platform arena layout')
+    occupied = [('runtime', layout['base'], layout['runtime_end']),
+                ('runtime stage', layout['stage'], layout['stage_end'])]
+    result = []
+    for entry in entries:
+        for role, length in (('dst', entry['rawlen']), ('stage', len(entry['blob']))):
+            start = entry[role]
+            if 0x48000000 <= start < 0x50000000:
+                start -= UNCACHED
+            end = start + length
+            name = entry['name'] + ' ' + role
+            if length <= 0 or not layout['base'] <= start < end <= layout['ceiling']:
+                raise ValueError(f'pre-boot {name} lies outside the platform arena')
+            for other, lo, hi in occupied:
+                if start < hi and lo < end:
+                    raise ValueError(f'pre-boot {name} overlaps {other}: {start:#x}..{end:#x}')
+            occupied.append((name, start, end))
+            result.append(dict(name=name, start=start, end=end))
+    return result
+
+
+def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, preboot=(), includes=None):
     """units: [(module key, Linked)] with dram=True, in link order.
     payloads: [dict(name, blob, stage, dst, rawlen, rhash, backup)] for
     payloads built elsewhere (Octakit): `blob` = signature + GKA3 stream.
     reserve: (base, size) of the arena reserve the runtime lives in;
     required when there are units. defsyms: extra {name: value} for the
-    link (a bridge's continuation targets, schema.Override). Returns
+    link (a bridge's continuation targets, schema.Override). preboot:
+    [dict(name, blob, stage, dst, rawlen, rhash)] depacked BEFORE the
+    boot-continue call (Analog BD's DSP uploads); the loader
+    carries that section only when there is one. Returns
     (append bytes, symbols of the octabam runtime, boot poke, payload
     names) and writes LAYOUT."""
     import json
@@ -115,6 +144,11 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, inclu
         (work / "runtime.raw").write_bytes(raw)
         layout.update(base=base, runtime_end=base + len(raw), stage=stage,
                       stage_end=stage_end, ceiling=ceiling, size=size)
+    if preboot:
+        try:
+            layout['preboot'] = preboot_layout(layout, preboot)
+        except ValueError as exc:
+            sys.exit(f'platform build: {exc}')
     (work / LAYOUT).write_text(json.dumps(layout, indent=2) + "\n")
     # the table and the blobs, as assembler input
     inc = [f"        .long {len(entries)}"]
@@ -126,8 +160,18 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, inclu
     for i in range(len(entries)):
         inc += [f"        .align 4", f"blob{i}:", f"        .incbin \"blob{i}.bin\""]
     (work / "table.inc").write_text("\n".join(inc) + "\n")
+    pre = [f"        .long {len(preboot)}"]
+    for i, e in enumerate(preboot):
+        (work / f"preblob{i}.bin").write_bytes(e["blob"])
+        pre += [f"        .long preblob{i}, {len(e['blob'])}, 0x{roll(e['blob'][4:]):08x}, "
+                f"0x{e['stage']:08x}, 0x{e['dst']:08x}, {e['rawlen']}, 0x{e['rhash']:08x}, 0"]
+    for i in range(len(preboot)):
+        pre += [f"        .align 4", f"preblob{i}:", f"        .incbin \"preblob{i}.bin\""]
+    if preboot:
+        (work / "pretable.inc").write_text("\n".join(pre) + "\n")
     o, e, b = work / "loader.o", work / "loader.elf", work / "append.bin"
-    _run(["m68k-elf-as", "-mcpu=5475", "-I", work, "-o", o, ROOT / "tools/remix/loader.S"], work)
+    _run(["m68k-elf-as", "-mcpu=5475", "-I", work, *(["--defsym", "PREBOOT=1"] if preboot else []),
+          "-o", o, ROOT / "tools/remix/loader.S"], work)
     _run(["m68k-elf-ld", f"-Ttext=0x{LOADER_AT:x}", "-o", e, o], work)
     _run(["m68k-elf-objcopy", "-O", "binary", e, b], work)
     append = b.read_bytes()
@@ -135,4 +179,4 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, inclu
     # needed when no other payload's own writes already route boot here
     boot_poke = (0x4000050C, bytes.fromhex("4eb940001e50"),
                  b"\x4e\xb9" + LOADER_AT.to_bytes(4, "big"), "boot -> octabam loader")
-    return append, symbols, boot_poke, [e["name"] for e in entries]
+    return append, symbols, boot_poke, [e["name"] for e in list(preboot) + entries]

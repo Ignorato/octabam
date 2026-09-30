@@ -11,6 +11,14 @@ The full text before this rewrite: `git show 666b6154:CHANGELOG.md`.
 
 ## Unreleased
 
+- Analog BD: engine selection now lives only in the pool-style browser; the
+  former SRC SETUP MODEL control and its encoder editing path are removed.
+  Both source outputs are 12.04 dB louder than the 29 September revision,
+  with matching default hit energy (within 0.03 dB over 500 ms) and default
+  peaks of −7.31/−1.59 dBFS for 808/909. The post-desk gains preserve every
+  internal state; 909 overloads limit at full scale. The 808 uses the same
+  three output instructions; the 909 adds four instructions per sample.
+
 Remixes
 - bottleservice takes the computer's stereo output onto inputs C/D (USB AUDIO IN CD + USB CROSSBAR); USB AUDIO OUT MASTER polls every 250 µs (28 Sep).
 - Twelve `usb-io-<out>-<in>` test remixes and `usb-out-main`; USB remixes named by direction (`usb-full` → `usb-out-tracks`, `usb-lean` → `usb-out-tracks-main-cue`, `usb-master` → `usb-out-master`, `usb-mc` → `usb-out-main-cue`) (28 Sep).
@@ -169,6 +177,18 @@ On the unit: sequencer stuck on step 1 at the first play.
 On the unit: sequencer stuck on step 1 at the first play (one-word displaced
 Y stores, a form no stock site runs; inferred).
 - The core-1 rotation tracker heals a lead of one within a frame (stamps in the cleared buffers, a hold flag).
+
+## Analog BD1 — MK1 audition reported 28 Sep 2026
+
+- `OCTATRACK_ANALOGBD1.bin`, SHA256
+  `3672634dedb8ce0138d7cf4216bd051a47afac6601dcd2a3c1830def24f39704`.
+  mathgonzlez reported that every parameter worked and tweaking caused no
+  glitches or unexpected sounds; parameter labels were close to the area edge.
+- This is the earlier standalone Analog BD image. The later engine browser,
+  horizontal navigation and eight-track admission were not in this report.
+  Save/reload, eight simultaneous voices and every FX combination remain
+  outside its reported coverage. See `modules/analog-bassdrum/README.md`.
+
 
 ## Image 43 — 21 Sep 2026 (`OCTABAM43`, bamsep26 at `b3f6471`)
 
