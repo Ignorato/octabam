@@ -9,7 +9,7 @@ refuses it beside KITS RELOAD and MIDI SCENES. octatrick's three are out
 (measured 28 Sep 2026): DIRECT JUMP's hook at 0x400a06d6 is a site
 Octakit's recipe writes, and SCALE QUANTIZER's 2,916 B ROM unit beside
 REPITCH's 576 B leaves CC MAP's 724 B cave no run in the free ROM; they
-live in octatrick / octatrick-usb. Booted under the ColdFire port; unflashed as a
+live in octatrick. Booted under the ColdFire port; unflashed as a
 whole (ok-ms, its subset, has run on hardware).
 
 Octakit migrates Parts into Kits on load: back up projects first. midisc's

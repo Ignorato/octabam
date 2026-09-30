@@ -4,7 +4,7 @@ A pattern change lands at the next step instead of at the pattern's end,
 the Analog Four / Rytm direct jump: CHAIN AFTER's unused value 1 becomes
 DIRECT. Built from
 [timhastie/octatrick-modules](https://github.com/timhastie/octatrick-modules)
-(submodule `upstream/`, pinned to `v9.1`). `Kind.CF_PATCH`: one floating ROM
+(submodule `upstream/`, pinned to `v2.9` (`525f4b1`)). `Kind.CF_PATCH`: one floating ROM
 cave on the pattern-queue setter and the tick handler, four fixed pokes (step and label table entries, the menu setter, the project loader). No DSP code, no menu row of its
 own (the option appears in PROJECT > CONTROL > SEQUENCER > CHAIN AFTER as
 option 2, between PAT.LEN and 2/16).
@@ -21,20 +21,29 @@ inferred.
 
 ## Measured
 
-- Remixes `octatrick` and `octatrick-usb` build byte-identical with the
-  module sources as a plain `modules/<name>/` directory and as this
+- At `v9.1`, remixes `octatrick` and `octatrick-usb` built byte-identical
+  with the module sources as a plain `modules/<name>/` directory and as this
   wrapper over the submodule (same base, same build reports), and
   byte-identical to the OCTATRICK9 images Tim flashed (built on
   upstream `0e93543`; upstream's changes since touch modules these
   remixes do not carry).
+- `v2.9` (29 Sep 2026) leaves this module's sources as they were at `v9.1`
+  (the cave links to the same 358 bytes); the quantizer's move into DRAM at
+  2.9 frees the ROM zero run, so the cave fits beside SCALE QUANTIZER and
+  CF METER's descriptor clone again (at 2.8 it did not).
 
 ## On the unit
 
-`OCTATRICK9` (remix `octatrick-usb`) on Tim's Octatrack MKI, 26 Sep 2026.
+- 26 Sep 2026: `OCTATRICK9` (remix `octatrick-usb`) on Tim's Octatrack MKI.
+- Every test build since, 2.3 .. 2.8, flashed on the same MKI from Tim's
+  own tree ([timhastie/octatrick](https://github.com/timhastie/octatrick),
+  the same wrappers over the same submodule), and the 2.9 line up to the
+  build before its last two fixes. The 2.9 image with the last two fixes is
+  emulator-verified on `octatrick` (`make check` on this tree).
 
 ## How it is built
 
-Source: `upstream/` is Tim's repository (submodule, pinned to `v9.1`).
+Source: `upstream/` is Tim's repository (submodule, pinned to `v2.9` (`525f4b1`)).
 Nothing inside `upstream/` is edited here. The manifest here
 (`manifest.py`) executes `upstream/direct-jump/manifest.py` from the source
 on disk and re-exports its `MODULE`; that manifest derives its source paths
