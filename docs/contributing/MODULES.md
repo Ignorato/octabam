@@ -14,7 +14,7 @@ Decide first which kind you are writing.
   of the hazards below do not apply. `modules/character/` is the worked example.
 - A **server** owns a bus accumulator, is bank-bound to one core, and takes
   part in the rotation, the housekeeping election and the auto-gain. There
-  are two; `docs/effects/XBUS.md`.
+  are two; [`modules/send/README.md`](../../modules/send/README.md).
 - A **bus client** (`send`) taps its track into the bus.
 - A **ColdFire module** changes what the firmware does (parts, kits, menus,
   MIDI, bug fixes) and touches no audio; midisc (`modules/midi-scenes`)
@@ -43,7 +43,8 @@ python3 tools/verify/verify_character.py
 ```
 
 `modules/_template/` is the skeleton to copy: a manifest with every field
-commented and nothing else.
+commented, and the `README.md` shape every module page follows (Knobs,
+Measured, On the unit, Open, Gates).
 
 Give your module one gate whose answer you can compute by hand: drive
 both signs of a full-scale signal (the negative half proves an `mpy` did
@@ -172,6 +173,17 @@ state things you might assume:
   0..127 draws no knob at all; a bipolar pair draws a count-5 select as a
   balance dial. Declare `formatter=` per slot; `verify_menu` checks the
   renderer against the count.
+- **Four per-parameter arrays carry the drawing**, `P`-relative
+  (`docs/firmware/PARAM_PAGES.md` §2, §7): `P+0x9a` count (drawn on a
+  fixed 0–127 scale: count 16 = ⅛ of the travel), `P+0x0ca` formatter A,
+  `P+0x0fa` widget B, `P+0x12a` (zero for a stepped control; 20 of 20
+  stock stepped params). A clone inherits all four from its donor.
+  Stepped pairs: CHORUS.TAPS (count 5) `0x4003c718` / `0x40047254`
+  (BusVerb's MODE uses this); SPATIALIZER.PHSE (4) `0x4003bbc0` /
+  `0x400467a4`; FILTER.Q (4) `0x4003bc60` / `0x40046c28` (draws
+  `none|HP|LP|BOTH`: the words come from the renderer, not the
+  descriptor). Every enabled slot needs an explicit in-range default
+  (`verify_menu`).
 - **A `name` of `None` inherits the donor's; `b""` blanks it.** Write the
   name explicitly even when the donor has it: the harness reads these.
 - A labelled select wider than five values normally falls back to a plain
@@ -464,6 +476,249 @@ labels by prefix, Tcc and the condition codes) and the dispatcher rule
   failed assemble.
 - With an impulse input, a flat RMS envelope is instability, not a long
   tail.
+
+### Page 2: even slots are knob fields, odd slots are companion fields
+
+Slots 6/8/10 are delivered in bits 16-23 of `r6+$c/$d/$e` and slots 7/9/11
+in bits 8-15 of the same words (`docs/firmware/PARAM_PAGES.md`). Any slot
+may carry any count (stock CHORUS TAPS sits on slot 6, stock FILTER's DIST
+knob on slot 11).
+
+Put a MODE on an even slot: the panel's page-2 knob editor (`0x4003a474`)
+writes even slots (slot 6 hardware-confirmed), so a select there is
+settable from a cave or a main-menu screen through the firmware's own
+routine. An emulator run showed the same editor writing all six page-2
+slots (`docs/firmware/MAINMENU.md` §9c-ii / §9e), so the odd-slot
+restriction is in doubt; an even slot is the proven choice. The DSP read
+must take the field the slot is delivered in.
+
+### FX2 ids
+
+`0x00`-`0x03` are the values stock treats as synonyms for "no effect"
+(correct chooser names, dead knobs, garbage audio); the schema rejects them.
+
+The fifteen stock ids are refused without `replaces` (`schema.STOCK_FX2_IDS`):
+the two DSP dispatch tables are indexed by the raw id and shared between
+FX1 and FX2, so a module on a stock id replaces that effect's code wherever
+the id is selected, FX1 included, and a remix that omits the module then
+aliases the id to SEND, which takes the stock effect away from FX1 too.
+Free ids: `0x06 0x07 0x09 0x0a 0x0b 0x0e 0x0f 0x17 0x1a 0x1b 0x1d 0x1e
+0x1f`, of which `0x1d 0x1e 0x1f` are unclaimed.
+
+The registry is the arbiter: `registry.modules()` refuses two modules on
+one id at import, whether or not any remix selects both. `make modules`
+prints what is claimed.
+
+### Per-mode knob names and defaults: `ModeView`
+
+A multi-mode effect reuses its knobs. Declare the difference:
+
+```python
+mode_slot=7,                       # which slot carries the MODE select
+mode_views=(
+    ModeView(mode=0, defaults={0: 40, 1: 60}),          # CLEAN
+    ModeView(mode=1, names={6: b"SCTR", 8: b"DENS"},    # GRAIN
+             defaults={0: 36, 6: 40, 8: 127}),
+),
+```
+
+Both maps are sparse and optional. `names` renames a slot for that mode
+(four characters); `defaults` is where the other knobs land when the
+operator arrives at this mode.
+
+| | the remixer | the unit |
+|---|---|---|
+| `names` | the UNIT pane's rows follow the current MODE (`Module.knob_map_in`); `send_probe --set SCTR=40` resolves the alias | `tools/build/mode_names.py` emits a MODE formatter that rewrites the descriptor's name fields before printing its own word |
+| `defaults` | applied the moment MODE changes | `modules/mode-defaults` (in the rig): the FX1 and FX2 page-2 editors are detoured, and a MODE turned on the panel writes the view -- page 1 through the stock page-1 writer, page 2 with the editor's own stores; without the module, `stamp-defaults` writes them; a MODE over CC MAP goes through the same unit (the cave calls it) |
+
+The unit half needs no new hook: a descriptor carries its twelve parameter
+names as 12 × 6 bytes at `E+0x4e`, the clones are writable RAM, and every
+stepped select already has a formatter cave the panel calls as `fmt(buf,
+value)` with the value in hand. `tools/verify/verify_modenames.py` (in
+`make check`) calls each MODE formatter on the emulated ColdFire and reads
+the names back out of the clone.
+
+The MODE select also names itself: its cave writes the value's word into
+its own name field before printing it, so the knob reads CLEAN / GRAIN /
+REVRS rather than MODE (Character's SAT and BusVerb's MODE declare
+`mode_slot` for this alone). Every other select keeps its name and the tick
+widget flashes the word on a turn — on image 26 SIZE / SHFT / RATE
+reading `93MS` / `RUN` / `+12` / `1x` did not say what the knob was (Sam,
+15 Sep 2026; image 27 with the names back: "that's better").
+
+Two limits, inferred: the rename lands on the draw after the one that
+formats MODE if the panel draws names first (turning the encoder redraws);
+and the descriptor is shared by every track running the effect, so two
+tracks in different modes have one set of names between them.
+
+Each mode's block costs 8 bytes per renamed slot plus a terminator in the
+cave. Rename a slot whose meaning changes; a knob merely unused in a mode
+keeps its name and says so in its `doc`.
+
+### A station
+
+The stations (`modules/spectrum/`, `modules/character/`,
+`modules/modulation/`) are per-track inserts on a stock effect's id, FX1
+only (`Claims(fx1_only=True)`, below). They never housekeep: an FX1
+instance on track 5 runs before that track's FX2 instance, and position 0
+housekeeps unconditionally, so an electing FX1 participant would flip the
+rotation twice in the first block. The layout alphabet is exhausted
+(A-W, Y, Z), so stations take digits as `layout_char`; `send_probe --feed S
+--set S:SEND=100` feeds the tone to a station's own track. Every slot the
+sample loop touches sits below `$40` (a displacement past 63 assembles to
+the two-word form).
+
+## Keeping stock effects in the chooser
+
+Every image replaces the FX2 chooser wholesale. Which stock effects are
+given up is derived from the choosers: an effect on neither FX1's nor
+FX2's list is consumed (`stock.harvested`); by default PLATE, SPRING and
+DARK REV, whose 2,724 words every module packs into. The rest keep their
+code, descriptor and dispatch entries in every image.
+
+`tools/remix/stock.py` registers them under their own keys (`"FILTER"`,
+`"CHORUS"`, `"DELAY"`, …), so a remix keeps one by listing it like a
+module, in the position it should draw at:
+
+```python
+modules=("REVERB SERVER", "DELAY SERVER", "SEND", "FILTER", "LO-FI", "TEMPO SYNC")
+```
+
+A stock row is a list row and a cursor position; `make cycles`
+does not count it (only FILTER's cost is measured, 192 cycles per
+instance). The build writes its list row and cursor position;
+`verify_menu` checks that its descriptor and id entry are byte-identical to
+stock. A stock effect a remix leaves out is left alone entirely: an old
+project that selects it still runs it, it just has no row.
+`remixes/test/mods/remix.py` lists all fourteen.
+
+Two rules, both enforced:
+
+- **Four stock effects allocate an instance buffer**: SPATIALIZER, FLANGER,
+  CHORUS, COMB read `X:0x213` at init (measured by scanning the payload
+  disassembly). The allocator hands out a base per track slot, and those
+  bases are the addresses BusVerb's tank and BusDelay's line hardcode; the chooser is one list for all eight tracks, so an image cannot
+  keep them apart. The ledger refuses the pair
+  (`Claims.stock_instance_buffer` against any module with
+  `owns_fx2_buffers` or a non-`NEVER` `ybase`). All four are legal in an
+  insert-only remix.
+- **More than seven rows moves the list.** The list cave at `0x400d6b00`
+  holds seven rows before the first clone; a longer list goes to the tail
+  of the stock zero run (`LONG_LIST`, 32 rows) and the viewport is capped at
+  the screen's seven. Scrolling the relocated list on the panel is inferred
+  from stock's fifteen-row list; no image with more than seven rows has
+  been flashed.
+
+Stock rows appear in the remixer with their real knobs: `stock.py` reads
+each descriptor's names, defaults, value counts and enable bitmap out of
+the pristine image (`out/raw/section_3_MAIN_OS.bin`); a duplicated label
+gets a `2` suffix on the later slot. A select carries the firmware's own
+labels: `tools/build/stock_labels.py` runs every formatter for every value
+on the emulated ColdFire and checks the result in as
+`tools/remix/stock_labels.json` (`make stock-labels`). Each stock effect
+has a `layout_char` (L E J P A C Z O K I Y); `--pick chorus` also works.
+
+They render locally the way an insert does, from a dump of the stock
+image's payload A (`out/dsp/_stock_A.mem`), with `dsp_host -alloc 1` so a
+buffered effect gets Y:0x4000 as the hardware gives track 1, and `-audio 0`
+because the dispatcher's `move #$0,r0` puts the audio block at X:0 and
+stock effects use X:0x20-0xff as scratch. Measured on a 438 Hz tone at
+0.5 FS:
+
+| effect | result |
+|---|---|
+| FILTER | unity at defaults; BASE=20 WDTH=10 Q=100 takes the tone down 27 dB |
+| EQ, DJ EQ, PHASER, SPATIALIZER, COMB, COMPRESSOR | bit-exact unity at defaults |
+| FLANGER | MIX=0 is a bit-exact dry pass; full modulation flanges |
+| CHORUS | MIX=0 exactly dry; MIX=127 puts sidebands on the tone |
+| LO-FI | renders only with `tools/patches/dsp56300.patch` (`mpyri`); DIST, SRR and AMF/AMD act. At all-zero settings it passes the tone at exactly 2× (+6 dB); whether the unit does the same is unmeasured |
+| DELAY | no DSP code (the Echo Freeze delay is ColdFire-side); the audition refuses |
+
+A stock effect that sounds wrong locally is evidence about the harness or
+emulator before it is evidence about the effect.
+
+## What an unimplemented id falls back to
+
+The build rewrites the FX2 dispatch tables wholesale, so every one of the
+32 ids points at a descriptor and a DSP entry, including id 0, which is
+what a fresh part's FX2 slot holds. `Remix.fallback` names where they go:
+
+- **`fallback="SEND"`, for a remix with a bus.** The send client passes the
+  audio through and only taps it, so a track that selects a missing effect
+  becomes a send. No stock effect is a safe target (it would process the
+  unknown id on whatever knobs the part holds), and the target must be a
+  module of ours (it needs a cloned descriptor, a cursor position and placed
+  code).
+- **`fallback="NONE"`, for a remix with no bus.** Unimplemented ids resolve
+  to the firmware's own NONE: the descriptor a stock chooser carries at list
+  row 0 and the per-payload null stub. It costs one chooser row (four bytes
+  of cave) and no words.
+
+`NONE` is refused beside any bus participant (`registry.remix()`).
+Housekeeping (flipping the rotation word and clearing the accumulators) is
+gated to payload A and done by the first core-0 participant dispatched that
+block; with SEND on every unassigned track, core 0 always has one. Under
+`NONE` an unassigned track runs nothing, so a project with tracks 5-8 all
+unassigned would have no housekeeper and a server on the other core would
+read an accumulator never rotated and never cleared. No local test can
+settle it: `dsp_host` runs both cores lock-step or under a chosen
+interleave.
+
+Declare `bus_client=True` in a module's `Harness` if it writes the shared
+accumulators; `is_server=True` is the other half. `schema.on_the_bus()`
+reads both.
+
+## Declaring DSP code
+
+```python
+dsp=DspSection(
+    asm="modules/<name>/engine.asm",
+    priority=1,
+    ybase=YBase.XBUS,
+    r7_latch_slot=None,
+    gate_label="bus_notfirst",
+)
+```
+
+- **`priority` is byte-load-bearing.** The donor region is packed in this
+  order. The send client is first because the fallback alias needs its
+  entry points to exist; the delay is last so the region's trailing free
+  words belong to it.
+- **`ybase` decides when `$30000` is rewritten** to the payload's own half
+  of the shared window: the delay in every build, the reverb once the bus
+  has moved into the shared window, the send client never. The rewrite is a
+  blanket string replace over the whole source, comments included; a
+  shared-window address that must not move to the other half cannot be
+  spelled `$30000`, and the literal is censused.
+- **`ptable`**: a tuple of words the build parks in the stock curve bank
+  (X:0x4840) and points the source's `$fab1e0` literal at.
+- **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
+  label)`). The two stock words at `site` become `jsr >label` after
+  placement, the build asserting them first; the section replays the
+  displaced instruction. A section with hooks and no `MenuEntry` is placed
+  on `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject
+  at the frame head, P:0x88, on payload A. The ledger refuses two sections
+  on one site of one payload.
+- **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
+
+### Porting a published algorithm
+
+What is borrowed is the curve or the law, re-derived under the gates; the
+source code never runs here (Character, Spectrum and Modulation are the
+examples; each README has its sources, `THIRD_PARTY.md` the licences).
+
+- No per-sample division, log, exp, tan or tanh: each becomes a P-table
+  (33 pairs interpolated, as Character's tables are) or moves to the
+  per-block path, which has one real division.
+- A sample-loop callee may contain no control transfer; forward skips in the
+  loop body are priced as the worst path (`CYCLES_FORWARD_BRANCHES`).
+- Lookahead needs delay memory an FX1 station has not got: limiters and
+  maximizers are out.
+- 2x oversampling doubles the cycle price.
+- A stepped select cannot sit on page 1 (the schema refuses it): a
+  page-1 control is a knob.
+- Prove each mode against a float transcription of its source
+  (`modules/modulation/modulation_ref.py`, `modules/spectrum/capacitor2_ref.py`).
 
 ## Declaring a ColdFire module
 

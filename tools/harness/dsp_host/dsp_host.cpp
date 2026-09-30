@@ -63,7 +63,7 @@
 // Default scheduling is lock-step: core 0 runs its whole block, then core 1.
 // That is exactly what one core used to see, so every existing render is
 // bit-identical, and it is structurally blind to the cross-core race
-// (docs/effects/XBUS.md) just as before. -skew N interleaves instead: core 0 runs N
+// (modules/send/README.md) just as before. -skew N interleaves instead: core 0 runs N
 // instructions ahead, then the two alternate instruction by instruction. That
 // is not the hardware's timing -- it is a FUZZ of it. A green run proves
 // nothing; a red one is a real defect.

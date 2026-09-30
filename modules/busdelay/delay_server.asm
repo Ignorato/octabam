@@ -359,7 +359,7 @@ bus_notfirst:
 ; ---- resolve THIS BLOCK'S WRITE OFFSET, ONCE, into raw $20 ---------------
 ; A client never reads y:>$900 at its own dispatch time: core 0 owns the flip
 ; and this server is on payload B (modules/send/send_client.asm,
-; docs/effects/XBUS.md step 3). build_bus.py substitutes a per-payload body
+; modules/send/README.md "Housekeeping and the rotation"). build_bus.py substitutes a per-payload body
 ; here; both leave the offset in raw $20, and every site downstream reads
 ; that instead of the shared word.
 ; ROTLATCH
@@ -446,7 +446,7 @@ bus_mine:
 ; 3 bits of headroom (asr #3); this block multiplies by 1/sqrt(N) and the
 ; per-sample read shifts back up by 3, so the send knob sets a track's SHARE
 ; of the delay. 1/sqrt(N), not 1/N: uncorrelated sources sum as sqrt(N)
-; (docs/effects/XBUS.md "Gain staging"). The count is masked to 0..7, so 8
+; (modules/send/README.md "The auto-gain"). The count is masked to 0..7, so 8
 ; writers wrap to index 0, which holds 1/sqrt(8); a count of 0 lands there
 ; too, on a zero accumulator. The eight reciprocals are the manifest's
 ; RECIP, in the P table at offset 52. x1 (the write rotation) is still

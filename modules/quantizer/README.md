@@ -1,4 +1,4 @@
-# SCALE QUANTIZER
+# `quantizer` — SCALE QUANTIZER
 
 The PTCH knob and the chromatic trig keys snap to a scale, and the synth
 gets a glide time: a SCALE row and a GLIDE row in PROJECT > CONTROL >
@@ -7,8 +7,6 @@ SEQUENCER, built from
 (submodule `upstream/`, pinned to `v9.1`). `Kind.CF_PATCH`: four ROM units
 (`glide.s`, `keys.s`, `quantizer.s`, `scale.s`), detours, pokes and a
 `TableGrow` for the menu rows. No DSP code, no FX2 row.
-
-## What it does
 
 SCALE (OFF, then 24 scales): the PTCH knob on the PLAYBACK page of a
 STATIC / FLEX / PICKUP track steps to the next scale degree, on the Part's
@@ -19,6 +17,19 @@ legato on the chromatic keys; polyphonic chromatic keys on a synth track
 whose VOIC is 2..4. Live recording on a synth track writes the played note
 length as an AMP HOLD lock. `upstream/quantizer/README.md` is the full
 description, with what was measured and what was inferred.
+
+## Measured
+
+- Remixes `octatrick` and `octatrick-usb` build byte-identical with the
+  module sources as a plain `modules/<name>/` directory and as this
+  wrapper over the submodule (same base, same build reports), and
+  byte-identical to the OCTATRICK9 images Tim flashed (built on
+  upstream `0e93543`; upstream's changes since touch modules these
+  remixes do not carry).
+
+## On the unit
+
+- 26 Sep 2026: `OCTATRICK9` (remix `octatrick-usb`) on Tim's Octatrack MKI.
 
 ## How it is built
 
@@ -31,17 +42,6 @@ Tim's tree and at `modules/quantizer/upstream/quantizer/` here. The glide
 byte, the key trampoline and the scale trampoline are at pinned addresses
 (`GLIDE_AT`, `KEYS_AT`, `SCALE_AT`) that SYNTH MACHINE's engine reads; the
 main unit floats.
-
-## Measured
-
-- Remixes `octatrick` and `octatrick-usb` build byte-identical with the
-  module sources as a plain `modules/<name>/` directory and as this
-  wrapper over the submodule (same base, same build reports), and
-  byte-identical to the OCTATRICK9 images Tim flashed (built on
-  upstream `0e93543`; upstream's changes since touch modules these
-  remixes do not carry).
-- **On hardware 26 Sep 2026** as `OCTATRICK9` (remix `octatrick-usb`) on
-  Tim's Octatrack MKI.
 
 ## Updating
 

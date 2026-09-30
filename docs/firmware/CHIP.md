@@ -215,7 +215,7 @@ instructions are `andi #$fc,mr`); the Y sweep is Fig 3-2's 48K to the
 word; payload A's P code ends at `0x01fdf`, 33 words short of `0x2000`, so
 program space is the wall by a setting, not silicon. Fig 3-6 is ruled out
 (stock's X modules reach `0x08d98`). Shared RAM is program-addressable in
-every map. Switching the map is an untested lever (`docs/effects/XBUS.md`).
+every map. Switching the map is an untested lever (`modules/send/README.md`).
 
 ### What is in the shared window (static analysis)
 

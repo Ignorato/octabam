@@ -1,4 +1,4 @@
-# DIRECT JUMP
+# `direct-jump` — DIRECT JUMP
 
 A pattern change lands at the next step instead of at the pattern's end,
 the Analog Four / Rytm direct jump: CHAIN AFTER's unused value 1 becomes
@@ -8,8 +8,6 @@ DIRECT. Built from
 cave on the pattern-queue setter and the tick handler, four fixed pokes (step and label table entries, the menu setter, the project loader). No DSP code, no menu row of its
 own (the option appears in PROJECT > CONTROL > SEQUENCER > CHAIN AFTER as
 option 2, between PAT.LEN and 2/16).
-
-## What it does
 
 A pattern chosen while the sequencer runs ([PATTERN] + [TRIG], [BANK] +
 [TRIG], MIDI program change) takes over at the next step boundary, at the
@@ -21,6 +19,19 @@ already stores, so a project that never selects it plays exactly as stock.
 measured (audio-measured hand-over timing, 26 Sep 2026) and what was
 inferred.
 
+## Measured
+
+- Remixes `octatrick` and `octatrick-usb` build byte-identical with the
+  module sources as a plain `modules/<name>/` directory and as this
+  wrapper over the submodule (same base, same build reports), and
+  byte-identical to the OCTATRICK9 images Tim flashed (built on
+  upstream `0e93543`; upstream's changes since touch modules these
+  remixes do not carry).
+
+## On the unit
+
+`OCTATRICK9` (remix `octatrick-usb`) on Tim's Octatrack MKI, 26 Sep 2026.
+
 ## How it is built
 
 Source: `upstream/` is Tim's repository (submodule, pinned to `v9.1`).
@@ -31,17 +42,6 @@ from its own directory, so the same file builds at `modules/direct-jump/`
 in Tim's tree and at `modules/direct-jump/upstream/direct-jump/` here. The
 cave's ratified bytes (`pinned`) are re-linked from `direct_jump.s` and
 compared on every build.
-
-## Measured
-
-- Remixes `octatrick` and `octatrick-usb` build byte-identical with the
-  module sources as a plain `modules/<name>/` directory and as this
-  wrapper over the submodule (same base, same build reports), and
-  byte-identical to the OCTATRICK9 images Tim flashed (built on
-  upstream `0e93543`; upstream's changes since touch modules these
-  remixes do not carry).
-- **On hardware 26 Sep 2026** as `OCTATRICK9` (remix `octatrick-usb`) on
-  Tim's Octatrack MKI.
 
 ## Updating
 

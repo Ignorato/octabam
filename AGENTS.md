@@ -470,7 +470,7 @@ same table makes FX1's NONE (id 0) run the FALLBACK's code: SEND ran on
 every empty FX1 slot at r7 0x6100/0x6400/0x6700/0x6a00, sent from an
 unseen page byte and, on core 1, compared the rotation tracker before
 position 0's advance — one step ahead for good on the unit (images 40–47,
-21 Sep 2026; `docs/effects/XBUS.md`). A client keys its slot on r7, never
+21 Sep 2026; `modules/send/README.md` "An FX1 slot is not a client"). A client keys its slot on r7, never
 on X:$213 (stale at proc time), and `dsp_host` places FX2 slots at
 0x6200 + 0x300·pos (`verify_twocore` had 0x200·pos until image 48).
 
