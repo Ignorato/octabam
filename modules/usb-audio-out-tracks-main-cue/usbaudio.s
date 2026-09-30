@@ -114,6 +114,22 @@
 | the tracks' slot; the consumer runs 512 frames behind, so that slot is
 | unread when it is written.
 .set MAIN_CUE_LAG_BLOCKS, 1
+| With MASTER TRACK on, CUE leads MAIN. The mixdown (payload A, P:0x257:
+| brset #$a on x:(X:$207+$7e)) takes the master path at P:0x292: the cue bus
+| (ring words 0/1, P:0x29f-0x2b2) sums slots 0-6 of this frame's blocks
+| directly, while MAIN (words 2/3, P:0x2cb-0x2d0) is slot 7 alone, track 8's
+| output of a mix it was sent (x:(X:$209+$1f8), P:0x2b7-0x2ca) two frames
+| earlier. The ColdFire sets that bit from the MASTER TRACK byte: the frame
+| record builder ORs 0x600 into 0x8000030c + ping*0x200 (halfword $7e of the
+| 0x80000210 record) when 0x80000034 is nonzero (0x4000498c-0x400049aa).
+| Measured on Bryan T's MKII (29 Sep 2026, a transient on a track sent to
+| both, recorded over USB in Logic): master off, 0 samples; master on, CUE
+| 43976 vs MAIN 44008, 32 samples = 2 blocks. The producer writes CUE this
+| many blocks AHEAD of MAIN's slot while the byte is set. Ahead is safe: the
+| consumer is behind the producer, and no later block's write touches a
+| slot's CUE field except the block that owns it.
+.set MASTER_TRACK_ON,        0x80000034
+.set CUE_MASTER_LAG_BLOCKS,  2
 
 .if SLOT8_LAYOUT
 | x -> x * SLOT_BYTES (8) in place.
@@ -1058,14 +1074,30 @@ audio_frame_shim:
     movel   %d3,%a4@+               | MAIN L, full speed
     movel   %d2,%a4@+               | MAIN R, full speed
 .Lmc_sum_skip:
+    | CUE goes into its own slot: this frame's, or CUE_MASTER_LAG_BLOCKS
+    | blocks ahead with MASTER TRACK on (see the constant). a3 steps past this
+    | slot's CUE field, which the block that owns it writes. a2 and d7 are
+    | free in this layout.
+    moveq   #15,%d7
+    subl    %d6,%d7                 | f
+    addl    %d4,%d7                 | this frame's index
+    tstb    MASTER_TRACK_ON
+    beqs    .Lmc_cue_slot
+    addil   #16*CUE_MASTER_LAG_BLOCKS,%d7
+.Lmc_cue_slot:
+    andil   #AUD_FRAMES-1,%d7
+    lsll    #4,%d7                  | slot * SLOT_BYTES (16)
+    lea     aud_ring+8,%a2
+    addal   %d7,%a2                 | that slot's CUE field
     movel   %a0@(MAIN_CUE_CUE_OFF),%d2    | CUE L
     clrb    %d2
     byterev %d2
-    movel   %d2,%a3@+
+    movel   %d2,%a2@+
     movel   %a0@(MAIN_CUE_CUE_OFF+4),%d2  | CUE R
     clrb    %d2
     byterev %d2
-    movel   %d2,%a3@+
+    movel   %d2,%a2@
+    addql   #8,%a3                  | past this slot's CUE field
     subql   #1,%d6
     bpl     1b
     addql   #8,%d4
@@ -1144,21 +1176,47 @@ audio_frame_shim_body:
 .if USB_LAYOUT == LAYOUT_TRACKS_MAIN_CUE
     | ---- MAIN and CUE, channels 17-20: the same word format, top 24 bits --
     | Frame f's pair sits at MAIN_CUE_BASE + f*8 (+MAIN_CUE_CUE_OFF for CUE);
-    | f = 15 - d6. It goes into the slot MAIN_CUE_LAG_BLOCKS blocks behind
+    | f = 15 - d6. MAIN goes into the slot MAIN_CUE_LAG_BLOCKS blocks behind
     | this frame's (see the constant): slot (d4 + f - 16*LAG) & (AUD_FRAMES-1),
-    | at +64 past its sixteen track words. a0, d0, d7 are free until the next
-    | frame reloads them; d1 (the sum shift) is borrowed and restored; CUE R
-    | is parked on the stack while d7 does the slot arithmetic.
+    | at +64 past its sixteen track words. CUE goes into the same slot, or
+    | CUE_MASTER_LAG_BLOCKS blocks ahead of it with MASTER TRACK on, at +72.
+    | CUE is written first so its words go straight from the source to the
+    | ring; a0 is re-pointed at the source for MAIN. a0, d0, d2, d7 are free
+    | until the next frame reloads them; d1 (the sum shift) is borrowed and
+    | restored.
     moveq   #15,%d7
     subl    %d6,%d7                 | f
     lsll    #3,%d7                  | f * 8
     lea     MAIN_CUE_BASE,%a0
     addal   %d7,%a0                 | a0 = this frame's MAIN (L,R); CUE at +MAIN_CUE_CUE_OFF
+    movel   %a0@(MAIN_CUE_CUE_OFF),%d0    | CUE L
+    movel   %a0@(MAIN_CUE_CUE_OFF+4),%d1  | CUE R
+    moveq   #15,%d7
+    subl    %d6,%d7                 | f again
+    addl    %d4,%d7                 | this frame's index
+    subil   #16*MAIN_CUE_LAG_BLOCKS,%d7
+    tstb    MASTER_TRACK_ON
+    beqs    .Ltmc_cue_slot
+    addil   #16*CUE_MASTER_LAG_BLOCKS,%d7
+.Ltmc_cue_slot:
+    andil   #AUD_FRAMES-1,%d7
+    lsll    #4,%d7                  | slot * 16
+    lea     aud_ring+72,%a0         | + the track words' 64 B + MAIN's 8 B
+    lea     %a0@(0,%d7:l:4),%a0     | + slot * 64
+    addal   %d7,%a0                 | + slot * 16 = slot * 80
+    clrb    %d0
+    byterev %d0
+    movel   %d0,%a0@+               | CUE L
+    clrb    %d1
+    byterev %d1
+    movel   %d1,%a0@                | CUE R
+    moveq   #15,%d7
+    subl    %d6,%d7                 | f again
+    lsll    #3,%d7                  | f * 8
+    lea     MAIN_CUE_BASE,%a0
+    addal   %d7,%a0                 | a0 = this frame's MAIN (L,R) again
     movel   %a0@(MAIN_CUE_MAIN_OFF),%d0   | MAIN L
     movel   %a0@(MAIN_CUE_MAIN_OFF+4),%d1 | MAIN R
-    movel   %a0@(MAIN_CUE_CUE_OFF),%d2    | CUE L
-    movel   %a0@(MAIN_CUE_CUE_OFF+4),%d7  | CUE R
-    movel   %d7,%sp@-
     moveq   #15,%d7
     subl    %d6,%d7                 | f again
     addl    %d4,%d7                 | this frame's index
@@ -1173,15 +1231,8 @@ audio_frame_shim_body:
     movel   %d0,%a0@+               | MAIN L
     clrb    %d1
     byterev %d1
-    movel   %d1,%a0@+               | MAIN R
-    clrb    %d2
-    byterev %d2
-    movel   %d2,%a0@+               | CUE L
-    movel   %sp@+,%d2
-    clrb    %d2
-    byterev %d2
-    movel   %d2,%a0@                | CUE R
-    lea     %a3@(16),%a3            | this slot's MAIN/CUE field: the next block writes it
+    movel   %d1,%a0@                | MAIN R
+    lea     %a3@(16),%a3            | this slot's MAIN/CUE field: other blocks write it
     moveq   #SUM_SHIFT,%d1          | the sum shift, borrowed above
 .endif
     movel   %d5,%d2                 | the stereo sum, L

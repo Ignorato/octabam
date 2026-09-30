@@ -13,6 +13,10 @@ The variant is Bryan T's (27 Sep 2026), from usbin-test's `AUD_IN4`:
   stock recorder's MAIN/CUE sources read) and writes one 16-byte slot per
   frame into a 1,024-frame ring. `MAIN_CUE_BASE` is not ping-ponged, so there is
   no bank bookkeeping; no track is read and there is no stereo sum.
+- **CUE with MASTER TRACK on** is written two blocks later than MAIN, so
+  the two stay sample-aligned: the mixdown's master path gives CUE a
+  32-sample lead
+  ([OUT TRACKS MAIN CUE](../usb-audio-out-tracks-main-cue/README.md#cue-against-main-with-master-track-on)).
 - **High speed polls every 250 µs**, as OUT TRACKS MAIN CUE and OUT TRACKS do (not
   OUT MASTER's 1 ms): 11.025 frames × 16 bytes a packet, at most 12 frames =
   192 bytes.
