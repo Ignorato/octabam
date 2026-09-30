@@ -1058,16 +1058,18 @@ the same project and read the status word from `--mem-dump` of
 `stems_state` (the second of the six words): its value names the step that
 failed.
 
-### The unit hangs when STEM REC is selected
+### The unit hangs when STEM REC's REC is pressed
 
-**Symptom.** Selecting MAIN MENU › CONTROL › STEM REC freezes the unit.
+**Symptom.** Pressing REC in MAIN MENU › STEMS freezes the unit. (Until
+29 Sep 2026 the row was MAIN MENU › CONTROL › STEM REC.)
 
-**Cause.** Predicted, and untested on the unit. The first select creates the
-writer task (STEM_REC.md section 3), and every select changes the state with
+**Cause.** Predicted, and untested on the unit. The first press creates the
+writer task (STEM_REC.md section 3), and every press changes the state with
 interrupts masked for a few instructions. Under the port both run and
-return (STEM_REC.md 11.1).
+return (STEM_REC.md 11.1), from the port's call and from the real key
+(`verify_stems_menu`, section 16).
 
-**First check.** Does it happen on the first select after power-on only?
+**First check.** Does it happen on the first press after power-on only?
 Then it is task creation. Run the same image under the port with the same
 project and `--call-before-play` of `stems_action`, and look for a fault or
 a hang in the port's report.

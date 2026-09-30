@@ -1,16 +1,18 @@
 # STEM REC
 
-MAIN MENU › CONTROL › STEM REC records tracks to the card while the
-sequencer plays. It writes the take while it records, so a take can run
-until you stop it, up to 60 minutes. Each track lands as its own file,
-`<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`, 16-bit stereo at 44,100 Hz. This build
-records all eight tracks. The port has run every track count, the ring's
-wrap and its overflow at eight tracks, on a fixture with sound in every
-frame (STEM_REC.md section 15). It's a step of
-`docs/proposals/MULTITRACK_TO_CARD.md`.
+MAIN MENU › STEMS records tracks to the card while the sequencer plays.
+It writes the take while it records, so a take can run until you stop it,
+up to 60 minutes. Each track lands as its own file,
+`<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`, 16-bit stereo at 44,100 Hz. All eight
+tracks are on at every boot, and the menu turns them on and off. The port
+has run every track count, the ring's wrap and its overflow at eight
+tracks, on a fixture with sound in every frame (STEM_REC.md section 15),
+and the menu key by key on the MKII and MKI panels (section 16). It's a
+step of `docs/proposals/MULTITRACK_TO_CARD.md`.
 
 - The design: `docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md`,
   over the proof of concept's `docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md`.
+  The menu: `docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md`.
 - Every stock address the module uses, with its evidence:
   `docs/firmware/STEM_REC.md`. Section 12 covers streaming.
 - The remix: `stems`, STEM REC alone. `make image REMIX=stems` builds it.
@@ -35,6 +37,19 @@ each track's finished audio back to the main processor. The runs cover:
   in every frame, and the ring's peak fill matches the watch log.
 - A card that refuses a write: the run records that the writer hangs.
 - A take cut off mid-way: the run records that its file is empty.
+- The menu's labels, read from memory during and after takes: `REC 00:00`
+  rising to `REC 00:01`, `DONE mm:ss`, `DONE 60:00` at the cap, `NO CARD`,
+  `SAME MINUTE`, `RING FULL`, and REC pressed while a take saves changing
+  nothing.
+
+`tools/verify/verify_stems_menu.py`, also part of `make check REMIX=stems`,
+presses the menu's keys under the port, once as an MKII and once as an
+MKI. It walks the five categories and checks that SYSTEM still reaches OS
+UPGRADE, because MAIN MENU is also the recovery screen. In STEMS it turns
+tracks off and on, arms and cancels, records a take with T3 off from PLAY
+to STOP, and checks the seven files on the card. It also draws every text
+STEMS can show and checks that each fits. A picture of the screen at each
+step lands in `out/stems_runs/menu-*.png`.
 
 The fixture projects come from a local copy of EZBot's Ultimate FX 1.5.3
 template, which never enters the repository. The verifier builds them at
@@ -93,26 +108,47 @@ Known from the port, before any flash:
 
 ## How to use it
 
-1. Open MAIN MENU › CONTROL and select **STEM REC**.
-   - If the sequencer is stopped, STEM REC arms. Recording starts on the
-     first frame the sequencer plays.
-   - If the sequencer is running, recording starts at once.
-2. The take stops when the sequencer stops, when you select STEM REC
-   again, or after 60 minutes. Selecting it while armed cancels the arm.
-3. The writer finishes the files a moment after the stop: it writes the
-   last audio, then each file's real header and exact length. **Wait at
-   least 5 seconds after the stop before you pull the card or power off.**
-   The folder isn't a signal: it appears when the take starts.
+Open MAIN MENU: the MAIN MENU key on the MKII, FUNC+MIXER on the MKI.
+STEMS is the fifth category, under MIDI, with a record dot for its icon.
+Its rows, top to bottom:
 
-The screen shows nothing. You know a take worked when its files open with
-the right length.
+| Row | Shows | YES |
+|---|---|---|
+| 1 | `REC`; `CANCEL` while armed; `STOP` while recording; `SAVING` while the files are finished | Arms, cancels or stops the take |
+| 2 | The status: `READY`, `ARMED`, `REC 01:23`, `SAVING`, `DONE 01:23`, `NO CARD`, or an error by name | The cursor skips this row |
+| 3-10 | `T1 [X]` to `T8 [X]`, `[ ]` when a track is off | Turns the track on or off |
+| 11 | `PEAK 12%`: the take's highest ring fill | The cursor never reaches this row |
+
+1. Turn off the tracks you don't want. All eight are on at boot. The last
+   track that's on stays on, and the track rows are locked while a take
+   records or saves.
+2. Press **REC**.
+   - If the sequencer is stopped, STEM REC arms. Recording starts on the
+     first frame the sequencer plays. Press it again to cancel.
+   - If the sequencer is running, recording starts at once.
+3. The take stops when the sequencer stops, when you press **STOP**, after
+   60 minutes, or when the ring fills. The menu can be closed while it
+   records.
+4. The writer finishes the files a moment after the stop: the last audio,
+   then each file's real header and exact length. **Pull the card or power
+   off only when the status reads `DONE`.** The folder isn't a signal: it
+   appears when the take starts.
+
+**The status updates when you press a key.** The menu redraws on keys,
+not on its own (STEM_REC.md 16.1), so the time and `DONE` show when you
+open the menu or press any key in it, UP or DOWN for example.
+
+The error names: `RING FULL` (the card fell behind; the files still play),
+`SAME MINUTE` (a take already exists for this minute), `WRITE FAILED`,
+`OPEN FAILED`, `PATH FAILED` (no set mounted, or its path too long),
+`SEEK FAILED`,
+`CLOSE FAILED` and `TASK FAILED`.
 
 ## Limits
 
-- One build-time set of tracks: all eight in this build. There's no menu
-  to pick tracks yet.
+- The track choices reset to all eight at every boot. Nothing is saved.
 - 16-bit, at most 60 minutes.
-- No screen feedback, and no error report on the unit.
+- The status doesn't tick on its own: it's current as of the last key.
 - The name has no seconds. A second take in the same minute is refused, and
   the first stays intact.
 - If the card falls behind and the 4 MiB ring fills, the take stops by
@@ -132,8 +168,8 @@ the right length.
 - Loading a project while recording isn't detected. Don't do it.
 - One risk accepted for the proof of concept (Yves, 12 Sep 2026): the
   writer task sleeps on a shared timer that holds one waiter (STEM_REC.md
-  4.7). Once STEM REC has been selected since power-on, don't run an OS
-  upgrade until you've power cycled.
+  4.7). Once REC has been pressed since power-on, don't run an OS upgrade
+  until you've power cycled.
 
 The proof of concept also warned against saving or loading while a take
 was written, because it wrote through the file layer's shared staging
@@ -153,9 +189,9 @@ it with each other, as in stock.
   take's largest ring fill in frames, `stems_peak`. Arming resets it to 0,
   and it keeps its value after the take ends. Its share of the ring is
   `stems_peak` over the ring's capacity at the take's track count. It's
-  for the menu's status row, and for measuring the card on the unit.
+  for the menu's PEAK row, and for measuring the card on the unit.
 - **The writer task.** The module's own RTOS task at priority 1, created
-  the first time STEM REC is selected. It wakes every 10 ms. At a take's
+  the first time REC is pressed. It wakes every 10 ms. At a take's
   start it names the take from the clock, creates the folder, refuses a
   folder that exists, and opens one file per track. While recording, it
   moves the ring into each file in 512-frame chunks. At the end it writes
@@ -173,6 +209,13 @@ it with each other, as in stock.
   buffers are DRAM regions at the free top of the platform's arena
   reserve. So the module costs no sample memory beyond what any DRAM remix
   already gives up.
+- **The menu.** The manifest copies MAIN MENU's four stock categories from
+  your own image and adds STEMS, a row that points at the category's icon
+  and its list of eleven rows, both in the module's DRAM. Each row's label
+  is a pointer: a press switches it to another fixed string at once, and
+  the writer task formats the numbers (`REC 01:23`, `DONE`, `PEAK`) into a
+  spare buffer before it switches the pointer, so a redraw never catches a
+  half-written label. The frame hook doesn't change.
 
-No module upstream hooks the frame site or rewrites the CONTROL list (27 Sep
+No module upstream hooks the frame site or grows MAIN MENU's root (29 Sep
 2026). The ledger refuses one that does, by name.

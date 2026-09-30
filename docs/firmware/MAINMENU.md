@@ -119,7 +119,11 @@ Driven under the port with real keys, the MKII (PROJ) and the MKI
   next key that redraws the menu draws the new label. A module that
   changes a label from outside a key handler is seen at the next key.
 - ✅ A row whose action is 0 draws as plain text, and the cursor skips it:
-  DOWN from AUDIO lands on SEQUENCER when INPUT's action is 0.
+  DOWN from AUDIO lands on SEQUENCER when INPUT's action is 0. ✅ It skips
+  ONE such row, not two in a row: with two together, DOWN stops on the
+  second, where ENTER calls address 0 (STEMS's first layout). ✅ It never
+  moves onto a last such row: DOWN from the row above stays put. So rows
+  without an action must never be adjacent; one may be the last.
 - ✅ With the firmware's own font, the list pane clips a label at
   x = 118 and the root column at x = 56 (the right edge of 24 Ws). `WRITE
   FAILED` ends at 105 and `STEMS` at 45.
@@ -144,6 +148,12 @@ there passed a static zero-check and a no-project boot and faulted on
 added: a null-action row is a heading the cursor skips; a row inside a
 pane cannot descend (`+0x10` read on the root only); the descriptor must
 ship initialised. `RANDOMIZE PAGE` = `0x4005b9c0`, via `0x400bab22`.
+STEMS (`modules/stems`, 29 Sep 2026) is a fifth category run under the
+port on the MKII and the MKI by real keys (`verify_stems_menu`): the root
+grown by a `TableGrow` of the four stock rows plus its own and a `Poke` of
+the count; the list, its eleven rows and the icon in DRAM; labels switched
+by one aligned pointer write, from the actions and from an RTOS task.
+Unflashed; `STEM_REC.md` section 16.
 
 ## 6. Opening a parameter page from a handler ✅
 

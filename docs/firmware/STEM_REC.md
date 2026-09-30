@@ -7074,6 +7074,23 @@ and `probe-mki-*.png`.
 | 5 | Does the cursor skip a row with action 0? | ✅ Yes, both ways: `[0, 2, 0]`, and the row draws as plain text |
 | 6 | Do PLAY and STOP work with the menu open? | ✅ Transport 0 → 1 → 0, the menu stays open |
 | 7 | What does NO do inside a list? | ✅ It closes the whole menu; the focus pointer keeps the list |
+| 8 | Can the cursor land on a LAST row with action 0? | ✅ No: from the row above it, DOWN, DOWN = `[4, 4, 4]` (MKII, `v3-p3-probe-last.log`) |
+
+**Two rows with action 0 next to each other are not skipped.** ✅ Found
+by the gate's first run (MKII, `v3-p3-menu-gate.log`): with the status at
+row 1 and PEAK at row 2, DOWN from REC stopped on row 2. The engine skips
+one such row, not a run of them, and ENTER on one calls address 0. Item 5
+had tested a single one. Yves moved PEAK to the last row (29 Sep 2026),
+which item 8 then showed the cursor never reaches; the gate passes on both
+panels with that layout (16.2).
+
+**A key-driven boot needs `--mount`.** ✅ `ot_emu --interactive` with
+`--set`/`--project` but no `--mount` loads no project: ready at sample
+8,567, the current set's path (`0x100f8480`) empty, and a take then ends
+`PATH FAILED` (the gate's second run). With `--mount`, as
+`tools/panel/panel_server.py` passes it, the port posts the card mount and
+LOAD PROJECT in its boot: ready at sample 524,098, the set path `/STEMS`.
+The menu measurements above need no project and stand.
 
 The texts STEMS can show, each drawn in a row of the pane: `T8 [X]` ends at
 x = 79, `PEAK 100%` at 93, `DONE 60:00` at 95, `SAME MINUTE` at 101,
@@ -7094,3 +7111,80 @@ recording window.
 The first probe run pressed NO to leave CONTROL, which closed the menu, so
 its items 3 to 5 measured a closed menu; that run is void, and item 7
 records NO.
+
+### 16.2 The category as built ✅ under the port
+
+**The layout.** MAIN MENU's root grows from four categories to five: the
+manifest copies the four stock rows from the user's image (a `TableGrow`,
+the new array at `0x400d6b80`), adds STEMS, and pokes the count from 4 to
+5. CONTROL is stock again, byte for byte. The STEMS row points at the
+label `STEMS`, a 19 × 9 record-dot icon, and a list descriptor shipped
+filled in (11 rows, 7 visible). All three live in STEM REC's DRAM runtime.
+
+| row | label | action |
+|---|---|---|
+| 0 | `REC` / `CANCEL` / `STOP` / `SAVING`, by state | `stems_action` |
+| 1 | the status: `READY`, `ARMED`, `REC mm:ss`, `SAVING`, `DONE mm:ss`, `NO CARD`, an error name | 0: the cursor skips it |
+| 2-9 | `T1 [X]` to `T8 [X]`, `[ ]` when off | `stems_track_action` |
+| 10 | `PEAK n%` | 0: the last row, never reached |
+
+**The labels.** A label is the row's `+0x00` pointer, switched by one
+aligned long write, so a redraw reads a whole old label or a whole new
+one. The actions switch fixed strings at once (`stems_ui_state`). The
+writer task, every pass (`stems_ui`), rebuilds the status and PEAK from
+the state, whether a take has ended (`stems_took`), the error, the take's
+whole seconds and the PEAK percent, packed into one long; only when that
+changes does it format a line, with the stock `sprintf`, into the buffer
+the row isn't showing. The frame hook is unchanged. The screen shows a
+change at the next key (16.1).
+
+**The track rows.** A track row finds its track from the list's absolute
+selection (`+0x0c`) less row 2, with interrupts masked for the test and
+the flip. They refuse while a take records or saves, and the last track
+that's on stays on, so a take always has a track the rows show.
+
+**The runs.**
+
+- `verify_stems.py stems` (Task 4, `v3-p3-ui-check.log` at `5cc96e0`,
+  dirty 0): 168 checks, 0 FAIL, 0 SKIP. The labels read from memory:
+  `STOP`, `REC 00:00` at frame 124, `REC 00:01` at frame 2,924, then `REC`,
+  `DONE 00:01`, `PEAK 0%`; `DONE 60:00` at the cap; `NO CARD` with the card
+  word poked to 0 (the state stays IDLE, no task made); `SAME MINUTE`;
+  `RING FULL` after the overflow, where a REC during the long save changed
+  nothing (state writes `[1, 2, 3, 0, 1]`), and the re-arm's `CANCEL`,
+  `ARMED`, `PEAK 0%`.
+- Moved against Task 1's run of the same checks, and explained: the
+  writer's stack peak 1,052 → 1,252 bytes (`stems_ui` calls `sprintf` from
+  the task; the limit is 6,144); the arm's `d0` 0 → 1 (the new state; the
+  menu's caller at `0x4006505c` ignores it, since the redraw it jumps to
+  at `0x40064d7c` loads `d0` first); peaks moved by 1 to 4 frames and
+  `cardfail`'s polls by 0.4%, each peak still equal to its rebuilt value
+  (the phase mechanism of 15.5, inferred).
+- `verify_stems_menu.py stems` (Task 5, `v3-p3-menu-gate3.log`): 29 PASS,
+  0 FAIL on the MKII and the MKI alike. The five categories `[0, 1, 2, 3,
+  4]`; SYSTEM to OS UPGRADE (focus `0x400cbd1c`, row 1); STEMS on REC;
+  DOWN and UP skip the status `(2, 0)`; DOWN walks `[2, …, 9, 9]`, T8
+  stays and PEAK is never reached; every track off leaves `0x80`; T3 off
+  gives `0xfb` and the rows say so; REC arms and cancels; with the menu
+  closed PLAY records, and reopened it shows `STOP`, `REC 00:02`, then
+  `REC 00:05` after 2.5 s and a key; T3 is locked; STOP ends on
+  `DONE 00:06`; every text inside the pane (clip 118) and the root column
+  (clip 56); the take's seven files `T1 T2 T4 … T8`. The screens are
+  `out/stems_runs/menu-mkii-*.png` and `menu-mki-*.png`.
+- `make check-remix REMIX=stems` with the gate declared (`v3-p3-gates2.log`
+  at `a0852d2`, dirty 0): 208 PASS, 0 FAIL; the menu gate's 28 checks
+  pass with the same values; the only SKIP is `verify_set`'s (no
+  `OT_PROJECT`). Each panel's walk takes 15 to 18 minutes there.
+
+### 16.3 What the gate can't see 🟡
+
+- **The unit's key timing and its panel.** The port feeds the panel's
+  bytes in exact steps; a real press is slower and bounces. Flash A
+  proves the menu on the MKII.
+- **The card while the menu is open.** The emulated card answers at one
+  fixed speed (15.4).
+- **Whether the MKII's root takes a fifth category on the unit.** octalab's
+  ran on a MKI (7 Sep 2026). A root that won't draw costs a SysEx recovery,
+  so flash A's precondition stays: a stock 1.40C `.syx` at hand.
+- **A status that ticks by itself.** Not built (16.1): the screen shows the
+  task's labels at the next key.

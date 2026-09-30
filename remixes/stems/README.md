@@ -4,11 +4,11 @@ One ColdFire module and nothing else. For recording what the tracks play to the 
 
 ## What is in it
 
-- **STEM REC.** MAIN MENU > CONTROL > STEM REC arms a take, or starts one if the sequencer is running. Selecting it again stops the take, and so does stopping the sequencer or reaching 60 minutes. Each enabled track is a 16-bit stereo file, `<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`. This build records all eight tracks. `modules/stems/README.md`.
+- **STEM REC.** MAIN MENU > STEMS, a fifth category: REC arms a take, or starts one if the sequencer is running. STOP ends it, and so does stopping the sequencer or reaching 60 minutes. T1 to T8 turn tracks on and off (all eight at boot), a status row shows the take's time, `DONE` or an error by name, and PEAK the ring's highest fill. Each enabled track is a 16-bit stereo file, `<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`. `modules/stems/README.md`.
 
 ## Status
 
-Never flashed. Measured under the ColdFire port: `python3 tools/verify/verify_stems.py stems` records takes and checks every sample against the track's own audio. Crosscheck's flash plan is carried as a record in `modules/stems/FLASH.md`; flash A gets its own. The stock facts STEM REC stands on are in `docs/firmware/STEM_REC.md`.
+Never flashed. Measured under the ColdFire port: `python3 tools/verify/verify_stems.py stems` records takes and checks every sample against the track's own audio, and `python3 tools/verify/verify_stems_menu.py stems` presses the menu's keys on the MKII and MKI panels, a take included. Crosscheck's flash plan is carried as a record in `modules/stems/FLASH.md`; flash A gets its own. The stock facts STEM REC stands on are in `docs/firmware/STEM_REC.md`.
 
 ## Build
 
