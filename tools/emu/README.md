@@ -42,7 +42,7 @@ or from `~/.octabam_project`.
 
 ## Build
 
-Needs `make setup` and `make os && make recon` ([BUILDING.md §0–2](../../docs/guide/BUILDING.md)), plus `cmake`.
+Needs `make setup` and `make os && make recon` ([BUILDING.md sections 0–2](../../docs/guide/BUILDING.md)), plus `cmake`.
 
 ```sh
 make emu-cf                          # cmake into out/emu, then boots stock 1.40C to the RTOS handoff
@@ -200,13 +200,13 @@ bytes) to FILE:
 with half blocks, and `--png out.png` saves one frame.
 
 The plane is 64 columns × 128 rows, 8 bytes per row, MSB left. Screen pixel
-(x, y) is column 63−y of row x (see `docs/firmware/PANEL.md` §1).
+(x, y) is column 63−y of row x (see `docs/firmware/PANEL.md` section 1).
 
 ## The panel from a FIFO
 
 `ot_emu --live FIFO` reads panel events while the RTOS runs:
 - panel events go to the firmware over the panel link (UART1), in the
-  controller's own framing (`docs/firmware/PANEL.md` §4b);
+  controller's own framing (`docs/firmware/PANEL.md` section 4b);
 - MIDI goes over UART0.
 
 ```
@@ -332,7 +332,7 @@ commands' reply formats are the header comment of `main.cpp`
   to the image file before its WRITE completes; `card flush`, `quit`, EOF
   and exit `fsync`. Without it the card lives in memory.
 - **`--mkii`**: the GPIO loopback the boot probe tests and the MKII panel's
-  replies (`docs/firmware/PANEL.md` §4c).
+  replies (`docs/firmware/PANEL.md` section 4c).
 - **DMA timers** DTIM0–3 (`0xfc070000 + 0x4000·n`, INTC0 sources 32–35);
   DTIM1 is the firmware's 8.333 ms UI/LED tick. The 2.8 s boot logo on
   DTIM3 is skipped unless `--boot-logo`.
@@ -363,7 +363,7 @@ commands' reply formats are the header comment of `main.cpp`
     wall second.
 - `--profile` prints the hottest PCs over the boot and over the frames.
 - Where stock ColdFire time goes per frame: [`docs/firmware/ARCHITECTURE.md`
-  §6](../../docs/firmware/ARCHITECTURE.md).
+  section 6](../../docs/firmware/ARCHITECTURE.md).
 
 ## Emulator defects fixed (each has a test)
 

@@ -7,7 +7,7 @@ pass and stops.
 
 Why: RLEN counts master-clock 16ths and stops at 64, so a 1/4X track cannot
 give its 16-bar pattern a fixed length; MAX has no length and ends at the
-next recorder trig (`docs/firmware/RECORDER.md` §2a), which is what makes a
+next recorder trig (`docs/firmware/RECORDER.md` section 2a), which is what makes a
 manual loop need TRIG `ONE2` and a second press.
 
 ## Measured
@@ -62,7 +62,7 @@ passes).
 - The length path is exercised by a sequencer recorder trig, which takes
   the same converter as a manual press.
 
-The watches are `docs/firmware/RECORDER.md` §2a's.
+The watches are `docs/firmware/RECORDER.md` section 2a's.
 
 ## On the unit
 

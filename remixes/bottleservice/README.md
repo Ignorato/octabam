@@ -231,9 +231,9 @@ install to the way back to stock. For this remix:
    elsewhere; `stamp-defaults` writes the remix's knob defaults where the
    stored bytes mean something else now. A project made on the unit after
    the flash needs neither.
-4. **Flash from the card** ([BUILDING.md §5](../../docs/guide/BUILDING.md#5-flash-from-the-card)),
+4. **Flash from the card** ([BUILDING.md section 5](../../docs/guide/BUILDING.md#5-flash-from-the-card)),
    then power-cycle once more. SYSTEM STATUS → OS VERSION reads `OCTABAM91`.
-5. **Back to stock:** [BUILDING.md §8](../../docs/guide/BUILDING.md#8-back-to-stock-or-another-remix).
+5. **Back to stock:** [BUILDING.md section 8](../../docs/guide/BUILDING.md#8-back-to-stock-or-another-remix).
 
 If the unit misbehaves, [FAILURE_MODES.md](../../docs/contributing/FAILURE_MODES.md)
 is the register of what has gone wrong and why.

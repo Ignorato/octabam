@@ -49,7 +49,7 @@ messages, about one second at 31.25 kbaud without running status.
 - Whether scene locks or parameter locks rewrite the live lane during
   play (which would make the sweep transmit at step rate). The lane is
   the knob store the frame builder copies; the lock arrays are
-  `0x80001538`/`0x80001658` (`docs/firmware/MIDI.md` §3). Not measured
+  `0x80001538`/`0x80001658` (`docs/firmware/MIDI.md` section 3). Not measured
   with a project that plays locks under the port.
 - LEVEL (CC 46), AMP VOL as CC 25 outside the AMP page, MUTE/SOLO (49/50)
   and the crossfader (48) are not in the map: their state is not in the

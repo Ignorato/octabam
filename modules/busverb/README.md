@@ -40,7 +40,7 @@ The tank modulation is pinned at MOD 30 / RATE 1× inside the engine since
 15 Sep 2026. The 16 Sep 2026 knob pass reordered the page (before it: SEND
 TIME SHMR SIZE TONE WET / MODE — DIFF SHFT GATE —); renders at any knob
 value by name are bit-identical across the two layouts. The page-2 field
-map is `docs/firmware/PARAM_PAGES.md` §6. Stock DARK reads its pre-delay
+map is `docs/firmware/PARAM_PAGES.md` section 6. Stock DARK reads its pre-delay
 from `$c`; BusVerb's `$c` knob field is MODE.
 
 ## Measured
@@ -106,7 +106,7 @@ from `$c`; BusVerb's `$c` knob field is MODE.
   scratch, output stage, allpass phase, chain word and aux pointers onto
   pointers and registers: one-word displaced `(r7+$..)` accesses per
   sample 206 → 111 (the loop once, plus fbA/fbB × 4 and apbody × 4; the
-  ×8 tank loop had none). Probe 57 (`docs/firmware/CHIP.md` §2) timed a
+  ×8 tank loop had none). Probe 57 (`docs/firmware/CHIP.md` section 2) timed a
   displaced move at 3.98 cycles against 2.00 for a pointer or register
   move, which the pricer cannot see. 28 bus-gate cases bit-identical
   (`make verify-bus`, with PLATE, BIG, the shimmer and the gate driven

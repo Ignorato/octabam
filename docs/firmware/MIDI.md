@@ -109,7 +109,7 @@ BusDelay's note latch and GRAIN pitch: `modules/busdelay/README.md`.
   path for that slot is the suspect. 🟡 untraced, single-slot; not a
   general rule and not page 2's.
 - The OT echoes TIME as CC 40 with CC OUT on.
-- The lab's MIDI setup (Rytm clock master, Midihub): `docs/contributing/TESTING.md` §1.
+- The lab's MIDI setup (Rytm clock master, Midihub): `docs/contributing/TESTING.md` section 1.
 
 ## Remote CC reference
 
@@ -280,7 +280,7 @@ array `0x80000a50` as `value << 8` — which is exactly why knob values sit at
 bits 16–23 of the DSP word (`PARAM_PAGES.md`). The same loop also fills a
 second byte lane at `+0x20` (`0x80000830..`) and six more at `+0x3e`. Page 2
 is that `+0x20` lane ✅ (`0x80000810 + track*72 + 0x20 + slot2` for the
-PLAYBACK page; FX2 page 2 at `+0x38`, FX1 page 2 at `+0x32`; §6). The `0xa0`
+PLAYBACK page; FX2 page 2 at `+0x38`, FX1 page 2 at `+0x32`; section 6). The `0xa0`
 marker array `0x80000db4` is walked by the packer at `0x4000d648`. A CC
 write lands in the next frame's record; there is no explicit "publish" call.
 
@@ -301,7 +301,7 @@ echo and the shared body 🟡.
 Readers of `0x460d16c8` (scene interpolation): `0x4003ee4c`, `0x4003f0d0`,
 `0x4006ff34`, `0x400935a8`, `0x4009dd30`, `0x400a3126`, `0x400357cc`.
 
-Channel → track: see §1 table; the map is rebuilt from `MIDI_TRIG_CHn`
+Channel → track: see section 1 table; the map is rebuilt from `MIDI_TRIG_CHn`
 (`0x8000003f+t`) on every CC, so it is always live. `MIDI_MODE`
 (`0x80000012` ≠ 0) makes the auto channel address MIDI track
 `current+8` (`0x40062502`) and, in the CC handler, short-circuits
@@ -448,7 +448,7 @@ Message layout: `a4`=status, `a3`=note, `a5`=velocity. `d4` = channel.
      is the voice-command writer: `0x8000186e[t*4]` ← lookup, `0x8000188e[t*4]`
      ← flags|0x100, and a halfword into `0x80000110 + 2*(0xbcf+t)` =
      `0x800018ae + 2t` (machine<<10 | sample) — the mailbox family from
-     ARCHITECTURE §6 (M for the stores, I for the naming).
+     ARCHITECTURE section 6 (M for the stores, I for the naming).
    - **notes 48-55** (`0x4000e5e2`): part/mute functions.
    - **notes 60-71** (`0x4000e668`): events `0x45`/`0x4b` (index note-60/-66).
    - **notes 72-96 = chromatic play** (`0x4000e6e2`, M). For every track t
@@ -575,13 +575,13 @@ ColdFire `mvs/mvz/byterev/mac`, which is most of this code). Markers as in
 Scene byte *k* of a track is the lock for **DSP-frame halfword *k*** of that
 track: the frame builder reads them 1:1 (`movew a2@+` → compute → `movew d3,a1@+`
 at `0x4000ce60..0x4000ced4`). Frame halfwords are `knob<<8 | companion`
-(ColdFire halfword → DSP 24-bit word `<<8`, `DSP.md` §6c).
+(ColdFire halfword → DSP 24-bit word `<<8`, `DSP.md` section 6c).
 
 | scene bytes | frame halfwords | page |
 |---|---|---|
 | 0..5 | page-block `0x80000510+ping·0x180+track·0x30`, hw 0..5 | PLAYBACK p1 (byte 1 = STRT, 2 = LEN, 3 = RATE ✅ from the STRT/LEN encoder hooks `0x4003eef0`/`0x4003ec7c` and `FUN_4003f1b4`) |
-| 6..11 | same block, hw 6..11 | LFO p1: the LFO engine reads SPD *i* at word 6+i and DEP *i* at 9+i (✅ objdump, `LFO.md` §2) |
-| 12..17 | voice record `0x80000110+ping·0x200+track·0x40`, hw 0..5 | AMP p1: PMTR 12–17 write there (✅ objdump, `LFO.md` §5) |
+| 6..11 | same block, hw 6..11 | LFO p1: the LFO engine reads SPD *i* at word 6+i and DEP *i* at 9+i (✅ objdump, `LFO.md` section 2) |
+| 12..17 | voice record `0x80000110+ping·0x200+track·0x40`, hw 0..5 | AMP p1: PMTR 12–17 write there (✅ objdump, `LFO.md` section 5) |
 | 18..23 | voice record hw 6..11 | FX1 page 1 (`r6+0..5`) ✅ |
 | 24..29 | voice record hw 12..17 | **FX2 page 1 (`r6+0..5`)** ✅ |
 | 30..31 | — | **skipped**: `addql #4,%a2` at `0x4000cef6` |
@@ -677,14 +677,14 @@ the exclusion lives, and how `modules/scenes-p2` locks page 2 instead:
 `modules/scenes-p2/README.md`.
 
 Falsifier: a hardware flash where the fader at the A end changes a page-1
-lock the wrong way (would invert §2's endpoint claim).
+lock the wrong way (would invert section 2's endpoint claim).
 
 ## Appendix D: CC out — the emitter (record)
 
 `0x40033e3c(track, cc, value)`, stack arguments, disassembled 28 Sep 2026
 (`modules/cc-feedback`). Gated on `0x8000004a` (AUDIO CC OUT) **bit 1**;
 bit 0 is what the panel crossfader path tests before applying its move
-(§4 above), so bit 0 = INT, bit 1 = EXT ✅. `track` 8 = the current track
+(section 4 above), so bit 0 = INT, bit 1 = EXT ✅. `track` 8 = the current track
 (resolved to the first audio-track channel no MIDI track uses); a track
 0..7 uses `0x8000003f + track` (−1 = off → return) and returns if a MIDI
 track's channel byte (`0x46c76de0 + 68·i`, ch+1) equals it. It does not

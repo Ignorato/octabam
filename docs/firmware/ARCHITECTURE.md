@@ -23,7 +23,7 @@ pipeline.
 | Audio DSP | Freescale Symphony **DSP56721** (`DSPB56721AG`): two DSP5636x cores, 200 MHz each, no external memory controller | ✓ (board photo) |
 | RAM | 128 MB SDRAM at `0x40000000` (`docs/contributing/PLACEMENT.md`) | ✓ |
 | Storage | CompactFlash (FAT16/32), OS and data; boots to DEMO without CF | ✓ |
-| NOR flash | CS0 at `0x00000000`, 8 MB decode; Spansion S29GL-N ID check, size not read (§3a) | ~ |
+| NOR flash | CS0 at `0x00000000`, 8 MB decode; Spansion S29GL-N ID check, size not read (section 3a) | ~ |
 | Expansion bus | FlexBus (chip selects for ATA, DSP, RAM) | ✓ |
 
 ## 3. OS format and update chain ✓
@@ -87,7 +87,7 @@ image.
 | Flash range | Contents | Source |
 |---|---|---|
 | `0x000000..0x003fff` | bootstrap, linked at 0; its copy sits in the OS image at `~0x400de7dc..0x400e21e0` and carries the "BOOTSTRAP UPGRADE" string and the SysEx OS upgrade path | ~ |
-| `0x004000..0x1fffff` | the OS region: the OS's sector table at `0x400a91c0` has 37 entries, `0x4000`, `0x6000..0xe000` (6 × 8 KB), `0x10000..0x1f0000` (31 × 64 KB) = 2,080,768 B. The bootstrap's SysEx path programs the OS from `0x4000` (`0x400e011a..`, `pea %a0@(16384)`, +2 per word). The table is followed by "ELFU" and the `.bin` cipher constants (§3) | ~ |
+| `0x004000..0x1fffff` | the OS region: the OS's sector table at `0x400a91c0` has 37 entries, `0x4000`, `0x6000..0xe000` (6 × 8 KB), `0x10000..0x1f0000` (31 × 64 KB) = 2,080,768 B. The bootstrap's SysEx path programs the OS from `0x4000` (`0x400e011a..`, `pea %a0@(16384)`, +2 per word). The table is followed by "ELFU" and the `.bin` cipher constants (section 3) | ~ |
 | `0x1ffffa..0x1fffff` | three words: magic `0x1234` at `0x1ffffa`, two words after it; the bootstrap also programs `0xabcd`/`0xdcba` markers here | ~ |
 | `0x200000..` | magic "EFGH", a count n, then n × 28-byte records, copied to `0x46ceb400` by `0x4001b9b4`; contents unidentified | ~ |
 | above the EFGH table | no reference in the OS image | ~ |
@@ -97,7 +97,7 @@ The current MAIN OS is 1,112,560 B, 53% of the 2,080,768 B window;
 
 **Constraints on using it.**
 
-- The OS executes from SDRAM (load base `0x40000400`, §7), not in place
+- The OS executes from SDRAM (load base `0x40000400`, section 7), not in place
   from flash. Code stored in flash runs only after something copies it to
   RAM: the bootstrap does this for the OS region (inferred: the copy loop is not located); anything above
   `0x200000` needs its own loader (the DRAM platform's boot detour is
@@ -112,7 +112,7 @@ The current MAIN OS is 1,112,560 B, 53% of the 2,080,768 B window;
   100,000 erase cycles per sector. A setting stored in flash rewrites a
   whole sector per change; the card is the store for anything written
   often (samples, recordings, projects).
-- The OS's own upgrade flow stops audio before it writes (§3). Whether a
+- The OS's own upgrade flow stops audio before it writes (section 3). Whether a
   program or erase can run with audio running is not measured.
 - Capacity: 8 MB decoded; the part may be larger than the decode, and a
   larger part's upper half is unreachable at this CSMR0 setting. Sample
@@ -128,7 +128,7 @@ The current MAIN OS is 1,112,560 B, 53% of the 2,080,768 B window;
 - The bootstrap's own erase loop runs 21 entries from a table at flash
   `0x2e38`, which the image copy does not carry. 21 sectors from `0x4000`
   would end at `0xfffff`, below the end of the current OS.
-- §3's write flow says `os_apply_flash` writes via ATA; the OS carries
+- section 3's write flow says `os_apply_flash` writes via ATA; the OS carries
   this NOR driver and sector table. Which device `os_apply_flash` writes
   is not traced.
 
@@ -147,7 +147,7 @@ No third-party RTOS signatures (banner `ElektronOctatrack DPS-1`).
 Scheduler (`FUN_4000056e`, reached by `TRAP #0` and by the timer): saves
 D0-D7, A0-A7 into the current TCB at `0x0c`-`0x4b` (SP at `0x48`; SR
 travels in the exception frame the `rte` pops; layout in
-`git show 3ceba41:docs/history/RTOS_FORK.md` §2); takes the highest-priority ready task;
+`git show 3ceba41:docs/history/RTOS_FORK.md` section 2); takes the highest-priority ready task;
 clears the reschedule bit and re-arms the PIT `0xFC08_0000` (reload
 `0xb3f`), the time-slice quantum; switches `_DAT_800068fc` and restores.
 The ATA async queues and the audio voice mailboxes are its message
@@ -222,7 +222,7 @@ interface reset. Args: program, length, load address. The first 50/58
 words go to the chip's own HI08 bootstrap ROM (count, address, words,
 jump); the payload then goes through that bootstrap's loader, which echoes
 each record's space word. The payloads live inside the MAIN OS image;
-`docs/firmware/DSP.md` §§1-3.
+`docs/firmware/DSP.md` sections 1-3.
 
 **Trig → voice** (`FUN_400977cc`, dispatched by machine type): reads the
 track's machine state (`FUN_40097168` → 0-4) and emits the voice command
@@ -267,7 +267,7 @@ delay's EMAC mix at `0x40003734` (`COLDFIRE_DELAY.md`).
 
 | Window | Use |
 |---|---|
-| `0x00000000` | NOR flash, CS0, 8 MB decode (§3a) |
+| `0x00000000` | NOR flash, CS0, 8 MB decode (section 3a) |
 | `0x10000000` | CS1, 1 MB decode |
 | `0x40000000` | SDRAM: code (OS image at `0x40000400`), data/BSS, the audio page arena, the delay rings (`docs/contributing/PLACEMENT.md`) |
 | `0x48000000` | the same SDRAM, uncached |
@@ -287,7 +287,7 @@ container), `string_func_map.py`, the `Ghidra*.java` headless scripts.
 ## 9. Open
 
 - The trig dispatch source (internal tempo clock or MIDI clock 0xF8): the
-  tempo/project-BPM path is read end-to-end (`docs/firmware/DSP.md` §6c);
+  tempo/project-BPM path is read end-to-end (`docs/firmware/DSP.md` section 6c);
   the dispatch itself is not.
 - Remaining ATA handlers; large functions the decompiler does not lift.
 - The vector table (`0x400` preamble, not in this section).

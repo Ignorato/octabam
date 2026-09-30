@@ -67,7 +67,7 @@ off and the output is mono to both channels.
   in n6; REVERSE keeps its lags and windows in registers). Displaced
   `(r7+$..)` moves per sample, counting each `do #4` body four times and
   callees per call: CLEAN 91 -> 35, GRAIN 294 -> 102, REVERSE 109 -> 39.
-  Probe 57 (`docs/firmware/CHIP.md` §2) timed a one-word displaced move at
+  Probe 57 (`docs/firmware/CHIP.md` section 2) timed a one-word displaced move at
   3.98 cycles against 2.00 for a pointer or register move. All 28
   `verify-bus` cases bit-identical. Not gated: a TIME move during a render
   (no case glides), so the ramp's move to n4 is by reading, not by render.

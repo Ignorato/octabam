@@ -253,7 +253,7 @@ per-core layout the remix lets a user select (four tracks × FX1 ∈ {none,
 the FX1 rows of ours} × FX2 ∈ {SEND, this core's server, ours on the FX2
 chooser, stock rows at 0}, at most one server per core) and sums the static
 per-sample cost of each pick at its worst mode loop (`cycle_count.py`),
-against 3,120 (USABLE, `docs/firmware/CHIP.md` §2). Tag 91 hung the sequencer with three
+against 3,120 (USABLE, `docs/firmware/CHIP.md` section 2). Tag 91 hung the sequencer with three
 stations beside the reverb at a static 3,106, under both lines, which
 points at the counter's known error (the reverb ~270 low, the delay ~260
 high); the burn sweep settles both. `out/pressure/<remix>_layouts.tsv` has
@@ -332,7 +332,7 @@ configurations is the cost of the change, the only way to price a stock
 effect (instruction count is not cycles: one rewrite moved instructions
 508 → 512 while cycles fell 735 → 731). A configuration that freezes at
 `BURN = 0` is already over budget. The current numbers it produced are
-`docs/firmware/CHIP.md` §2.
+`docs/firmware/CHIP.md` section 2.
 
 Measured with the original probe (before the 22 Sep 2026 clock
 measurement, on a 4,535-cycle frame):
@@ -343,7 +343,7 @@ measurement, on a 4,535-cycle frame):
 | FILTER disabled everywhere | froze at `BURN = 76` (32× scale) | 2,432 ✅ |
 
 Four FILTERs cost 1,040 cycles/sample by difference (❌ superseded: one
-FILTER measures 192, `CHIP.md` §2). FX2 bank (static) 957
+FILTER measures 192, `CHIP.md` section 2). FX2 bank (static) 957
 + 4 × FILTER 1,040 + burn at the freeze 1,392 = 3,389 accounted; stock's
 own per-track work by difference ~1,150 of 4,535. The 16× probe topped out
 at 2,032 and the filters-off configuration passed it, so the absolute
@@ -375,6 +375,6 @@ ceiling is unmeasured by it. ❌ "There is not real headroom": retracted.
   level-match (active RMS) before any A/B, judge modes wet-only, ~9 s of a
   sustained source, A/B/A/B.
 
-`docs/firmware/DSP.md` §6b is the bring-up of `dsp_host` and the ABI; the
+`docs/firmware/DSP.md` section 6b is the bring-up of `dsp_host` and the ABI; the
 functional baseline (`TESTPASS.md`) and the hardware-measurement protocol
 (`CAPTURE_18AUG.md`) are in git history (`git show 3ceba41:docs/history/<name>`).

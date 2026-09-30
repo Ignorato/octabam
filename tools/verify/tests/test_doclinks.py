@@ -48,6 +48,10 @@ class DocLinks(unittest.TestCase):
         got = self.fails({"tools/x.py": "# see docs/firmware/GONE.md section 2\n"})
         self.assertEqual(got, ["tools/x.py:1: docs/firmware/GONE.md -- no such file"])
 
+    def test_the_section_sign_is_refused_in_markdown(self):
+        got = self.fails({"README.md": "see GUIDE \u00a70\n", "tools/x.py": "# GUIDE \u00a70\n"})
+        self.assertEqual(got, ["README.md:1: the section sign -- write 'section N'"])
+
     def test_history_git_show_placeholders_and_code_spans_pass(self):
         self.assertEqual(self.fails({
             "tools/x.py": "# docs/history/RTOS_FORK.md s10 and git show 3ceba41:docs/firmware/OLD.md\n"

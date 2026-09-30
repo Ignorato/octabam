@@ -33,12 +33,12 @@ licence is MIT; a fork that takes requests and tracks issues is allowed.
 
 ## Quick start
 
-[docs/guide/BUILDING.md](docs/guide/BUILDING.md) has every step. §0 is what
+[docs/guide/BUILDING.md](docs/guide/BUILDING.md) has every step. Section 0 is what
 to install first: on macOS the Xcode Command Line Tools
 (`xcode-select --install`), Homebrew, Python 3.10+ and
 `brew install cmake uv`. Then `make setup`, `make emu-setup`,
 `make os && make recon`, `make image REMIX=<name> BUILD=1`, and the flash
-from the card (§5).
+from the card (section 5).
 
 <!-- modules:begin -->
 
@@ -186,7 +186,7 @@ cross-core timing) is listed beside every gate that is blind to it.
 **Writing a non-official OS to an Octatrack can leave it unusable and puts
 your warranty in question.** Nothing here is endorsed by, supported by, or
 affiliated with Elektron. [BUILDING.md](docs/guide/BUILDING.md) has the
-recovery path (§7).
+recovery path (section 7).
 
 **No Elektron binary is redistributed here, and none may be.** A built
 `.bin` or `.syx` contains Elektron's OS: do not share built images. Share

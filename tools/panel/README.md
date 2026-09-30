@@ -4,7 +4,7 @@ By **Tim Hastie**, from his fork of octabam,
 [timhastie/octa-panel](https://github.com/timhastie/octa-panel) at
 `be68244` (10-25 Sep 2026; MIT, as octabam). The panel (`tools/panel/`),
 the macOS app (`tools/panel/app/`), the key/LED map and its evidence
-(`KEYMAP.md`, `docs/firmware/PANEL.md` §9, `key_map.json`, `param_map.json`) and the
+(`KEYMAP.md`, `docs/firmware/PANEL.md` section 9, `key_map.json`, `param_map.json`) and the
 port features the panel runs on (`tools/emu/ot_emu`: `--interactive`,
 pacing, the RTC, the DMA timers, bursts, the page table, `--dsp-rt`, card
 write-back, the memory-to-memory eDMA, per-track taps; the dsp56300 hunks
@@ -40,7 +40,7 @@ make panel-app                                   # out/Virtual Panel.app (File >
 ```
 
 - The port runs as an MKII (`ot_emu --mkii`, `docs/firmware/PANEL.md`
-  §4c): the page draws PROJ / PART / AED / ARR / REC3 and the PAGE legend
+  section 4c): the page draws PROJ / PART / AED / ARR / REC3 and the PAGE legend
   and `/map` returns `"model": "mkii"`. `PANELARGS=--mki` runs it as an
   MKI (the MKI keymap; those keys do nothing there). `tools/emu/live.py`
   also passes `--mkii` by default (`--mki` to drop it); the keys are
@@ -165,7 +165,7 @@ readouts and takes list are gone -- scripts have `/key`, `/knob`, `/run`,
 
 **The screen** is decoded from what the firmware sends the panel processor
 over UART@`0xfc064000` (`tools/panel/panel_link.py`, protocol in
-`docs/firmware/PANEL.md` §9): `0x10`–`0x17 <column> <8 bytes>` LCD blocks (page = opcode
+`docs/firmware/PANEL.md` section 9): `0x10`–`0x17 <column> <8 bytes>` LCD blocks (page = opcode
 & 7, page 7 on top, bit 0 the top pixel of a band), `0x2r <mask>` LED bitmap
 rows, `0x3n <id>` LED levels, a few one-byte commands. Rendering the RAM
 framebuffer at `0x460d1f80` instead comes out with lines rotated (the
@@ -181,7 +181,7 @@ per-row state so held chords (FUNC+…) work. **Encoders** are rows
 **The LEDs** are the `0x2r <mask>` rows: `key_map.json` names each LED as
 `[row, bit]`; `/leds` returns the 17 row bytes.
 
-The older jump-table path (`press_key_live`, `RTOS_FORK.md` §9) is kept in
+The older jump-table path (`press_key_live`, `RTOS_FORK.md` section 9) is kept in
 the server as `press()` — it calls a key's handler directly, which changes
 state but does not redraw under route A, so the UART path is the real one.
 
@@ -676,7 +676,7 @@ double-click, logs / JSON / `S_*` `R_*` screens beside them; the evidence
 is in `KEYMAP.md` and `param_map.json`).
 
 **The crossfader is the panel board's pot, reported as `0x40 <adc>` on the
-panel UART** (the same wire as the keys and encoders: docs/firmware/PANEL.md §9). The
+panel UART** (the same wire as the keys and encoders: docs/firmware/PANEL.md section 9). The
 firmware scales the byte by a calibration record in its boot flash
 (`0x1ffffe`, none under emulation, so `value >> 1`), posts sys message kind
 4, stores the position in `0x460d16c8` (127 = scene A, 0 = scene B),

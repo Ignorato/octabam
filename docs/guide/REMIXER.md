@@ -3,11 +3,11 @@
 A remix is a selection of modules: which effects the unit's FX1 and FX2
 choosers list, in which order, and which firmware mods ride along. Compose
 one in the remixer (`make remix`), or write `remixes/<name>/remix.py` by
-hand; then build and flash it as in [BUILDING.md](BUILDING.md) §3–6.
+hand; then build and flash it as in [BUILDING.md](BUILDING.md) sections 3–6.
 
 ## Setup
 
-[BUILDING.md §0–2](BUILDING.md#0-what-you-need) first: the Xcode Command
+[BUILDING.md sections 0–2](BUILDING.md#0-what-you-need) first: the Xcode Command
 Line Tools, Homebrew, Python 3.10+, `brew install cmake uv`, then
 `make setup` and `make os && make recon`. The remixer also needs:
 
@@ -297,7 +297,7 @@ make image REMIX=mine BUILD=2   # -> out/OCTATRACK_OCTABAM2.bin
 
 `make check` also refuses a remix directory without a `README.md`. A remix
 whose parameter layout differs from the one a project was saved under
-needs the stamp before play ([BUILDING.md §6](BUILDING.md#6-after-the-flash)).
+needs the stamp before play ([BUILDING.md section 6](BUILDING.md#6-after-the-flash)).
 
 ## Known gaps
 

@@ -8,7 +8,7 @@ signal passes through costs another one. This is what "127" means, not a
 calibration constant or a table.
 
 Read out of the binary and off hardware by Bryan T (21 Sep 2026;
-hardware captures his, §7). Nothing
+hardware captures his, section 7). Nothing
 below has been run under the port.
 
 Status key as `CHIP.md`: ✅ measured (hardware or read off the firmware) ·
@@ -32,7 +32,7 @@ captures to 1-2 LSB with no filtering or drift, and every `k` is an exact
 multiple of 256 in 24-bit terms.
 
 Sweeping CUE confirms the square law against `(L/128)²`, exact at 96 and
-127 (2 LSB of a 15-bit scale high at 32 and 64 — open, §3).
+127 (2 LSB of a 15-bit scale high at 32 and 64 — open, section 3).
 
 ## 2. The code path
 

@@ -10,7 +10,7 @@ the current one.
 ## 0. The machine model
 
 FX1 and FX2 are two effect slots on every track, run back to back in the
-same per-track chain: `FX1 → FX2 → gain → bookkeeping` (`DSP.md` §5-6).
+same per-track chain: `FX1 → FX2 → gain → bookkeeping` (`DSP.md` sections 5-6).
 Both slots of a track run on the core that track lives on.
 
 ```
@@ -21,7 +21,7 @@ Both slots of a track run on the core that track lives on.
    │  track n: FX1→FX2│   │  track n: FX1→FX2│
    │  own P memory    │   │  own P memory    │
    └────────┬─────────┘   └─────────┬────────┘
-            └──── shared 64 K ──────┘   (Y:0x30000–0x3FFFF, §3)
+            └──── shared 64 K ──────┘   (Y:0x30000–0x3FFFF, section 3)
 ```
 
 FX1 and FX2 differ in exactly three ways ✅: order (FX1 runs first, so an
@@ -61,7 +61,7 @@ part defaults FX1 = FILTER.
 | CPU | Freescale ColdFire MCF54454VR266, 32-bit big-endian, 266 MHz | ✅ board photo (an MKI board reads `MCF54454`; an earlier note said `MCF5445A`) |
 | CPU clock tree | crystal 24 MHz → VCO 528 → CPU 264 MHz, internal bus 132, FlexBus 66 | ✅ from the image + MCF54455RM (below) |
 | Audio DSP | Freescale Symphony DSP56721 (`DSPB56721AG`) | ✅ board photo |
-| DSP cores | two DSP5636x cores, 200 MHz / 200 MIPS each (the part's maximum) | ✅ datasheet; ✅ 199.9 MHz = 4,532 cycles/sample on this board, measured 22 Sep 2026 (§2). ❌ 183.456 MHz / 4,160 (inferred from the payload's register writes, until 22 Sep 2026) |
+| DSP cores | two DSP5636x cores, 200 MHz / 200 MIPS each (the part's maximum) | ✅ datasheet; ✅ 199.9 MHz = 4,532 cycles/sample on this board, measured 22 Sep 2026 (section 2). ❌ 183.456 MHz / 4,160 (inferred from the payload's register writes, until 22 Sep 2026) |
 | External memory controller | none; all DSP memory is on-chip | ✅ datasheet |
 | Shared DSP memory | 8 blocks × 8 K words = 64 K words at `$030000`, reachable by both cores; P/X/Y alias there | ✅ reference manual + hardware |
 | ColdFire RAM | 128 MB SDRAM | ✅ `docs/contributing/PLACEMENT.md` |
@@ -78,7 +78,7 @@ touch it (`0x400e165c`, `0x16d0`, `0x173c`, `0x17a8`): PFDR = 22, OUTDIV1 =
 multiplies its top byte by 12,000,000, checks the answer is 264,000,000 and
 keeps it at `0x400b9654`. That stored number is the CPU clock: the UART
 baud setup at `0x40010f76` loads it, shifts it right one, and divides by 32
-× baud (the internal bus clock clocks the UARTs, RM §32); 132 MHz / (32 ×
+× baud (the internal bus clock clocks the UARTs, RM section 32); 132 MHz / (32 ×
 31250) = 132, an integer.
 
 | | | |
@@ -183,7 +183,7 @@ FX1:  0x1000  0x1C00  0x2800  0x3400      stride 0xC00  =  3,072 words
 FX2:  0x4000  0x8000  0x30000 0x34000     stride 0x4000 = 16,384 words
 ```
 
-✅ `0x30000-0x3FFFF` is the shared memory (DSP56720RM §1.4.13: "eight 8K ×
+✅ `0x30000-0x3FFFF` is the shared memory (DSP56720RM section 1.4.13: "eight 8K ×
 24 words memory blocks for a total of 64K shared words … starting from
 $030000"; Ch. 3: "accessible by both DSP cores"). Words, not bytes. The
 split into `0x30000` (payload A) / `0x38000` (payload B) is a convention,
@@ -195,7 +195,7 @@ addresses across the window. ❌ "X:0x30000 and Y:0x30000 do not alias" (an
 inference); ❌ "BusDelay may use its full 32,768 words" (the window is not
 free ground). Zero wait states as X or Y (1 as P). Contention is per 8 K
 block: no bus contention when the two cores access different blocks. A
-second cross-core channel exists, the ICC (§1.4.14): each core can raise
+second cross-core channel exists, the ICC (section 1.4.14): each core can raise
 an interrupt in the other, with write-data and poll-data registers.
 
 Per-core P/X/Y extents are configurable via OMR, and stock runs the
@@ -222,7 +222,7 @@ every map. Switching the map is an untested lever (`modules/send/README.md`).
 | range | what | evidence |
 |---|---|---|
 | `0x30000-0x30047` (72 words) | stock's per-frame parameter staging, copied X→`Y:0x1b8` and written back every frame | `do #<$48` loops at `P:0x0a4` (read) and `P:0x366` (write) |
-| `0x30000-0x300AA` (171 words) | the DSP host-port loader + ESAI setup, payload A, boot-time (the ESAIs carry audio, 8-slot network mode; `DSP.md` §6c) | module dump |
+| `0x30000-0x300AA` (171 words) | the DSP host-port loader + ESAI setup, payload A, boot-time (the ESAIs carry audio, 8-slot network mode; `DSP.md` section 6c) | module dump |
 | `0x31000-0x31031` (50 words) | bootstrap A | `DSP.md` |
 | `0x32000-0x32039` (58 words) | bootstrap B | `DSP.md` |
 | `0x38000-0x38012` (19 words) | payload B's entry stub, `jsr`s into `0x30082`/`0x3008a` (stock cross-core code sharing) | module dump |
@@ -257,7 +257,7 @@ neighbour's whole module (`stock.harvested`, `docs/contributing/MODULES.md`).
 | FX slots per track | FX1 (3,072 words) + FX2 (16,384 words) | ✅ |
 | reverb/delay FX2-only | FX1's 3,072 words are too small | ✅ |
 | FX1 is not idle | the dispatcher calls it every frame; a fresh part defaults FX1 = FILTER | ✅ |
-| parameters per effect | 12: 6 page-1 knobs, 6 page-2 slots. Any slot may carry any count (`DSP.md` §6, "Page 2") | ✅ |
+| parameters per effect | 12: 6 page-1 knobs, 6 page-2 slots. Any slot may carry any count (`DSP.md` section 6, "Page 2") | ✅ |
 | unassigned tracks | id 0 is aliased to SEND in a bus remix, to the firmware's NONE otherwise | ✅ |
 | `r7` state block | `$00–$83` usable; `$84–$8a` is host-owned and cannot hold state across calls (per-call scratch there is fine; BusDelay uses `$84`–`$88`) | ✅ bisected |
 
@@ -266,7 +266,7 @@ damping state in the instance's own Y region.
 
 ## 6. Closed
 
-- Do the two cores share `Y:0x30000–0x3FFFF`? Yes (§3).
+- Do the two cores share `Y:0x30000–0x3FFFF`? Yes (section 3).
 - The 32-step fault: bisected on hardware, two instances of the same
   effect on one bank corrupt audio after ~5.45 s at any address (one
   `SharePrb` + three `Send`s clean at every ADDR and INC; `SharePrb` +

@@ -306,7 +306,7 @@ reads the MAC/MSAC bit from the opcode word where ColdFire keeps it in the
 extension word, so every `msac` accumulated with the wrong sign (the
 sequencer's frame builder is one). One defect, three symptoms that were each
 investigated as firmware behaviour for a day (7 Sep 2026, RTOS_FORK
-§10.16): the recorder length converter wrote 10,336 for Bryan's 20,672
+section 10.16): the recorder length converter wrote 10,336 for Bryan's 20,672
 (explained away as "2-sample units"), the recorder's block walk stalled at
 3,072 samples ("needs a DSP position feed"), and the sequencer's per-frame
 timing byte advanced 8 per 16-sample frame, which dropped half the tempos'
@@ -381,7 +381,7 @@ EMAC-with-load shim ran every shimmed instruction from one scratch address,
 rewriting its bytes each time; in a long-running Unicorn the address kept
 its first translation, so the trampoline executed whichever instruction had
 been translated there LAST — `msacl ..,%acc1` ran as the previous `msacl
-..,%acc0` and corrupted the sequencer's timing byte (RTOS_FORK §10.16.2,
+..,%acc0` and corrupted the sequencer's timing byte (RTOS_FORK section 10.16.2,
 7 Sep 2026). Fresh-Uc micro-tests could not show it; a per-instruction
 trace of the real run did. Rule: never rewrite emulated code in place — give
 each distinct instruction its own slot (`r.emac_slots`), and when a
@@ -724,14 +724,14 @@ README (`docs/effects/` dissolved). The remix index is `remixes/README.md`.
 `modules/…`/`remixes/….md` path that does not resolve; a citation of a
 removed file uses `git show <sha>:<path>`. Old paths: `docs/remixer/X.md`
 is `docs/contributing/X.md` (MODULES, PLACEMENT, TESTING, TOOLING,
-FAILURE_MODES; ACCEPTANCE is TESTING §8) or `docs/guide/` (REMIXER;
+FAILURE_MODES; ACCEPTANCE is TESTING section 8) or `docs/guide/` (REMIXER;
 FLASHING is BUILDING), EMU is `tools/emu/README.md`, HARNESS
 `tools/harness/README.md`; Tim Hastie's port log (O14i–O24) is
 `git show 666b6154:docs/firmware/COLDFIRE_PORT.md`.
 
 On 16 Sep 2026 `docs/history/` (18 closed records: BUS, RTOS_FORK,
 COLDFIRE_PORT, VOICING, NOTES, REVERB_LOG, XBUS_LOG, EXTERNAL_INGEST, ...)
-was removed. A citation of the form `docs/history/RTOS_FORK.md §10.16` in a
+was removed. A citation of the form `docs/history/RTOS_FORK.md section 10.16` in a
 comment or a doc is still the provenance of what it sits beside; read it
 with `git show 3ceba41:docs/history/RTOS_FORK.md`.
 
