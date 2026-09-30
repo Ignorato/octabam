@@ -265,7 +265,7 @@ in time and nothing else.
   a track × mode sweep.
 - `dsp_host` runs both cores since 7 Sep 2026, lock-step or under `-skew`;
   a mismatch under skew is a defect, identity is not evidence
-  (`docs/remixer/HARNESS.md`). The decisive configuration is BusDelay on
+  (`tools/harness/README.md`). The decisive configuration is BusDelay on
   track 1, fed over the bus.
 - Residual at 6–7 senders: 2 samples in 16,305 differ by ≤ 33 LSB
   (−105 dB) from the lag-0 control; does not scale with amplitude; filed as

@@ -345,11 +345,11 @@ def main():
                 # The voice plays and the FX chain's read-back carries it;
                 # the DSP's main mixdown multiplies it by a gain that reads
                 # 0 under the port on this machine, so nothing reaches the
-                # ESAI (docs/remixer/EMU.md, the voice-silence entry, 28 Sep
+                # ESAI (tools/emu/README.md, the voice-silence entry, 28 Sep
                 # 2026). A run with audio is measured in full.
                 silent = res["error"].split(" -- ", 1)[-1]
                 print(f"  [SKIP] playback {name}: {res['error']} -- the port's main mixdown gain "
-                      f"(docs/remixer/EMU.md); pitch and speed not measured", flush=True); continue
+                      f"(tools/emu/README.md); pitch and speed not measured", flush=True); continue
             print(f"  [FAIL] playback {name}: {res['error']}", flush=True); fails += 1; continue
         p0, p1 = (TONE * k for k in want(pk))
         s0, s1 = want(sk)

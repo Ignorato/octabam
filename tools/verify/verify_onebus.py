@@ -3,7 +3,7 @@
 cores (the hardwired rig).
 
 Every case below renders through tools/harness/dsp_host with BOTH payloads booted
-(docs/remixer/HARNESS.md "Two cores"): the senders and the delay on payload B where
+(tools/harness/README.md "Two cores"): the senders and the delay on payload B where
 the unit runs them, the reverb on payload A, so the chain buffer and its
 liveness stamp cross the real core boundary. The image is the rig remix
 (registry.fixture: the smallest carrying both servers, SEND, the stations and RIG HOSTS) as SPEC -- the stations must be in it. Since 20 Sep 2026 each

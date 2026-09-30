@@ -1,7 +1,7 @@
 # The tooling, end to end
 
 What each tool is and where it sits in the pipeline. The audition and
-measurement rig in depth: `docs/remixer/HARNESS.md`.
+measurement rig in depth: `tools/harness/README.md`.
 
 The pipeline, left to right:
 
@@ -22,15 +22,17 @@ target.
 another by bare name wherever they sit; a new script opens with the one
 line `verify_dram_boot.py` does.
 
-| directory | what is in it |
-|---|---|
-| `tools/remix/` | **the toolkit**: the module schema, the registry, the ledger, the stock-effect list, the loader (`loader.S`), the DRAM platform (`platform_build.py`), the recipe runtime builder (`runtime_build.py`), the TUI (`app.py`), auditioning, the index and the selftest |
-| `tools/build/` | **the build** (`build_bus.py`) and the tools that understand the OS layout: the DSP load map, disassembly, reachability, the ELUP/`.bin` codecs, label and formatter emitters, cycle pricing |
-| `tools/verify/` | **the gates**: one `verify_*.py` per property, run by `make verify` |
-| `tools/harness/` | **hearing and measuring the DSP side** locally: the emulator harness (`dsp_host/`), `send_probe`, `render_reverb`, `rig_render` |
-| `tools/emu/` | **the ColdFire emulators**: the headless machine port (`ot_emu/`, C++) and the Unicorn bring-up (`emu_bringup`, `emu_card`) |
-| `tools/hw/` | **the unit and its card**: MIDI control, capture, sweeps, project files, MIDI flashing |
-| `tools/patches/` | local patches to the vendored toolchains (dsp56300, elektron-firmware-tool, unicorn) |
+| directory | what is in it | its doc |
+|---|---|---|
+| `tools/remix/` | **the toolkit**: the module schema, the registry, the ledger, the stock-effect list, the loader (`loader.S`), the DRAM platform (`platform_build.py`), the recipe runtime builder (`runtime_build.py`), the TUI (`app.py`), auditioning, the index and the selftest | [`tools/remix/README.md`](../../tools/remix/README.md) |
+| `tools/build/` | **the build** (`build_bus.py`) and the tools that understand the OS layout: the DSP load map, disassembly, reachability, the ELUP/`.bin` codecs, label and formatter emitters, cycle pricing | §4 below |
+| `tools/verify/` | **the gates**: one `verify_*.py` per property, run by `make verify` | [`TESTING.md`](TESTING.md) |
+| `tools/harness/` | **hearing and measuring the DSP side** locally: the emulator harness (`dsp_host/`), `send_probe`, `render_reverb`, `rig_render`, `pressure`, `stress_project` | [`tools/harness/README.md`](../../tools/harness/README.md) |
+| `tools/emu/` | **the ColdFire emulators**: the headless machine port (`ot_emu/`, C++) and the Unicorn bring-up (`emu_bringup`, `emu_card`) | [`tools/emu/README.md`](../../tools/emu/README.md) |
+| `tools/panel/` | **the virtual front panel** over the port: browser and macOS app | [`tools/panel/README.md`](../../tools/panel/README.md) |
+| `tools/ghidra/` | the Ghidra project import and the DSP56300 SLEIGH spec | [`tools/ghidra/README.md`](../../tools/ghidra/README.md) |
+| `tools/hw/` | **the unit and its card**: MIDI control, capture, sweeps, project files, MIDI flashing | §7 below |
+| `tools/patches/` | local patches to the vendored toolchains (dsp56300, elektron-firmware-tool, unicorn) | §1 below |
 
 ## The chip, in one paragraph
 
@@ -46,15 +48,14 @@ completely separate instruction set and toolchain.
 
 ## 1. Toolchain (`make setup`, `scripts/setup.sh`)
 
-Idempotent; assumes macOS + Homebrew (Linux substitutions are the obvious
-ones — the DSP toolchain itself is plain CMake). It builds:
+Idempotent. What to install before it: [BUILDING.md §0](../remixes/BUILDING.md#0-what-you-need). It builds:
 
 | tool | from | what it is |
 |---|---|---|
 | `dsp_asm` | `vendor/dsp56300` | the DSP56300 assembler. It mis-encodes some instructions silently (`AGENTS.md`'s trap list). `tools/patches/dsp56300.patch` adds the chip's one-word displaced move (displacement −64..63, data-ALU register); a word or cycle figure recorded before 14 Sep 2026 counts such a move as 2 |
-| `dsp_host` | `tools/harness/dsp_host/` (staged into `vendor/dsp56300` and built there) | the emulator harness written here: runs assembled effects on the dsp56300 emulator core. `docs/remixer/HARNESS.md` |
-| `emu_bringup.py` | `tools/emu/` | Tier-0 ColdFire bring-up: boots the MAIN OS image on Unicorn's CFV4E core to the RTOS handoff (the remixer's emulator view). Needs `unicorn`: `make emu-setup` (uv, the `emu` extra). `docs/remixer/EMU.md` |
-| `ot_emu` | `tools/emu/ot_emu/` (`make emu-cf`) | the headless C++ port of the machine: boots the built image, loads a project from a staged card, runs the sequencer and both DSP cores. `docs/remixer/EMU.md`, `docs/firmware/COLDFIRE_PORT.md` (O14i-O24; O1-O14: `git show 3ceba41:docs/history/COLDFIRE_PORT.md`) |
+| `dsp_host` | `tools/harness/dsp_host/` (staged into `vendor/dsp56300` and built there) | the emulator harness written here: runs assembled effects on the dsp56300 emulator core. `tools/harness/README.md` |
+| `emu_bringup.py` | `tools/emu/` | Tier-0 ColdFire bring-up: boots the MAIN OS image on Unicorn's CFV4E core to the RTOS handoff (the remixer's emulator view). Needs `unicorn`: `make emu-setup` (uv, the `emu` extra). `tools/emu/README.md` |
+| `ot_emu` | `tools/emu/ot_emu/` (`make emu-cf`) | the headless C++ port of the machine: boots the built image, loads a project from a staged card, runs the sequencer and both DSP cores. `tools/emu/README.md`, `docs/firmware/COLDFIRE_PORT.md` (O14i-O24; O1-O14: `git show 3ceba41:docs/history/COLDFIRE_PORT.md`) |
 | `ot_spec` | `tools/hw/ot_spec.py` | one JSON spec over a project's parts and patterns: `apply` (FX ids by module name, every knob by name, machine type, part names; per pattern track: length, scale, trigs, locks on every page by knob name — PLAYBACK, LFO, AMP, FX1, FX2 — with `clear`; the lock-trig mask follows), `report` (the same shape back), `diff` (two projects, field by field); checksum + read-back on `.work` and `.strd` |
 | `ot_bank` | `tools/hw/ot_bank.py` | the bank file's pattern records: `report` lock counts per page, `strip --pages fx1,fx2` clears them in every pattern (the stamper never touches patterns) |
 | `verify_character` / `verify_spectrum` / `verify_modulation` | `tools/verify/verify_<module>.py` | the module rendered through `dsp_host` on the audition's scratch image against predictable arithmetic or a float reference (in `make check` since 16 Sep 2026; Character's master path reads the shipping build) |
@@ -149,7 +150,7 @@ priority order, wires the dispatch tables, patches the ColdFire-side menu
 descriptors, installs caves, detours and the DRAM platform, and
 census-checks itself. It is driven by env flags (`DEV`, `NOSHIM`, `MODE`,
 `DNOTE`, `TPROBE`, …; grep `environ` in the file); the render cache
-fingerprints every one (`docs/remixer/HARNESS.md`). `make image` repacks
+fingerprints every one (`tools/harness/README.md`). `make image` repacks
 the result into a card-flashable `.bin` with the build number stamped into
 the OS version string. `docs/remixer/FLASHING.md` before writing to
 hardware.
@@ -157,7 +158,7 @@ hardware.
 ## 5. Hearing and measuring locally
 
 Render on the desktop at ~6× real time instead of flashing.
-`docs/remixer/HARNESS.md` in depth:
+`tools/harness/README.md` in depth:
 
 | tool | what it does |
 |---|---|
@@ -192,7 +193,7 @@ CI). The family, and what each proves:
 
 ## 7. Hardware measurement and control
 
-For the claims the emulator structurally cannot make (`docs/remixer/HARNESS.md`,
+For the claims the emulator structurally cannot make (`tools/harness/README.md`,
 last section), the hardware rig — protocol in `docs/history/CAPTURE_18AUG.md`:
 
 | tool | what it does |

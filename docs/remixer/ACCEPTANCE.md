@@ -28,7 +28,7 @@ make accept REMIX=<name> OT_PROJECT="/path/to/local/project" \
 files seed the fixture; `tools/harness/stress_project.py` derives the
 placement from the remix's selection and writes eight FLEX tracks, three
 LFOs per track, dense parameter locks and four Parts/patterns
-([STRESS_PROJECT](../../tools/harness/STRESS_PROJECT.md)). FX2 slot 0
+([tools/harness/README.md](../../tools/harness/README.md), stress_project.py). FX2 slot 0
 on T2 and on every server's track carries no lock or LFO: `verify_set`
 sends CC 40 there and reads the value back. The generated fixture is the
 pressure fixture: a remix with no DSP module of ours has nothing to

@@ -175,7 +175,7 @@ material, not an impulse convolution. `send_probe --rmode` drives MODE
 through the parameter word; `render_reverb --mode` forces the decoded value
 and cannot see the field map. What needs hardware: the cycle budget under
 load, everything ColdFire-side, a mid-run parameter change. `make
-verify-bus` and `make check` are the gates (`docs/remixer/HARNESS.md`).
+verify-bus` and `make check` are the gates (`tools/harness/README.md`).
 
 ## Open
 

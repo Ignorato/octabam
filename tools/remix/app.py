@@ -1716,7 +1716,7 @@ class RemixerScreen(Screen):
         which is why it read as "slow when holding" rather than as latency.
 
         Nothing a keystroke does can change this picture: knob VALUES draw as
-        dial graphics the string-capture hook cannot read (docs/remixer/EMU.md), so
+        dial graphics the string-capture hook cannot read (tools/emu/README.md), so
         the page depends only on WHICH page, WHICH effect, and which boot.
         """
         key = (mode, effect_id, self.synced)
