@@ -42,9 +42,13 @@ def diff_box(a, b):
 class MenuPort:
     def __init__(self, image, card, set_name, project, mkii, log_path=None, extra=()):
         self.mkii = mkii
-        argv = [str(PORT_BIN), "--image", str(image), "--card", str(card), "--set", set_name,
-                "--project", project, "--load-ms", "20000", "--dsp", "--card-rw", "--interactive",
-                *(["--mkii"] if mkii else []), *extra]
+        # --mount makes the port's boot post the card mount and LOAD PROJECT
+        # (panel_server.py's _port_argv): without it --set/--project load
+        # nothing, the set path stays empty, and a take fails on its folder
+        # (29 Sep 2026: PATH FAILED in the gate's first key-driven take).
+        argv = [str(PORT_BIN), "--image", str(image), "--card", str(card), "--mount", "--set", set_name,
+                "--project", project, "--internal-clock", "--load-ms", "20000", "--dsp", "--card-rw",
+                "--interactive", *(["--mkii"] if mkii else []), *extra]
         self.proc = PortProc(argv, log_path=log_path)
         self.proc.wait_ready(900)
         self.rt = PortRt(self.proc)
