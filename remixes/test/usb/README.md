@@ -31,7 +31,7 @@ and each has a one-module remix under `remixes/test/`.
 
 ## Build and flash
 
-1. Set up the repository and the stock OS: [BUILDING.md](../../../docs/guide/BUILDING.md) sections 1–2 (`make setup`, `make os`, `make recon`).
+1. Set up the repository and the stock OS: [BUILDING.md](../../../docs/guide/BUILDING.md) sections 0–2 (what to install first, then `make setup`, `make emu-setup`, `make os`, `make recon`).
 2. Build:
 
    ```bash
@@ -39,7 +39,7 @@ and each has a one-module remix under `remixes/test/`.
    ```
 
    Optional first: `make emu-cf` then `make check REMIX=usb-audio`. `verify_usb` enumerates the image under the emulator and streams from it.
-3. Back up the card and flash from it: [BUILDING.md](../../../docs/guide/BUILDING.md) sections 4–5. Recovery: section 6.
+3. Back up the card and flash from it: [BUILDING.md](../../../docs/guide/BUILDING.md) sections 4–5. Recovery: section 7.
 4. Old projects: [`bottleservice` — How to flash](../../bottleservice/README.md#how-to-flash) (`ot_project.py host` and `stamp-defaults`).
 
 OS upgrades still need DIN MIDI or the card. They do not work over USB MIDI.

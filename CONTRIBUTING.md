@@ -60,7 +60,7 @@ README.md       what it is, what was MEASURED, what is INFERRED, what is open
 plus a remix that carries it (`remixes/<name>/remix.py`, or
 `remixes/test/<name>/remix.py` for a remix of that one module, and a
 `README.md` beside it: what is in it, where it has run;
-`docs/guide/BUILDING.md` section 8) and, for anything with behaviour worth pinning, a gate
+`docs/guide/REMIXER.md`) and, for anything with behaviour worth pinning, a gate
 (`tools/verify/verify_<name>.py`, named in the manifest's `gates`, run by
 `make check` for every remix that carries the module). Nothing else
 registers it: the registry discovers every `modules/*/manifest.py`, and

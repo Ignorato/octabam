@@ -63,5 +63,5 @@ One remix with everything: SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP and TUNER
    ```
 
    Optional first: `make emu-cf` then `make check REMIX=octatrick`.
-3. Back up the card and flash from it: [BUILDING.md](../../docs/guide/BUILDING.md) sections 4–5. Recovery: section 6. Power-cycle the unit fully after the upgrade, and SAVE or SYNC TO CARD after changing project settings (DIRECT is a project setting; SCALE, ROOT and GLIDE live in battery RAM).
+3. Back up the card and flash from it: [BUILDING.md](../../docs/guide/BUILDING.md) sections 4–5. Recovery: section 7. Power-cycle the unit fully after the upgrade, and SAVE or SYNC TO CARD after changing project settings (DIRECT is a project setting; SCALE, ROOT and GLIDE live in battery RAM).
 4. USB on a host: [`usb`](../test/usb/README.md) — Using it. The computer's audio: pick the Octatrack's four-channel output on the host; channels 1–4 play into inputs A–D (record them, or monitor them through the mixer's DIR settings, as a jack input).
