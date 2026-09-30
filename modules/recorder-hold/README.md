@@ -231,6 +231,51 @@ samples. At a tempo whose bar is a whole number of samples (120 among them)
 the window and the content always match and sound-on-sound is clean without
 a patch.
 
+### Capturing it sample-exact over USB
+
+On the unit the loop was judged by ear and by analog captures, and the
+port shows the caves firing on the wraps where Bryan T's unit still clicks
+(26 Sep 2026). [`sos-capture`](../../remixes/test/sos-capture/README.md) is
+the recorder fixes with USB AUDIO IN AB and USB AUDIO OUT TRACKS:
+
+```bash
+tools/hw/sos_capture.py fixture <a project of yours> SOSCAP --bpm 128 --rlen 16
+tools/hw/sos_capture.py signal sig.wav --bpm 128 --rlen 16     # 997 Hz on L, a sample-index ramp on R
+# SOSCAP on the card, the image flashed, PLAY pressed, then:
+tools/hw/sos_capture.py capture sig.wav unit.wav
+tools/hw/sos_capture.py compare sig.wav unit.wav                # each recirculating pass against the one before
+tools/hw/sos_capture.py port SOSCAP sig.wav port.wav --image out/mainos_bus.bin
+tools/hw/sos_capture.py compare sig.wav unit.wav port.wav       # -> the port delay that matches the unit's arm
+tools/hw/sos_capture.py port SOSCAP sig.wav port.wav --delay N
+tools/hw/sos_capture.py compare sig.wav unit.wav port.wav       # -> the samples where unit and port differ
+```
+
+The ramp on R makes every sample T1 plays name the input sample it was
+recorded from, so the unit's arm is located to the sample and the port
+is started with its input on the same one. Once the signal stops, the
+loop recirculates and each pass is compared with the one before, per
+sample over shifts of −2..+2, so the one-sample walk drops out and a
+missing, repeated or foreign sample stays.
+
+Measured under the port (30 Sep 2026, `sos-capture`, 128 BPM, RLEN 16,
+AMP VOL 127): every recirculating pass matches the one before; a zero
+sample and a 20-sample burst planted in a copy of the capture were found
+at their pass and offset, and the aligned diff against the unplanted run
+listed exactly those 21 samples. The port run takes the arm to the sample
+from the ramp (a +7,000-sample input delay recovered exactly).
+
+Not yet known: whether the unit's capture is bit-exact where the port's
+is (AMP and the read-back are the same DSP code on both, but the port is
+not a timing model of the chip); whether macOS presents the unit as one
+device with 16 inputs and 2 outputs (`capture` refuses otherwise and lists
+the devices).
+
+The port's ColdFire rate does not produce the click: `--ips` from 1,200 to
+3,990 ColdFire instructions per sample (30–100 % of the default, which is
+not a measurement), RLEN 16 and RLEN 4, recirculating passes identical to
+the pass before at every rate; a slower ColdFire moves the arm 2–8 samples
+against the input and nothing else (30 Sep 2026).
+
 ### Where the detail is
 
 - `git show 3ceba41:docs/history/RTOS_FORK.md` section 10.53 (the diagnosis and
