@@ -3,9 +3,9 @@
 octabam is a remixer for the Octatrack's OS: it composes modules, each
 credited to its author, into one image built from the user's own 1.40C.
 `README.md` says what each module and remix is and where it has run;
-`CHANGELOG.md` records each flashed image. `docs/contributing/PLACEMENT.md` is
-the architecture record for where code goes and what is measured about
-the memory.
+`CHANGELOG.md` records each flashed image. `docs/README.md` lists every doc
+by reader; `docs/contributing/PLACEMENT.md` is the architecture record for
+where code goes and what is measured about the memory.
 
 The repo is organised as **modules** (`modules/<name>/manifest.py` declares one
 contribution) composed into **remixes** (`remixes/<name>/remix.py` selects a
@@ -551,7 +551,7 @@ modules that pinned a track by its r7 (the one-aux return on T8, the
 track-8 send refusal) matched in the harness and never on the unit — flash
 6's "the return never reaches T8", with `make verify-onebus` green on
 exactly that property. Found 8 Sep 2026 by running the shipping image from
-the card under the ColdFire port (`docs/history/COLDFIRE_PORT.md` O11). Any module
+the card under the ColdFire port (`git show 3ceba41:docs/history/COLDFIRE_PORT.md` O11). Any module
 logic keyed on a dispatcher fact (r7, r6, X:0x213, instance blocks) is
 measured under the port (`ot_emu --dsp-pcwatch`), never modelled in
 `dsp_host`; and a hardware failure the lock-step harness cannot show goes to
@@ -713,6 +713,21 @@ On 10 Sep 2026 the tree was regrouped for the remixer: `tools/` into
 `build/ verify/ harness/ emu/ hw/ patches/` (plus `remix/` and `scratch/`),
 `docs/` into `remixer/ firmware/ effects/ history/`. `git log --follow` crosses
 the moves; older commit messages and memory notes name the flat paths.
+
+On 30 Sep 2026 the docs were regrouped by reader: `docs/guide/` (building,
+flashing, composing a remix), `docs/contributing/` (modules, testing,
+placement, tooling, the failure register), `docs/firmware/` (reverse
+engineering only), a README beside each tool (`tools/emu/`, `tools/harness/`,
+`tools/remix/`, `tools/panel/`), and each module's design in its own
+README (`docs/effects/` dissolved). The remix index is `remixes/README.md`.
+`make verify-docs` (in CI) refuses a link or a `docs/…`/`tools/…`/
+`modules/…`/`remixes/….md` path that does not resolve; a citation of a
+removed file uses `git show <sha>:<path>`. Old paths: `docs/remixer/X.md`
+is `docs/contributing/X.md` (MODULES, PLACEMENT, TESTING, TOOLING,
+FAILURE_MODES; ACCEPTANCE is TESTING §8) or `docs/guide/` (REMIXER;
+FLASHING is BUILDING), EMU is `tools/emu/README.md`, HARNESS
+`tools/harness/README.md`; Tim Hastie's port log (O14i–O24) is
+`git show 666b6154:docs/firmware/COLDFIRE_PORT.md`.
 
 On 16 Sep 2026 `docs/history/` (18 closed records: BUS, RTOS_FORK,
 COLDFIRE_PORT, VOICING, NOTES, REVERB_LOG, XBUS_LOG, EXTERNAL_INGEST, ...)
