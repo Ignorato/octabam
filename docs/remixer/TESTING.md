@@ -304,7 +304,7 @@ boots at once contend and run slower than three (measured 28 Sep 2026);
 evidence: any `[SKIP]`, a swallowed non-zero exit, a timeout or an
 over-budget cycle count fails or blocks the run, and it writes a versioned
 JSON report (`out/acceptance/<timestamp>/`, schema
-`docs/remixer/acceptance.schema.json`).
+`tools/verify/acceptance.schema.json`).
 
 ```bash
 make accept REMIX=bottleservice STRESS_SOURCE=<a local project>       # a fixture generated for the remix

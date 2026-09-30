@@ -326,17 +326,17 @@ HELP = {
 The loop is one move long: highlight one of yours in AVAILABLE and press `enter`. The image rebuilds and re-boots by itself, so the panel on the right is never showing something else.
 
 [bold]keys[/]
-  tab  next pane           up/down  move the cursor
+  tab  next pane           up/down (j/k)  move the cursor
   enter   AVAILABLE: add it to the FX2 chooser (it displaces nothing).
-          LOADED: remove the row you are on, from ITS list.
+          CHOOSERS: remove the row you are on, from ITS list.
   left/right   UNIT: the knob value, hold to run, SHIFT for ×10
-               LOADED: move the row within its own chooser
+               CHOOSERS: move the row within its own chooser
   r  render + hear     space  replay
-  a / b  park what you just heard as A / B      , / .  play A / B
+  a  mark the last render A     b  render this one and mark it B     , / .  play A / B
   1  put the highlighted effect on the FX1 chooser (or take it off)
   x  apply the fix the ⚠ is offering (only shown when there is one)
   d  sample folder     l  load a remix      s  save this one as a remix
-  c  full check        f  choose the fallback        k  back to stock
+  c  full check        f  choose the fallback        K  back to stock
   ?  this              esc  stop audio      q  quit
 
 [bold]two slots, two chooser lists[/]
@@ -509,7 +509,9 @@ class RemixerScreen(Screen):
         Binding("1", "fx1", "FX1 row", show=False),
         Binding("l", "load", "load"),
         Binding("s", "save", "save"),
-        Binding("k", "stock", "reset to stock", show=False),
+        # `K`, not `k`: `k` is the cursor-up key in on_key, and a binding
+        # on it fired as well, so moving up reset the selection to stock.
+        Binding("K", "stock", "reset to stock", show=False),
         Binding("question_mark", "help", "what is this?"),
         Binding("q", "app.quit", "quit"),
     ]
@@ -909,7 +911,7 @@ class RemixerScreen(Screen):
                     + (f"[{WARN}]⌁[/]" if m.key in st.harvest else " "))
             nm = disp(m) if m.is_stock else f"[{OURS}]{disp(m)}[/]"
             pad = " " * max(0, 18 - len(disp(m)))
-            if cat == rig.MOD:
+            if not m.is_stock and rig.category(m) == rig.MOD:
                 # A firmware mod has no chooser column; its column is the
                 # ledger's verdict against what is loaded: ✓ shares the
                 # image, x names the module it collides with (by name, the

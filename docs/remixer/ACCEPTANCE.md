@@ -109,7 +109,7 @@ A run of one remix writes `out/acceptance/<timestamp>/report.json`, logs
 and local artifacts; a run of several writes
 `out/acceptance/<timestamp>/<remix>/report.json` each, the shared half's
 `check_shared.log` beside them and `summary.json` (remix to status) over
-all. [acceptance.schema.json](acceptance.schema.json) defines the
+all. [acceptance.schema.json](../../tools/verify/acceptance.schema.json) defines the
 versioned interchange envelope. Consumers must check `schema_version`
 before reading it: v1 had one `check` gate where v2 has `check_shared`
 and `check_remix`.

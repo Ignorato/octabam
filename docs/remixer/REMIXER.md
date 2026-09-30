@@ -56,7 +56,7 @@ up at play time, so no restart is needed.
 | `1` | give the highlighted effect an FX1 row, or take it off |
 | `f` | pick the fallback explicitly |
 | `x` | apply the fix the ⚠ line names |
-| `l` / `s` / `k` | load a remix (or `stock`) / save the selection as one / reset to stock |
+| `l` / `s` / `K` | load a remix (or `stock`) / save the selection as one / reset to stock |
 | `c` | `make check` |
 | `r` / `space` / `esc` | render the effect under the cursor on the source and play it / replay / stop |
 | `a` / `b` / `,` / `.` | mark A / render and mark B / play A / play B |

@@ -221,12 +221,13 @@ verify: verify-shared verify-remix ## The remix-independent gates, then the sele
 # and 25 checks used to repeat them 25 times (27 Sep 2026, ~3 h serially).
 REMIXES ?= $(REMIX)
 .PHONY: verify-shared
-verify-shared: ## The gates that do not depend on the remix: ledger selftest, slots, replaces, docs, label_fmt, knob census, remix-independent module gates (REMIXES="a b")
+verify-shared: ## The gates that do not depend on the remix: ledger selftest, slots, replaces, docs, the remixer draws, label_fmt, knob census, remix-independent module gates (REMIXES="a b")
 	@test -n "$(REMIXES)" || { echo "REMIXES is unset: make $@ REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
 	python3 tools/remix/selftest.py
 	python3 tools/verify/verify_slots.py
 	python3 tools/verify/verify_replaces.py --static
 	python3 tools/verify/verify_docs.py
+	$(PY) tools/verify/verify_remixer.py
 	python3 tools/build/label_fmt.py
 	@# The knob click census: every continuous knob of the rig fixture's DSP
 	@# modules moved mid-render, plus the garbage-start gate. Builds its own
@@ -366,6 +367,10 @@ accept: ## Strict local acceptance + JSON report: REMIX=<one>, or REMIXES="a b c
 	@test -n "$(REMIXES)" || { echo "REMIX is unset: make $@ REMIX=<name>, or REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
 	BUILD="$(BUILD)" python3 tools/verify/acceptance.py --remix $(REMIXES) $(if $(STRESS_SOURCE),--stress-source "$(STRESS_SOURCE)",) $(if $(JOBS),--jobs $(JOBS),) $(ACCEPTARGS)
 
+.PHONY: verify-docs
+verify-docs: ## The rendered tables are current and every link between tracked files resolves (no firmware; CI runs it)
+	python3 tools/verify/verify_docs.py
+
 .PHONY: test-acceptance
 test-acceptance: ## Firmware-free tests of the acceptance runner and the reach classifier
 	python3 -m unittest discover -s tools/verify/tests -p 'test_*.py' -v
@@ -430,7 +435,11 @@ ci-emu: ## CI: build the ColdFire port (tools/emu/ot_emu) and run its unit tests
 	ctest --test-dir out/emu-ci --output-on-failure -E '^(rtos|dsp|repitch-stock|repitch-patch)$$'
 
 .PHONY: ci
-ci: reach test-acceptance ci-dsp ci-emu ## Everything CI runs, locally
+ci: test-acceptance verify-docs ci-dsp ci-emu ## Everything CI runs, locally
+	@# The gate list only, as the CI job prints it: `make reach RUN=1` runs
+	@# `make ci` when the Makefile or the workflow changes, and an inherited
+	@# RUN=1 made this reach run the whole list again, recursively.
+	$(MAKE) reach RUN= KEEP= JOBS= FULL=
 
 .PHONY: emu-setup
 emu-setup: ## Provision the remixer deps (unicorn + textual) into .venv via uv
