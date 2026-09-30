@@ -12,7 +12,7 @@ package: `brew install libusb`, then
 and run this with `/usr/local/bin/python3` (25 Sep 2026).
 A device-recipient control request needs no interface claim, so the
 audio and MIDI drivers macOS attaches stay attached. The unit must be
-running a `usb-audio` image; on any other image the request STALLs
+running an image with a USB AUDIO OUT module; on any other image the request STALLs
 (reported here, not an error).
 
 Meaning (from usbaudio.s): produced/consumed are frame counts (the ring is
@@ -20,7 +20,10 @@ Meaning (from usbaudio.s): produced/consumed are frame counts (the ring is
 could not fill; overruns = the host stopped draining and the producer
 lapped the ring; bankdup = blocks where the read-back ping-pong bank did
 NOT alternate (the producer read a bank twice, or skipped one) -- the count
-that decides whether the clicks are the producer's.
+that decides whether the clicks are the producer's; minfill/maxfill = the
+ring's low and high water at packet builds since the host's first poll of
+this open; anchor = the frames the consumer skipped at that first poll (the
+producer's output between SET_INTERFACE and the host starting to poll).
 
 --in reads USB AUDIO IN's counters (0xc0/0x56; modules/usb-audio-in/
 usbaudio_in.s) instead: produced/consumed = frames into and out of its
@@ -31,22 +34,18 @@ bad = err + partial: err = completions with a dTD error bit (halted, data
 buffer, transaction), partial = lengths that were not whole frames;
 frames/seconds = the two state-7 visits (equal while running);
 minfill/maxfill = the ring's low and high water while consuming since the
-stream came up (the cushion IN_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns", "overruns",
-            "reprimes", "bad", "frames", "seconds", "minfill", "maxfill", "err", "partial")
-TARGET has to cover).
+stream came up (the cushion IN_TARGET has to cover).
 """
 import argparse
 import struct
 import sys
 import time
 
+# usbaudio_in.s in_counters (NCOUNT 15), the same order usb_probe.py reads
 IN_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns", "overruns",
-             "reprimes", "bad", "frames", "seconds", "minfill", "maxfill",
-             "err", "partial", "errmask", "lasttok", "lastslot",
-             "depth", "badfr", "badfr_prev", "dry", "late", "maxpass",
-             "good_nz", "bad_nz", "bad_nzw", "last_nzw")
+            "reprimes", "bad", "frames", "seconds", "minfill", "maxfill", "err", "partial")
 NAMES = ("consumed", "acc", "overruns", "underruns", "lastn", "lastfill", "lastbank",
-         "bankdup", "lastsamp", "srcjump", "reprimes", "produced")
+         "bankdup", "lastsamp", "srcjump", "reprimes", "minfill", "maxfill", "anchor", "produced")
 
 
 def read(dev, host_in=False):

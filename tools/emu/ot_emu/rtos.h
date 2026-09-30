@@ -1,7 +1,7 @@
 // The machine RUNNING: the firmware's own scheduler, its tasks, its timers.
 //
 // This is the C++ counterpart of `tools/emu/emu_rtos.py`'s `Rtos` class, and route
-// A is the oracle (`docs/firmware/COLDFIRE_PORT.md`). Everything here is a translation
+// A is the oracle (`git show 3ceba41:docs/history/COLDFIRE_PORT.md`; route A retired 26 Sep 2026, 60509404). Everything here is a translation
 // of a named piece of that file, with its measurements and its warnings
 // carried across rather than summarised.
 //
@@ -39,7 +39,7 @@
 
 namespace ot
 {
-	// The kernel, byte-exact (docs/firmware/RTOS_FORK.md §2, and route A's own header).
+	// The kernel, byte-exact (docs/history/RTOS_FORK.md §2, and route A's own header).
 	inline constexpr uint32_t g_vbr       = 0x40000000;		// [0x400b9668], set at 0x40000db6
 	inline constexpr uint32_t g_sched     = 0x40000550;		// one handler for trap #0 and PIT0
 	inline constexpr uint32_t g_schedRte  = 0x400005a6;		// the scheduler's rte: a task is (re)entered
@@ -520,6 +520,8 @@ namespace ot
 		// (a later peek cannot tell "nothing sent" from "consumed"). Record:
 		// u8 dir('>'/'<'), u32 frame, u16 ch, u8 core, u32 ram, u32 nwords, u16[nwords].
 		void setBlockDump(const std::string& _path) { m_blockDump.open(_path, std::ios::binary); }
+		void flushBlockDump() { if(m_blockDump.is_open()) m_blockDump.flush(); }
+		void closeBlockDump() { if(m_blockDump.is_open()) m_blockDump.close(); }
 		const std::vector<std::string>& blockLog() const { return m_blockLog; }
 		uint64_t ataInterrupts() const { return m_ataInterrupts; }
 		bool ataLineAsserted() const { return m_ataIrq; }

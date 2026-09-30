@@ -70,7 +70,7 @@ IN_RING_NAMES = ("produced", "consumed", "pkts", "lastn", "lastfill", "underruns
                  "reprimes", "bad", "frames", "seconds", "minfill", "maxfill", "err", "partial")
 # USB AUDIO's counters (0x55), the EP3 IN ring: usbaudio.s
 AUDIO_NAMES = ("consumed", "acc", "overruns", "underruns", "lastn", "lastfill", "lastbank",
-               "bankdup", "lastsamp", "srcjump", "reprimes", "produced")
+               "bankdup", "lastsamp", "srcjump", "reprimes", "minfill", "maxfill", "anchor", "produced")
 # the host -> unit stream's channel count is read from the CoreAudio device
 # (2 with USB AUDIO IN AB or IN CD, 4 with IN ABCD)
 

@@ -230,7 +230,7 @@ class MakefileTests(unittest.TestCase):
 
 class PlanTests(unittest.TestCase):
     def test_docs_and_ci(self):
-        self.assertEqual(commands(["docs/remixer/MODULES.md", "README.md"]), ["python3 tools/verify/verify_docs.py"])
+        self.assertEqual(commands(["docs/contributing/MODULES.md", "README.md"]), ["python3 tools/verify/verify_docs.py"])
         self.assertEqual(commands([".github/workflows/ci.yml"]), ["make ci"])
 
     def test_unclassified_reaches_the_cover_and_says_so(self):
@@ -365,3 +365,74 @@ open("scripts/opened.sh")
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuickTests(unittest.TestCase):
+    """The quick tier: fewer remixes, no identity, no accept."""
+
+    def quick(self):
+        c = ctx()
+        c.quick = True
+        c.test_remixes = {"miniverb"}
+        c.floor = [max(c.floor, key=lambda r: (c._modules_of().get(r, 0), r))]
+        return c
+
+    def test_a_module_checks_its_user_facing_carriers(self):
+        c = self.quick()
+        self.assertEqual(c.carriers(["bamsep26", "usb"]), ["bamsep26", "usb"])
+        self.assertEqual(c.carriers(["miniverb"]), ["miniverb"])
+
+    def test_only_test_carriers_check_the_smallest(self):
+        c = self.quick()
+        c.test_remixes = {"bamsep26", "usb", "miniverb"}
+        self.assertEqual(len(c.carriers(["bamsep26", "usb"])), 1)
+
+    def test_the_floor_is_one_remix_and_a_build_change_skips_identity(self):
+        c = self.quick()
+        self.assertEqual(len(c.floor), 1)
+        kinds = [k for k, _ in c.build_change()]
+        self.assertIn("refhash", kinds)
+        self.assertNotIn("identity", kinds)
+
+    def test_full_is_unchanged(self):
+        c = ctx()
+        self.assertEqual(c.carriers(["bamsep26", "usb"]), ["bamsep26", "usb"])
+        self.assertIn("identity", [k for k, _ in c.build_change()])
+
+    def test_a_makefile_check_target_skips_identity_when_quick(self):
+        head = MAKE_BASE.replace("\tpython3 tools/verify/verify_menu.py", "\tpython3 tools/verify/verify_menu.py --x")
+        c = ctx(make_head=head)
+        c.quick = True
+        kinds = [k for _, g, _ in reach.classify(["Makefile"], c) for k, _ in g]
+        self.assertNotIn("identity", kinds)
+        c.quick = False
+        self.assertIn("identity", [k for _, g, _ in reach.classify(["Makefile"], c) for k, _ in g])
+
+
+class TestRemixTests(unittest.TestCase):
+    """remixes/test/ is left out unless TESTS=1."""
+
+    def ctx_without_tests(self):
+        c = ctx()
+        c.include_tests = False
+        c.test_remixes = {"miniverb"}
+        c.test_carriers = {"MINIVERB": ["miniverb"]}
+        c.remixes_of = {k: [r for r in v if r != "miniverb"] for k, v in c.remixes_of.items()}
+        c.remixes = [r for r in c.remixes if r != "miniverb"]
+        return c
+
+    def test_a_module_only_in_test_remixes_is_not_checked(self):
+        rows = reach.classify(["modules/miniverb/engine.asm"], self.ctx_without_tests())
+        self.assertEqual([cmd for _, g, _ in rows for _, cmd in g], ["python3 tools/remix/selftest.py"])
+        self.assertIn("carried only by test remixes", rows[0][2])
+
+    def test_a_test_remix_edit_is_not_checked(self):
+        rows = reach.classify(["remixes/test/miniverb/remix.py"], self.ctx_without_tests())
+        kinds = [k for _, g, _ in rows for k, _ in g]
+        self.assertNotIn("check", kinds)
+        self.assertNotIn("accept", kinds)
+
+    def test_identity_names_only_the_remixes_in_play(self):
+        c = self.ctx_without_tests()
+        self.assertIn("--remixes bamsep26 usb", c.identity()[1])
+        self.assertNotIn("--remixes", ctx().identity()[1])

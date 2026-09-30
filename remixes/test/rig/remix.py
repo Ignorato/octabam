@@ -1,0 +1,25 @@
+"""rig -- the rig's selection with no ColdFire runtime, for the gates that
+build it.
+
+bottleservice without USB AUDIO, USB MIDI, Octakit and the scene modules:
+the bus, the three stations, TEMPO SYNC, CC MAP, MODE DEFAULTS, RIG HOSTS.
+registry.fixture picks it for verify_ccmap and verify_ccfeedback (CC MAP on
+the hosts under unicorn, no Runtime), verify_character and verify_onebus.
+Until 30 Sep 2026 the `usb` remix was this selection plus USB MIDI.
+"""
+
+from remix.schema import Proof, Remix
+
+REMIX = Remix(
+    name="rig",
+    family="rig", proof=Proof.CHECK, proof_note="",
+    doc="The rig without a ColdFire runtime: the fixture of the CC MAP, Character and one-aux gates.",
+    modules=("REVERB SERVER", "DELAY SERVER", "SEND",
+             "SPECTRUM", "CHARACTER", "MODULATION",
+             "TEMPO SYNC", "CC MAP", "MODE DEFAULTS", "RIG HOSTS"),
+    fallback="SEND",
+    hidden=("REVERB SERVER", "DELAY SERVER"),
+    named=("REVERB SERVER", "DELAY SERVER"),
+    locked=("REVERB SERVER", "DELAY SERVER"),
+    fx1=("SPECTRUM", "CHARACTER", "MODULATION"),
+)

@@ -8,7 +8,9 @@ tracks are on at every boot, and the menu turns them on and off. The port
 has run every track count, the ring's wrap and its overflow at eight
 tracks, on a fixture with sound in every frame (STEM_REC.md section 15),
 and the menu key by key on the MKII and MKI panels (section 16). It's a
-step of `docs/proposals/MULTITRACK_TO_CARD.md`.
+step of the roadmap in
+`docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`,
+section 0.
 
 - The design: `docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md`,
   over the proof of concept's `docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md`.

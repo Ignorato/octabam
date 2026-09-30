@@ -907,6 +907,9 @@ class Module:
     # against `params` at load, so a knob rename refuses the build instead
     # of failing a fixture after the merge (PR #396 on #415).
     dear: dict[str, int] = field(default_factory=dict)
+    # DSP work outside the FX pricer (for example a CF-registered source).
+    # An explicit gap must block pressure qualification, never report N/A.
+    pressure_blocker: str = ""
 
     def __post_init__(self):
         if self.params and len(self.params) != 12:
@@ -1132,8 +1135,7 @@ class Module:
 # been a module of ours -- SEND, which passes the audio through and only taps
 # it. That costs 215-250 words, and an INSERT-ONLY remix was paying them for
 # a client nothing reads: with no server in the image, nothing ever consumes
-# the bus accumulators SEND writes. restock.py says so in its own docstring
-# -- PLATE REV is missing from it ONLY because SEND's words land on PLATE's.
+# the bus accumulators SEND writes.
 #
 # So a remix may name this sentinel instead, and unimplemented ids resolve to
 # the FIRMWARE's own NONE: its descriptor (the one at list position 0 of a
@@ -1211,7 +1213,7 @@ class Remix:
     modules: tuple[str, ...]
     fallback: str                # module KEY that unimplemented ids alias to,
                                  # or NO_FALLBACK for the firmware's own NONE
-    # ---- the remix index (docs/remixes/README.md, `make docs`) -----------
+    # ---- the remix index (remixes/README.md, `make docs`) -----------
     family: str = ""             # "rig", "effects", "mods", "reference"
     proof: Proof | None = None   # schema.Proof; as a module's
     proof_note: str = ""

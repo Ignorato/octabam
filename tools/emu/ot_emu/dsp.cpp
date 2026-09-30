@@ -155,6 +155,14 @@ namespace ot
 		const dsp56k::HDI08& hdi() const { return px->getHDI08(); }
 	};
 
+	void DspPair::memoryRanges(std::vector<std::pair<uint8_t*, size_t>>& _out) const
+	{
+		for(const auto& k : m_cores)
+			for(const auto area : {dsp56k::MemArea_P, dsp56k::MemArea_X, dsp56k::MemArea_Y})
+				_out.emplace_back(reinterpret_cast<uint8_t*>(k->mem->getMemAreaPtr(area)),
+					static_cast<size_t>(0x1000000) * sizeof(dsp56k::TWord));
+	}
+
 	DspPair::DspPair(const double _ratio, const double _ips, const bool _rt)
 		: m_ratio(_ratio), m_ips(_ips), m_shared(_rt ? 0 : g_shareHi - g_shareLo, 0)
 	{
@@ -369,7 +377,7 @@ namespace ot
 			// payload's 8 slots that was an audio clock 8x slow: the 256-word
 			// ring at X:0x8000 advanced 16 words per 16-sample frame instead of
 			// 128, the dispatcher's DSR2 == 0x80f0 bank never came, and every
-			// block landed in bank A (COLDFIRE_PORT.md O8, "the bank is the
+			// block landed in bank A (git show 3ceba41:docs/history/COLDFIRE_PORT.md O8, "the bank is the
 			// audio ring's phase"). One slot per `_ips / 8`: 520 at 4160.
 			// O9: RX0 carries the input (a file or the tones) from the
 			// transport start on, silence before it and on every other slot
@@ -568,7 +576,7 @@ namespace ot
 
 	// =====================================================================
 	// O17 (12 Sep 2026): THE REAL-TIME MODE -- the two cores as JIT WORKERS ON
-	// THE LOCKSTEP SCHEDULE (--dsp-rt; docs/firmware/COLDFIRE_PORT.md O17).
+	// THE LOCKSTEP SCHEDULE (--dsp-rt; git show 666b6154:docs/firmware/COLDFIRE_PORT.md O17).
 	//
 	// THE PREMISE. The ColdFire stays the master of emulated time: every tick
 	// books `m_due` exactly as O16c has it. What changes is WHO runs the

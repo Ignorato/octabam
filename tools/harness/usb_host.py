@@ -200,13 +200,14 @@ def midi_send(b, raw):
 
 
 COUNTERS = ("consumed", "acc", "overruns", "underruns", "lastn", "lastfill", "lastbank",
-            "bankdup", "lastsamp", "srcjump", "reprimes", "produced")
+            "bankdup", "lastsamp", "srcjump", "reprimes", "minfill", "maxfill", "anchor", "produced")
 
 
 def counters(b):
-    """USB AUDIO's twelve counters over the vendor request 0xc0/0x55 (48 big-endian bytes)."""
-    raw = b.ctrl_in(0xc0, 0x55, 0, 0, 48)
-    vals = struct.unpack(">12i", raw) if len(raw) == 48 else None
+    """USB AUDIO's fifteen counters over the vendor request 0xc0/0x55 (60 big-endian bytes)."""
+    n = 4 * len(COUNTERS)
+    raw = b.ctrl_in(0xc0, 0x55, 0, 0, n)
+    vals = struct.unpack(f">{len(COUNTERS)}i", raw) if len(raw) == n else None
     if vals is None:
         raise RuntimeError(f"counters: {len(raw)} bytes")
     return dict(zip(COUNTERS, vals))

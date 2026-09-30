@@ -7002,7 +7002,7 @@ Every value above was measured on STEM REC assembled by Ubuntu's
 `m68k-linux-gnu` binutils 2.46, symlinked as `m68k-elf-*`. Upstream's
 authors build with Homebrew's bare-metal `m68k-elf` tools. On 28 Sep 2026
 this machine got the same kind of toolchain, built from source: binutils
-2.47 and GCC 16.1.0 in `/opt/m68k-elf` (`docs/remixes/BUILDING.md` 1a).
+2.47 and GCC 16.1.0 in `/opt/m68k-elf` (`docs/guide/BUILDING.md` 1a).
 
 **STEM REC's bytes move.** ✅ The bare-metal assembler reads a global
 symbol of the same section PC-relative: `tstl %pc@(d)`, 4 bytes. Ubuntu's

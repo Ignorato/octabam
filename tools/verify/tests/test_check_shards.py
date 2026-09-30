@@ -29,15 +29,15 @@ class ByGate(unittest.TestCase):
             check_shards.check_recipe(jobs)
         self.assertIn("verify_usb.py", str(cm.exception))
 
-    def test_image_stage_follows_the_set_gate(self):
-        """TEMPO BUS boots the card verify_set stages: same job, after it,
-        with the image restored between."""
+    def test_image_stage_stages_its_own_card(self):
+        """TEMPO BUS boots the card verify_set stages: its job stages it
+        (--stage-only) and runs apart from verify_set's own run."""
         (_n, cmds, _e, _s), = [j for j in self.jobs() if j[0] == "set"]
-        scripts = [c[1] if c[0] != "make" else "make " + c[1] for c in cmds]
-        self.assertEqual(scripts, ["tools/verify/verify_set.py", "make bus",
-                                   "tools/verify/module_gates.py"])
-        self.assertIn("--stage", cmds[2])
-        self.assertEqual(cmds[2][cmds[2].index("--stage") + 1], "image")
+        self.assertEqual([c[1] for c in cmds], ["tools/verify/verify_set.py"])
+        (_n, cmds, _e, _s), = [j for j in self.jobs() if j[0] == "image"]
+        self.assertEqual([c[1] for c in cmds], ["tools/verify/verify_set.py", "tools/verify/module_gates.py"])
+        self.assertIn("--stage-only", cmds[0])
+        self.assertEqual(cmds[1][cmds[1].index("--stage") + 1], "image")
 
     def test_module_gates_are_one_job_each(self):
         names = [j[0] for j in self.jobs()]
@@ -62,3 +62,22 @@ class ByGate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Split(unittest.TestCase):
+    """Which remixes run as gate jobs (check_shards.choose_split)."""
+
+    def test_none_and_named(self):
+        self.assertEqual(check_shards.choose_split(["a", "b"], "none", {}, 3), set())
+        self.assertEqual(check_shards.choose_split(["a", "b"], "b,zz", {}, 3), {"b"})
+
+    def test_recorded_times_pick_the_long_pole(self):
+        times = {"bottleservice": 780.0, "usb": 140.0, "miniverb": 80.0, "euclid": 130.0}
+        self.assertEqual(check_shards.choose_split(list(times), "auto", times, 3), {"bottleservice"})
+        # nothing over 300 s: nothing split
+        small = {k: 100.0 for k in times}
+        self.assertEqual(check_shards.choose_split(list(small), "auto", small, 3), set())
+
+    def test_without_a_record_the_octakit_remixes(self):
+        got = check_shards.choose_split(["bottleservice", "usb-midi", "octatrick"], "auto", {}, 3)
+        self.assertEqual(got, {"bottleservice"})

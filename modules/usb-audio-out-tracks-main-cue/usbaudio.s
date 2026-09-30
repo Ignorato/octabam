@@ -114,6 +114,22 @@
 | the tracks' slot; the consumer runs 512 frames behind, so that slot is
 | unread when it is written.
 .set MAIN_CUE_LAG_BLOCKS, 1
+| With MASTER TRACK on, CUE leads MAIN. The mixdown (payload A, P:0x257:
+| brset #$a on x:(X:$207+$7e)) takes the master path at P:0x292: the cue bus
+| (ring words 0/1, P:0x29f-0x2b2) sums slots 0-6 of this frame's blocks
+| directly, while MAIN (words 2/3, P:0x2cb-0x2d0) is slot 7 alone, track 8's
+| output of a mix it was sent (x:(X:$209+$1f8), P:0x2b7-0x2ca) two frames
+| earlier. The ColdFire sets that bit from the MASTER TRACK byte: the frame
+| record builder ORs 0x600 into 0x8000030c + ping*0x200 (halfword $7e of the
+| 0x80000210 record) when 0x80000034 is nonzero (0x4000498c-0x400049aa).
+| Measured on Bryan T's MKII (29 Sep 2026, a transient on a track sent to
+| both, recorded over USB in Logic): master off, 0 samples; master on, CUE
+| 43976 vs MAIN 44008, 32 samples = 2 blocks. The producer writes CUE this
+| many blocks AHEAD of MAIN's slot while the byte is set. Ahead is safe: the
+| consumer is behind the producer, and no later block's write touches a
+| slot's CUE field except the block that owns it.
+.set MASTER_TRACK_ON,        0x80000034
+.set CUE_MASTER_LAG_BLOCKS,  2
 
 .if SLOT8_LAYOUT
 | x -> x * SLOT_BYTES (8) in place.
@@ -207,7 +223,9 @@
 .endif
 .set STEP_HS,      11025        | 11.025 frames per 250 us packet, x1000 (every layout)
 .set STEP_FS,      44100        | 44.1 frames per 1 ms packet, x1000
-.set SERVO_STEP,   100          | +-0.1 frame per packet, x1000
+.set SERVO_SHIFT,  1            | proportional gain G = 2^SERVO_SHIFT: x1000
+                                | frames per packet per frame of fill error
+.set SERVO_MAX,    200          | correction clamp: +-0.2 frame per packet, x1000
 
 | Four queue slots, so the host always finds a packet waiting: four packets
 | cover 1 ms of polls. The frame ISR (every 363 us) is the only context that
@@ -221,10 +239,10 @@
 | cached addresses (the USB controller reads the packet buffers), so the
 | rings need no cache maintenance.
 .set AUD_FRAMES,   1024
-.set AUD_TARGET,   512          | ring fill the stream starts at and the servo
-                                    | steers towards: ~12 ms, so a momentary
-                                    | producer stall is absorbed
-.set AUD_BAND,     128          | servo deadband, so it does not hunt
+.set AUD_TARGET,   64           | ring fill the stream starts at and the servo
+                                    | holds: ~1.5 ms (512 before the proportional
+                                    | servo; the unit held +-13 around 256 and
+                                    | 128 under a busy project, 28 Sep 2026)
 
 .set PORTSC1,    0xfc0b0184         | bits 27:26 = port speed, 2 = high
 
@@ -363,7 +381,44 @@ audio_isr_shim:
 | is left alone.
 usbaudio_kick:
     tstb    usbaudio_alt            | alt 0 requested since this block began:
-    beqs    9f                      | queue nothing more (teardown follows)
+    beq     9f                      | queue nothing more (teardown follows)
+    | THE FIRST POLL SETS THE CUSHION. The host polls EP3 IN some time after
+    | its SET_INTERFACE (macOS: about 460 frames later, Bryan T's unit, 27
+    | Sep 2026), and the producer keeps filling meanwhile, so a cursor set
+    | at bring-up starts the stream that much further behind than
+    | AUD_TARGET and the servo holds it there. So: bring-up queues NSLOT
+    | packets and sets aud_await to 1; this block marks them queued (2);
+    | from then on nothing more is built until one of them has RETIRED, the
+    | controller's own record of a poll (the ACTIVE bit it clears), and at
+    | that block the cursor is re-set to AUD_TARGET behind the producer.
+    | The frames between are skipped once, before the host has audio;
+    | usbaudio_anchor holds the count.
+    mvzb    aud_await,%d0
+    cmpil   #2,%d0
+    bnes    .Lk_build
+    moveq   #0,%d2                  | any slot no longer ACTIVE = a poll happened
+.Lk_await:
+    movel   %d2,%d0
+    bsr     audio_dtd_of
+    movel   %a0@(4),%d1
+    btst    #7,%d1
+    beqs    .Lk_anchor
+    addql   #1,%d2
+    cmpil   #NSLOT,%d2
+    bcss    .Lk_await
+    rts                             | all still queued: the host has not polled
+.Lk_anchor:
+    movel   aud_produced,%d0
+    movel   %d0,%d1
+    subl    usbaudio_consumed,%d1   | fill now
+    subil   #AUD_TARGET,%d1         | beyond the cushion: skipped
+    bles    .Lk_anchored            | at or under it already (a prompt host)
+    movel   %d1,usbaudio_anchor
+    subil   #AUD_TARGET,%d0
+    movel   %d0,usbaudio_consumed
+.Lk_anchored:
+    clrb    aud_await
+.Lk_build:
     moveq   #NSLOT,%d0
     movel   %d0,%sp@-               | builds left this block
 1:  bsr     audio_pkt_build         | fill the tail slot, if free
@@ -372,6 +427,12 @@ usbaudio_kick:
     subql   #1,%sp@
     bnes    1b
 2:  addql   #4,%sp
+    mvzb    aud_await,%d0
+    cmpil   #1,%d0
+    bnes    3f
+    moveq   #2,%d0                  | the bring-up's packets are queued
+    moveb   %d0,aud_await
+3:
     | Self-heal. The add-dTD tripwire (audio_pkt_build) is the documented
     | way to append to a running queue, and its hazard window is reported by
     | the hardware clearing ATDTW. Should anything ever leave an ACTIVE dTD
@@ -452,22 +513,43 @@ audio_pkt_build:
     subil   #AUD_FRAMES,%d1
     movel   %d1,usbaudio_consumed   | resync to the ring's trailing edge
     movel   #AUD_FRAMES,%d2
-3:  movel   usbaudio_acc,%d3
+3:  tstb    aud_await               | low and high water since the first poll
+    bnes    5f
+    cmpl    usbaudio_minfill,%d2
+    bccs    4f
+    movel   %d2,usbaudio_minfill
+4:  cmpl    usbaudio_maxfill,%d2
+    blss    5f
+    movel   %d2,usbaudio_maxfill
+5:  movel   usbaudio_acc,%d3
     | RATE SERVO. The endpoint is ASYNCHRONOUS: the device sends at its own
     | clock and the host adapts. The host's polls run on ITS clock, so a fixed
     | 11.025 frames per poll would drain the ring faster or slower than the
     | producer fills it, by the two clocks' drift, and the ring would under-
-    | or overrun within minutes. The servo nudges the drain by +-0.1 frame per
-    | packet against a target fill, which is exactly "send what is produced".
+    | or overrun within minutes. The servo is proportional: each packet drains
+    | nominal + G x (fill - AUD_TARGET) / 1000 frames, clamped to +-SERVO_MAX,
+    | which is "send what is produced" at the device's clock. The fill decays
+    | to the target with a time constant of 1000/G packets (G = 2: 500, about
+    | 125 ms at high speed) and drift eps leaves eps x STEP / G frames of
+    | error (0.06 at the 11 ppm Bryan T's Mac showed). Held there, the fill no
+    | longer wanders, so USB AUDIO IN's ring, whose fill with this one's sums to
+    | a constant under implicit feedback, holds too.
     movel   aud_step,%d5            | nominal frames per packet, x1000
-    cmpil   #(AUD_TARGET+AUD_BAND),%d2
-    bcss    .Lsrv_low
-    addil   #SERVO_STEP,%d5
-    bras    .Lsrv_done
-.Lsrv_low:
-    cmpil   #(AUD_TARGET-AUD_BAND),%d2
-    bccs    .Lsrv_done
-    subil   #SERVO_STEP,%d5
+    tstb    aud_await               | until the host's first poll anchors the
+    bnes    .Lsrv_done              | ring, send nominal: the bring-up burst's
+                                    | fill falls 11 per packet, not a clock error
+    movel   %d2,%d0
+    subil   #AUD_TARGET,%d0         | fill error, signed
+    asll    #SERVO_SHIFT,%d0        | x G
+    cmpil   #SERVO_MAX,%d0
+    bles    .Lsrv_hi
+    movel   #SERVO_MAX,%d0
+.Lsrv_hi:
+    cmpil   #-SERVO_MAX,%d0
+    bges    .Lsrv_lo
+    movel   #-SERVO_MAX,%d0
+.Lsrv_lo:
+    addl    %d0,%d5                 | step + correction (> 0: STEP_HS - SERVO_MAX)
 .Lsrv_done:
     addl    %d5,%d3
     movel   #1000,%d7
@@ -814,6 +896,11 @@ audio_ep3_up:
     clrl    usbaudio_acc
     moveq   #1,%d0
     moveb   %d0,aud_running
+    moveb   %d0,aud_await           | 1: queue, then wait for the host's first poll
+    movel   #0x7fffffff,%d0
+    movel   %d0,usbaudio_minfill
+    clrl    usbaudio_maxfill
+    clrl    usbaudio_anchor
     rts
 
 audio_ep3_down:
@@ -987,14 +1074,30 @@ audio_frame_shim:
     movel   %d3,%a4@+               | MAIN L, full speed
     movel   %d2,%a4@+               | MAIN R, full speed
 .Lmc_sum_skip:
+    | CUE goes into its own slot: this frame's, or CUE_MASTER_LAG_BLOCKS
+    | blocks ahead with MASTER TRACK on (see the constant). a3 steps past this
+    | slot's CUE field, which the block that owns it writes. a2 and d7 are
+    | free in this layout.
+    moveq   #15,%d7
+    subl    %d6,%d7                 | f
+    addl    %d4,%d7                 | this frame's index
+    tstb    MASTER_TRACK_ON
+    beqs    .Lmc_cue_slot
+    addil   #16*CUE_MASTER_LAG_BLOCKS,%d7
+.Lmc_cue_slot:
+    andil   #AUD_FRAMES-1,%d7
+    lsll    #4,%d7                  | slot * SLOT_BYTES (16)
+    lea     aud_ring+8,%a2
+    addal   %d7,%a2                 | that slot's CUE field
     movel   %a0@(MAIN_CUE_CUE_OFF),%d2    | CUE L
     clrb    %d2
     byterev %d2
-    movel   %d2,%a3@+
+    movel   %d2,%a2@+
     movel   %a0@(MAIN_CUE_CUE_OFF+4),%d2  | CUE R
     clrb    %d2
     byterev %d2
-    movel   %d2,%a3@+
+    movel   %d2,%a2@
+    addql   #8,%a3                  | past this slot's CUE field
     subql   #1,%d6
     bpl     1b
     addql   #8,%d4
@@ -1073,21 +1176,47 @@ audio_frame_shim_body:
 .if USB_LAYOUT == LAYOUT_TRACKS_MAIN_CUE
     | ---- MAIN and CUE, channels 17-20: the same word format, top 24 bits --
     | Frame f's pair sits at MAIN_CUE_BASE + f*8 (+MAIN_CUE_CUE_OFF for CUE);
-    | f = 15 - d6. It goes into the slot MAIN_CUE_LAG_BLOCKS blocks behind
+    | f = 15 - d6. MAIN goes into the slot MAIN_CUE_LAG_BLOCKS blocks behind
     | this frame's (see the constant): slot (d4 + f - 16*LAG) & (AUD_FRAMES-1),
-    | at +64 past its sixteen track words. a0, d0, d7 are free until the next
-    | frame reloads them; d1 (the sum shift) is borrowed and restored; CUE R
-    | is parked on the stack while d7 does the slot arithmetic.
+    | at +64 past its sixteen track words. CUE goes into the same slot, or
+    | CUE_MASTER_LAG_BLOCKS blocks ahead of it with MASTER TRACK on, at +72.
+    | CUE is written first so its words go straight from the source to the
+    | ring; a0 is re-pointed at the source for MAIN. a0, d0, d2, d7 are free
+    | until the next frame reloads them; d1 (the sum shift) is borrowed and
+    | restored.
     moveq   #15,%d7
     subl    %d6,%d7                 | f
     lsll    #3,%d7                  | f * 8
     lea     MAIN_CUE_BASE,%a0
     addal   %d7,%a0                 | a0 = this frame's MAIN (L,R); CUE at +MAIN_CUE_CUE_OFF
+    movel   %a0@(MAIN_CUE_CUE_OFF),%d0    | CUE L
+    movel   %a0@(MAIN_CUE_CUE_OFF+4),%d1  | CUE R
+    moveq   #15,%d7
+    subl    %d6,%d7                 | f again
+    addl    %d4,%d7                 | this frame's index
+    subil   #16*MAIN_CUE_LAG_BLOCKS,%d7
+    tstb    MASTER_TRACK_ON
+    beqs    .Ltmc_cue_slot
+    addil   #16*CUE_MASTER_LAG_BLOCKS,%d7
+.Ltmc_cue_slot:
+    andil   #AUD_FRAMES-1,%d7
+    lsll    #4,%d7                  | slot * 16
+    lea     aud_ring+72,%a0         | + the track words' 64 B + MAIN's 8 B
+    lea     %a0@(0,%d7:l:4),%a0     | + slot * 64
+    addal   %d7,%a0                 | + slot * 16 = slot * 80
+    clrb    %d0
+    byterev %d0
+    movel   %d0,%a0@+               | CUE L
+    clrb    %d1
+    byterev %d1
+    movel   %d1,%a0@                | CUE R
+    moveq   #15,%d7
+    subl    %d6,%d7                 | f again
+    lsll    #3,%d7                  | f * 8
+    lea     MAIN_CUE_BASE,%a0
+    addal   %d7,%a0                 | a0 = this frame's MAIN (L,R) again
     movel   %a0@(MAIN_CUE_MAIN_OFF),%d0   | MAIN L
     movel   %a0@(MAIN_CUE_MAIN_OFF+4),%d1 | MAIN R
-    movel   %a0@(MAIN_CUE_CUE_OFF),%d2    | CUE L
-    movel   %a0@(MAIN_CUE_CUE_OFF+4),%d7  | CUE R
-    movel   %d7,%sp@-
     moveq   #15,%d7
     subl    %d6,%d7                 | f again
     addl    %d4,%d7                 | this frame's index
@@ -1102,15 +1231,8 @@ audio_frame_shim_body:
     movel   %d0,%a0@+               | MAIN L
     clrb    %d1
     byterev %d1
-    movel   %d1,%a0@+               | MAIN R
-    clrb    %d2
-    byterev %d2
-    movel   %d2,%a0@+               | CUE L
-    movel   %sp@+,%d2
-    clrb    %d2
-    byterev %d2
-    movel   %d2,%a0@                | CUE R
-    lea     %a3@(16),%a3            | this slot's MAIN/CUE field: the next block writes it
+    movel   %d1,%a0@                | MAIN R
+    lea     %a3@(16),%a3            | this slot's MAIN/CUE field: other blocks write it
     moveq   #SUM_SHIFT,%d1          | the sum shift, borrowed above
 .endif
     movel   %d5,%d2                 | the stereo sum, L
@@ -1189,7 +1311,7 @@ audio_frame_shim_body:
 audio_ctrl_shim:
     mvzb    SETUP_BMREQ,%d0
     | A vendor GET (bmRequestType 0xc0, bRequest 0x55) reads the
-    | twelve counters below back over EP0 as 48 big-endian bytes, so a
+    | fifteen counters below back over EP0 as 60 big-endian bytes, so a
     | host -- the port's bench, or tools/hw/usb_counters.py on a unit --
     | can watch underruns, overruns and the bank-duplicate count during a
     | stream. Any driver a host attached to the interfaces is bypassed: a
@@ -1200,7 +1322,7 @@ audio_ctrl_shim:
     cmpil   #0x55,%d0
     bne     .Lctrl_stock
     pea     usbaudio_consumed
-    moveq   #48,%d0
+    moveq   #60,%d0
     bra     .Lctrl_send
 .Lctrl_class:
     cmpil   #0xa1,%d0               | class GET, interface recipient
@@ -1259,8 +1381,8 @@ uac2_clock_valid: .byte 0x01
     .global usbaudio_consumed, usbaudio_acc, usbaudio_overruns
     .global usbaudio_underruns, usbaudio_lastn, usbaudio_lastfill
     .global usbaudio_lastbank, usbaudio_bankdup, usbaudio_srcjump
-    .global usbaudio_reprimes
-| The twelve longs from usbaudio_consumed to aud_produced are what the
+    .global usbaudio_reprimes, usbaudio_minfill, usbaudio_maxfill, usbaudio_anchor
+| The fifteen longs from usbaudio_consumed to aud_produced are what the
 | vendor request 0xc0/0x55 returns, in this order.
 usbaudio_consumed: .long 0          | frames pulled from the ring
 usbaudio_acc:      .long 0          | frames-per-packet accumulator (x1000)
@@ -1273,6 +1395,9 @@ usbaudio_bankdup:  .long 0    | blocks where the bank did NOT alternate
 usbaudio_lastsamp: .long 0    | previous summed L sample
 usbaudio_srcjump:  .long 0    | discontinuities present at production
 usbaudio_reprimes: .long 0    | idle endpoint found holding a queued dTD
+usbaudio_minfill:  .long 0    | lowest fill at a packet build since the first poll
+usbaudio_maxfill:  .long 0    | highest
+usbaudio_anchor:   .long 0    | frames skipped at the host's first poll (this open)
 aud_produced:      .long 0          | producer frame count
 qh_ep3:            .long 0          | EP3 IN dQH, read from ENDPTLISTADDR
 aud_step:          .long STEP_HS    | frames per packet x1000, set by the speed
@@ -1285,6 +1410,7 @@ aud_sum:           .space AUD_FRAMES*SUM_BYTES   | 1024 x stereo sum (MAIN alone
 .endif
 usbaudio_alt:      .byte 0          | alt setting the host asked for
 aud_running:       .byte 0          | EP3 is up (frame-ISR owned)
+aud_await:         .byte 0          | 1 = queue for the first poll, 2 = queued, 0 = anchored
 aud_hs:            .byte 0          | 1 = high speed (20 ch), 0 = full (sum)
 aud_tail:          .byte 0          | next dTD slot to fill (0..NSLOT-1)
 

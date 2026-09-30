@@ -135,7 +135,8 @@
 ;                       stepped per sample), TIME (per block)
 ;   r7+$76              SEND, this host's own send level (per block)
 ;   r7+$77/$78          TONE filter state, line L / R (persistent)
-;   r7+$79              free
+;   r7+$79              T1's key peak |mono in| this block, zeroed at frame
+;                       offset 0, published to y:$990 (Character's KEY)
 ;   r7+$7a              dR, line R's raw tap (per sample; REVERSE skips the
 ;                       read and the damping keeps reading the last one)
 ;   r7+$7b/$7c          fL/fR, the damped taps == this sample's wet (GRAIN
@@ -151,7 +152,7 @@
 ;                       on a host track with a sample playing, the unit's own
 ;                       per-track state lives there between our calls, and the
 ;                       delay printed a white-noise wash that survived STOP
-;                       (docs/remixer/FAILURE_MODES.md). DSP.md had recorded
+;                       (docs/contributing/FAILURE_MODES.md). DSP.md had recorded
 ;                       $84..$8a as not persisting since 10 Aug 2026.
 ;
 ; Parameters (a knob arrives as value<<16, value 0..127):
@@ -205,7 +206,7 @@ init:
 ; it (T2 THRU or T3 STATIC with a trig every step; T1 never), bisected on
 ; the unit: image 38 without them clean, 39/40/41 wash, 42 = 41 minus the
 ; four stores clean. The port never showed it. Mechanism open
-; (docs/remixer/FAILURE_MODES.md); the coefficients glide in from whatever
+; (docs/contributing/FAILURE_MODES.md); the coefficients glide in from whatever
 ; the slot held for ~20 ms after a select, as before.
 ; ROTINIT
         rts
@@ -358,7 +359,7 @@ bus_notfirst:
 ; ---- resolve THIS BLOCK'S WRITE OFFSET, ONCE, into raw $20 ---------------
 ; A client never reads y:>$900 at its own dispatch time: core 0 owns the flip
 ; and this server is on payload B (modules/send/send_client.asm,
-; docs/effects/XBUS.md step 3). build_bus.py substitutes a per-payload body
+; modules/send/README.md "Housekeeping and the rotation"). build_bus.py substitutes a per-payload body
 ; here; both leave the offset in raw $20, and every site downstream reads
 ; that instead of the shared word.
 ; ROTLATCH
@@ -445,7 +446,7 @@ bus_mine:
 ; 3 bits of headroom (asr #3); this block multiplies by 1/sqrt(N) and the
 ; per-sample read shifts back up by 3, so the send knob sets a track's SHARE
 ; of the delay. 1/sqrt(N), not 1/N: uncorrelated sources sum as sqrt(N)
-; (docs/effects/XBUS.md "Gain staging"). The count is masked to 0..7, so 8
+; (modules/send/README.md "The auto-gain"). The count is masked to 0..7, so 8
 ; writers wrap to index 0, which holds 1/sqrt(8); a count of 0 lands there
 ; too, on a zero accumulator. The eight reciprocals are the manifest's
 ; RECIP, in the P table at offset 52. x1 (the write rotation) is still
@@ -610,7 +611,7 @@ dwarmdone:
 ; every track's record every frame (0x40004d6a), which an FX2 instance reads
 ; at r6+$13. ticks Q12.4 = 42,336,000 / tempo24 -- the word the ColdFire
 ; cave used to publish at r6+$7, and it clobbered the FX1 station's page 2
-; there (docs/remixer/FAILURE_MODES.md). 48/24 division, 24 `div` steps:
+; there (docs/contributing/FAILURE_MODES.md). 48/24 division, 24 `div` steps:
 ; `div` is fractional, so a0 comes out as N/(2D) for a dividend N loaded as
 ; an integer -- the dividend is loaded DOUBLED (84,672,000 = $050bfe00) and
 ; a0 is the integer quotient. Measured under the port (tempo24 2901: 7296
@@ -1338,6 +1339,15 @@ gvrdone:
 ; from x:>$208 / x:>$419 before every proc call (payload B P:0x29c..0x2f8);
 ; m6 is not, and stays untouched.
 
+; ---- T1's key level (29 Sep 2026): the peak |mono in| of this block, for
+; Character's KEY. Zeroed on the block's first call (frame offset 0), held
+; in raw $79 through the loop, published at y:$990 after it.
+        move    x:(r7+$1e),a            ; this call's frame offset (raw $67)
+        tst     a
+        bne     dkeyrun
+        clr     b
+        move    b,x:(r7+$30)            ; the key peak (raw $79)
+dkeyrun:
         move    #$1,n0                  ; the frame stride (a byte lands
                                         ; LOW in an address register)
         move    x:(r7+$1a),a
@@ -1371,6 +1381,12 @@ gvrdone:
         add     x0,a
         asr     #$1,a,a
         move    a,x0                    ; own dry mono
+        abs     a                       ; |mono|: the key peak
+        move    a,y1                    ; (y1 is reloaded below)
+        move    x:(r7+$30),b
+        cmp     y1,b                    ; nothing but moves before the Tcc
+        tlt     y1,b
+        move    b,x:(r7+$30)
 ; REV: the dry x the ramped REV level into the reverb's accumulator
         move    x:(r7-$1e),a            ; REV, ramped per sample (raw $2b)
         move    x:(r7-$1d),y1           ; + this block's step ($2c)
@@ -1981,6 +1997,15 @@ dlyend:
         move    n4,a
         move    a,x:(r7-$23)            ; the ramp, where the next call's
                                         ; per-block section rewrites it
+; ---- publish T1's key level: the peak and a counter Character reads to
+; tell a live host from a stale word (one writer, stored every call)
+        move    x:(r7+$30),a
+        move    a,y:>$990               ; the peak |mono in| so far this block
+        move    y:>$991,x0              ; (boot garbage may have bit 23 set)
+        move    #>$7fff,a
+        and     x0,a                    ; masked into a clean positive a
+        add     #>$1,a
+        move    a,y:>$991               ; the call counter
 
 ; ---- save both phases, restore the M registers ----------------------------
         move    r1,a
@@ -1997,7 +2022,7 @@ dlyend:
 ; 4.5 samples after T1's proc entry, jittering by half a sample or more,
 ; and the dispatcher's copy of this block right after the rts lands inside
 ; it: the pull reads the block mid-rewrite (junk on main R, 0.5/min on
-; image 99, docs/remixer/FAILURE_MODES.md). Stock effects copy by +2
+; image 99, docs/contributing/FAILURE_MODES.md). Stock effects copy by +2
 ; samples. Measured on the unit with a WOW-selected pad here (image 36):
 ; +0 cycles 1266 junk runs/min, +256 16/min, +512 0/min over 60 s and
 ; 1.4/min over 10 min, +2048 0/60 s. Running the compute from the

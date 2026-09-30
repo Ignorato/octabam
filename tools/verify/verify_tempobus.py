@@ -6,8 +6,8 @@ edit the hosts, the window closes clean.
     OT_PROJECT=<dir> make check REMIX=bottleservice            # the same, from make verify
 
 Boots the image and card verify_set staged (out/setverify/image.bin,
-card.img), drives the panel through `ot_emu --live` (key and encoder events
-on the panel link), dumps RAM at the end and checks:
+card.img), drives the panel through `ot_emu --live-script` (key and encoder
+events on the panel link at emulated times, no wall-clock sleeps), dumps RAM at the end and checks:
 
   window   TEMPO opens a 118 x 64 window (the menu window's size)
   delay    rows MODE TIME WET TONE FDBK PING SIZE SCTR DENS PTCH, a mode's
@@ -42,6 +42,7 @@ from remix import registry  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 EMU = ROOT / "out/emu/ot_emu"
 SET = ROOT / "out/setverify"
+GAP, DOWN = 50.0, 20.0         # emulated ms between panel lines; key down -> up
 OUT = ROOT / "out/tempobus"
 WINH, LAYERS = 0x460d16a0, 0x460d165c
 TABLE, STRIDE, PLANES = 0x46c7d34c, 56, 0x460d1f7b
@@ -50,6 +51,7 @@ DUMP_BASE, DUMP_LEN = 0x460d0000, 0xbb0000
 ROM_BASE, ROM_LEN = 0x400b0000, 0x28000        # the stock layers and ours live here
 KEY_TEMPO, KEY_NO, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_FUNC = 0x18, 0x32, 0x21, 0x33, 0x20, 0x2d
 TEMPO = 0x80000020
+LIVE_IDS = 0x80000ec4          # the live FX1/FX2 id arrays (verify_set.LIVE_IDS)
 
 
 def png(path, w, h, px, scale=4):
@@ -86,65 +88,61 @@ def main():
     work = pathlib.Path(tempfile.mkdtemp(prefix="tempobus."))
     run_card = work / "card.img"
     run_card.write_bytes(card.read_bytes())
-    fifo = work / "live"
-    os.mkfifo(fifo)
+    script = work / "panel.txt"
     dump, lanes, rom, log = work / "ram.bin", work / "lanes.bin", work / "rom.bin", OUT / "port.txt"
     tmp = work / "tempo.bin"
+    ids = work / "ids.bin"
+    # The panel script at EMULATED times (ot_emu --live-script): the same key
+    # sequence the unit's user presses, with no wall-clock sleeps, so a
+    # loaded machine runs it exactly as a quiet one. Gaps in emulated ms.
+    lines, now = [], [1500.0]            # the first key after the boot settles
+
+    def send(line, pause=GAP):
+        lines.append(f"{now[0]:.0f} {line}")
+        now[0] += pause
+
+    def key(code, pause=3 * GAP):
+        send(f"key {code:#x} down", DOWN)
+        send(f"key {code:#x} up", pause)
+
+    key(KEY_NO, 5 * GAP)                              # the boot's date prompt
+    key(KEY_TEMPO, 5 * GAP)
+    # rows (26 Sep 2026): MODE TIME WET TONE in both boxes, then each
+    # engine's own (delay FDBK PING SIZE SCTR DENS PTCH, reverb SIZE DLY
+    # SHMR SHFT DIFF GATE); DEL and REV are the host pages', and a mode's
+    # --- slots are left out
+    send("enc 0 -5"); send("enc 0 2", 3 * GAP)        # row 0 MODE: A to REVERSE (its view)
+    key(KEY_DOWN); key(KEY_DOWN)                      # row 2: WET
+    send("enc 0 -64"); send("enc 0 -64"); send("enc 0 9", 3 * GAP)
+    key(KEY_DOWN); key(KEY_DOWN)                      # row 4: FDBK
+    send("enc 1 -64"); send("enc 1 -64"); send("enc 1 5")
+    key(KEY_DOWN)                                     # row 5: SLEN, REVERSE's --- PING left out
+    send("enc 1 -64"); send("enc 1 -64"); send("enc 1 1", 3 * GAP)
+    key(KEY_RIGHT)                                    # reverb: its own cursor, row 0 (MODE)
+    key(KEY_UP)                                       # UP at row 0: held there
+    for _ in range(4):
+        key(KEY_DOWN)                                 # row 4: SIZE
+    send("enc 1 -64"); send("enc 1 -64"); send("enc 1 7", 3 * GAP)
+    key(KEY_DOWN)                                     # row 5: DLY
+    send("enc 0 -64"); send("enc 0 -64"); send("enc 0 11", 3 * GAP)
+    for _ in range(4):
+        key(KEY_UP)                                   # row 1: TIME
+    send("enc 0 -64"); send("enc 0 -64"); send("enc 0 5", 3 * GAP)
+    send("enc 6 -128"); send("enc 6 -128")            # LEVEL: to the 30.0 floor
+    send("enc 6 5", 2 * GAP)                          # LEVEL: +5 BPM
+    send(f"key {KEY_FUNC:#x} down", GAP)
+    send("enc 6 3", 2 * GAP)                          # FUNC + LEVEL: +0.3 BPM
+    send(f"key {KEY_FUNC:#x} up", 3 * GAP)
+    key(KEY_TEMPO, 5 * GAP)                           # close
+    send("quit")
+    script.write_text("\n".join(lines) + "\n")
     cmd = [str(EMU), "--image", str(image), "--card", str(run_card), "--set", setname,
-           "--project", name, "--load-ms", "90000", "--live", str(fifo),
+           "--project", name, "--load-ms", "90000", "--live-script", str(script),
            "--mem-dump", f"{DUMP_BASE:#x},{DUMP_LEN:#x}={dump};{LIVEB:#x},0x240={lanes};{TEMPO:#x},8={tmp};"
-                         f"{ROM_BASE:#x},{ROM_LEN:#x}={rom}"]
+                         f"{ROM_BASE:#x},{ROM_LEN:#x}={rom};{LIVE_IDS:#x},16={ids}"]
     with open(log, "w") as lf:
-        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT)
-        fd = os.open(fifo, os.O_WRONLY)
-        for _ in range(3000):
-            if "live       : reading panel" in log.read_text():
-                break
-            if proc.poll() is not None:
-                break
-            time.sleep(0.1)
-        time.sleep(2)
-
-        def send(line, pause=0.2):
-            os.write(fd, (line + "\n").encode())
-            time.sleep(pause)
-
-        def key(code, pause=0.6):
-            send(f"key {code:#x} down", 0.1)
-            send(f"key {code:#x} up", pause)
-
-        key(KEY_NO, 1.0)                                  # the boot's date prompt
-        key(KEY_TEMPO, 1.0)
-        # rows (26 Sep 2026): MODE TIME WET TONE in both boxes, then each
-        # engine's own (delay FDBK PING SIZE SCTR DENS PTCH, reverb SIZE DLY
-        # SHMR SHFT DIFF GATE); DEL and REV are the host pages', and a mode's
-        # --- slots are left out
-        send("enc 0 -5"); send("enc 0 2", 0.6)            # row 0 MODE: A to REVERSE (its view)
-        key(KEY_DOWN, 0.3); key(KEY_DOWN, 0.3)            # row 2: WET
-        send("enc 0 -64"); send("enc 0 -64"); send("enc 0 9", 0.6)
-        key(KEY_DOWN, 0.3); key(KEY_DOWN, 0.3)            # row 4: FDBK
-        send("enc 1 -64"); send("enc 1 -64"); send("enc 1 5")
-        key(KEY_DOWN, 0.3)                                # row 5: SLEN, REVERSE's --- PING left out
-        send("enc 1 -64"); send("enc 1 -64"); send("enc 1 1", 0.6)
-        key(KEY_RIGHT)                                    # reverb: its own cursor, row 0 (MODE)
-        key(KEY_UP, 0.3)                                  # UP at row 0: held there
-        for _ in range(4):
-            key(KEY_DOWN, 0.3)                            # row 4: SIZE
-        send("enc 1 -64"); send("enc 1 -64"); send("enc 1 7", 0.6)
-        key(KEY_DOWN, 0.3)                                # row 5: DLY
-        send("enc 0 -64"); send("enc 0 -64"); send("enc 0 11", 0.6)
-        for _ in range(4):
-            key(KEY_UP, 0.3)                              # row 1: TIME
-        send("enc 0 -64"); send("enc 0 -64"); send("enc 0 5", 0.6)
-        send("enc 6 -128"); send("enc 6 -128")            # LEVEL: to the 30.0 floor
-        send("enc 6 5", 0.4)                              # LEVEL: +5 BPM
-        send(f"key {KEY_FUNC:#x} down", 0.2)
-        send("enc 6 3", 0.4)                              # FUNC + LEVEL: +0.3 BPM
-        send(f"key {KEY_FUNC:#x} up", 0.6)
-        key(KEY_TEMPO, 1.0)                               # close
-        send("quit", 1.0)
-        os.close(fd)
-        proc.wait(timeout=600)
+        lf.write(" ".join(cmd) + "\n"); lf.flush()
+        subprocess.run(cmd, cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT, timeout=900)
     text = log.read_text()
 
     fails = 0
@@ -154,7 +152,7 @@ def main():
         print(f"  [{'ok' if ok else 'FAIL'}] {label}{'  ' + detail if detail else ''}")
 
     check("run: the port ended on quit", "ended on quit" in text,
-          re.search(r"live       : .*ended .*", text).group(0) if "ended" in text else "no end line")
+          re.search(r"live script: .*ended .*", text).group(0) if "ended" in text else "no end line")
     ram, lane, romb = dump.read_bytes(), lanes.read_bytes(), rom.read_bytes()
 
     def rd(a, n):
@@ -163,8 +161,9 @@ def main():
         return ram[a - DUMP_BASE:a - DUMP_BASE + n]
     u32 = lambda a: struct.unpack(">I", rd(a, 4))[0]
 
-    # the host tracks: the part's live FX2 ids as verify_set dumped them
-    idb = (SET / "ids.bin").read_bytes()
+    # the host tracks: the part's live FX2 ids, from this run (the card
+    # verify_set staged; it need not have run: `verify_set --stage-only`)
+    idb = ids.read_bytes()
     fx2 = list(idb[8:16])
     dly = next((t for t, v in enumerate(fx2) if v == registry.by_key("DELAY SERVER").menu.fx2_id), None)
     vrb = next((t for t, v in enumerate(fx2) if v == registry.by_key("REVERB SERVER").menu.fx2_id), None)

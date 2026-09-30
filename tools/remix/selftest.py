@@ -581,7 +581,7 @@ def main():
     # DONE. "On neither chooser" gives every shipped remix exactly the three
     # reverbs -- FX1 lists ten of the thirteen and the reverbs are FX2-only
     # -- which is the whole reason removing the explicit field was safe.
-    # restock lists all fourteen and places nothing, so it gives up nothing.
+    # mods lists all fourteen and places nothing, so it gives up nothing.
     _sp = stock.p_spans("A")
     _fx1_all = {k for k in _sp
                 if registry.modules()[k].menu.fx2_id in stock.fx1_ids()}
@@ -593,14 +593,16 @@ def main():
     _rig = ("FILTER", "SPATIALIZER", "EQUALIZER", "PHASER", "FLANGER", "CHORUS",
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
-    _want = {"restock": (), "mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
-             "octatrick": (), "octatrick-usb": (), "usb-out-main-cue": (), "usb-out-main": (),     # stock effects + ColdFire modules, no DSP words
-             "repitch": (),
+    _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
+             "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (),     # stock effects + ColdFire modules, no DSP words
+             "repitch": (), "analog-bassdrum": ("SPRING REV",),
              # the twelve io remixes: the IN module's RX inject is placed in SPATIALIZER's words
              **{f"usb-io-{o}-{i}": ("SPATIALIZER",) for o in ("tracks", "tracks-main-cue", "main-cue", "main") for i in ("ab", "cd", "abcd")},
+             "octatrick": ("SPATIALIZER",),   # USB AUDIO IN ABCD's inject, as in the io remixes
+             "sos-capture": ("SPATIALIZER",),   # usb-io-tracks-ab + the recorder fixes
              "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "usb": _rig, "usb-audio": _rig, "bottleservice": _rig}
+             "rig": _rig, "bottleservice": _rig}
     for _n in registry.remix_names():
         _r = registry.remix(_n)
         _hv = stock.region_of(stock.harvested(

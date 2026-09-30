@@ -23,6 +23,13 @@ DEL and REV, that set how much of the track goes to each. The delay's
 repeats also feed the reverb (the reverb's DLY knob). Each engine's wet
 signal comes out on the track that hosts it.
 
+> **Tracks 1 and 5 must be THRU tracks with no trigs of their own.** That
+> is the only setup the bus has been tested in. Sounds programmed on track
+> 1 made the delay pop and click (reported 29 Sep 2026, cause open:
+> [FAILURE_MODES.md](../../docs/contributing/FAILURE_MODES.md)). Track
+> 5 with a sample machine or trigs has not been tested. Put your sounds on
+> tracks 2–4 and 6–7 and send them to the bus.
+
 ```mermaid
 flowchart LR
     S["SEND on tracks 2–4, 6–7<br/>DEL · REV"]
@@ -66,8 +73,14 @@ three pass audio through unchanged.
 | station | in place of | modes | page 1 | page 2 |
 |---|---|---|---|---|
 | **SPECTRUM** | FILTER | LADR (Moog ladder) · SEM (Oberheim SVF, SHPE sweeps LP → BP → HP) · ISO · VOWL | FREQ · RES · ENV · LDP · LSP · WDTH | MODE · SHPE |
-| **CHARACTER** | LO-FI | SAT: TAPE · TUBE · INFL | DRV · FOLD · WDTH · COMP · TONE · MIX | SAT |
+| **CHARACTER** | LO-FI | SAT: TAPE · TUBE · INFL | DRV · FOLD · WDTH · COMP · TONE · MIX | SAT · KEY · KLVL |
 | **MODULATION** | CHORUS | JUNO · DIM · FLNG · COMB · PHSR | RATE · DPTH · DLY · FDBK · LOFI · MIX | MODE · TONE · WDTH |
+
+CHARACTER's KEY sets what drives its compressor: SELF (the track's own
+input) or T1 (T1's level, published by the delay host). KLVL scales T1's
+level, 64 = unity. A Character with KEY = T1 on tracks 2–7 ducks that track
+when T1 plays; T1 reaches the master unducked. On track 8 KEY is ignored:
+the master receives T1 itself.
 
 Modules: [`spectrum`](../../modules/spectrum/README.md),
 [`character`](../../modules/character/README.md),
@@ -160,6 +173,15 @@ On image 88 a fourth MODULATION beside the reverb overran the DSP and
 three fit; the cycle pass that followed prices four inside the budget and
 has not been measured on the unit.
 
+Metered on 15 Sep 2026 (`rig_render.py --project OCTABAM89 --bank 3
+--part 2`, the rig of that date with a T8 return; instructions/sample,
+worst block): 1,301 on core 0 and 561 on core 1 with every station at its
+passthrough and the delay on CLEAN; delay GRAIN takes core 1 to 1,276. The
+delay alone: CLEAN 476, GRAIN 1,191, REVERSE 497. A station at neutral
+knobs takes its bypass loop and costs its static price only once a knob
+leaves neutral. GRAIN's four grains per line are the largest lever:
+`Remix.grains=2` halves the reader, −350 on core 1.
+
 ## Where it has run
 
 - **Hardware:** Sam's MKII, image 88 (built from main `d6867bd`, 27 Sep
@@ -186,24 +208,21 @@ has not been measured on the unit.
 
 ## How to flash
 
-1. **Set up once.** Clone the repository and fetch the stock OS:
-   [BUILDING.md](../../docs/remixes/BUILDING.md) §1–2 (`make setup`,
-   `make os`, `make recon`). You need an MKI or MKII on 1.40C and its CF
-   card.
-2. **Build the image.** Pick a build number; it becomes the OS version the
-   unit shows and the suffix on every octabam effect's name. Bump it each
-   time you flash.
+[BUILDING.md](../../docs/guide/BUILDING.md) has every step, from what to
+install to the way back to stock. For this remix:
+
+1. **Build.** Pick a build number; it becomes the OS version the unit shows
+   and the suffix on every octabam effect's name. Bump it each time.
 
    ```bash
-   make image REMIX=bottleservice BUILD=91
+   make image REMIX=bottleservice BUILD=91       # -> out/OCTATRACK_OCTABAM91.bin
    ```
 
-   The card image is `out/OCTATRACK_OCTABAM91.bin`. Optional:
-   `make emu-cf` then `make check REMIX=bottleservice` runs every gate and
-   boots the image in the emulator first (about half an hour).
-3. **Back up the card.** USB DISK MODE, copy everything. Octakit migrates
-   Parts into Kits on load and going back to stock can lose Kit data.
-4. **Old projects.** For a project made before this remix, on the card:
+   Optional: `make emu-cf` then `make check REMIX=bottleservice` runs every
+   gate and boots the image in the emulator first (about half an hour).
+2. **Back up the card.** Octakit migrates Parts into Kits on load and going
+   back to stock can lose Kit data.
+3. **Old projects.** For a project made before this remix, on the card:
 
    ```bash
    python3 tools/hw/ot_project.py host "<card>/<set>/<project>"
@@ -214,16 +233,9 @@ has not been measured on the unit.
    elsewhere; `stamp-defaults` writes the remix's knob defaults where the
    stored bytes mean something else now. A project made on the unit after
    the flash needs neither.
-5. **Flash from the card.** On the unit: PROJECT → SYSTEM → USB DISK MODE →
-   YES. Copy the `.bin` to the root of the card, eject it on the computer,
-   leave USB DISK MODE. Then PROJECT → SYSTEM → OS UPGRADE → YES. When it
-   restarts, **power-cycle it once more**: an OS upgrade does not clear DSP
-   RAM and the first boot has played garbled audio that a reboot cleared.
-   SYSTEM STATUS → OS VERSION reads `OCTABAM91`.
-6. **Back to stock.** Power off, hold FUNC and power on → STARTUP MENU →
-   TRIG 3 → MIDI UPGRADE, then send `downloads/extracted/OCTATRACK_OS1.40C.syx`
-   over DIN MIDI from a SysEx app. Do not power off during UPDATING FLASH.
-   Details and recovery: [BUILDING.md](../../docs/remixes/BUILDING.md) §5–6.
+4. **Flash from the card** ([BUILDING.md section 5](../../docs/guide/BUILDING.md#5-flash-from-the-card)),
+   then power-cycle once more. SYSTEM STATUS → OS VERSION reads `OCTABAM91`.
+5. **Back to stock:** [BUILDING.md section 8](../../docs/guide/BUILDING.md#8-back-to-stock-or-another-remix).
 
-If the unit misbehaves, [FAILURE_MODES.md](../../docs/remixer/FAILURE_MODES.md)
+If the unit misbehaves, [FAILURE_MODES.md](../../docs/contributing/FAILURE_MODES.md)
 is the register of what has gone wrong and why.
