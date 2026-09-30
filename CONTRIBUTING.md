@@ -25,24 +25,27 @@ from the user's image at build time.
 
 ## Your first pull request
 
-1. Fork `sambanks/octabam` on GitHub and clone your fork with its
-   submodules:
+1. Fork `sambanks/octabam` on GitHub. Clone `sambanks/octabam` itself
+   with its submodules and add your fork as the remote you push to, so
+   `origin/main` (the base `make reach` and `make identity` use) is the
+   project's main:
 
    ```bash
-   git clone --recurse-submodules https://github.com/<you>/octabam
+   git clone --recurse-submodules https://github.com/sambanks/octabam
    cd octabam
-   git remote add upstream https://github.com/sambanks/octabam
+   git remote add fork https://github.com/<you>/octabam
    ```
 
 2. Install and build the toolchain, and unpack **your own** copy of OS
    1.40C: [BUILDING.md sections 0–2](docs/guide/BUILDING.md#0-what-you-need)
    (`make setup`, `make emu-setup`, `make os && make recon`; `make emu-cf`
    for the gates that boot the image). The OS never leaves your machine.
-4. Branch from `upstream/main`, write the module (next section), and run
+3. Branch from `origin/main`, write the module (next section), and run
    the gates in [Before you open a PR](#before-you-open-a-pr).
-5. Open the PR against `sambanks/octabam:main`. The template asks for the
-   gates you ran and what was measured. CI runs on it; GitHub holds a
-   first-time contributor's first CI run until a maintainer approves it.
+4. `git push fork <branch>` and open the PR against `sambanks/octabam:main`.
+   The template asks for the gates you ran and what was measured. CI runs
+   on it; GitHub holds a first-time contributor's first CI run until a
+   maintainer approves it.
 
 Issues are turned off (`README.md`): a question about your change goes in
 its PR.
@@ -202,9 +205,9 @@ conflict can still fail on main (PR #396's stress fixture named a knob
 that #415 had renamed).
 
 ```bash
-git fetch upstream && git rebase upstream/main
-make reach BASE=upstream/main RUN=1 KEEP=1      # QUICK: every module or tool change
-STRESS_SOURCE=<a local project> make reach BASE=upstream/main FULL=1 RUN=1 KEEP=1 JOBS=3
+git fetch origin && git rebase origin/main
+make reach RUN=1 KEEP=1      # QUICK: every module or tool change
+STRESS_SOURCE=<a local project> make reach FULL=1 RUN=1 KEEP=1 JOBS=3
 #   FULL=1 (optional): every gate, identity and accept included, at full speed
 #   KEEP=1: every gate, then one table (instead of stopping at the first failure)
 #   JOBS=3: the per-remix lines over three worktrees at a time
