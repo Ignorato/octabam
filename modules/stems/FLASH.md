@@ -1,4 +1,51 @@
-# STEM REC: flash A, and crosscheck's flash plan as a record
+# STEM REC: flashes A and B, and crosscheck's flash plan as a record
+
+## Flash B — `stems`: the stock effects back (staged 1 Oct 2026)
+
+STEMS1 ran on Yves's MKII on 30 Sep 2026 (`docs/firmware/STEM_REC.md`
+section 17.1). STEMS2 is the same STEM REC code on the stock effects: the
+remix now lists the 14 stock effects, so FX2's chooser is stock's and PLATE,
+SPRING and DARK REV are back. It also carries upstream `363861e` (the build's
+pre-boot regions and placement). `modules/stems/stems.s` is unchanged.
+
+**The image.** Built 1 Oct 2026 from branch `stem-rec-p3` at `d646e83`
+(a clean tree), with the bare-metal `m68k-elf` toolchain: `make image
+REMIX=stems BUILD=2 VERSION=STEMS2`. The unit's OS version reads `STEMS2`.
+The build at `18a46fd` (the remix change alone) gave the same bytes.
+
+| file | path | bytes | sha256 |
+|---|---|---|---|
+| card image | `out/OCTATRACK_STEMS2.bin` | 448,576 | `6a02db5e2a6afbe4dc1a98dd075b5e89c65f8dd99b31ecbef6d6da61e8fc8519` |
+| MIDI image | `out/OCTATRACK_OS1.40C_STEMS2.syx` | 626,582 | `204105583d99fc34030066d184ddfb2b05466d0ed1dd75c0e4eb57517fa399b5` |
+
+Both are built from your own 1.40C and never enter the repository. Every
+gate passed on that commit: `make check-remix REMIX=stems` 209 PASS, 0
+FAIL, with the menu gate's 28 panel checks (MKII and MKI) and
+`verify_stems` in it; the only SKIP is `verify_set`'s, which needs a
+project (`/home/yvez/xcheck/v3-stems2-gates.log`, 1 Oct 2026). Never
+flashed. The card path is flash A's.
+
+**Before you flash.** As flash A: the stock `.syx` and a MIDI interface at
+hand, the card backed up.
+
+**The tests, in order.**
+
+1. **The first boot.** Before you power-cycle: does the unit play audio?
+   **Report** yes or no. Then power-cycle anyway (`docs/guide/BUILDING.md`
+   section 5 step 5). STEMS1's first boot was silent
+   (`docs/contributing/FAILURE_MODES.md`).
+2. **The FX2 chooser.** Open FX2 on any track. **Report:** NONE and the 14
+   stock effects, FILTER to DARK REV.
+3. **The level.** One track alone, a steady sample, LEVEL and pan as they
+   are, the same pattern three times: with the stock recorder on T1 as
+   its source, with the stock recorder on MAIN, and with STEMS. **Report:**
+   each file's peak in a DAW, and T1's LEVEL. Section 17.1 has why.
+4. **Flash A's tests not yet reported:** the card's speed (60 s takes at
+   1, 2, 4 and 8 tracks: PEAK after each, any `RING FULL`), a take while a
+   static machine streams from the card, and stock saves (save the project
+   and a sample, power-cycle, load both).
+
+The stop conditions are flash A's.
 
 ## Flash A — `stems`: STEMS in MAIN MENU (staged 30 Sep 2026)
 
