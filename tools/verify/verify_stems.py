@@ -568,6 +568,9 @@ def nocard(s):
 FIXTURE8 = pathlib.Path("out/stems_fixture8.json")   # tools/verify/stems_fixture.py --eight
 FIXTURE32 = pathlib.Path("out/stems_fixture32.json")   # tools/verify/stems_fixture.py --fat32
 FIXTURE_THRU = pathlib.Path("out/stems_fixture_thru.json")   # stems_fixture.py --thru
+FIXTURE_THRU1 = pathlib.Path("out/stems_fixture_thru1.json")   # stems_fixture.py --thru1
+FIXTURE_MODES = [("", FIXTURE), ("--eight", FIXTURE8), ("--fat32", FIXTURE32),
+                 ("--thru1", FIXTURE_THRU1), ("--thru", FIXTURE_THRU)]   # --thru1 passes through the THRU card: before --thru
 CARD_READY = 0x460d1cb8     # emu_card.FW_CARD_READY: := 1 after the firmware's card init and mount
 SUFFIX = ""                 # appended to every run's tag: "32" while the FAT32 checks run
 
@@ -1104,14 +1107,27 @@ def slow8(s):
 
 
 def fixtures():
-    """The four fixture cards, built from TEMPLATE at the start of every
-    run: a fresh tree has none, and a card left by an older stems_fixture.py
-    must never be read. They rebuild byte for byte, in about 30 s for all
-    four (28 Sep 2026). False, with nothing checked, when there is no
-    template; a build that fails is a failed check."""
+    """The fixture cards, built from TEMPLATE: rebuilt when the builder, the
+    card writer, the project editor or the template change (a hash of all
+    of them in out/stems_fixtures.key), reused otherwise -- a stale card is
+    never read, and a quick run doesn't pay a minute to rebuild them. False,
+    with nothing checked, when there is no template; a build that fails is
+    a failed check."""
     if not TEMPLATE.is_dir():
         return False
-    for mode in ("", "--eight", "--fat32", "--thru"):
+    import hashlib
+    import emu_card
+    import ot_project
+    h = hashlib.sha256()
+    for p in [pathlib.Path("tools/verify/stems_fixture.py"), pathlib.Path(emu_card.__file__),
+              pathlib.Path(ot_project.__file__)] + sorted(q for q in TEMPLATE.rglob("*") if q.is_file()):
+        h.update(str(p).encode())
+        h.update(p.read_bytes())
+    key = pathlib.Path("out/stems_fixtures.key")
+    if key.exists() and key.read_text() == h.hexdigest() and all(j.exists() for _, j in FIXTURE_MODES):
+        check("the fixtures are current: their inputs are unchanged", True, h.hexdigest()[:12])
+        return True
+    for mode, _ in FIXTURE_MODES:
         r = subprocess.run([sys.executable, "tools/verify/stems_fixture.py", *([mode] if mode else []),
                             str(TEMPLATE)], capture_output=True, text=True)
         if r.returncode:
@@ -1119,7 +1135,8 @@ def fixtures():
             check(f"the fixture builds from the template (stems_fixture.py{' ' + mode if mode else ''})",
                   False, tail[-1] if tail else f"exit {r.returncode}")
             return False
-    check("the four fixtures build from the template", True, str(TEMPLATE))
+    key.write_text(h.hexdigest())
+    check("the fixtures build from the template", True, str(TEMPLATE))
     return True
 
 
