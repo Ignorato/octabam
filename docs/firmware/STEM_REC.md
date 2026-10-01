@@ -7257,3 +7257,121 @@ STEMS1's STEM REC on the 14 stock effects. Yves reported it from the unit.
   before the fader. Piece 5 changes it (its spec is on branch
   `stem-rec-p5`).
 - **Not yet reported:** the card's speed (test 4).
+
+## 18. The level path (piece 5)
+
+Measured 1 Oct 2026 under the port with `tools/verify/stems_levels_probe.py`
+on the `stems` image built from branch `stem-rec-p5` (logs
+`/home/yvez/xcheck/v5-p5-lv-*.log`), and read from `out/dsp/payload_A.asm`
+(`tools/build/dsp_disasm_all.py`) and the stock slice (SHA-256
+`164f3122…af0a84e`). Confidence markers as at the top of this file.
+
+### 18.1 The level pages ✅
+
+Each frame the ColdFire writes the words core 0 reads through `X:$205` into
+one of four 0x80-byte pages at `0x80005460`:
+
+- `0x4000ac18` picks the page written this frame,
+  `0x80005460 + [0x80004800] << 7`, and stores its address at `0x80003c10`.
+- `0x400049da` points channel 0, the transfer to the DSP, at
+  `0x80005460 + [0x80004804] << 7`.
+- The sent index is written twice a frame and cycles 1, 2, 3, 0. In the
+  fourth frame it's written 4, then 0, inside one routine: an increment and
+  its wrap.
+- The page after the fourth (`0x80005660`) isn't a level page. It holds
+  zeros on the one-track fixture and 16-bit audio-like words on the THRU
+  fixture.
+
+Per slot k = 0 to 9 (T1 to T8, then inputs AB and CD), four halfwords at
+byte 8k:
+
+| Halfword | Contents |
+|---|---|
+| 4k | the cue send |
+| 4k+1 | the track level: `0x7f00` at LEVEL 127, `0x4008` after the level byte is poked to 64 (the level chain shapes it) |
+| 4k+2 | the MAIN table index (`0x7f00` on both fixtures) |
+| 4k+3 | the split: the sample, in the low 4 bits, where a change starts |
+
+The page builder at `0x4000d1a6` fills the rest from fixed bytes, each
+sign-extended: halfword `0x28`, the cue level, from `0x80000036`; `0x29`,
+the MAIN level, from `0x80000035`; `0x2a` from `0x80000032`; `0x27` from
+`0x8000002f`; `0x26` from the word at `0x80000c92`; `0x25` from
+`0x80000031 << 8`.
+
+Measured on the one-track fixture: T1-T4 and T7-T8 `0000 7f00 7f00 0000`,
+T5-T6 `0000 0000 7f00 0000` (LEVEL 0). On the THRU fixture: all eight
+`0000 7f00 7f00 0000`. On both, halfwords `0x28` and `0x29` read
+`0040 0040` under `--main-level 64`. In the DSP (`X:0x4800`) each word
+arrives with `0x03` in its top byte, which core 0's multiply drops.
+
+Two movers for the gates, both measured:
+
+- Poking `0x80000035` to 127 makes halfword `0x29` read `007f`, and T1's
+  settled MAIN gain becomes `0x7c0980`, (127/128)^4 × T[254]
+  (`v5-p5-lv-main.log`).
+- Poking T1's level byte `0x80000c50` to 64 makes slot 0's level word
+  `0x4008`, and T1's MAIN gain falls to `0x0801d0` (`v5-p5-lv-move.log`).
+
+### 18.2 The gain path ✅ (read from the code)
+
+Payload A, core 0, once a frame:
+
+- `P:0xf5`-`0x101`: per slot, the cue send and the level times 0x80, the
+  low word kept (the word shifted left 8, the tag gone), into `X:2k` and
+  `X:2k+1`, and the table index into `X:0x14+k`.
+- `P:0x102`-`0x10a`: those 20 words squared into `Y:0`-`0x13`.
+- `P:0x10b`-`0x130` (`P:0x113` branches to `0x131` when MASTER TRACK is
+  on, bit 10 of `x:(X:$207+$7e)`): the cue level and the MAIN level
+  (halfwords `0x28` and `0x29`, shifted left 16) squared. Per slot, the
+  cue target `Y:2k` is cue send² × cue level², and the MAIN target
+  `Y:2k+1` is level² × lim(MAIN level² × T[idx]), where idx is the index
+  word shifted left 8, as a signed 24-bit value, shifted right 15, and T
+  is the table at `X:0x6c00` (18.4).
+- `mpy` is floor(a·b / 2^23) on 24-bit words; each move to memory limits
+  to 24 bits.
+- `P:0x203`-`0x237`: the ramp (18.3).
+- `P:0x259`-`0x28f`: the mixdown. Per sample, each slot's sample times its
+  gain, summed, `asl #2`, limited: MAIN = lim(floor(Σ g·x / 2^21)), with
+  the MAIN gains at `Y:0x4a + 20j + k` (j the sample, k the slot).
+
+### 18.3 The ramp and its residual ✅
+
+The state per slot is five words at `X:0x3dd + 5k`: the last split, the
+cue increment, the MAIN increment, the cue gain and the MAIN gain. Each
+frame, with the page's split s and m = min(s, the last split):
+
+- samples 0 to m−1 continue the old ramp;
+- samples m to s−1 hold;
+- samples s to 15 ramp by lim((target − gain) >> 4) a sample, and the
+  ramp's remaining steps run in the next frame's first m samples.
+
+The floor leaves a settled gain up to 15 steps under its target. Measured:
+target `0x1f7fe3`, settled `0x1f7fe0` (LEVEL 127, MAIN level 64). The
+leftover depends on every earlier change, so a copy of this arithmetic
+stays exact only when it starts from the same state and sees every page.
+
+Payload A's upload writes 50 zero words at `X:0x3dd`, so the state starts
+at zero after a boot. The banks the pages land in, `X:0x4800` and
+`X:0x2800`, aren't in the upload: on a unit they hold whatever RAM held
+until the first page arrives. 🟡 Inferred: if core 0 runs frames on those
+words first, its ramp starts from them. Falsifier: `verify_stems`'
+`gainsdirty` under `--dsp-dirty` (plan Task 5).
+
+`Y:0`-`0x13` hold the targets only until later code reuses them as
+scratch: a peek at a run's end read the targets on the THRU fixture and
+other words on the one-track fixture. `X:0x3dd` is the reliable reading.
+
+### 18.4 The table ✅
+
+`X:0x6c00` holds T[0..257], a quarter sine: T[1] = `0x00c910`,
+T[254] = `0x7ffd87`, T[256] = `0x7fffff` (limited), T[257] = `0x7fff61`.
+Several words differ from round(sin(πi/512) × 2^23), so the table can't be
+computed. Its words are in the image at `0x400ea18a`, three bytes each,
+little-endian (payload A's X module at `0x6c00`).
+
+The OS reuses that memory after the upload: at a run's end the 774 bytes
+read `0xff` while the image's NAME_FMT string at `0x400b77bb` still reads
+right (`v5-p5-lv-one2.log`). So STEM REC carries its own copy, taken from
+the user's stock slice at build time with `.incbin`, as AGENTS.md's
+pattern has it (no Elektron byte in the repository). The copy equals what
+core 0 received, uploaded from the same bytes.
