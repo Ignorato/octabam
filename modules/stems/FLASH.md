@@ -21,12 +21,12 @@ Both are built from your own 1.40C and never enter the repository. Under
 the port on that code: `verify_stems` 168 checks and the menu gate 28 on
 the MKII and MKI, 0 failures; `make check-remix REMIX=stems` 208
 (`docs/firmware/STEM_REC.md` 16.2). Never flashed. The card path
-(`docs/guide/BUILDING.md` §5): copy the `.bin` to the root of the card, then
+(`docs/guide/BUILDING.md` section 5): copy the `.bin` to the root of the card, then
 PROJECT → OS UPGRADE → [YES].
 
 **Before you flash.**
 
-1. **Know the way back** (`docs/guide/BUILDING.md` §7). Hold [FUNC] and
+1. **Know the way back** (`docs/guide/BUILDING.md` section 7). Hold [FUNC] and
    power on for the STARTUP MENU; [TRIG 3] is MIDI UPGRADE; send
    `downloads/extracted/OCTATRACK_OS1.40C.syx` over a 5-pin MIDI interface.
    The Startup Menu doesn't need MAIN MENU, so an image whose MAIN MENU
@@ -91,7 +91,7 @@ the Status of `remixes/stems/README.md` is updated.
 
 ## What the first flash could hit, predicted 🔮
 
-Carried from `docs/remixer/FAILURE_MODES.md` (30 Sep 2026), which upstream
+Carried from `git show 7935fd9c:docs/remixer/FAILURE_MODES.md` (30 Sep 2026), which upstream
 replaced by `docs/contributing/FAILURE_MODES.md`, a register of modes seen
 on hardware. These are predictions for a module not yet flashed; an entry
 moves to that register the moment its mode is seen on a unit.
@@ -270,7 +270,7 @@ card image.
 
 ## Crosscheck's flash plan, a record
 
-Carried from `docs/effects/FLASHPLAN.md` on branch `crosscheck` (`7dee174`), which upstream does not have: upstream records flashed images in `CHANGELOG.md`, and this one has not been flashed. Read the old file with `git show 7dee174:docs/effects/FLASHPLAN.md`.
+Carried from crosscheck's flash plan, `git show 7dee174:docs/effects/FLASHPLAN.md` (branch `crosscheck`), which upstream does not have: upstream records flashed images in `CHANGELOG.md`, and this one was never flashed.
 
 ⚠️ **A record, not the plan for this branch.** It builds tag 28 from branch `crosscheck`, and what it says about the emulator is about crosscheck's port, which could not draw the screen; upstream's can (`--lcd`, `--live`). Flash A, piece 4 of the roadmap (`docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`), gets its own plan on this branch, built from this record.
 
@@ -400,8 +400,8 @@ STEM_REC.md 11.7, which the patch should prevent. Power cycle, stop the
 session, and report the card's make and model. A stock save that fails in
 test 4: power cycle, stop the session, and go back to a stock OS for that
 card.
-Every new failure goes into `docs/remixer/FAILURE_MODES.md`, whose STEM REC
-block lists what is predicted, the moment it is seen.
+Every new failure goes into `docs/contributing/FAILURE_MODES.md` the moment
+it is seen; what is predicted is in this file's own block above.
 
 **After the flash:** every result, good and bad, goes into
 `docs/firmware/STEM_REC.md` (a new "Hardware" section) and

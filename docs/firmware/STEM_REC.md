@@ -38,7 +38,7 @@ Every one of the 33 references in the image is a longword form: `movel`,
 `0x800065b8` anywhere in the image.
 
 This confirms the warning already in `tools/emu/emu_rtos.py` and
-`RTOS_FORK.md` §10.1: reading this address one byte at a time reports a flat
+`RTOS_FORK.md` section 10.1: reading this address one byte at a time reports a flat
 0 no matter what the firmware does, because the value lands in `0x800065bb`.
 
 ### 1.2 Every reference, classified ✅
@@ -255,7 +255,7 @@ different transmission, or none. This does not affect the interface, because
 all three store the same value.
 
 The store at `0x4009c3d4` is the one the port has already caught.
-`RTOS_FORK.md` §9.4 and §10.1 record `[0x800065b8] <- 0x1 (4)` at pc
+`RTOS_FORK.md` section 9.4 and section 10.1 record `[0x800065b8] <- 0x1 (4)` at pc
 `0x4009c3d4` in task main, measured 6 Sep 2026 against `out/_testproj`. That
 is an independent confirmation of both the size (4 bytes) and the running
 value (1) at one of the five sites listed here. ✅
@@ -431,7 +431,7 @@ holds `0x400019d0`, which is a bare `rts`:
 400019d2:	0000           	.short 0x0000
 ```
 
-The addresses in `RTOS_FORK.md` §9.3 are right; only the index arithmetic
+The addresses in `RTOS_FORK.md` section 9.3 are right; only the index arithmetic
 was wrong. `emu_rtos.py`'s constants `KEY_REC`, `KEY_PLAY` and `KEY_STOP`
 are unaffected, because they hold the addresses, not the indices. This
 document does not edit either file.
@@ -474,7 +474,7 @@ the first. ✅
 evidence is strong but indirect: it is the third of three consecutive table
 entries whose other two are the measured REC and PLAY handlers, and it is
 the only one of the three that reaches a routine transmitting MIDI Stop
-(`0xfc` at `0x4009f6ec`). `RTOS_FORK.md` §9.3 reached the same conclusion
+(`0xfc` at `0x4009f6ec`). `RTOS_FORK.md` section 9.3 reached the same conclusion
 from the table shape alone and marked it inferred; this adds the MIDI
 evidence and keeps the marker.
 **Falsifier:** a run under the port that presses `0x4000a1e0` while the
@@ -518,7 +518,7 @@ on the command above shows exactly two writes over the whole run:
 
 The first is engine init (section 1.3's `0x400a1050`); the second is
 `FW_TRANSPORT`'s cold-start write of 1, at the transport start. This matches
-`RTOS_FORK.md` §9.4 exactly (same pc, same value) against a different
+`RTOS_FORK.md` section 9.4 exactly (same pc, same value) against a different
 project, so the 0->1 transition is now measured twice, against two
 projects.
 
@@ -558,7 +558,7 @@ with its own precondition satisfied, does write 2 and nothing else. Section
 1.7's rule -- running iff the word is exactly 1 -- stands on both runs.
 
 **🟡 What sets `0x80000029` on the unit is still open.** `RTOS_FORK.md`
-§9.4 measured this same byte as already `0x01` right after
+section 9.4 measured this same byte as already `0x01` right after
 `load_project_live` on `out/_testproj`, with no extra setup. On
 `Ultimate FX 1.5.3`, staged the same way, it reads `0x00` after the same
 kind of load and stays `0x00` through 400 frames of the sequencer running.
@@ -6990,7 +6990,7 @@ recording. A growth without a ± had an error under 1 frame a second.
 - **Its limit.** The emulated card has one constant delay per sector. A
   real card stalls. OctaLab measured single card writes of up to 1.2 s
   while STATIC tracks play, and 1.4 to 2.1 MB/s while they read (their
-  `docs/OTX_PROJECT_PROPOSAL.md`, 26 Sep 2026). 🟡 Arithmetic, not
+  `docs/proposals/OTX_PROJECT_PROPOSAL.md`, 26 Sep 2026). 🟡 Arithmetic, not
   measured: eight tracks need 1.41 MB/s, and the 4 MiB ring holds 8,192
   frames at eight tracks, about 3 s, so a 1.2 s stall fits in the ring if
   the card writes fast enough between stalls to empty it again. So this
