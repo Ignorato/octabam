@@ -55,7 +55,7 @@ MODULE = Module(
     key="STEM REC",
     kind=Kind.CF_PATCH,
     category=Category.MACHINES, author="yvesrosius", author_url="https://github.com/yvesrosius",
-    proof=Proof.PORT, proof_note="`verify_stems` under the ColdFire port; never flashed",
+    proof=Proof.HARDWARE, proof_note="Yves's MKII, 30 Sep 2026 (STEMS1): T1-T8, about two minutes",
     doc="MAIN MENU > STEMS: every track to the card while the sequencer plays "
         "(streamed: 16-bit, up to 60 min).",
     linked=(Linked("stems", "modules/stems/stems.s", dram=True),),

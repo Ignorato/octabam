@@ -5,6 +5,12 @@ a mode is seen on hardware.
 
 Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.md`.
 
+## No audio on the first boot after an OS upgrade, with no DSP module 🔴 open
+
+- **Seen:** STEMS1 (`stems`: STEM REC alone, no DSP module), Yves's MKII, 30 Sep 2026. The first boot after the upgrade played nothing, in the loaded project and in a new one; the stock recorder's buffers still drew the inputs' waveforms. A power cycle brought the sound back.
+- **Cause:** open. The garbled-audio entry's warm-up tag can't apply: the image places no DSP words. Not known: whether a stock 1.40C upgrade on the same unit does the same.
+- **Fix:** power-cycle after every upgrade before judging anything (`docs/guide/BUILDING.md` section 5 step 5). To find out: whether STEMS2's first boot is silent too, and whether a stock 1.40C upgrade's is.
+
 ## Pops and clicks from T1 with BusDelay when T1 plays its own trigs 🔴 open
 
 - **Seen:** Discord, Arcdmd_, 29 Sep 2026. Image, unit model, T1's machine and trig pattern not stated.

@@ -7198,3 +7198,46 @@ that's on stays on, so a take always has a track the rows show.
   so flash A's precondition stays: a stock 1.40C `.syx` at hand.
 - **A status that ticks by itself.** Not built (16.1): the screen shows the
   task's labels at the next key.
+
+## 17. On hardware
+
+### 17.1 Flash A: STEMS1 on Yves's MKII, 30 Sep 2026
+
+The image is STEMS1 (`BUILD=1`, from `4ec1276`; `modules/stems/FLASH.md`).
+Yves reported each result from the unit and the card, by ear and by eye. No
+instrument read any of them.
+
+- ✅ **The flash.** From the card, OS UPGRADE, no error.
+- 🔴 **The first boot had no audio**, in the loaded project and in a new
+  one. The stock recorder's buffers still drew the inputs' waveforms. A
+  power cycle brought the sound back. Cause open: STEMS1 carries no DSP
+  module, so the warm-up tag that `docs/guide/BUILDING.md` section 5 step 5
+  blames can't apply (`docs/contributing/FAILURE_MODES.md`).
+- ✅ **T1 alone** recorded a take.
+- ✅ **T1 to T8**, each track on its own sample, about 1:57: every take
+  whole. Stopping the sequencer ended the take.
+- ✅ **The files.** The take's folder is `YYMMDD-HHMM` in the set's AUDIO
+  folder. Every track's file is there and plays, 16-bit stereo.
+- ✅ **The effects are in the stems** (checked again on 1 Oct 2026). The tap
+  is post-FX (section 9).
+- **The time doesn't tick by itself.** Leaving the menu and opening it again
+  shows the right time. This is the design of section 16.1, and Yves now
+  wants it live.
+- **FX2's chooser had one row.** Every octabam image replaces the FX2
+  chooser with the remix's list (`tools/remix/stock.py`), and STEMS1 listed
+  STEM REC alone. The selftest's give-up table shows the other cost: STEMS1
+  also gave up PLATE, SPRING and DARK REV, the FX2-only reverbs. STEMS2
+  lists the 14 stock effects.
+- 🟡 **The stems are about 12 dB quieter than normal playback.** This is
+  Yves's rough gain staging, not a measurement. What is known: the tap is
+  post-FX and pre-fader. The track's LEVEL, the crossfader, MAIN volume and
+  the master effects all come after it (the tap note in
+  `modules/usb-audio-out-tracks-main-cue/usbaudio.s`). Under the port, T1's
+  slot sat at 1/15.5 of its source sample (section 9.3). Open: the gain from
+  the tap to MAIN. **Falsifier:** a port run with T1 alone at the default
+  LEVEL, comparing T1's read-back slot with the MAIN buffer at `0x80005e60`
+  (the stock recorder's MAIN source). A ratio near 1 puts the 12 dB
+  somewhere else.
+- **Not reported:** the checklist's tests 4 to 7 (the card's speed at 1, 2,
+  4 and 8 tracks, a static machine playing, the level against the stock
+  recorder, and stock saves).

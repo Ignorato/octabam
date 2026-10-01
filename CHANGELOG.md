@@ -21,12 +21,14 @@ The full text before this rewrite: `git show 666b6154:CHANGELOG.md`.
 
 Remixes
 - bottleservice takes the computer's stereo output onto inputs C/D (USB AUDIO IN CD + USB CROSSBAR); USB AUDIO OUT MASTER polls every 250 µs (28 Sep).
+- `stems`: STEM REC on the stock effects; STEMS1 listed STEM REC alone and drew a one-row FX2 chooser (1 Oct).
 - Twelve `usb-io-<out>-<in>` test remixes and `usb-out-main`; USB remixes named by direction (`usb-full` → `usb-out-tracks`, `usb-lean` → `usb-out-tracks-main-cue`, `usb-master` → `usb-out-master`, `usb-mc` → `usb-out-main-cue`) (28 Sep).
 - `remixes/test/` holds the one-module carriers; `mods` moved there, `restock` removed (28–30 Sep).
 - `octatrick` carries SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP, TUNER, USB MIDI, USB AUDIO OUT TRACKS MAIN CUE and USB AUDIO IN ABCD + USB CROSSBAR on the stock effects less SPATIALIZER (its payload-A words hold the IN inject); `octatrick-usb` folded into it and removed (Tim Hastie, 29 Sep, #526).
 - Removed: `bamsep26` (bottleservice is its superset), `mutables`, `nimbus`, `hello`, `hello-dram` (27 Sep).
 
 Modules
+- STEM REC: MAIN MENU > STEMS records every track to the card while the sequencer plays, one 16-bit stereo file per track, streamed, up to 60 min (Yves Rosius, 26-30 Sep).
 - USB AUDIO IN AB / CD / ABCD: host channels onto the inputs, the inject a placed DSP section behind a ledger-checked hook (`schema.DspHook`) (28 Sep).
 - USB CROSSBAR: the SCM/XBS setting that cured lost packet tails, written at USB controller init (28 Sep).
 - USB AUDIO OUT MAIN: MAIN L/R alone every 250 µs (28 Sep).
@@ -53,12 +55,22 @@ Gates and tools
 - Shards: image-stage gates on their own shard, long-pole remixes split into gate jobs; the cover 681 s → 530 s (29 Sep).
 - Tape Echo probe: glibc `random()` vectors on every host, oracle built `-fwrapv` (27 Sep).
 - `tools/hw/bcr2000.py` (28 Sep), `tools/hw/usb_probe.py` (Bryan T, 28 Sep), `tools/harness/usb_align.py` (28 Sep), `tools/ghidra` (roblg, #483, 28 Sep).
+- `verify_docs` exempts the dated plans and specs under `docs/superpowers/`, records like this file (1 Oct).
 - `verify_docs` checks every relative Markdown link; the remixer TUI draws again (30 Sep).
 
 Docs
 - `docs/guide/` (BUILDING, REMIXER) and `docs/contributing/` (MODULES, PLACEMENT, TESTING, TOOLING, FAILURE_MODES cut to Seen / Cause / Fix / Check); tool docs beside the tools (30 Sep).
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
+
+## STEMS1 — 30 Sep 2026 (`stems` at `4ec1276`)
+
+On the unit (Yves's MKII): T1 alone, then T1-T8 for about two minutes, every
+take whole; stopping the sequencer ended the take; every file plays. The first
+boot had no audio until a power cycle (open). FX2's chooser had one row. The
+stems sit about 12 dB under normal playback, by ear
+(`docs/firmware/STEM_REC.md` section 17.1).
+- The remix: STEM REC alone. MAIN MENU > STEMS: REC, a status row, T1-T8, PEAK.
 
 ## Image 88 — 27 Sep 2026 (`bottleservice` at `d6867bd`)
 
