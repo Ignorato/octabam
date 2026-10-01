@@ -286,7 +286,9 @@ stereo.
 
 ## 11. Not in this piece
 
-A status that ticks by itself, a key that arms a take, the file length set
-every few chunks (the roadmap's piece 5), seconds in the folder name,
+A status that ticks by itself, a key that arms a take, a PRE/POST switch
+for the stems (Yves, 1 Oct 2026: next, after this piece; piece 3's copy is
+the pre-fader path and this piece adds the post-fader one), the file length
+set every few chunks (the roadmap's piece 5), seconds in the folder name,
 saved settings, a speed limit by layout, a screen of its own, and any pull
 request.
