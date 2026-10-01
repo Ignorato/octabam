@@ -7407,7 +7407,12 @@ so each traced frame is placed among the pages core 0 received
   included. No other pairing matches more than 14 frames, all of them
   frames where the gain held still.
 - So `GAIN_LAG` = 2, `TRACK_HALF` = 1 and `TRACK_DELAY` = 1. The USB
-  track-out module's measurement had predicted the half and the delay.
+  track-out module had measured the half and the delay from its own hook
+  at the frame interrupt's end: it reads the tracks from the half
+  `0x800000e4` names, and in its stream MAIN is the mix of the tracks one
+  block earlier (`modules/usb-audio-out-tracks-main-cue/usbaudio.s`,
+  `MAIN_CUE_LAG_BLOCKS`; heard on Bryan T's MKII, 25 Sep 2026, and
+  measured under the port, 28 Sep 2026).
 - The half `PING` doesn't name isn't a copy of the half it named a frame
   earlier: a positive sample's long reads one less there (`033db600`, then
   `033db5ff`); negative samples read the same. Core 0 mixes the words of
@@ -7465,6 +7470,10 @@ A THRU track trails its raw input. T1's mixed sample is input A from 80
 samples (five frames) earlier, at 65/256 of its level (−11.9 dB, AMP VOL's
 default): correlation 1.000 at that lag, under 0.42 at any other lag from −64 to 399.
 
+No USB module reads the inputs on the ColdFire: USB AUDIO IN injects the
+host's channels on the DSP side, so this ring has no second measurement
+beside the stock recorder's code.
+
 The hook's constants: `IN_RING` = `0x80005660`, `IN_IDX` = `0x46104d00`,
 `IN_AB_OFF` = `0x80` and `IN_CD_OFF` = `0x00` within a page, and
 `IN_A_IS_LEFT` = 1.
@@ -7482,10 +7491,14 @@ equal to core 0's `X:0x3dd` in all eight slots, through the same LEVEL
 steps. T2-T7 settle at `0x7dff90` and T8 at `0x1f7fe0`, at MAIN level 64
 (`v5-p5-master.log`). The normal model, by contrast, differs in T1-T7.
 
-🟡 Read, not traced: the mixdown at `P:0x292`-`0x2d3` sums seven track
-slots and the two inputs, one gain each, into one buffer, a second sum
-into another, and T8 alone, with the gain at `Y:(r5 + 0x11) + 20j`, into
-MAIN.
+The mixdown at `P:0x292`-`0x2d3` takes the master path. The USB module's
+notes record it as measured on Bryan T's MKII (29 Sep 2026; `usbaudio.s`):
+the cue bus sums T1-T7 of this frame directly (`P:0x29f`-`0x2b2`), MAIN
+is T8 alone (`P:0x2cb`-`0x2d0`), and T8 plays a mix it was sent two
+frames earlier (`x:(X:$209+$1f8)`, `P:0x2b7`-`0x2ca`). The ColdFire sets
+the bit from the MASTER TRACK byte: the frame record builder ORs `0x600`
+into halfword `$7e` of the record when `0x80000034` is non-zero
+(`0x4000498c`-`0x400049aa`).
 
 Ruling for STEM REC: the stems keep the normal target in every slot, the
 MAIN level included. With MASTER TRACK on, a stem of T1-T7 is the track at
