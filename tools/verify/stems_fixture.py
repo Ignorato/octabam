@@ -8,7 +8,7 @@ mirror; T1's FX1 and FX2 = SEND; slot 1's TSMODE=0, so "the record IS the
 file" (no timestretch grains to fit around). The kick itself is ours
 (`scripts/make_test_audio.py kick`), never Elektron's.
 
-    python3 tools/verify/stems_fixture.py [--eight | --fat32 | --thru] [PROJECT_DIR]
+    python3 tools/verify/stems_fixture.py [--eight | --fat32 | --thru | --thru1] [PROJECT_DIR]
 
 PROJECT_DIR defaults to `out/projects/Ultimate FX 1.5.3`. The template is
 copied into a scratch folder first and only the copy is edited -- the
@@ -297,9 +297,29 @@ def build_thru(project_dir=DEFAULT_PROJECT, inputs=None):
     return result
 
 
+THRU1_JSON = ROOT / "out" / "stems_fixture_thru1.json"
+THRU1_CARD = ROOT / "out" / "stems_fixture_thru1_card.img"
+
+
+def build_thru1(project_dir=DEFAULT_PROJECT):
+    """T1 alone sounds, a THRU machine on inputs A|B in stereo; T2-T8 are
+    THRU with both input pairs off, so MAIN is T1's share alone and a
+    post-fader stem must equal it sample for sample (piece 5)."""
+    inputs = {t: (0, 0) for t in range(1, 9)}
+    inputs[1] = (1, 0)
+    res = build_thru(project_dir, inputs=inputs)
+    THRU1_CARD.write_bytes(pathlib.Path(res["card"]).read_bytes())
+    res = {**res, "card": str(THRU1_CARD)}
+    THRU1_JSON.write_text(json.dumps(res, indent=2) + "\n")
+    print(f"-> {THRU1_JSON}")
+    return res
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--eight":
         build8(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
+    elif len(sys.argv) > 1 and sys.argv[1] == "--thru1":
+        build_thru1(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
     elif len(sys.argv) > 1 and sys.argv[1] == "--thru":
         build_thru(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
     elif len(sys.argv) > 1 and sys.argv[1] == "--fat32":
