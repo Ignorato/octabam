@@ -7249,5 +7249,11 @@ STEMS1's STEM REC on the 14 stock effects. Yves reported it from the unit.
 
 - ✅ **The flash.** It flashed with no error.
 - ✅ **FX2's page displays correctly.** The stock effects are back in it.
-- **Not yet reported:** the checklist's first-boot audio (test 1), the
-  level three ways (test 3), and flash A's open tests (test 4).
+- ✅ **The first boot played audio.** Yves made a new project at once, and it
+  sounded. Flash A's silent first boot didn't recur, though flash A had
+  loaded the saved project before trying a new one.
+- ✅ **A stem doesn't follow the fader.** T1 recorded while its LEVEL moved:
+  the take doesn't change level. That's the tap of section 9: post-FX,
+  before the fader. Piece 5 changes it
+  (`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`).
+- **Not yet reported:** the card's speed (test 4).

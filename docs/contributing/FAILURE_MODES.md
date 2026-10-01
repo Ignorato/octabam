@@ -9,7 +9,8 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 - **Seen:** STEMS1 (`stems`: STEM REC alone, no DSP module), Yves's MKII, 30 Sep 2026. The first boot after the upgrade played nothing, in the loaded project and in a new one; the stock recorder's buffers still drew the inputs' waveforms. A power cycle brought the sound back.
 - **Cause:** open. The garbled-audio entry's warm-up tag can't apply: the image places no DSP words. Not known: whether a stock 1.40C upgrade on the same unit does the same.
-- **Fix:** power-cycle after every upgrade before judging anything (`docs/guide/BUILDING.md` section 5 step 5). To find out: whether STEMS2's first boot is silent too, and whether a stock 1.40C upgrade's is.
+- **Not seen again:** STEMS2 on the same MKII, 1 Oct 2026: a new project made straight after the first boot played audio. Flash A had loaded the saved project first.
+- **Fix:** power-cycle after every upgrade before judging anything (`docs/guide/BUILDING.md` section 5 step 5). To find out: whether a first boot that loads the saved project is silent again, and whether a stock 1.40C upgrade's is.
 
 ## Pops and clicks from T1 with BusDelay when T1 plays its own trigs 🔴 open
 
