@@ -84,14 +84,18 @@ def main24(gains, xs):
     return lim24(sum(g * x for g, x in zip(gains, xs)) >> 21)
 
 
-def sent_pages(log):
+def sent_pages(log, mark=None):
     """Every page channel 0 sent, in order, from a --watch-mem log of the
     sent index and the page ring (the port's line: `[sample] [addr] <- value
     (bytes) at pc ...`). The index is written once per core, so a repeat of
     the same value is the same frame; a page is taken when the index moves
     past it, with every write of its frame in it. The fourth frame writes
-    4, then 0: the 4 is the increment before its wrap, never sent."""
-    ring, out, cur = bytearray(NPAGES * PAGE), [], None
+    4, then 0: the 4 is the increment before its wrap, never sent.
+
+    With `mark`, the address of a long a test seam writes once a frame (also
+    in the watch), returns (pages, marks): each value written there, with
+    the index among the pages of the page being sent at that moment."""
+    ring, out, cur, marks = bytearray(NPAGES * PAGE), [], None, []
     for line in log.splitlines():
         m = WATCH.match(line)
         if not m:
@@ -103,10 +107,12 @@ def sent_pages(log):
                     p = ring[cur * PAGE:(cur + 1) * PAGE]
                     out.append([int.from_bytes(p[i:i + 2], "big") for i in range(0, PAGE, 2)])
                 cur = val
+        elif addr == mark:
+            marks.append((val, len(out)))
         elif PAGES <= addr < PAGES + NPAGES * PAGE:
             o = addr - PAGES
             ring[o:o + nb] = (val & ((1 << 8 * nb) - 1)).to_bytes(nb, "big")
-    return out
+    return (out, marks) if mark is not None else out
 
 
 def dsp_peeks(log, space, addr):

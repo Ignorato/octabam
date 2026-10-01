@@ -314,7 +314,7 @@ bursts, 4 minor loops); before each DMA it writes the DSP destination
 | `0x80005460` + slot·`0x80` | 32 | `X:0x800` | a sample-slot record, on demand |
 | `0x80003190` + ping·`0x400` | 256 | ← `X:0x4600` (A) / `X:0x2600` (B) | read-back: four per-track post-FX2 blocks (below); core 1's lands at `0x80003190`, core 0's at `+0x200`; the 512 words go back to core 0 every frame |
 | `0x80005460` + [`0x80004804`]·`0x80`: four pages, `0x80005460..0x8000565f` ([`0x80004800`] names the one written) | 64 | `X:$205` (`0x4800` A / `0x2800` B) | the level words: per slot the cue send, the level, the MAIN table index and the split; the cue and MAIN levels at halfwords `0x28`/`0x29` (`STEM_REC.md` 18.1) ✅ |
-| `0x80005660..0x80005e60`, page-stepped | 128 | ← | the eight ESAI input slots × 16 samples (eDMA ch 7) 🟡: until 1 Oct 2026 this row began at `0x80005460`, where the level pages are; a THRU run shows audio-like words at `0x80005660` (`STEM_REC.md` 18.1) |
+| `0x80005660` + [`0x46104d00`]·`0x100`: eight pages, `0x80005660..0x80005e5f`; `0x4000ab66` advances the index mod 8 each frame | 128 | ← (eDMA ch 7) | the four inputs, one frame a page: C and D at `+0x00`, A and B at `+0x80`, a long a sample each, interleaved (`STEM_REC.md` 18.7) ✅. Until 1 Oct 2026 this row read "the eight ESAI input slots × 16 samples" and began at `0x80005460`, where the level pages are |
 
 Retracted: "`X:0x400`" for the read-back (never located; `X:0x415`–`0x41f`
 are dispatcher variables). The 336-word block is built by the packer

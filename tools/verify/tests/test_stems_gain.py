@@ -103,6 +103,19 @@ class Pages(unittest.TestCase):
             "   [     3.0] [0x80004804] <- 0x1 (4) at pc 0x40004e72 in x  i=5"])
         self.assertEqual([p[1] for p in sg.sent_pages(log)], [0x1234, 0])
 
+    def test_a_mark_names_the_page_being_sent(self):
+        # A test seam's counter, written once a frame: each value comes back
+        # with the index, among the returned pages, of the page sent then.
+        log = "\n".join([
+            "   [     1.0] [0x80004804] <- 0x1 (4) at pc 0x40004e72 in x  i=1",
+            "   [     1.5] [0x40b00000] <- 0x2 (4) at pc 0x40b00010 in x  i=2",
+            "   [     2.0] [0x80004804] <- 0x2 (4) at pc 0x40004e72 in x  i=3",
+            "   [     2.5] [0x40b00000] <- 0x3 (4) at pc 0x40b00010 in x  i=4",
+            "   [     3.0] [0x80004804] <- 0x3 (4) at pc 0x40004e72 in x  i=5"])
+        pages, marks = sg.sent_pages(log, mark=0x40b00000)
+        self.assertEqual(len(pages), 2)
+        self.assertEqual(marks, [(2, 0), (3, 1)])
+
 
 if __name__ == "__main__":
     unittest.main()

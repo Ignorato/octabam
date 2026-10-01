@@ -7384,3 +7384,112 @@ right (`v5-p5-lv-one2.log`). So STEM REC carries its own copy, taken from
 the user's stock slice at build time with `.incbin`, as AGENTS.md's
 pattern has it (no Elektron byte in the repository). The copy equals what
 core 0 received, uploaded from the same bytes.
+
+### 18.5 What the hook sees each frame ✅
+
+Measured 1 Oct 2026 with the hook's trace seam (`stems_trace` in
+`modules/stems/stems.s`) and `tools/verify/stems_levels_probe.py trace` on
+the one-THRU fixture: T1 a THRU machine on inputs A|B, T2-T8 silent.
+The trace covers 64 frames from frame 60. T1's level byte is poked to 64,
+to 100 one frame later, to 20 and to 127 inside that window. One
+`--watch-mem` takes the sent page index, the level pages and `stems_trace`,
+so each traced frame is placed among the pages core 0 received
+(`v5-p5-trace3.log`).
+
+- `PING` (`0x800000e0`) alternates 0 and 1 from frame to frame. The sent
+  page index advances by one each frame, mod 4, and the written index runs
+  one behind it.
+- The MAIN in `0x80005e60` at hook frame f was mixed from T1's samples in
+  the half `PING` doesn't name, as that half read at hook frame f−1, times
+  the gains of the page sent two frames before the page being sent at
+  frame f. With `stems_gain.py`'s model, that pairing reproduces MAIN's
+  first and last L sample in all 63 frames with sound, the LEVEL ramps
+  included. No other pairing matches more than 14 frames, all of them
+  frames where the gain held still.
+- So `GAIN_LAG` = 2, `TRACK_HALF` = 1 and `TRACK_DELAY` = 1. The USB
+  track-out module's measurement had predicted the half and the delay.
+- The half `PING` doesn't name isn't a copy of the half it named a frame
+  earlier: a positive sample's long reads one less there (`033db600`, then
+  `033db5ff`); negative samples read the same. Core 0 mixes the words of
+  the half `PING` doesn't name.
+
+### 18.6 MAIN and CUE at hook time ✅
+
+eDMA channel 6 writes `0x80005e60` (`0x4000abf2`): MAIN at `+0x00`, CUE at
+`+0x80`, each 16 samples of an L long and an R long. The stock recorder
+reads its SRC3 sources MAIN and CUE there, at `0x80005e60 + 0x80·(src − 8)
++ 8·s` (`0x40007600`-`0x4000760e`).
+
+At hook time the buffer holds the frame of 18.5, complete: MAIN's first
+and last L samples both match in all 63 traced frames. CUE reads zero on
+the fixture, which has no cue sends; its place is the stock recorder's,
+not measured with sound.
+
+### 18.7 The inputs ✅
+
+The inputs aren't at `0x80005e60 + 0x100` or `+ 0x180`. Those longs belong
+to the stock delay's per-track records, which start at `0x80005f60`
+(`COLDFIRE_DELAY.md`); the trace read a zero, `0x7fffffff` and a position
+that grows by 0x80 a frame.
+
+eDMA channel 7 writes the inputs into eight 0x100-byte pages at
+`0x80005660`. Once a frame, `0x4000ab66`-`0x4000ab80` adds one to the index
+at `0x46104d00`, mod 8, and points the channel at `0x80005660 + index <<
+8`. A page is one frame:
+
+| Offset | Contents |
+|---|---|
+| `+0x00` + 8·s | input C, sample s |
+| `+0x04` + 8·s | input D |
+| `+0x80` + 8·s | input A |
+| `+0x84` + 8·s | input B |
+
+Each sample is a long with the 24-bit word in its top 24 bits: the test
+WAV's 16-bit samples read back with a zero low half.
+
+Measured on the THRU fixture fed a four-channel noise WAV (`ot_emu
+--audio-in` channels 0-3 are inputs C, D, A and B): a search of the whole
+SRAM (`0x80000000`-`0x8000ffff`) for runs of each channel's samples finds
+them only here, at stride 8, 104 runs a channel (8 pages × 13 positions)
+(`v5-p5-insearch.log`). In the trace, page `[0x46104d00]` holds this
+frame's 16 samples at hook time, complete: A's first and last samples and
+B's, C's and D's first lie on one run of the WAV over 64 frames (WAV
+sample 1579 + 16·f), and the page before holds the 16 samples before.
+
+The stock recorder reads INAB at the page + `0x80` + 8·s and INCD at the
+page + 8·s (`0x400075aa`-`0x400075d8` and `0x40007616`-`0x40007640`), with
+the page `[0x46104d00]` or, on one path, that index less a count of
+frames.
+
+A THRU track trails its raw input. T1's mixed sample is input A from 80
+samples (five frames) earlier, at 65/256 of its level (−11.9 dB, AMP VOL's
+default): correlation 1.000 at that lag, under 0.42 at any other lag from −64 to 399.
+
+The hook's constants: `IN_RING` = `0x80005660`, `IN_IDX` = `0x46104d00`,
+`IN_AB_OFF` = `0x80` and `IN_CD_OFF` = `0x00` within a page, and
+`IN_A_IS_LEFT` = 1.
+
+### 18.8 MASTER TRACK ✅
+
+`P:0x113` branches to `P:0x131` when bit 10 of `x:(X:$207 + $7e)` is set.
+There, slots 0-6 (T1-T7) and 8-9 (the inputs) get the MAIN-chain target
+lim(mpy(level², T[idx])), without the MAIN level. Slot 7 (T8) keeps the
+normal target, lim(mpy(level², lim(mpy(MAIN², T[idx])))).
+
+Measured on the one-THRU fixture with `MASTER_TRACK=1` in `project.work`:
+a replay of the run's 300 pages with that target leaves the ramp state
+equal to core 0's `X:0x3dd` in all eight slots, through the same LEVEL
+steps. T2-T7 settle at `0x7dff90` and T8 at `0x1f7fe0`, at MAIN level 64
+(`v5-p5-master.log`). The normal model, by contrast, differs in T1-T7.
+
+🟡 Read, not traced: the mixdown at `P:0x292`-`0x2d3` sums seven track
+slots and the two inputs, one gain each, into one buffer, a second sum
+into another, and T8 alone, with the gain at `Y:(r5 + 0x11) + 20j`, into
+MAIN.
+
+Ruling for STEM REC: the stems keep the normal target in every slot, the
+MAIN level included. With MASTER TRACK on, a stem of T1-T7 is the track at
+the level it would have in MAIN through a T8 that passed it unchanged.
+T8's stem holds T1-T7 again, through T8's effects, so in this mode the
+stems don't sum to MAIN. `verify_stems`' `master` check confirms only that
+the take is whole and aligned.

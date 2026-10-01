@@ -22,6 +22,8 @@
         .equ    PING,          0x800000e0   | the read-back half selector  (Task 3)
         .equ    PING_XOR,      0            | half = (PING ^ PING_XOR) & 1  (Task 3)
         .equ    READBACK,      0x80003190   | track k's block at READBACK + half*0x400 + k*0x80 (9.2)
+        .equ    IN_RING,       0x80005660   | the inputs, eight 0x100-byte pages: C D longs, then A B at +0x80 (18.7)
+        .equ    IN_IDX,        0x46104d00   | long: the page eDMA channel 7 was last pointed at (18.7)
         .equ    K_CREATE,      0x400005fc   | (tcb, entry, prio, stack, size) -> 1   (Task 4)
         .equ    K_START,       0x4000063c   | (tcb)                                  (Task 4)
         .equ    TCB_SIZE,      84           |                                        (Task 4)
@@ -70,6 +72,8 @@
         .equ    ERR_TASK,      8
         .equ    STACK_FILL,    0x5354454d   | "STEM": the untouched stack
         .equ    HDR_SIZE,      44
+        .equ    TRACE_N,       64           | test seam: frames stems_trace records
+        .equ    TRACE_B,       64           | bytes a traced frame
 
 | ColdFire byterev is ISA_A+ and -mcpu=5407 does not accept it, so it is
 | encoded by hand: opcode 0x02C0 | reg (SAMPLE_SAVE.md section 3).
@@ -97,6 +101,9 @@ stems_peak:      .long   0          | the take's largest ring fill, frames; rese
         .global stems_tracks, stems_hold, stems_wr_off, stems_rd_off, stems_probe, stems_probe_res
 stems_tracks:    .long   0xFF       | the track mask, bit k = track k+1; latched at the start
 stems_hold:      .long   0          | test seam: non-zero pauses the writer while RECORDING
+        .global stems_trace, stems_trace_buf
+stems_trace:     .long   0          | test seam: 1..TRACE_N records that frame into stems_trace_buf, then counts on
+stems_trace_buf: .space  TRACE_N*TRACE_B
 stems_mask:      .long   0          | the latched mask
 stems_nt:        .long   0          | its bit count
 stems_fbytes:    .long   0          | a ring frame: 64 x stems_nt
@@ -380,10 +387,14 @@ stems_track_action:
 | ---- the frame hook: in the audio interrupt, IPL 5 ---------------------
 | Reached by `jsr` from 0x40004b12. Calls nothing but the routine it
 | displaced; uses no RTOS service; loops are bounded (8 tracks). In IDLE its
-| whole cost is one test and one branch. The copy runs BEFORE the stock
-| routine, which reads the same block.
+| whole cost is two tests and two branches, one of them the trace seam's.
+| The copy runs BEFORE the stock routine, which reads the same block.
         .global stems_frame_hook
 stems_frame_hook:
+        tst.l   stems_trace
+        beq.s   .Lh_notrace
+        bsr.w   stems_trace_frame
+.Lh_notrace:
         tst.l   stems_state
         beq.w   .Lh_stock           | IDLE
         lea     -36(%sp),%sp
@@ -512,6 +523,73 @@ stems_layout:
         bhi.s   .Ll_rd
         clr.l   stems_rd_off
 .Ll_rd:
+        rts
+
+| ---- test seam: one frame of what the hook sees (STEM_REC.md 18.5) -----
+| TRACE_B bytes a frame: PING, the written and sent page indexes, T1's
+| first read-back long in the half PING names and in the other half,
+| MAIN's first L and R, MAIN's last L; the input ring's index, and in
+| its page A's, B's, C's and D's first longs and A's last; in the page
+| before it A's first; T1's last long in the other half.
+stems_trace_frame:
+        lea     -16(%sp),%sp
+        movem.l %d0-%d1/%a0-%a1,(%sp)
+        move.l  stems_trace,%d0
+        subq.l  #1,%d0
+        cmpi.l  #TRACE_N,%d0
+        bcc.w   .Lr_out
+        lsl.l   #6,%d0              | * TRACE_B
+        movea.l %d0,%a1
+        adda.l  #stems_trace_buf,%a1
+        move.l  PING,%d1
+        move.l  %d1,(%a1)+
+        move.l  0x80004800,(%a1)+
+        move.l  0x80004804,(%a1)+
+        eori.l  #PING_XOR,%d1
+        andi.l  #1,%d1
+        moveq   #10,%d0
+        lsl.l   %d0,%d1
+        movea.l %d1,%a0
+        adda.l  #READBACK,%a0
+        move.l  (%a0),(%a1)+
+        move.l  %a0,%d1
+        eori.l  #0x400,%d1
+        movea.l %d1,%a0
+        move.l  (%a0),(%a1)+
+        move.l  0x80005e60,(%a1)+
+        move.l  0x80005e64,(%a1)+
+        move.l  0x80005ed8,(%a1)+
+        move.l  IN_IDX,%d1
+        move.l  %d1,(%a1)+
+        moveq   #7,%d0
+        and.l   %d0,%d1
+        lsl.l   #8,%d1
+        movea.l %d1,%a0
+        adda.l  #IN_RING,%a0
+        move.l  0x80(%a0),(%a1)+
+        move.l  0x84(%a0),(%a1)+
+        move.l  (%a0),(%a1)+
+        move.l  4(%a0),(%a1)+
+        move.l  0xf8(%a0),(%a1)+
+        move.l  IN_IDX,%d1
+        subq.l  #1,%d1
+        and.l   %d0,%d1
+        lsl.l   #8,%d1
+        movea.l %d1,%a0
+        adda.l  #IN_RING,%a0
+        move.l  0x80(%a0),(%a1)+
+        move.l  PING,%d1
+        eori.l  #PING_XOR^1,%d1
+        andi.l  #1,%d1
+        moveq   #10,%d0
+        lsl.l   %d0,%d1
+        movea.l %d1,%a0
+        adda.l  #READBACK,%a0
+        move.l  0x78(%a0),(%a1)+
+        addq.l  #1,stems_trace
+.Lr_out:
+        movem.l (%sp),%d0-%d1/%a0-%a1
+        lea     16(%sp),%sp
         rts
 
 | ---- the stock PIO write's first sector (docs/firmware/STEM_REC.md 11.7) --
