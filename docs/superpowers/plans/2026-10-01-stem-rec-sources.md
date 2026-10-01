@@ -30,7 +30,7 @@
 
 These five inputs follow from the spec, and no gate in its section 6 names them. Each line names the task that adds its test.
 
-1. **A take started while a fader is moving.** Expected: the stems match MAIN from the first recorded frame, because the mirror tracked the ramp before the take. Test: Task 6's `postmove` starts the take (REC while playing) two frames before a LEVEL step.
+1. **A take started while a fader is moving.** Expected: the stems match MAIN from the first recorded frame, because the mirror tracked the ramp before the take. Test: Task 6's `postmove` starts the take (REC while playing) two frames before a LEVEL step (frame 58, the step at 60).
 2. **A hot track at full LEVEL and MAIN LEVEL.** Expected: the stem clips at full scale exactly where MAIN does. Test: Task 6's `clip` runs T1 at LEVEL 127 with the MAIN level at 127 on a full-scale input; every clipped sample of `T1.wav` equals MAIN's.
 3. **Every source off.** Expected: the last source that's on stays on (T8 when only tracks were on; MAIN when only MAIN was). Test: Task 10's gate turns sources off in turn.
 4. **All 14 files in one take.** Expected: 14 files, each with its own header (channels, width) and a length that matches its frames. Test: Task 8's `all14`, and Task 9's `all14w`.
@@ -45,6 +45,20 @@ These five inputs follow from the spec, and no gate in its section 6 names them.
 - **Commits.** Stage by name; check `git status --porcelain` shows only the intended files staged before each commit.
 - **Assembly.** `-mcpu=54455`. ColdFire instructions are at most six bytes, so an immediate can't be stored to an absolute address in one instruction: load it into a register first. `divu.l`, `mulu.l` and `muls.l` take a register, never an immediate. `movem` has no `-(sp)` or `(sp)+` form: use `lea -N(%sp),%sp` then `movem.l regs,(%sp)`, and the reverse. After any EMAC instruction or other unusual form: build, then disassemble the built routine (`scripts/disasm.sh emac ADDR N`, the address from `m68k-elf-nm out/platform/runtime/runtime.elf`) and compare it with the intent (AGENTS.md: "Disassemble what you assemble"). Use only EMAC forms the stock image runs (Task 5 Step 1), never MAC-with-load.
 - **The ledger.** `.superpowers/sdd/2026-10-01-stem-rec-sources/progress.md` (local, excluded): one line per finding and ruling, with the log that shows it.
+
+## Testing
+
+Yves's rule (1 Oct 2026): small focused tests while a piece is built; one big pass at the end; focused tests again while fixing what the big pass finds; then another big pass.
+
+- **While building a piece**, test only what the change touches:
+  1. Unicorn unit tests first (`tools/verify/verify_stems_units.py`, Task 4b): the routine alone against `stems_gain.py` or a reference beside the test, thousands of cases in seconds, no boot, no DSP.
+  2. Then one or two short port runs as the proof inside the firmware (`VS --only=...`), about 300 frames each.
+  3. A task re-runs an older check only when it changed that check's code or the code under it. Task 6 changes how every take is compared, so it re-runs one check per changed comparison; Task 10 changes only the menu, so it runs no audio check.
+- **No emulator** for the model's tests, `--static`, building, and disassembling.
+- **The big pass** is Task 11: `make check-remix REMIX=stems`, both panels and the `--long` runs, after Task 10b has the port boot once per fixture.
+- **After the big pass**, each failure gets its own focused test (a unit test or one `--only=` run) until its fix holds; then the big pass runs again. Only a clean big pass leads to STEMS3.
+- **Fixtures are built once** and rebuilt when their builder or the template changes (Task 4b).
+- One heavy WSL job at a time (3.8 GB); the patched Unicorn's build runs alone.
 
 ## Measured before this plan (1 Oct 2026, `/home/yvez/stemrec3` at `14ea124`, the `stems` image)
 
@@ -511,9 +525,9 @@ def dsp_peeks(log, space, addr):
     return [sext24(int(w, 16)) for w in m.group(1).split()] if m else []
 
 
-def validate(fixture="out/stems_fixture_thru1.json", frames=420):
-    """One port run with T1's LEVEL stepped at frames 150 (64), 151 (100),
-    200 (20) and 260 (127) -- two steps one frame apart cut a ramp -- every
+def validate(fixture="out/stems_fixture_thru1.json", frames=260):
+    """One port run with T1's LEVEL stepped at frames 60 (64), 61 (100),
+    90 (20) and 120 (127) -- two steps one frame apart cut a ramp -- every
     page write and sent index logged. Every sent page replayed through
     Mirror must leave core 0's ramp state (X:0x3dd) and its last frame's
     MAIN gains (Y:0x4a + 20j + k for j >= 2; the cue mix rewrites
@@ -531,7 +545,7 @@ def validate(fixture="out/stems_fixture_thru1.json", frames=420):
             "--pre-roll", "40", "--poke-trig", "2", "--audio-in", fx["audio_in"],
             "--watch-mem", f"0x{SENT:x},4;0x{PAGES:x},{NPAGES * PAGE}",
             "--dsp-peek", "0:X:0x3dd,50;0:Y:0x40,320"]
-    steps = ((150, 64), (151, 100), (200, 20), (260, 127))
+    steps = ((60, 64), (61, 100), (90, 20), (120, 127))
     if mover[0] == "poke":
         for f, v in steps:
             args += ["--step", f"{f}:poke:{mover[1]}={v}"]
@@ -551,7 +565,7 @@ def validate(fixture="out/stems_fixture_thru1.json", frames=420):
         gains.append(mirror.step(p))
         states.append([list(s) for s in mirror.state])
     x, y = dsp_peeks(log, "X", 0x3dd), dsp_peeks(log, "Y", 0x40)
-    if len(x) != 50 or len(y) != 320 or len(pages) < 300:
+    if len(x) != 50 or len(y) != 320 or len(pages) < 200:
         print(f"incomplete run: {len(pages)} pages, {len(x)} X words, {len(y)} Y words")
         return False
     dsp_state = [[x[5 * k], x[5 * k + 2], x[5 * k + 4]] for k in range(8)]
@@ -613,7 +627,7 @@ and the docstring's usage line becomes `[--eight | --fat32 | --thru | --thru1]`.
 - [ ] **Step 6: The model against core 0**
 
 Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-fixture1 bash -c '.venv/bin/python3 tools/verify/stems_fixture.py --thru1 && .venv/bin/python3 tools/verify/stems_fixture.py --thru' && bash .superpowers/v2/wslrun-5 p5-gain-val .venv/bin/python3 tools/verify/stems_gain.py validate`
-Expected: `the model equals core 0 in every track slot`, with about 450 pages replayed. Also run `stems_levels_probe.py thru1` once and check T1's w1 moved and T2-T8 sound nowhere (their read-back slots silent in the block dump of the validate run).
+Expected: `the model equals core 0 in every track slot`, with about 300 pages replayed. Also run `stems_levels_probe.py thru1` once and check T1's w1 moved and T2-T8 sound nowhere (their read-back slots silent in the block dump of the validate run).
 
 **STOP if it prints `MISMATCH`.** Record the printed values in the ledger and bring them to Yves (the stop condition).
 
@@ -720,7 +734,7 @@ def sext(v):
     return v - 0x1000000 if v & 0x800000 else v
 
 
-def trace(fixture_json, start=150):
+def trace(fixture_json, start=60):
     """The hook's view for TRACE_N frames from `start`, against the model:
     for each traced frame N, which mirrored frame's gains and which
     read-back long (this half, the other half, either one frame older)
@@ -792,6 +806,224 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
+### Task 4b: The patched Unicorn and the unit harness
+
+**Files:**
+- Create: `tools/verify/verify_stems_units.py`
+- Modify: `tools/verify/verify_stems.py` (`fixtures()`: built once, rebuilt when its inputs change)
+
+**Interfaces:**
+- Produces: in `verify_stems_units.py`: `Rt` (the built runtime in Unicorn) with `call(name, **regs) -> dict`, `wmem`, `rmem`, `w32`, `r32`, `r32s`, `.s` (every symbol, local ones included), `.table` (the gain table from the stock slice); `check`; the decorator `unit`, which adds a test to `UNITS`; the constants the tests share (`GQ_N`, `SRC_BITS`, and Task 4's `GAIN_LAG`, `TRACK_HALF`, `TRACK_DELAY`, `IN_AB_OFF`, `IN_CD_OFF`, `IN_A_IS_LEFT`, as `stems.s` will carry them); `main()` runs every test, or those named. In `verify_stems.py`: `fixtures()` with a key file `out/stems_fixtures.key`.
+
+- [ ] **Step 1: Build the patched Unicorn**
+
+Nothing else may run in WSL. Run: `bash .superpowers/v2/wslrun-5 p5-unicorn bash -c 'scripts/build_unicorn.sh && .venv/bin/python3 -c "import sys; sys.path[:0] = [\"tools/emu\", \"tools\"]; import emu_bringup as e; print(e.emac_selftest())"'`
+Expected: the library in `.venv/lib/unicorn-emac/`, and `(True, ...)`. `.venv` is a link to stemrec2's, so every tree uses the same library. If the self-test still fails, STOP: unit tests on a wrong EMAC would prove nothing about our EMAC code.
+
+- [ ] **Step 2: The harness**
+
+`tools/verify/verify_stems_units.py`:
+```python
+#!/usr/bin/env python3
+"""STEM REC's ColdFire routines, one at a time, in Unicorn: no boot, no DSP.
+
+    python3 tools/verify/verify_stems_units.py [test ...]
+
+Loads the built runtime (out/platform/runtime/runtime.bin at its .text
+base, inside the platform's DRAM reserve), maps the memory the routines read
+(the SRAM at 0x80000000, the image's gain-table words at 0x400ea18a from the
+stock slice, a stack), and calls one routine with its registers set. The
+Unicorn is the one tools/emu/emu_bringup.py selects: the repository's
+patched build, whose EMAC multiplies in fractional mode as the MCF5445x
+does. The harness refuses to run when that self-test fails. Each test
+compares a routine with tools/verify/stems_gain.py or a reference beside
+it (docs/superpowers/plans/2026-10-01-stem-rec-sources.md, "Testing")."""
+import pathlib
+import random
+import struct
+import subprocess
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+for p in ("tools/emu", "tools", "tools/verify"):
+    sys.path.insert(0, str(ROOT / p))
+import toolpath  # noqa: E402,F401
+import emu_bringup  # noqa: E402  (exports LIBUNICORN_PATH before unicorn loads)
+from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN  # noqa: E402
+from unicorn import m68k_const as K  # noqa: E402
+import stems_gain as sg  # noqa: E402
+
+# The constants of modules/stems/stems.s these tests depend on. Each task
+# that adds one to stems.s copies its value here.
+GQ_N = 4
+SRC_BITS = 0xff                                         # Task 8: 0xfff
+GAIN_LAG, TRACK_HALF, TRACK_DELAY = 1, 1, 1             # STEM_REC.md 18.5: Task 4's values
+IN_AB_OFF, IN_CD_OFF, IN_A_IS_LEFT = 0x100, 0x180, 1    # STEM_REC.md 18.7: Task 4's values
+
+RESERVE = (0x40a95000, 0x41496000)        # the platform reserve, page-aligned (docs/contributing/PLACEMENT.md)
+SRAM = (0x80000000, 0x10000)
+TABLE = 0x400ea18a
+STOP, STACK = 0x00010000, 0x00030000
+fails = 0
+UNITS = []
+
+
+def check(label, ok, detail=""):
+    global fails
+    print(f"  [{'PASS' if ok else 'FAIL'}] {label}" + (f"  {detail}" if detail else ""))
+    fails += 0 if ok else 1
+
+
+def unit(f):
+    UNITS.append(f)
+    return f
+
+
+class Rt:
+    REGS = {**{f"d{i}": getattr(K, f"UC_M68K_REG_D{i}") for i in range(8)},
+            **{f"a{i}": getattr(K, f"UC_M68K_REG_A{i}") for i in range(7)}}
+
+    def __init__(self):
+        ok, why = emu_bringup.emac_selftest()
+        if not ok:
+            sys.exit(f"the EMAC self-test fails ({why}): run scripts/build_unicorn.sh (plan Task 4b)")
+        rt = ROOT / "out/platform/runtime"
+        nm = subprocess.check_output(["m68k-elf-nm", str(rt / "runtime.elf")], text=True)
+        self.s = {f[2]: int(f[0], 16) for f in (line.split() for line in nm.splitlines()) if len(f) == 3}
+        hdr = subprocess.check_output(["m68k-elf-objdump", "-h", str(rt / "runtime.elf")], text=True)
+        base = int(next(line.split()[3] for line in hdr.splitlines()
+                        if len(line.split()) > 3 and line.split()[1] == ".text"), 16)
+        self.uc = uc = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
+        uc.ctl_set_cpu_model(K.UC_CPU_M68K_CFV4E)
+        uc.mem_map(RESERVE[0], RESERVE[1] - RESERVE[0])
+        uc.mem_write(base, (rt / "runtime.bin").read_bytes())
+        uc.mem_map(*SRAM)
+        uc.mem_map(STOP & ~0xfff, STACK - (STOP & ~0xfff))
+        img = (ROOT / "out/raw/section_3_MAIN_OS.bin").read_bytes()
+        t0 = TABLE - 0x40000400
+        uc.mem_map(TABLE & ~0xfff, 0x1000)
+        uc.mem_write(TABLE, img[t0:t0 + 258 * 3])
+        self.table = [int.from_bytes(img[t0 + 3 * i:t0 + 3 * i + 3], "little") for i in range(258)]
+        uc.reg_write(K.UC_M68K_REG_SR, 0x2700)
+
+    def call(self, name, **regs):
+        uc = self.uc
+        for r, v in regs.items():
+            uc.reg_write(self.REGS[r], v & 0xffffffff)
+        uc.reg_write(K.UC_M68K_REG_A7, STACK - 4)
+        uc.mem_write(STACK - 4, struct.pack(">I", STOP))
+        uc.emu_start(self.s[name], STOP, count=2_000_000)
+        assert uc.reg_read(K.UC_M68K_REG_PC) == STOP, f"{name} did not return"
+        sp = uc.reg_read(K.UC_M68K_REG_A7)
+        assert sp == STACK, f"{name}: the stack is off by {sp - STACK}"
+        return {r: uc.reg_read(n) for r, n in self.REGS.items()}
+
+    def wmem(self, a, b):
+        self.uc.mem_write(a, bytes(b))
+
+    def rmem(self, a, n):
+        return bytes(self.uc.mem_read(a, n))
+
+    def w32(self, a, v):
+        self.wmem(a, (v & 0xffffffff).to_bytes(4, "big"))
+
+    def r32(self, a):
+        return int.from_bytes(self.rmem(a, 4), "big")
+
+    def r32s(self, a):
+        return int.from_bytes(self.rmem(a, 4), "big", signed=True)
+
+
+def main():
+    names = sys.argv[1:]
+    rt = Rt()
+    for f in UNITS:
+        if not names or f.__name__ in names:
+            print(f"== {f.__name__}")
+            f(rt)
+    print(f"verify_stems_units: {fails} failure(s)")
+    return 1 if fails else 0
+```
+and at the file's end (every test sits above it):
+```python
+if __name__ == "__main__":
+    sys.exit(main())
+```
+
+- [ ] **Step 3: Its first test, on code that exists**
+
+Above the `__main__` block:
+```python
+@unit
+def layout_now(rt):
+    """The harness on code that exists: piece 3's stems_layout for one and
+    eight tracks. Task 7 replaces it with the file table's test."""
+    s = rt.s
+    for mask, nt in ((0x01, 1), (0xff, 8)):
+        rt.w32(s["stems_tracks"], mask)
+        rt.call("stems_layout")
+        got = tuple(rt.r32(s[n]) for n in ("stems_nt", "stems_fbytes", "stems_rframes", "stems_rlimit"))
+        want = (nt, 64 * nt, 0x400000 // (64 * nt), 0x400000 // (64 * nt) * 64 * nt)
+        check(f"layout_now: mask {mask:#04x}", got == want, f"{got} vs {want}")
+```
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-units bash -c 'make bus REMIX=stems > /dev/null && time .venv/bin/python3 tools/verify/verify_stems_units.py'`
+Expected: both `layout_now` checks PASS in a few seconds. A FAIL here is the harness's (a missing map, a wrong base), never STEM REC's: fix the harness.
+
+- [ ] **Step 4: Fixtures built once**
+
+Replace `fixtures()` in `verify_stems.py`:
+```python
+FIXTURE_THRU1 = pathlib.Path("out/stems_fixture_thru1.json")   # stems_fixture.py --thru1
+FIXTURE_MODES = [("", FIXTURE), ("--eight", FIXTURE8), ("--fat32", FIXTURE32),
+                 ("--thru1", FIXTURE_THRU1), ("--thru", FIXTURE_THRU)]   # --thru1 passes through the THRU card: before --thru
+
+
+def fixtures():
+    """The fixture cards, built from TEMPLATE: rebuilt when the builder, the
+    card writer, the project editor or the template change (a hash of all
+    of them in out/stems_fixtures.key), reused otherwise -- a stale card is
+    never read, and a quick run doesn't pay a minute to rebuild them. False,
+    with nothing checked, when there is no template; a build that fails is
+    a failed check."""
+    if not TEMPLATE.is_dir():
+        return False
+    import hashlib
+    import emu_card
+    import ot_project
+    h = hashlib.sha256()
+    for p in [pathlib.Path("tools/verify/stems_fixture.py"), pathlib.Path(emu_card.__file__),
+              pathlib.Path(ot_project.__file__)] + sorted(q for q in TEMPLATE.rglob("*") if q.is_file()):
+        h.update(str(p).encode())
+        h.update(p.read_bytes())
+    key = pathlib.Path("out/stems_fixtures.key")
+    if key.exists() and key.read_text() == h.hexdigest() and all(j.exists() for _, j in FIXTURE_MODES):
+        check("the fixtures are current: their inputs are unchanged", True, h.hexdigest()[:12])
+        return True
+    for mode, _ in FIXTURE_MODES:
+        r = subprocess.run([sys.executable, "tools/verify/stems_fixture.py", *([mode] if mode else []),
+                            str(TEMPLATE)], capture_output=True, text=True)
+        if r.returncode:
+            tail = (r.stdout + r.stderr).strip().splitlines()
+            check(f"the fixture builds from the template (stems_fixture.py{' ' + mode if mode else ''})",
+                  False, tail[-1] if tail else f"exit {r.returncode}")
+            return False
+    key.write_text(h.hexdigest())
+    check("the fixtures build from the template", True, str(TEMPLATE))
+    return True
+```
+(Task 6 appends its two variants to `FIXTURE_MODES`, and its constants `FIXTURE_THRU1_HOT` and `FIXTURE_THRU1_MASTER` must then be defined above the list.) Run `VS --only=full` twice: the first run builds and writes the key, the second prints "the fixtures are current".
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tools/verify/verify_stems_units.py tools/verify/verify_stems.py
+git commit -m "verify_stems_units: STEM REC's routines one at a time in Unicorn, against the reference model, in seconds -- on the patched EMAC, refused without it; fixtures built once and rebuilt when their inputs change
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
 ### Task 5: The gain mirror in the hook (gate 1)
 
 **Files:**
@@ -810,11 +1042,10 @@ Expected: every count above 0, and the two disassemblies show the frame interrup
 
 In `tools/verify/verify_stems.py`, beside the constants:
 ```python
-FIXTURE_THRU1 = pathlib.Path("out/stems_fixture_thru1.json")
 GQ_N = 4                                   # stems.s: frames of per-sample gains kept
 MOVER = pathlib.Path("out/stems_runs/lv_mover.txt")     # Task 2: "poke 0x80000c50" or "midi"
 MAIN_LEVEL_SRC = None                      # Task 2 Step 3's address, or None when the port can't drive it
-LEVEL_STEPS = ((150, 64), (151, 100), (200, 20), (260, 127))   # two steps a frame apart cut a ramp
+LEVEL_STEPS = ((60, 64), (61, 100), (90, 20), (120, 127))   # two steps a frame apart cut a ramp
 ```
 (write `MAIN_LEVEL_SRC` as Task 2 measured it), and after `rebuilt_peak`:
 ```python
@@ -854,11 +1085,11 @@ def gains(s):
     each slot matches the hook's last mirrored frame or the one before."""
     steps, midi = level_steps(LEVEL_STEPS)
     if MAIN_LEVEL_SRC:
-        steps.append(f"300:poke:0x{MAIN_LEVEL_SRC:x}=100")
+        steps.append(f"140:poke:0x{MAIN_LEVEL_SRC:x}=100")
     else:
         print("  [SKIP] gains: the MAIN level move (the port can't drive it, STEM_REC.md 18.1)")
     for tag, extra in (("gains", ()), ("gainsdirty", ("--dsp-dirty", "7"))):
-        log, *_ = port(s, 420, tag=tag, calls_before=(), fixture=FIXTURE_THRU1, mask=None,
+        log, *_ = port(s, 260, tag=tag, calls_before=(), fixture=FIXTURE_THRU1, mask=None,
                        dump_blocks=False, extra=extra, steps=steps, midi_lines=midi,
                        mems=((s["stems_gstate"], 96, "gs"), (s["stems_gstate_prev"], 96, "gp"),
                              (s["stems_lvskip"], 4, "skip")))
@@ -888,14 +1119,54 @@ In `port()`: add the parameter `midi_lines=()`, and before `subprocess.run`:
         mid.write_text("".join(l + "\n" for l in midi_lines))
         args += ["--midi", str(mid)]
 ```
-In `fixtures()`, build `--thru1` first and `--thru` after it (the `--thru1` build passes through the THRU card). Add `gains` to `main()`'s run list after `full`, and to the names `--only` accepts.
+(`fixtures()` already builds `--thru1` before `--thru`: Task 4b.) Add `gains` to `main()`'s run list after `full`, and to the names `--only` accepts.
 
-The spec's gate 1 also names a crossfader sweep and a scene change. Probe first whether the one-THRU fixture's scenes move a level: write `out/stems_runs/xf.txt` with the lines `120 BA 30 00`, `140 BA 30 40` and `160 BA 30 7F` (CC 48, the crossfader, on the AUTO channel 11; `docs/firmware/MIDI.md`), and run `stems_levels_probe.py thru1 midi:out/stems_runs/xf.txt`. If page slot 0's w1 (or any slot's) moves, add those three lines to `gains`' run after the LEVEL steps (`midi_lines`; with a MIDI LEVEL mover, append them to its lines) and add the check `f"{tag}: the crossfader moved a level"`. If no word moves, the template's scenes lock no level: record in the ledger that the crossfader and scenes reach the hook only through these same words, which the LEVEL steps move, and tell Yves before Task 6 that this part of gate 1 isn't exercised by the fixture.
+The spec's gate 1 also names a crossfader sweep and a scene change. Probe first whether the one-THRU fixture's scenes move a level: write `out/stems_runs/xf.txt` with the lines `150 BA 30 00`, `170 BA 30 40` and `190 BA 30 7F` (CC 48, the crossfader, on the AUTO channel 11; `docs/firmware/MIDI.md`), and run `stems_levels_probe.py thru1 midi:out/stems_runs/xf.txt`. If page slot 0's w1 (or any slot's) moves, add those three lines to `gains`' run after the LEVEL steps (`midi_lines`; with a MIDI LEVEL mover, append them to its lines) and add the check `f"{tag}: the crossfader moved a level"`. If no word moves, the template's scenes lock no level: record in the ledger that the crossfader and scenes reach the hook only through these same words, which the LEVEL steps move, and tell Yves before Task 6 that this part of gate 1 isn't exercised by the fixture.
 
-- [ ] **Step 3: Run it to see it fail**
+And its unit test, in `tools/verify/verify_stems_units.py` (Task 4b's harness):
+```python
+@unit
+def mirror(rt, n=4000, seed=5):
+    """stems_mirror against stems_gain.Mirror: n random pages through the
+    five-page ring, a third of them repeated (the target cache), with the
+    edges of the arithmetic (levels 0, 0x4000, 0x7f00, 0x8000 = -1.0, any;
+    the MAIN level 0x40, 0x7f, 0x80 = -1.0, any; splits 0-15). After every
+    page: the state of all eight slots and, armed, their 16 gains."""
+    s = rt.s
+    model = sg.Mirror(rt.table)
+    rt.w32(s["stems_state"], 1)                     # ARMED: the gains are written
+    rt.w32(s["stems_lvlast"], 0xffffffff)
+    rt.w32(s["stems_gqn"], 0)
+    rng = random.Random(seed)
+    page, first = [0] * 64, None
+    for i in range(n):
+        if i == 0 or rng.random() > 0.33:
+            page = [0] * 64
+            for k in range(8):
+                page[4 * k + 1] = rng.choice((0, 0x4000, 0x7f00, 0x8000, rng.randrange(0x10000)))
+                page[4 * k + 2] = rng.choice((0x7f00, 0, rng.randrange(0x8000)))
+                page[4 * k + 3] = rng.randrange(16) if rng.random() < 0.4 else 0
+            page[0x29] = rng.choice((0x40, 0x7f, 0x80, rng.randrange(0x100)))
+        idx = i % 5
+        rt.wmem(0x80005460 + 0x80 * idx, b"".join(w.to_bytes(2, "big") for w in page))
+        rt.w32(0x80004804, idx)
+        rt.call("stems_mirror")
+        want = model.step(page)
+        state = [[rt.r32s(s["stems_gstate"] + 12 * k + 4 * f) for f in range(3)] for k in range(8)]
+        q = s["stems_gq"] + ((rt.r32(s["stems_gqn"]) - 1) % GQ_N) * 512
+        gq = [[rt.r32s(q + 64 * k + 4 * j) for j in range(16)] for k in range(8)]
+        if state != model.state or gq != want:
+            first = (i, state[0], model.state[0], gq[0][:4], want[0][:4])
+            break
+    check(f"mirror: {n} pages, every slot's state and gains equal the model", first is None,
+          f"first difference (page, mirror, model, gains, model's): {first}" if first else "")
+    check("mirror: no page index jump counted", rt.r32(s["stems_lvskip"]) == 0)
+```
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-gains-red VS --only=gains` (VS spelled out as in Conventions)
-Expected: `KeyError: 'stems_gstate'`.
+- [ ] **Step 3: Run them to see them fail**
+
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-gains-red bash -c '.venv/bin/python3 tools/verify/verify_stems_units.py mirror; VS --only=gains'` (VS spelled out)
+Expected: the unit test stops on `KeyError: 'stems_mirror'`, the check on `KeyError: 'stems_gstate'`.
 
 - [ ] **Step 4: The mirror**
 
@@ -1008,12 +1279,14 @@ stems_mirror:
         move.l  %d0,stems_gw29
         andi.l  #0xff,%d0
         ror.l   #8,%d0                      | m << 8: (W29 & 0xff) << 24
+        cmpi.l  #0x80000000,%d0
+        beq.s   .Lg_m2one                   | -1.0: its square overflows the EMAC's read-out
         mac.l   %d0,%d0,%acc0
         movclr.l %acc0,%d0
         asr.l   #8,%d0                      | M2 = floor(m*m / 2^23)
-        cmpi.l  #0x7fffff,%d0
-        ble.s   .Lg_m2ok
-        move.l  #0x7fffff,%d0               | -1.0 squared, limited
+        bra.s   .Lg_m2ok
+.Lg_m2one:
+        move.l  #0x7fffff,%d0               | core 0's limited 1.0
 .Lg_m2ok:
         move.l  %d0,stems_gm2
         lea     stems_gcache,%a1            | every target is stale
@@ -1057,12 +1330,14 @@ stems_mirror:
         move.l  %d4,(%a3)
         move.l  %d1,%d0
         swap    %d0                         | x << 8 = w1 << 16, signed
+        cmpi.l  #0x80000000,%d0
+        beq.s   .Lg_sqone                   | -1.0: its square overflows the EMAC's read-out
         mac.l   %d0,%d0,%acc0
         movclr.l %acc0,%d0
         asr.l   #8,%d0                      | w1sq = floor(x*x / 2^23)
-        cmpi.l  #0x7fffff,%d0
-        ble.s   .Lg_sqok
-        move.l  #0x7fffff,%d0
+        bra.s   .Lg_sqok
+.Lg_sqone:
+        move.l  #0x7fffff,%d0               | core 0's limited 1.0
 .Lg_sqok:
         move.l  %d2,%d5
         swap    %d5
@@ -1173,8 +1448,8 @@ Expected: the build passes; the disassembly shows `macl %d0,%d0,%acc0`, `macl %d
 
 - [ ] **Step 6: Run the check**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-gains-green VS --only=gains,full,stream`
-Expected: every `gains` and `gainsdirty` check PASS; `full` and `stream` still PASS (the stems are still pre-fader here). **STOP if the mirror can't be made to equal core 0's state** in the clean run: record the first slot and field that differ and bring it to Yves. If only `gainsdirty` differs, record by how much (in gain LSB, at most 15 by the arithmetic of STEM_REC.md 18.3): that is the hardware risk of `X:0x4800` not being uploaded, and it goes to Yves with the measured size before Task 6.
+First the unit test, until it passes: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-mirror-unit bash -c 'make bus REMIX=stems > /dev/null && .venv/bin/python3 tools/verify/verify_stems_units.py mirror'` (seconds). Then once: `bash .superpowers/v2/wslrun-5 p5-gains-green VS --only=gains,full`.
+Expected: `mirror: 4000 pages ...` PASS; every `gains` and `gainsdirty` check PASS; `full` still PASS (the hook's top changed; the stems are still pre-fader here). **STOP if the mirror can't be made to equal core 0's state** in the clean run: record the first slot and field that differ and bring it to Yves. If only `gainsdirty` differs, record by how much (in gain LSB, at most 15 by the arithmetic of STEM_REC.md 18.3): that is the hardware risk of `X:0x4800` not being uploaded, and it goes to Yves with the measured size before Task 6.
 
 - [ ] **Step 7: Commit**
 
@@ -1284,18 +1559,18 @@ def postfader(s):
     every step, the cut ramp included."""
     steps, midi = level_steps(LEVEL_STEPS)
     aud = run_path("postfader", "aud")
-    log, dump, card, words, _ = port(s, 520, stop_at=340, tag="postfader", fixture=FIXTURE_THRU1,
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="postfader", fixture=FIXTURE_THRU1,
                                      steps=steps, midi_lines=midi, extra=("--audio-out", str(aud)))
     against_main("postfader", card, FIXTURE_THRU1, aud)
 
 
 def postmove(s):
-    """Review Focus 1: the take starts while playing (REC at frame 148), two
+    """Review Focus 1: the take starts while playing (REC at frame 58), two
     frames before the first LEVEL step: equal to MAIN from its first frame."""
     steps, midi = level_steps(LEVEL_STEPS)
     aud = run_path("postmove", "aud")
-    log, dump, card, words, _ = port(s, 520, stop_at=340, tag="postmove", fixture=FIXTURE_THRU1,
-                                     calls_before=(), calls=((148, s["stems_action"]),),
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="postmove", fixture=FIXTURE_THRU1,
+                                     calls_before=(), calls=((58, s["stems_action"]),),
                                      steps=steps, midi_lines=midi, extra=("--audio-out", str(aud)))
     against_main("postmove", card, FIXTURE_THRU1, aud)
 
@@ -1307,7 +1582,7 @@ def clip(s):
         print("  [SKIP] clip: the MAIN level can't be driven under the port (STEM_REC.md 18.1)")
         return
     aud = run_path("clip", "aud")
-    log, dump, card, words, _ = port(s, 420, stop_at=300, tag="clip", fixture=FIXTURE_THRU1_HOT,
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="clip", fixture=FIXTURE_THRU1_HOT,
                                      pokes_before=[(MAIN_LEVEL_SRC, 127)], extra=("--audio-out", str(aud)))
     res = against_main("clip", card, FIXTURE_THRU1_HOT, aud)
     if res:
@@ -1320,7 +1595,7 @@ def clip(s):
 def master(s):
     """Review Focus 5: MASTER TRACK on (STEM_REC.md 18.8): the take is whole --
     T1.wav as long as the frames recorded, and the task ends IDLE with no error."""
-    log, dump, card, words, _ = port(s, 520, stop_at=340, tag="master", fixture=FIXTURE_THRU1_MASTER)
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="master", fixture=FIXTURE_THRU1_MASTER)
     st, status, _, wr, rd, nfr = words
     files = dict(take_files(card, FIXTURE_THRU1_MASTER))
     data = files.get("T1.wav") or files.get("T1.WAV")
@@ -1335,12 +1610,55 @@ def build_thru1_variant(name, amp=8192, master_track=False, project_dir=DEFAULT_
     TRACK on (the project's [SETTINGS], as Task 4 Step 5 wrote it), in its own
     card and JSON, out/stems_fixture_<name>.json."""
 ```
-written as `build_thru1` is, with the WAV written to `out/test_audio/stems_in4_<name>.wav`, `MASTER_TRACK=1` written into the staged `project.work` when asked (the exact edit Task 4 Step 5 used), and `--thru1hot` / `--thru1master` branches in `__main__`; `verify_stems.fixtures()` builds both. Add `postfader`, `postmove`, `clip` and `master` to the run list and to `--only`.
+written as `build_thru1` is, with the WAV written to `out/test_audio/stems_in4_<name>.wav`, `MASTER_TRACK=1` written into the staged `project.work` when asked (the exact edit Task 4 Step 5 used), and `--thru1hot` / `--thru1master` branches in `__main__`; both go into `verify_stems.FIXTURE_MODES` before `--thru` (Task 4b), their constants defined above the list. Add `postfader`, `postmove`, `clip` and `master` to the run list and to `--only`.
+
+And its unit test, in `verify_stems_units.py`:
+```python
+def post16(g, x):
+    return max(-0x8000, min(0x7fff, (g * x) >> 29))
+
+
+def _track(rt, name, out_bytes, conv, n=200, seed=6):
+    """One track routine against `conv` on n random frames: random gains (0
+    and 0x7fffff among them) and random samples (both full scales), the
+    gains GAIN_LAG frames behind the newest, the samples where TRACK_HALF and
+    TRACK_DELAY put them. Returns the first difference, or None."""
+    s = rt.s
+    rng = random.Random(seed)
+    for i in range(n):
+        k = rng.randrange(8)
+        gains = [rng.choice((0, 0x7fffff, 0x1f7fe0, rng.randrange(0x800000))) for _ in range(16)]
+        xs = [rng.choice((0x7fffff, -0x800000, 0, rng.randrange(-0x800000, 0x800000))) for _ in range(32)]
+        gqn = rng.randrange(GQ_N + 1, 1000)
+        rt.w32(s["stems_gqn"], gqn)
+        frame = (gqn - 1 - GAIN_LAG) % GQ_N
+        rt.wmem(s["stems_gq"] + frame * 512 + 64 * k, b"".join(g.to_bytes(4, "big") for g in gains))
+        if TRACK_DELAY:
+            src = s["stems_tdelay"] + 0x80 * k
+        else:
+            src = 0x80003190 + (0x400 if TRACK_HALF else 0) + 0x80 * k
+        rt.wmem(src, b"".join(((x << 8) & 0xffffffff).to_bytes(4, "big") for x in xs))
+        rt.call("stems_emac_in")
+        rt.call(name, d4=0x80003190, d5=0x80 * k, a1=s["stems_ring"])
+        rt.call("stems_emac_out")
+        got = rt.rmem(s["stems_ring"], out_bytes)
+        want = b"".join(conv(gains[j], xs[2 * j + c]) for j in range(16) for c in (0, 1))
+        if got != want:
+            return (i, k, got[:12].hex(), want[:12].hex())
+    return None
+
+
+@unit
+def track16(rt):
+    """stems_track16 against post16, big-endian halves L : R."""
+    bad = _track(rt, "stems_track16", 64, lambda g, x: (post16(g, x) & 0xffff).to_bytes(2, "big"))
+    check("track16: 200 frames equal post16", bad is None, f"first difference {bad}" if bad else "")
+```
 
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-post-red VS --only=postfader`
-Expected: `postfader: every sample of T1.wav equals MAIN` FAIL (the stems are still pre-fader).
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-post-red bash -c '.venv/bin/python3 tools/verify/verify_stems_units.py track16; VS --only=postfader'`
+Expected: the unit test stops on `KeyError: 'stems_track16'`; `postfader: every sample of T1.wav equals MAIN` FAIL (the stems are still pre-fader).
 
 - [ ] **Step 3: The copy after the fader**
 
@@ -1553,7 +1871,7 @@ The hook (replace `stems_frame_hook` from its IDLE test to its end):
 
 - [ ] **Step 4: Assemble, disassemble, run**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-post-green bash -c 'make bus REMIX=stems > /dev/null && a=$(m68k-elf-nm out/platform/runtime/runtime.elf | awk "/ stems_track16\$/{print \$1}") && scripts/disasm.sh emac 0x$a 160 | grep -E "mac|movclr|smi|extb" && env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --only=postfader,postmove,clip,master'`
+First `verify_stems_units.py track16`, until it passes (seconds). Then: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-post-green bash -c 'make bus REMIX=stems > /dev/null && a=$(m68k-elf-nm out/platform/runtime/runtime.elf | awk "/ stems_track16\$/{print \$1}") && scripts/disasm.sh emac 0x$a 160 | grep -E "mac|movclr|smi|extb" && env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --only=postfader,postmove,clip,master'`
 Expected: `macl %d0,%d1,%acc0`, `macl %d0,%d2,%acc1`, `movclrl %acc0,%d1`, `movclrl %acc1,%d2`, `smi`, `extbl`; then every check PASS. A difference of exactly one frame means `GAIN_LAG` or `TRACK_DELAY` is off by one: rerun Task 4's trace, never shift the check.
 
 - [ ] **Step 5: The checks that compared stems with the read-back**
@@ -1565,11 +1883,10 @@ Each run that compares a take with a track now passes that track's settled gain,
 - `mask_take`: `ref = slot_frames(dump, k, gain_of(log, k))`.
 With, beside `PRE_ROLL`: `STEM_LAG = PRE_ROLL + 1 - TRACK_DELAY - TRACK_HALF` (the edge rule's frame later, the samples' frames older; Task 4's constants copied here), and in each lag check's detail the lag found. `thru` still checks the read-back itself (g=None).
 
-- [ ] **Step 6: The quick runs, then the whole verifier**
+- [ ] **Step 6: The checks this task changed**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-post-quick VS --only=tap,full,stream,wrap,cap,labels,thru,eight,mask07,maskff`
-Expected: all PASS. Commit (Step 7), then `bash .superpowers/v2/wslrun-5 p5-post-check make check-remix REMIX=stems` on the committed tree (tell Yves the log path; about 70 minutes).
-Expected: `# exit 0`, every check PASS, `verify_set`'s SKIP only; the counts beside piece 3's 209 in the ledger.
+One check per comparison Step 5 changed: `tap`, `wav_check` (through `full` and `wrap`), `eight`, `mask_take` (through `mask07`). Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-post-quick VS --only=tap,full,wrap,eight,mask07`
+Expected: all PASS. Every other check waits for the big pass (Task 11).
 
 - [ ] **Step 7: Commit**
 
@@ -1626,10 +1943,70 @@ def layout(s):
 ```
 Remove the old `RING_SIZE = 0x400000`; double `OVERFLOW_STOP` and `OVERFLOW_FRAMES` (the ring takes twice the frames to fill); add `layout` to the run list and `--only`.
 
-- [ ] **Step 2: Run it to see it fail**
+And their unit tests, in `verify_stems_units.py`, replacing Task 4b's `layout_now` (delete it):
+```python
+def layout_ref(src, fmt):
+    """The file table a source word and a format should latch (spec section 3)."""
+    src &= SRC_BITS
+    src = src or 1
+    w = 48 if fmt & 1 else 32
+    files = []
+    for k in range(12):
+        if not src >> k & 1:
+            continue
+        if k >= 10 and not fmt >> (k - 9) & 1:
+            a = 12 + 2 * (k - 10)
+            files += [(a << 24) | 0x10000 | w, ((a + 1) << 24) | 0x10000 | w]
+        else:
+            files.append((k << 24) | 0x20000 | 2 * w)
+    fb = sum(f & 0xffff for f in files)
+    return files, fb, 0x800000 // fb, 0x800000 // fb * fb
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-layout-red VS --only=layout`
-Expected: `KeyError: 'stems_fmt'`.
+
+@unit
+def layout(rt):
+    """stems_layout against layout_ref for every source word and format."""
+    s = rt.s
+    bad = None
+    for src in range(4096):
+        for fmt in range(8):
+            rt.w32(s["stems_tracks"], src)
+            rt.w32(s["stems_fmt"], fmt)
+            rt.w32(s["stems_wr_off"], 0)
+            rt.w32(s["stems_rd_off"], 0)
+            rt.call("stems_layout")
+            nf = rt.r32(s["stems_nf"])
+            got = ([rt.r32(s["stems_ftab"] + 4 * i) for i in range(nf)], rt.r32(s["stems_fbytes"]),
+                   rt.r32(s["stems_rframes"]), rt.r32(s["stems_rlimit"]))
+            if got != layout_ref(src, fmt):
+                bad = (hex(src), fmt, got, layout_ref(src, fmt))
+                break
+        if bad:
+            break
+    check("layout: every source word and format (32,768 cases)", bad is None,
+          f"first difference {bad}" if bad else "")
+
+
+@unit
+def header(rt):
+    """stems_hdr_fill for 16 and 24 bits, mono and stereo."""
+    s = rt.s
+    for fmt, entry, ch, bits in ((0, 0x00020040, 2, 16), (0, 0x0c010020, 1, 16),
+                                 (1, 0x08020060, 2, 24), (1, 0x0d010030, 1, 24)):
+        rt.w32(s["stems_lfmt"], fmt)
+        rt.w32(s["stems_ftab"], entry)
+        rt.call("stems_hdr_fill", d3=0, a2=s["stems_buf"])
+        h = rt.rmem(s["stems_buf"], 44)
+        got = struct.unpack_from("<HIIHH", h, 22)
+        want = (ch, 44100, 44100 * ch * bits // 8, ch * bits // 8, bits)
+        check(f"header: {ch} channel(s), {bits} bits", got == want and h[:4] == b"RIFF" and h[36:40] == b"data",
+              f"{got}")
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-layout-red bash -c '.venv/bin/python3 tools/verify/verify_stems_units.py layout header; VS --only=layout'`
+Expected: `KeyError: 'stems_fmt'` in both.
 
 - [ ] **Step 3: The state and the regions**
 
@@ -1938,8 +2315,8 @@ stems_hdr_fill:
 
 - [ ] **Step 6: Run, then commit**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-layout-green bash -c 'make bus REMIX=stems | grep -iE "stems_ring|stems_buf|reserve|refus"; env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --only=layout,full,stream,wrap,overflow,eight,mask07,maskff,postfader'`
-Expected: the build's DRAM lines show `stems_ring` 8 MiB and `stems_buf` 702,464 B inside the reserve, no refusal; every check PASS.
+First `verify_stems_units.py layout header` until both pass (the 32,768 layout cases take seconds). Then: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-layout-green bash -c 'make bus REMIX=stems | grep -iE "stems_ring|stems_buf|reserve|refus"; env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --only=layout,full,eight,postfader'` (the writer and the start changed: one take of one track, one of eight, one after the fader).
+Expected: the build's DRAM lines show `stems_ring` 8 MiB and `stems_buf` 702,464 B inside the reserve, no refusal; every check PASS. The overflow checks wait for the big pass.
 ```bash
 git add modules/stems/stems.s modules/stems/manifest.py tools/verify/verify_stems.py
 git commit -m "stems: the take from a file table latched at the start -- sources, format, files in order, the ring frame and its capacity by division; the ring 8 MiB, the writer's buffers for 14 files
@@ -2002,7 +2379,7 @@ def sources(s):
     AB.wav carries inputs A and B (the input WAV's channels 2 and 3), each a
     fixed gain of its own input at one lag."""
     aud = run_path("sources", "aud")
-    log, dump, card, words, _ = port(s, 520, stop_at=340, tag="sources", fixture=FIXTURE_THRU1, mask=None,
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="sources", fixture=FIXTURE_THRU1, mask=None,
                                      pokes_before=[(s["stems_tracks"] + 2, 0x07), (s["stems_tracks"] + 3, 0x01),
                                                    (CUE_T1, 127)],
                                      extra=("--audio-out", str(aud)))
@@ -2055,7 +2432,7 @@ def best_corr(got, src, lags=range(0, 4000)):
 def mono(s):
     """AB STEREO off: A.wav and B.wav, mono, equal to the stereo take's left
     and right channels of the same deterministic run."""
-    log, dump, card, words, _ = port(s, 520, stop_at=340, tag="mono", fixture=FIXTURE_THRU1, mask=None,
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="mono", fixture=FIXTURE_THRU1, mask=None,
                                      pokes_before=[(s["stems_tracks"] + 2, 0x04), (s["stems_tracks"] + 3, 0x01),
                                                    (s["stems_fmt"] + 3, 0b100)])
     f = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU1)}
@@ -2095,10 +2472,34 @@ def all14(s):
 ```
 with `CUE_T1 = 0x80000c51` (T1's cue level byte, `docs/firmware/MIDI.md`: CC 47) beside the constants. Add `(0x701, 0b110, ["T1", "MAIN", "CUE", "AB"], 256)`, `(0x401, 0b100, ["T1", "A", "B"], 128)` and `(0xfff, 0b000, [f"T{k}" for k in range(1, 9)] + ["MAIN", "CUE", "A", "B", "C", "D"], 768)` to `LAYOUT_CASES`, and `sources`, `mono`, `all14` to the run list (`mono` after `sources`: it reads `sources`' card) and to `--only`.
 
+And its unit test, in `verify_stems_units.py`, with `SRC_BITS` now `0xfff` (the `layout` test then covers the buses too):
+```python
+@unit
+def bus16(rt, seed=8):
+    """stems_bus16 for each kind 8-15 from a random channel-6 buffer: stereo
+    the L and R top 16 bits, mono the input's own channel."""
+    s = rt.s
+    rng = random.Random(seed)
+    longs = [rng.randrange(1 << 32) & 0xffffff00 for _ in range(128)]
+    rt.wmem(0x80005e60, b"".join(v.to_bytes(4, "big") for v in longs))
+    offs = {8: 0x00, 9: 0x80, 10: IN_AB_OFF, 11: IN_CD_OFF}
+    for kind in range(8, 16):
+        rt.call("stems_bus16", d5=kind, a1=s["stems_ring"])
+        if kind < 12:
+            base = offs[kind] // 4
+            want = b"".join((longs[base + 2 * j + c] >> 16).to_bytes(2, "big") for j in range(16) for c in (0, 1))
+        else:
+            pair = IN_AB_OFF if kind < 14 else IN_CD_OFF
+            ch = 0 if ((kind - 12) % 2 == 0) == bool(IN_A_IS_LEFT) else 1
+            want = b"".join((longs[pair // 4 + ch + 2 * j] >> 16).to_bytes(2, "big") for j in range(16))
+        got = rt.rmem(s["stems_ring"], len(want))
+        check(f"bus16: kind {kind}", got == want, f"{got[:8].hex()} vs {want[:8].hex()}")
+```
+
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-src-red VS --only=layout,sources`
-Expected: the three new `layout` cases FAIL (bits 8-11 are masked off: the file lists have tracks only) and `sources: T1, MAIN, CUE and AB` FAIL.
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-src-red bash -c '.venv/bin/python3 tools/verify/verify_stems_units.py layout bus16; VS --only=layout,sources'`
+Expected: the unit `layout` FAILs on the first source word with bit 8 set, `bus16` stops on `KeyError: 'stems_bus16'`; the three new `layout` cases FAIL (bits 8-11 are masked off) and `sources: T1, MAIN, CUE and AB` FAIL.
 
 - [ ] **Step 3: The bus copy**
 
@@ -2163,7 +2564,7 @@ In `stems_copy_frame`, after `lsr.l %d0,%d5`:
 
 - [ ] **Step 4: Run, then commit**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-src-green VS --only=layout,sources,mono,all14,postfader,full`
+First `verify_stems_units.py layout bus16` until both pass. Then: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-src-green VS --only=layout,sources,mono,all14`
 Expected: every check PASS. `CUE.wav … holds sound` failing means the cue byte didn't send T1 to the cue bus: find the cue mover as Task 2 Step 4 found the LEVEL mover (CC 47, or the cue key), record it, and rerun; never drop the sound requirement.
 ```bash
 git add modules/stems/stems.s tools/verify/verify_stems.py
@@ -2196,7 +2597,7 @@ def w24(s):
     T1.wav is 24-bit stereo and equals MAIN's 24 bits at every sample."""
     steps, midi = level_steps(LEVEL_STEPS)
     aud = run_path("w24", "aud")
-    log, dump, card, words, _ = port(s, 520, stop_at=340, tag="w24", fixture=FIXTURE_THRU1,
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="w24", fixture=FIXTURE_THRU1,
                                      pokes_before=[(s["stems_fmt"] + 3, 0b111)], steps=steps, midi_lines=midi,
                                      extra=("--audio-out", str(aud)))
     st, status, _, wr, rd, nfr = words
@@ -2213,7 +2614,7 @@ def w16v24(s):
     """The same deterministic run at 16 bits: every sample is the 24-bit
     take's top 16 bits."""
     steps, midi = level_steps(LEVEL_STEPS)
-    log, dump, card, words, _ = port(s, 520, stop_at=340, tag="w16", fixture=FIXTURE_THRU1,
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="w16", fixture=FIXTURE_THRU1,
                                      steps=steps, midi_lines=midi)
     a = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU1)}.get("T1.WAV")
     b = {n.upper(): d for n, d in take_files(run_path("w24", "img"), FIXTURE_THRU1)}.get("T1.WAV")
@@ -2261,10 +2662,46 @@ def overflow24(s):
 ```
 Add `(0x001, 0b111, ["T1"], 96)` and `(0xfff, 0b001, [f"T{k}" for k in range(1, 9)] + ["MAIN", "CUE", "A", "B", "C", "D"], 1152)` to `LAYOUT_CASES`; `w24`, `w16v24` (after `w24`), `all14w` and `overflow24` to the run list and `--only` (`overflow24` with the `--long` runs).
 
+And their unit tests, in `verify_stems_units.py`:
+```python
+def b24(v):
+    return (v & 0xffffff).to_bytes(3, "big")
+
+
+@unit
+def track24(rt):
+    """stems_track24 against stems_gain.stem24, six big-endian bytes a pair."""
+    bad = _track(rt, "stems_track24", 96, lambda g, x: b24(sg.stem24(g, x)))
+    check("track24: 200 frames equal stem24", bad is None, f"first difference {bad}" if bad else "")
+
+
+@unit
+def bus24(rt, seed=10):
+    """stems_bus24 for each kind 8-15: the buffer's 24 bits, stereo L R, mono
+    the input's own channel, big-endian."""
+    s = rt.s
+    rng = random.Random(seed)
+    longs = [rng.randrange(1 << 32) & 0xffffff00 for _ in range(128)]
+    rt.wmem(0x80005e60, b"".join(v.to_bytes(4, "big") for v in longs))
+    sx = lambda v: (v - (1 << 32) if v & 0x80000000 else v) >> 8    # noqa: E731
+    offs = {8: 0x00, 9: 0x80, 10: IN_AB_OFF, 11: IN_CD_OFF}
+    for kind in range(8, 16):
+        rt.call("stems_bus24", d5=kind, a1=s["stems_ring"])
+        if kind < 12:
+            base = offs[kind] // 4
+            want = b"".join(b24(sx(longs[base + 2 * j + c])) for j in range(16) for c in (0, 1))
+        else:
+            pair = IN_AB_OFF if kind < 14 else IN_CD_OFF
+            ch = 0 if ((kind - 12) % 2 == 0) == bool(IN_A_IS_LEFT) else 1
+            want = b"".join(b24(sx(longs[pair // 4 + ch + 2 * j])) for j in range(16))
+        got = rt.rmem(s["stems_ring"], len(want))
+        check(f"bus24: kind {kind}", got == want, f"{got[:9].hex()} vs {want[:9].hex()}")
+```
+
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-w24-red VS --only=w24`
-Expected: `w24: T1.wav is 24-bit stereo` FAIL (the header says 24 bits, the data is 16-bit samples).
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-w24-red bash -c '.venv/bin/python3 tools/verify/verify_stems_units.py track24 bus24; VS --only=w24'`
+Expected: both unit tests stop on a missing symbol; `w24: T1.wav is 24-bit stereo` FAIL (the header says 24 bits, the data is 16-bit samples).
 
 - [ ] **Step 3: The 24-bit paths**
 
@@ -2399,8 +2836,8 @@ with `.Ld_fnext:` placed before `addq.l #1,%d4` (the 16-bit loop falls through t
 
 - [ ] **Step 4: Assemble, disassemble, run**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-w24-green bash -c 'make bus REMIX=stems > /dev/null && a=$(m68k-elf-nm out/platform/runtime/runtime.elf | awk "/ stems_track24\$/{print \$1}") && scripts/disasm.sh emac 0x$a 200 | grep -E "mac|movclr|asrl|movew" | head -20 && env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --only=layout,w24,w16v24,all14w,all14,postfader'`
-Expected: the forms as intended (`asrl #6`, three `movew` stores per sample pair); every check PASS. Then `--long --only=overflow24`: PASS.
+First `verify_stems_units.py track24 bus24` until both pass. Then: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-w24-green bash -c 'make bus REMIX=stems > /dev/null && a=$(m68k-elf-nm out/platform/runtime/runtime.elf | awk "/ stems_track24\$/{print \$1}") && scripts/disasm.sh emac 0x$a 200 | grep -E "mac|movclr|asrl|movew" | head -20 && env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --only=layout,w24,w16v24,all14w'`
+Expected: the forms as intended (`asrl #6`, three `movew` stores per sample pair); every check PASS. `overflow24` runs in the big pass (`--long`).
 
 - [ ] **Step 5: Commit**
 
@@ -2482,10 +2919,56 @@ and after "turning every track off leaves the last one on":
 ```
 The take's file check at the end becomes `names == ["MAIN.WAV"] + [f"T{k}.WAV" for k in (1, 2, 4, 5, 6, 7, 8)]` (`take_files` sorts by name) and its label says "seven tracks and MAIN, T3's missing". Update the module docstring's list to match.
 
+And its unit test, in `verify_stems_units.py`:
+```python
+@unit
+def actions(rt):
+    """stems_source_action and stems_switch_action: each row flips its bit
+    and its label follows; the last source stays on; every row is locked
+    while recording (2) or saving (3); the status and PEAK rows do nothing."""
+    s = rt.s
+
+    def press(row, state=0):
+        rt.w32(s["stems_list"] + 0x0c, row)
+        rt.w32(s["stems_state"], state)
+        rt.call("stems_source_action" if 2 <= row <= 13 else "stems_switch_action")
+
+    def label(row):
+        return rt.rmem(rt.r32(s["stems_rows"] + 24 * row), 16).split(b"\0")[0].decode()
+
+    rt.w32(s["stems_tracks"], 0xff)
+    rt.w32(s["stems_fmt"], 6)
+    press(10)
+    check("actions: MAIN on", rt.r32(s["stems_tracks"]) == 0x1ff and label(10) == "MAIN [X]",
+          f"{rt.r32(s['stems_tracks']):#x} {label(10)}")
+    for row in range(2, 10):
+        press(row)
+    check("actions: every track off while MAIN is on",
+          rt.r32(s["stems_tracks"]) == 0x100 and label(9) == "T8 [ ]")
+    press(10)
+    check("actions: the last source stays on", rt.r32(s["stems_tracks"]) == 0x100 and label(10) == "MAIN [X]")
+    for state in (2, 3):
+        press(9, state)
+        press(16, state)
+    check("actions: locked while recording and saving",
+          rt.r32(s["stems_tracks"]) == 0x100 and rt.r32(s["stems_fmt"]) == 6)
+    press(16)
+    press(14)
+    press(15)
+    check("actions: 24 BIT on, both STEREO rows off, the labels follow",
+          rt.r32(s["stems_fmt"]) == 0b001
+          and [label(r) for r in (14, 15, 16)] == ["AB STEREO [ ]", "CD STEREO [ ]", "24 BIT [X]"],
+          f"{rt.r32(s['stems_fmt']):03b}")
+    press(1)
+    press(17)
+    check("actions: the status and PEAK rows change nothing",
+          rt.r32(s["stems_tracks"]) == 0x100 and rt.r32(s["stems_fmt"]) == 0b001)
+```
+
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-menu-red VS --static`
-Expected: the list and rows checks FAIL (11 rows).
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-menu-red bash -c '.venv/bin/python3 tools/verify/verify_stems_units.py actions; VS --static'`
+Expected: `actions` stops on `KeyError: 'stems_source_action'`; the list and rows checks FAIL (11 rows).
 
 - [ ] **Step 3: The rows and the actions**
 
@@ -2633,8 +3116,8 @@ In `manifest.py` the docstring's menu sentence lists the new rows.
 
 - [ ] **Step 4: Run, then commit**
 
-Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-menu-green bash -c 'env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --static && env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems_menu.py stems'` (tell Yves the log path: the menu gate takes about 35 minutes for both panels)
-Expected: every static check PASS; on both panels every menu check PASS, including the widths. A label that ends past the clip goes to its short form (`AB ST [X]`, `CD ST [X]`, `24B [X]`) in both `stems.s` and the checks, and the ledger records the measured edge.
+First `verify_stems_units.py actions` until it passes. In `verify_stems_menu.py`'s `main()`, the panels become `("mkii",) if "--mkii" in sys.argv else ("mkii", "mki")` (a development switch; the gate as declared runs both). Then: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-menu-green bash -c 'env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems.py stems --static && env STEMS_TEMPLATE="/home/yvez/stemrec5/out/projects/Ultimate FX 1.5.3" .venv/bin/python3 tools/verify/verify_stems_menu.py stems --mkii'` (tell Yves the log path: about 17 minutes). No audio check runs in this task: the menu changes only the rows and the two words they set, which Tasks 7-9 tested by poking.
+Expected: every static check PASS; every MKII menu check PASS, including the widths. The MKI panel runs in the big pass. A label that ends past the clip goes to its short form (`AB ST [X]`, `CD ST [X]`, `24B [X]`) in both `stems.s` and the checks, and the ledger records the measured edge.
 ```bash
 git add modules/stems/stems.s modules/stems/manifest.py tools/verify/verify_stems.py tools/verify/verify_stems_menu.py
 git commit -m "stems: the STEMS list's new rows -- MAIN, CUE, AB and CD as sources beside T1-T8, the last source kept; AB STEREO, CD STEREO and 24 BIT as switches; locked while a take records; every label inside the pane on both panels (gate 6)
@@ -2644,7 +3127,204 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 11: The cost, the whole gate, the records, STEMS3 (gates 7 and 8)
+### Task 10b: One boot per fixture (`--scenario`)
+
+**Files:**
+- Modify: `tools/verify/verify_stems.py` (`port()` split into `_port_parts` and `_port_result`; `port_group`; the prefetch in `main()`; check `same_as_alone`)
+
+**Interfaces:**
+- Consumes: the port's `--scenario "LOG ARGS..."` and `--scenario-jobs N` (`tools/emu/ot_emu/main.cpp`, upstream 29 Sep 2026: the port loads once and forks one child per scenario, each child's DSP memory unshared).
+- Produces: `_port_parts(s, frames, **kw) -> (pre, post, paths)`, `_port_result(paths, log)`, `port_group(s, runs, jobs=1) -> list`, `prefetch(s, checks, jobs=1)`, `PREFETCH`, `PRE_BOOT`; `port()` unchanged for every caller; `main()` takes `--alone` to boot every run on its own.
+
+- [ ] **Step 1: What a scenario may set**
+
+Read the scenario code in `tools/emu/ot_emu/main.cpp` (the parse near line 1382, the tokenizer above `unshareRanges`, the fork near line 2013): how a scenario's ARGS are split (whitespace only, or quotes too), and which options a child honours. Record in the ledger, for every option `port()` passes, whether it belongs to the boot (`pre`) or to a scenario (`post`), and whether a child writes its own `--mem-dump`, `--block-dump`, `--card-out`, `--audio-out` and `--coverage` files.
+Expected: the boot takes the image, the card, the set and project, `--load-ms`, `--dsp` and `--audio-in`; everything after the load is a scenario's, with its own output files; ARGS split on whitespace (no `port()` argument holds a space). A run with a boot option of its own (`--dsp-dirty`, `--ata-latency`) keeps its own boot. Where the code says otherwise, move the option between the two lists below and note it.
+
+- [ ] **Step 2: Write the failing check**
+
+```python
+def same_as_alone(s):
+    """Task 10b: a scenario of one boot gives what a boot of its own gives:
+    three runs on the one-THRU fixture (armed before play, 24 bits, a take
+    started while playing), each alone and then together; the state words
+    and every file of each take, byte for byte."""
+    runs = [dict(frames=260, stop_at=180, tag="sa1", fixture=FIXTURE_THRU1),
+            dict(frames=260, stop_at=180, tag="sa2", fixture=FIXTURE_THRU1,
+                 pokes_before=[(s["stems_fmt"] + 3, 0b111)]),
+            dict(frames=260, stop_at=180, tag="sa3", fixture=FIXTURE_THRU1, calls_before=(),
+                 calls=((58, s["stems_action"]),))]
+    alone = [port(s, **r) for r in runs]
+    together = port_group(s, [{**r, "tag": r["tag"] + "g"} for r in runs])
+    for r, a, g in zip(runs, alone, together):
+        fa, fg = take_files(a[2], FIXTURE_THRU1), take_files(g[2], FIXTURE_THRU1)
+        check(f"same_as_alone {r['tag']}: the state words and every file equal its own boot's",
+              a[3] == g[3] and fa == fg and len(fa) > 0, f"{a[3]} vs {g[3]}, {len(fa)} and {len(fg)} files")
+```
+Add it to the run list and to `--only`. Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-group-red VS --only=same_as_alone --alone`
+Expected: `NameError: name 'port_group' is not defined`.
+
+- [ ] **Step 3: `port()` in two parts, and the group**
+
+Replace `port()` with:
+```python
+PRE_BOOT = ("--dsp-dirty", "--ata-latency")   # boot options a scenario can't set: such a run boots alone
+PREFETCH = {}                                 # tag -> what port() returns, filled by prefetch()
+RECORDING = None                              # a list while prefetch() collects the runs checks will make
+
+
+class _Recorded(Exception):
+    pass
+
+
+def _port_parts(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
+                card_in=None, dump_blocks=True, stack=False, mems=(), calls_before=None, fixture=None,
+                pokes_before=(), mask=0x01, load_ms=20000, steps=(), midi_lines=()):
+    """port()'s command in two parts -- what the boot needs and what the run
+    sets after the load -- and the paths it writes. The body is port()'s
+    argument building as it stood, with `args` split in two."""
+    tag = f"{tag}{SUFFIX}"
+    before = (s["stems_action"],) if calls_before is None else tuple(calls_before)
+    fx = json.loads(pathlib.Path(fixture or FIXTURE).read_text())
+    pokes_before = ([(s["stems_tracks"] + 3, mask)] if mask is not None else []) + list(pokes_before)
+    work = pathlib.Path("out/stems_runs"); work.mkdir(parents=True, exist_ok=True)
+    paths = {"log": work / f"{tag}.log", "dump": work / f"{tag}.dump", "card": work / f"{tag}.img",
+             "mem": work / f"{tag}.mem", "ring": work / f"{tag}.ring", "ring_bytes": ring_bytes}
+    dumps = f"0x{s['stems_state']:x},24={paths['mem']}"
+    if ring_bytes:
+        dumps += f";0x{s['stems_ring']:x},{ring_bytes}={paths['ring']}"
+    if stack:
+        dumps += f";0x{s['stems_stack']:x},{STACK_SIZE}={work / (tag + '.stack')}"
+    for addr, length, name in mems:
+        dumps += f";0x{addr:x},{length}={work / (tag + '.' + name)}"
+    at = [f"{f}:0x{a:x}:0" for f, a in calls]
+    pk = list(pokes)
+    if stop_at is not None:
+        at.append(f"{stop_at}:0x{KEY_STOP:x}:0")
+        pk.append((STOP_GATE, 1))
+    pre = [str(EMU), "--image", str(IMAGE), "--card", card_in or fx["card"], "--set", fx["set"],
+           "--project", fx["project"], "--load-ms", str(load_ms), "--dsp"]
+    if fx.get("audio_in"):
+        pre += ["--audio-in", fx["audio_in"]]
+    post = ["--sequencer", "--internal-clock", "--frames", str(frames), "--main-level", "64",
+            "--pre-roll", str(PRE_ROLL), "--poke-trig", "2",
+            *(["--block-dump", str(paths["dump"])] if dump_blocks else []),
+            *(["--call-before-play", ",".join(f"0x{a:x}:0" for a in before)] if before else []),
+            "--card-out", str(paths["card"]), "--mem-dump", dumps, *extra]
+    if fx.get("midi"):
+        post += ["--midi", fx["midi"]]
+    if midi_lines:
+        mid = work / f"{tag}.midi.txt"
+        mid.write_text("".join(line + "\n" for line in midi_lines))
+        post += ["--midi", str(mid)]
+    if at:
+        post += ["--at", ",".join(at)]
+    if pk:
+        post += ["--poke", ";".join(f"0x{a:x}={b}" for a, b in pk)]
+    if pokes_before:
+        post += ["--poke-before-play", ";".join(f"0x{a:x}={b}" for a, b in pokes_before)]
+    for st in steps:
+        post += ["--step", st]
+    if "--dsp-peek" not in extra:
+        post += ["--dsp-peek", "0:X:0x3dd,50"]
+    return pre, post, paths
+
+
+def _port_result(paths, log):
+    paths["log"].write_text(log)
+    m = paths["mem"].read_bytes() if paths["mem"].exists() else b"\0" * 24
+    words = [int.from_bytes(m[i:i + 4], "big") for i in range(0, 24, 4)]
+    ring = paths["ring"].read_bytes() if paths["ring_bytes"] and paths["ring"].exists() else b""
+    return log, paths["dump"], paths["card"], words, ring
+
+
+def port(s, frames, **kw):
+    """One fixture run under the port (the arguments as _port_parts takes
+    them; the docstring of the old port() moves to _port_parts). Returns
+    (log, dump, card, state words, ring bytes). A result prefetch() already
+    made is returned as it is."""
+    if RECORDING is not None:
+        RECORDING.append({"frames": frames, **kw})
+        raise _Recorded
+    tag = f"{kw.get('tag', 'run')}{SUFFIX}"
+    if tag in PREFETCH:
+        return PREFETCH.pop(tag)
+    pre, post, paths = _port_parts(s, frames, **kw)
+    r = subprocess.run(pre + post, capture_output=True, text=True)
+    return _port_result(paths, r.stdout + r.stderr)
+
+
+def port_group(s, runs, jobs=1):
+    """Several runs on one fixture as scenarios of one boot. `runs` are
+    port()'s keyword arguments, `frames` among them; the result is what
+    port() returns for each, in order. Runs that don't share one boot, or
+    that set a boot option of their own, each boot alone instead."""
+    parts = [_port_parts(s, **r) for r in runs]
+    pre = parts[0][0]
+    if any(p[0] != pre for p in parts) or any(o in p[1] for p in parts for o in PRE_BOOT):
+        return [port(s, **r) for r in runs]
+    assert not any(" " in a for _, post, _ in parts for a in post), "a scenario's arguments split on spaces"
+    args = list(pre)
+    for _, post, paths in parts:
+        args += ["--scenario", " ".join([str(paths["log"])] + post)]
+    args += ["--scenario-jobs", str(jobs)]
+    r = subprocess.run(args, capture_output=True, text=True)
+    pathlib.Path("out/stems_runs/group.log").write_text(r.stdout + r.stderr)
+    return [_port_result(paths, paths["log"].read_text() if paths["log"].exists() else "")
+            for _, _, paths in parts]
+```
+and in `check()`, first line: `if RECORDING is not None: return` (a check's own lines don't count while its runs are collected).
+
+- [ ] **Step 4: Run the check**
+
+Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-group-green VS --only=same_as_alone --alone`
+Expected: three PASS; `out/stems_runs/group.log` shows one load (`load run ended`) for the three takes. A difference is a finding about the fork (the port's own, or an option Step 1 put in the wrong list): record it, never relax the check.
+
+- [ ] **Step 5: The prefetch**
+
+```python
+def prefetch(s, checks, jobs=1):
+    """Each check's first run, collected without running anything (port()
+    records its arguments and stops the check), then run as one boot per
+    fixture; each check then finds its first result waiting. A check that
+    can't be collected, a run with a boot option of its own, and every
+    later run of a check boot on their own as before."""
+    global RECORDING
+    import contextlib
+    import io
+    RECORDING = []
+    for c in checks:
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                c(s)
+        except Exception:
+            pass
+    runs, RECORDING = RECORDING, None
+    groups = {}
+    for r in runs:
+        pre, post, _ = _port_parts(s, **r)
+        if not any(o in post for o in PRE_BOOT):
+            groups.setdefault(tuple(pre), []).append(r)
+    for g in groups.values():
+        if len(g) > 1:
+            for r, res in zip(g, port_group(s, g, jobs)):
+                PREFETCH[f"{r.get('tag', 'run')}{SUFFIX}"] = res
+```
+In `main()`, just before the checks run, call `prefetch(s, chosen)` with the list of check functions it is about to run, unless `--alone` is among the arguments (`same_as_alone` itself is left out of `chosen`: it compares the two ways). Then run, on the committed tree: `VS --only=full,postfader,sources,mono` once with `--alone` and once without, and record both wall times and the number of `load run ended` lines in the ledger.
+Expected: the same PASS lines both ways; one load for the one-THRU checks and one for `full`'s fixture instead of four; the grouped run measurably shorter.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add tools/verify/verify_stems.py
+git commit -m "verify_stems: one boot per fixture -- the port's --scenario forks every run of a fixture from one loaded machine; a scenario's take and state words equal its own boot's, byte for byte (same_as_alone); --alone boots each run as before
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 11: The cost, the big pass, the records, STEMS3 (gates 7 and 8)
 
 **Files:**
 - Modify: `tools/verify/verify_stems.py` (check `cost`), `docs/firmware/STEM_REC.md` (18.9), `modules/stems/README.md`, `remixes/stems/README.md`, `modules/stems/manifest.py` (`doc`), `modules/stems/FLASH.md` (flash C), `CHANGELOG.md`
@@ -2709,7 +3389,16 @@ Add `cost` to the run list and `--only`.
 Run: `bash .superpowers/v2/sync-p5.sh && bash .superpowers/v2/wslrun-5 p5-cost VS --only=cost`
 Expected: PASS, with the two per-frame counts in the details; record both in the ledger beside piece 3's 743 (eight tracks, 16-bit). Above 5,000: STOP and bring the measured split (mirror, multiply, buses, packing) to Yves; the spec's fallback is the multiply in the writer task, at the cost of a ring twice as big per track frame.
 
-- [ ] **Step 3: The records**
+- [ ] **Step 3: The big pass**
+
+Commit everything first. Run on the committed tree: `bash .superpowers/v2/wslrun-5 p5-big make check-remix REMIX=stems`, then `bash .superpowers/v2/wslrun-5 p5-big-long VS --long` (tell Yves both log paths; the first about 60 minutes with Task 10b's grouping, the second about 40).
+Expected: `# exit 0` for both, every check PASS on both panels, `verify_set`'s SKIP only. Record the counts beside piece 3's 209.
+
+- [ ] **Step 4: Fixing what the big pass finds**
+
+For each FAIL: a ledger line (the check, its detail, the log); then a focused test that shows it (a unit test, or `VS --only=<that check>`), RED first; the fix; that test GREEN; a commit per fix. When every fix holds, run Step 3 again. Only a clean big pass goes on to Step 5.
+
+- [ ] **Step 5: The records**
 
 - `docs/firmware/STEM_REC.md` `### 18.9 The gates ✅`: each check of section 6 of the spec with its run, its log and its numbers; the two costs; what the port can't see (the card's speed, the null test on the unit, real inputs, the hardware risk of `X:0x4800` measured by `gainsdirty`).
 - `modules/stems/README.md`: "How to use it" with the new rows and the files; "Limits": the rates of spec section 3, the ring's cover, MASTER TRACK (18.8), the inputs recorded raw.
@@ -2723,12 +3412,11 @@ git commit -m "STEM REC piece 5 recorded: STEM_REC 18.9 (every gate, the costs, 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 4: The whole gate, and Sam's procedure**
+- [ ] **Step 6: Sam's procedure**
 
-Run on the committed tree: `bash .superpowers/v2/wslrun-5 p5-check make check-remix REMIX=stems` (about 90 minutes: tell Yves the log path).
-Expected: `# exit 0`, every check PASS, `verify_set`'s SKIP only. Then `make reach BASE=363861e` (the gates the diff reaches) and `STRESS_SOURCE=… STEMS_TEMPLATE=… make reach BASE=363861e RUN=1 KEEP=1 JOBS=1`; record each command and its result in the ledger, as the PR body will need them.
+`make reach BASE=363861e` (the gates the diff reaches) and `STRESS_SOURCE=… STEMS_TEMPLATE=… make reach BASE=363861e RUN=1 KEEP=1 JOBS=1`; record each command and its result in the ledger, as the PR body will need them.
 
-- [ ] **Step 5: STEMS3 and flash C**
+- [ ] **Step 7: STEMS3 and flash C**
 
 Run: `bash .superpowers/v2/wslrun-5 p5-image bash -c 'make image REMIX=stems BUILD=3 VERSION=STEMS3 && sha256sum out/*STEMS3* && mkdir -p /home/yvez/xcheck/stems3 && cp out/OCTATRACK_STEMS3.bin out/OCTATRACK_OS1.40C_STEMS3.syx /home/yvez/xcheck/stems3/'`
 Then add `## Flash C — stems: after the fader, the buses, 24 bits` at the top of `modules/stems/FLASH.md`, in flash B's form: the image (commit, sizes, hashes), every gate passed (the counts), and the tests in order:
