@@ -7361,6 +7361,15 @@ words first, its ramp starts from them. Falsifier: `verify_stems`'
 scratch: a peek at a run's end read the targets on the THRU fixture and
 other words on the one-track fixture. `X:0x3dd` is the reliable reading.
 
+Replayed through `tools/verify/stems_gain.py` (`validate`: 300 pages on
+the one-THRU fixture, T1's level stepped at frames 60, 61, 90 and 120),
+every page leaves the model's state equal to `X:0x3dd` in all eight
+track slots. T1 settles at `0x1f7be0`, not `0x1f7fe0`: the residual
+carries the earlier steps, and the model has it too. The MAIN gains at
+`Y:0x4a + 20j + k` equal the model's for j = 2 and 5 to 15; the words
+in `Y:0x80`-`0x9f` (most of j = 3 and 4) read `0x007ffc`, so other code
+reuses them by a run's end (`v5-p5-gain-val2.log`).
+
 ### 18.4 The table ✅
 
 `X:0x6c00` holds T[0..257], a quarter sine: T[1] = `0x00c910`,
