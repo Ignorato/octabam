@@ -116,8 +116,26 @@ def modules() -> dict[str, object]:
             continue
         seen_ids[m.menu.fx2_id] = m.key
         found[m.key] = m
+    bad = validate_keys(found)
+    if bad:
+        raise SystemExit("\n".join(bad))
     _cache = found
     return found
+
+
+def validate_keys(mods: dict[str, object]) -> list[str]:
+    """Every module key a manifest names -- in `conflicts`, `requires` or an
+    Override -- must be a module's. A typo in `requires` refuses every remix
+    carrying the module; one in `conflicts` would never refuse anything."""
+    bad = []
+    for m in mods.values():
+        named = [("conflicts", k) for k, _why in getattr(m, "conflicts", ())]
+        named += [("requires", k) for k in getattr(m, "requires", ())]
+        named += [("overrides", o.module) for o in getattr(m, "overrides", ())]
+        for field, key in named:
+            if key not in mods:
+                bad.append(f"{m.name}: {field} names {key!r}, which no module has")
+    return bad
 
 
 def by_key(key: str):

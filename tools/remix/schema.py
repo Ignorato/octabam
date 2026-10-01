@@ -405,8 +405,10 @@ class CavePatch:
     # the ratified reference and must match, or the build refuses. A source
     # may therefore hold absolute references to itself, and symbols it needs
     # from the build (the address of a data field, a clone's slot) arrive as
-    # `defsyms` -- `ld --defsym NAME=value` -- instead of placeholder words
-    # patched into hand-assembled hex (busscreen's MARKS, cc-map's VCOUNT).
+    # `defsyms` -- `--defsym NAME=value` to both the assembler (so `.ifdef`
+    # sees it) and the linker -- instead of placeholder words patched into
+    # hand-assembled hex (busscreen's MARKS, cc-map's VCOUNT). A name the
+    # source itself defines is refused.
     # An emit() that returns b"" for its bytes says "the source is the only
     # truth"; an emit() that still returns bytes takes the legacy path,
     # unlinked and unchecked, exactly as before. Without a toolchain the
@@ -420,6 +422,56 @@ class CavePatch:
     # address -- cc-map keeps its hand-patched legacy form for exactly this.
     # Checked on every build; a drift refuses.
     reference: object | None = None
+
+
+SHARED_WINDOW = (0x30000, 0x40000)      # Y:0x30000-0x3FFFF, both cores; X, Y and P alias
+HALF_BASE = {"A": 0x30000, "B": 0x38000}  # each payload's half of the shared window
+
+
+@dataclass(frozen=True)
+class DspRange:
+    """DSP data words a module writes, on every payload its section runs on.
+
+    `space` is "x" or "y". `start` is an absolute address, or with
+    `half_relative` an offset from the payload's own half of the shared
+    window (`HALF_BASE`: 0x30000 on A, 0x38000 on B -- the per-payload
+    `$30000` rewrite, schema.YBase). A range lies wholly inside the shared
+    window or wholly below it. Inside it, X, Y and P are one memory shared
+    by both cores, so the ledger compares the range against every module's
+    on either payload; below it, only against the same space on the same
+    payload (each core has its own).
+    """
+
+    space: str
+    start: int
+    length: int
+    what: str
+    half_relative: bool = False
+
+    def __post_init__(self):
+        if self.space not in ("x", "y"):
+            raise ValueError(f"DspRange({self.what!r}): space must be 'x' or 'y', not {self.space!r}")
+        if self.length <= 0:
+            raise ValueError(f"DspRange({self.what!r}): length must be positive")
+        if self.half_relative:
+            if not (0 <= self.start and self.start + self.length <= 0x8000):
+                raise ValueError(f"DspRange({self.what!r}): a half-relative range lies "
+                                 f"inside one half, 0x0000-0x7FFF")
+            return
+        lo, hi = SHARED_WINDOW
+        end = self.start + self.length
+        if self.start < 0 or end > hi or (self.start < lo < end):
+            raise ValueError(f"DspRange({self.what!r}): 0x{self.start:05x}..0x{end - 1:05x} "
+                             f"must lie wholly below 0x{lo:05x} or wholly in the shared window")
+
+    def resolve(self, payload: str) -> tuple[str, int, int]:
+        """(domain, start, end) on `payload`: domain "shared" in the window,
+        else "<payload>:<space>"."""
+        start = self.start + (HALF_BASE[payload] if self.half_relative else 0)
+        end = start + self.length
+        if start >= SHARED_WINDOW[0]:
+            return "shared", start, end
+        return f"{payload}:{self.space}", start, end
 
 
 @dataclass(frozen=True)
@@ -483,6 +535,14 @@ class Claims:
     # dTDs and packet buffers in the top 1 KB. The ledger refuses an overlap
     # between two modules; the stock extent is the author's census.
     sram: tuple[tuple[int, int, str], ...] = ()
+    # DSP DATA a module writes outside its r7 block and the regions the
+    # fields above cover (schema.DspRange): shared-window buffers, fixed X
+    # or Y tables. The ledger compares them with every other module's
+    # ranges, FX2 buffer region and core-private Y words, the bus scratch
+    # and stock's per-frame staging; with a project, verify_set holds every
+    # shared-window write the port measures against them
+    # (tools/remix/dsp_ranges.py).
+    dsp_ranges: tuple[DspRange, ...] = ()
 
     def __post_init__(self):
         if self.buffer_words is not None and not self.stock_instance_buffer:
@@ -618,14 +678,18 @@ class Linked:
     linked it: the build links a second copy at that address every time
     and compares, so a source or toolchain drift from the bytes the author
     ratified fails loudly, even though the unit the image carries is
-    linked somewhere else.
+    linked somewhere else. The oracle links with the declared `defsyms`
+    and this remix's `remix.inc`. A unit whose bytes depend on the remix
+    (its `include`) gives a callable instead: reference(modules) ->
+    (address, sha256), given the same modules `include` gets, naming the
+    variant the author ratified for that selection.
     """
 
     label: str
     source: str                          # .s, repo-relative
     cave_addr: int | None = None         # None = floating
     cpu: str = "5407"                    # m68k-elf-as -mcpu= for the ROM-cave form; a DRAM unit is assembled for the chip (54455)
-    reference: tuple[int, str] | None = None
+    reference: object | None = None      # (address, sha256), or a callable (see above)
     # DRAM: the unit is linked into octabam's PLATFORM RUNTIME -- one image
     # of every such unit in the remix, linked together (cross-unit symbols
     # resolve in the one link), packed, appended after the OS with the
@@ -642,6 +706,39 @@ class Linked:
     # on which modules are in the image (mode-defaults' view table) is
     # otherwise unlinkable: the source cannot know the remix.
     include: object | None = None
+    # (name, value) pairs passed to both `m68k-elf-as --defsym` (so
+    # `.ifdef NAME` sees them) and `m68k-elf-ld --defsym`, as
+    # CavePatch.defsyms. Each value resolves to a bridge's continuation
+    # target (Override.defsym) first, then a global of a unit or cave
+    # linked before this one, else the declared value; the `reference`
+    # oracle uses the declared values. A name the source itself defines is
+    # refused. DRAM units share one link, so two declaring one name must
+    # resolve it to one value.
+    defsyms: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self):
+        names = [n for n, _v in self.defsyms]
+        if len(names) != len(set(names)):
+            raise ValueError(f"Linked({self.label!r}): a defsym name declared twice")
+        if self.reference is not None and not callable(self.reference):
+            reference_shape(self.label, self.reference)
+
+    def reference_for(self, modules) -> tuple[int, str] | None:
+        """(address, sha256) of the author's build for this selection."""
+        if self.reference is None:
+            return None
+        ref = self.reference(modules) if callable(self.reference) else self.reference
+        return reference_shape(self.label, ref)
+
+
+def reference_shape(label: str, ref) -> tuple[int, str]:
+    """`ref` as (address, sha256), or ValueError naming the unit."""
+    if not (isinstance(ref, tuple) and len(ref) == 2 and isinstance(ref[0], int)
+            and isinstance(ref[1], str) and len(ref[1]) == 64
+            and all(c in "0123456789abcdef" for c in ref[1])):
+        raise ValueError(f"Linked({label!r}): reference must be (address, sha256 hex), "
+                         f"got {ref!r}")
+    return ref
 
 
 @dataclass(frozen=True)
@@ -677,18 +774,37 @@ class Detour:
 
 @dataclass(frozen=True)
 class TableGrow:
-    """A stock pointer array relocated into free space with entries
-    appended, and every reference to the old array repointed --
-    busscreen's menu-state-table move, generalised. `old` is the stock
-    array (`count` u32 entries), `symbols` the (unit, symbol) pairs to
-    append, `refs` the (address, expected old-array u32) sites rewritten
-    to the new address. The new array floats."""
+    """A stock pointer array relocated into free space with entries added,
+    and every reference to the old array repointed -- busscreen's
+    menu-state-table move, generalised. `old` is the stock array (`count`
+    u32 entries), `symbols` the (unit, symbol) pairs to add, `refs` the
+    (address, expected old-array u32) sites rewritten to the new address.
+    The new array floats.
+
+    `insert_at` places the symbols, as one block in declared order, before
+    stock entry `insert_at`; None (or `count`) appends them. An insert
+    renumbers every stock entry from `insert_at` up: stock code that
+    indexes the array by a constant, and an index stored in a Part or a
+    project, then names a different entry. The ledger refuses two modules
+    growing one stock array."""
 
     label: str
     old: int
     count: int
     symbols: tuple[tuple[str, str], ...]
     refs: tuple[tuple[int, int], ...]
+    insert_at: int | None = None
+
+    def __post_init__(self):
+        if self.insert_at is not None and not 0 <= self.insert_at <= self.count:
+            raise ValueError(f"TableGrow({self.label!r}): insert_at {self.insert_at} is "
+                             f"outside 0..{self.count}")
+
+    def entries(self, stock: list[int], added: list[int]) -> list[int]:
+        """The grown array: `stock` (the `count` entries read from the
+        image) with `added` (the resolved symbols) placed at `insert_at`."""
+        at = self.count if self.insert_at is None else self.insert_at
+        return list(stock[:at]) + list(added) + list(stock[at:])
 
 
 @dataclass(frozen=True)
@@ -698,6 +814,24 @@ class Poke:
     addr: int
     expect: bytes
     write: bytes
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class Keep:
+    """Bytes this module relies on staying stock, claimed without writing.
+
+    The ledger refuses any other module's write that overlaps them (a
+    poke, detour, hook, cave, table or symbol ref, emit poke or runtime
+    write); two modules keeping overlapping bytes compose when their
+    `expect` agrees. The build asserts `expect` against the stock image and
+    again against the finished image, so a write the ledger cannot see --
+    a floating cave or grown table landing here, a menu clone, an arena
+    literal -- is refused too. Writes made at run time by DRAM code are
+    not in the image and are not checked."""
+
+    addr: int
+    expect: bytes
     note: str = ""
 
 
@@ -795,10 +929,11 @@ class Override:
     protocol, and declares an Override per claim it replaces: `module` is
     the other module's key, `write` the name of its Runtime recipe write
     at that site (None for a Detour). The build then skips the overridden
-    detour or write and, when `defsym` is given, defines that symbol for
-    every unit and cave it links as the overridden claim's TARGET -- the
-    address a `jmp abs.l` write jumped to, or the pointer a 4-byte table
-    write installed -- so the stub knows where to continue. The ledger
+    detour or write and, when `defsym` is given, defines that symbol as the
+    overridden claim's TARGET -- the address a `jmp abs.l` write jumped
+    to, or the pointer a 4-byte table write installed -- so the stub knows
+    where to continue: for every DRAM unit (one link), and for each ROM
+    unit or cave that declares the name in its `defsyms`. The ledger
     treats the site as the bridge's; the overridden module must be in the
     remix, or the override is refused.
     """
@@ -838,6 +973,8 @@ class Module:
     tables: tuple[TableGrow, ...] = ()
     symbol_refs: tuple[SymbolRef, ...] = ()
     pokes: tuple[Poke, ...] = ()
+    # Stock bytes this module relies on and does not write (schema.Keep).
+    keeps: tuple[Keep, ...] = ()
     # Pages of the audio page arena this module's DRAM lives in
     # (schema.ArenaReserve). DRAM units need none: the platform reserves
     # its own (arena.PLATFORM_PAGES) whenever a remix carries any.
@@ -850,6 +987,11 @@ class Module:
     # stubs stand at those sites (scenes-p2-kits). The ledger refuses a
     # remix that selects it without them.
     requires: tuple[str, ...] = ()
+    # (module KEY, why) for modules this one must never share an image with
+    # although no byte overlaps -- two designs of one behaviour. The ledger
+    # refuses the pair by name with the reason; the registry refuses a key
+    # no module has.
+    conflicts: tuple[tuple[str, str], ...] = ()
     # Which slot carries the MODE select, and what each of its positions
     # renames and re-defaults. Empty for a single-engine module.
     mode_slot: int | None = None
@@ -883,7 +1025,41 @@ class Module:
     # An explicit gap must block pressure qualification, never report N/A.
     pressure_blocker: str = ""
 
+    def write_spans(self):
+        """Every fixed-address write this module declares, as (kind, start,
+        length, label): pinned caves (`len(pinned)`), cave hooks
+        (`len(hook_stock)`, at least the six-byte jsr), detours (the
+        larger of `expect` and `pad_to` or six), table refs and symbol refs
+        (four bytes), plain pokes. Floating caves and emit() pokes depend on
+        placement and are the ledger's to evaluate."""
+        for c in self.cf_patches:
+            if c.cave_addr is not None:
+                yield "cave", c.cave_addr, len(c.pinned), c.label
+            if c.hook_addr is not None:
+                yield "hook", c.hook_addr, max(len(c.hook_stock), 6), c.label
+        for d in self.detours:
+            yield "detour", d.site, max(len(d.expect), d.pad_to or 6), d.note or d.symbol
+        for t in self.tables:
+            for addr, _old in t.refs:
+                yield "table ref", addr, 4, t.label
+        for r in self.symbol_refs:
+            yield "symbol ref", r.addr, 4, f"{r.unit}:{r.symbol} ({r.note or hex(r.addr)})"
+        for p in self.pokes:
+            yield "poke", p.addr, len(p.expect), p.note or hex(p.addr)
+
     def __post_init__(self):
+        for need in self.requires:
+            if need in {k for k, _why in self.conflicts}:
+                raise ValueError(f"{self.name}: {need!r} is in both requires and conflicts")
+        for other, _why in self.conflicts:
+            if other == self.key:
+                raise ValueError(f"{self.name}: declares a conflict with itself")
+        for k in self.keeps:
+            for kind, start, length, label in self.write_spans():
+                if start < k.addr + len(k.expect) and k.addr < start + length:
+                    raise ValueError(
+                        f"{self.name}: keeps 0x{k.addr:08x} ({k.note or 'kept bytes'}) "
+                        f"and writes it ({kind} {label} at 0x{start:08x})")
         if self.params and len(self.params) != 12:
             raise ValueError(f"{self.name}: expected 12 param slots, "
                              f"got {len(self.params)}")

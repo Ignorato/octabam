@@ -607,6 +607,11 @@ def main():
         sys.exit("remix %r has colliding modules:\n  %s"
                  % (REMIX.name, "\n  ".join(_clashes)))
     img = bytearray(IMG.read_bytes())
+    # Kept bytes (schema.Keep) must hold stock before anything is written ...
+    from remix import keep as _keep
+    _kept = _keep.violations(img, BASE, [remix_modules()[k] for k in REMIX.modules])
+    if _kept:
+        sys.exit("not 1.40C where a module keeps stock bytes:\n  " + "\n  ".join(_kept))
 
     def rd32(a):
         return int.from_bytes(img[a - BASE:a - BASE + 4], "big")
@@ -873,12 +878,16 @@ def main():
     # module's descriptor (Character's ret_fmt.s did, 20 Sep 2026; no user now).
     _exports.update({"CLONE_" + re.sub(r"\W", "_", _k): _a for _k, _a in clone_addr.items()})
 
-    def _link(src, at, cpu, work, sections=(), defsyms=(), incdir=None):
+    def _link(src, at, cpu, work, sections=(), defsyms=(), incdir=None, asdefs=()):
         """Assemble `src` and link it at `at`; return (bytes, symbols,
         globals). `sections` = objcopy -j selection (empty = every alloc
         section). `defsyms` = (name, value) pairs for symbols defined by
         units already placed. `incdir` = an `.include` search directory
-        (a per-remix generated include, schema.Linked.include)."""
+        (a per-remix generated include, schema.Linked.include). `asdefs`
+        = the source's own declared defsyms, resolved: given to the
+        assembler too (`.ifdef` sees them), and refused if the source
+        defines one itself."""
+        from remix import platform_build
         work = pathlib.Path(work)
         work.mkdir(parents=True, exist_ok=True)
         o, e, b = work / "u.o", work / "u.elf", work / "u.bin"
@@ -886,11 +895,17 @@ def main():
               [f"--defsym={n}=0x{v:x}" for n, v in defsyms] + ["-o", e, o]
         _oc = ["m68k-elf-objcopy", "-O", "binary"] + \
               [x for s in sections for x in ("-j", s)] + [e, b]
-        _as = ["m68k-elf-as", f"-mcpu={cpu}"] + (["-I", incdir] if incdir else []) + ["-o", o, src]
+        _as = ["m68k-elf-as", f"-mcpu={cpu}"] + (["-I", incdir] if incdir else []) + \
+              platform_build.as_defsyms(asdefs) + ["-o", o, src]
         for _args in (_as, _ld, _oc):
             _r = subprocess.run([str(a) for a in _args], capture_output=True, text=True)
             if _r.returncode:
                 sys.exit(f"{src}: {_args[0]} failed\n{_r.stderr[-2000:]}")
+            if _args is _as and asdefs:
+                _own = platform_build.redefined(o, asdefs)
+                if _own:
+                    sys.exit(f"{src}: defines {', '.join(_own)}, which its defsyms also "
+                             f"declare; refusing")
         _nm = subprocess.run(["m68k-elf-nm", str(e)], capture_output=True, text=True).stdout
         _rows = [f for f in (l.split() for l in _nm.splitlines()) if len(f) == 3]
         return (pathlib.Path(b).read_bytes(),
@@ -969,6 +984,7 @@ def main():
         print("  tempo cave OFF (NOTEMPO=1) -- SYNC reads zeros")
         _plan = []
     _cave_top = cave_end            # caves start past the descriptor clones
+    _last_placed = "the descriptor clones"      # what ends at _cave_top
     _ovf_top = OVERFLOW_RUN
     # ROM-placed linked units go FIRST, so a cave may name a unit's global
     # (cc-map's CC_MODEDEF*, resolved to mode-defaults' cc_fx2 / cc_fx1 when
@@ -986,23 +1002,33 @@ def main():
         _work = pathlib.Path("out/linked") / _m.name / _u.label
         _work.mkdir(parents=True, exist_ok=True)
         _src = pathlib.Path(_u.source)
-        _defs = tuple(_exports.items())
+        # Linked.defsyms: a bridge's target, else an earlier global, else
+        # the declared value; the oracle links the declared values.
+        _decl = dict(_u.defsyms)
+        _mine = tuple((n, _defsym_ovr.get(n, _exports.get(n, v))) for n, v in _u.defsyms)
+        _rest = tuple((n, v) for n, v in _exports.items() if n not in _decl)
+        for _n, _v in _mine:
+            if _v != _decl[_n]:
+                print(f"  {_u.label}: {_n} -> 0x{_v:08x} (declared 0x{_decl[_n]:x})")
+        _sel = {_k: remix_modules()[_k] for _k in REMIX.modules}
         _inc = None
         if _u.include is not None:
             _inc = _work
-            (_work / "remix.inc").write_text(
-                _u.include({_k: remix_modules()[_k] for _k in REMIX.modules}))
-        if _u.reference is not None:
-            _ra, _rsha = _u.reference
+            (_work / "remix.inc").write_text(_u.include(_sel))
+        _uref = _u.reference_for(_sel)
+        if _uref is not None:
+            _ra, _rsha = _uref
             (_work / "ref").mkdir(exist_ok=True)
-            _rb, _, _ = _link(_src, _ra, _u.cpu, _work / "ref", defsyms=_defs, incdir=_inc)
+            _rb, _, _ = _link(_src, _ra, _u.cpu, _work / "ref", defsyms=tuple(_u.defsyms) + _rest,
+                              incdir=_inc, asdefs=tuple(_u.defsyms))
             _got = hashlib.sha256(_rb).hexdigest()
             if _got != _rsha:
                 sys.exit(f"{_m.key} {_u.label}: linked at the author's address "
                          f"0x{_ra:08x} it is {len(_rb)} B sha256 {_got}, not the "
                          f"author's {_rsha} -- source or toolchain drift; refusing")
         _at = _u.cave_addr if _u.cave_addr is not None else (_cave_top + 0x7f) & ~0x7f
-        _b, _syms, _glob = _link(_src, _at, _u.cpu, _work, defsyms=_defs, incdir=_inc)
+        _b, _syms, _glob = _link(_src, _at, _u.cpu, _work, defsyms=_mine + _rest, incdir=_inc,
+                                 asdefs=_mine)
         _exports.update(_glob)
         if _at >= SAFE_CAVE_CEIL:
             sys.exit(f"{_u.label}: linked at 0x{_at:08x}, above the safe ceiling")
@@ -1015,9 +1041,10 @@ def main():
         _sym[_u.label] = _syms
         print(f"  {_m.key}: {_u.label} {len(_b)} B linked at 0x{_at:08x}"
               f"{' (pinned)' if _u.cave_addr is not None else ''}"
-              f"{' -- matches the author\'s build at 0x%08x' % _u.reference[0] if _u.reference else ''}")
+              f"{' -- matches the author\'s build at 0x%08x' % _uref[0] if _uref else ''}")
         if _in:
-            _cave_top = max(_cave_top, _at + len(_b))
+            if _at + len(_b) > _cave_top:
+                _cave_top, _last_placed = _at + len(_b), f"{_m.key}'s {_u.label}"
         elif OVERFLOW_RUN <= _at < OVERFLOW_RUN_END:
             _ovf_top = max(_ovf_top, (_at + len(_b) + 3) & ~3)
 
@@ -1043,10 +1070,13 @@ def main():
                 f"free region.")
         _inside = CLONE_BASE <= _c.cave_addr < cave_limit
         if _inside:
-            assert _c.cave_addr >= _cave_top, \
-                f"{_c.label} overlaps what precedes it"
-            assert _c.cave_addr + len(_b) <= cave_limit, \
-                "past the stock zero run (or into the long chooser list)"
+            if _c.cave_addr < _cave_top:
+                sys.exit(f"{_c.label} at 0x{_c.cave_addr:08x} overlaps what precedes it "
+                         f"in the clone window ({_last_placed}, which ends at 0x{_cave_top:08x})")
+            if _c.cave_addr + len(_b) > cave_limit:
+                sys.exit(f"{_c.label}: {len(_b)} B at 0x{_c.cave_addr:08x} runs past the stock "
+                         f"zero run's limit 0x{cave_limit:08x} by "
+                         f"{_c.cave_addr + len(_b) - cave_limit} B (the long chooser list follows)")
         if _c.hook_addr is not None:
             got = bytes(img[_c.hook_addr - BASE:
                             _c.hook_addr - BASE + len(_c.hook_stock)])
@@ -1080,7 +1110,7 @@ def main():
             _lb, _lsyms, _lglob = _link(
                 _c.source, _c.cave_addr, _c.cpu,
                 pathlib.Path("out/linked/caves") / re.sub(r"\W+", "_", _c.label),
-                sections=(".text",), defsyms=_cdefs + tuple(_exports.items()))
+                sections=(".text",), defsyms=_cdefs + tuple(_exports.items()), asdefs=_cdefs)
             _exports.update(_lglob)
             _ref = (_c.reference(_c.cave_addr) if _c.reference is not None
                     else _c.pinned if _c.emit is None else _b)
@@ -1108,7 +1138,7 @@ def main():
                 _lb, _lsyms, _lglob = _link(
                     _c.source, _c.cave_addr, _c.cpu,
                     pathlib.Path("out/linked/caves") / re.sub(r"\W+", "_", _c.label),
-                    sections=(".text",), defsyms=_cdefs + tuple(_exports.items()))
+                    sections=(".text",), defsyms=_cdefs + tuple(_exports.items()), asdefs=_cdefs)
                 _exports.update(_lglob)
                 if _ref and _c.reference is not None:
                     _ref = _c.reference(_c.cave_addr)
@@ -1159,7 +1189,7 @@ def main():
         print(f"  {_c.label}: {len(_b)} bytes at 0x{_c.cave_addr:08x}"
               f"{_hook}{_c.report_note}")
         if _inside:
-            _cave_top = _c.cave_addr + len(_b)
+            _cave_top, _last_placed = _c.cave_addr + len(_b), _c.label
 
     # ==== 1c. loader-appended DRAM runtimes (schema.Runtime) =================
     # The third placement class: the OS image GROWS by an append (early
@@ -1273,22 +1303,43 @@ def main():
                 img[_ca - BASE + _o:_ca - BASE + _o + 4] = _pbase.to_bytes(4, "big")
             print(f"  arena: {_lbl}: {_want} arena-base literal(s) -> 0x{_pbase:08x}")
 
+    # DRAM units' Linked.defsyms, resolved as a ROM unit's; one link, so
+    # one value per name.
+    _dram_defs: dict[str, int] = {}
+    _unit_defs: dict[str, tuple] = {}
+    for _m, _u in _dram:
+        _mine = tuple((n, _defsym_ovr.get(n, _exports.get(n, v))) for n, v in _u.defsyms)
+        for _n, _v in _mine:
+            if _dram_defs.get(_n, _v) != _v:
+                sys.exit(f"{_m.key} {_u.label}: defsym {_n} = 0x{_v:x}, but another DRAM unit "
+                         f"has 0x{_dram_defs[_n]:x} -- the platform runtime is one link")
+            _dram_defs[_n] = _v
+        _unit_defs[_u.label] = _mine
+    _pdefs = {**_dram_defs, **_defsym_ovr}
+    _sel = {_k: remix_modules()[_k] for _k in REMIX.modules}
+
     if _dram or _payloads:
         from remix import platform_build
         _pappend, _psyms, _boot, _pnames = platform_build.build(
             [(_m.key, _u) for _m, _u in _dram], _payloads, pathlib.Path("out/platform"),
-            reserve=_reserve, defsyms=_defsym_ovr,
-            includes={_u.label: _u.include({_k: remix_modules()[_k] for _k in REMIX.modules})
-                      for _m, _u in _dram if _u.include is not None})
+            reserve=_reserve, defsyms=_pdefs, unit_defs=_unit_defs,
+            includes={_u.label: _u.include(_sel) for _m, _u in _dram if _u.include is not None})
         for _m, _u in _dram:
             _sym[_u.label] = _psyms          # detours name units; one table serves all
-            if _u.reference is not None:
+            _uref = _u.reference_for(_sel)
+            if _uref is not None:
                 # The author's oracle for a DRAM unit: linked alone at the
-                # author's own address, for the chip (the platform's ISA).
-                _ra, _rsha = _u.reference
+                # author's own address, for the chip (the platform's ISA),
+                # with the declared defsyms and this remix's remix.inc.
+                _ra, _rsha = _uref
                 _rw = pathlib.Path("out/platform/ref") / _u.label
                 _rw.mkdir(parents=True, exist_ok=True)
-                _rb, _, _ = _link(pathlib.Path(_u.source), _ra, "54455", _rw)
+                _rinc = None
+                if _u.include is not None:
+                    _rinc = _rw
+                    (_rw / "remix.inc").write_text(_u.include(_sel))
+                _rb, _, _ = _link(pathlib.Path(_u.source), _ra, "54455", _rw,
+                                  defsyms=tuple(_u.defsyms), incdir=_rinc, asdefs=tuple(_u.defsyms))
                 _got = hashlib.sha256(_rb).hexdigest()
                 if _got != _rsha:
                     sys.exit(f"{_m.key} {_u.label}: linked at the author's address "
@@ -1321,8 +1372,8 @@ def main():
 
     for _m, _t in [(remix_modules()[_k], _t) for _k in REMIX.modules
                    for _t in getattr(remix_modules()[_k], "tables", ())]:
-        _ents = [rd32(_t.old + i * 4) for i in range(_t.count)]
-        _ents += [_sym[u][s] for u, s in _t.symbols]
+        _ents = _t.entries([rd32(_t.old + i * 4) for i in range(_t.count)],
+                           [_sym[u][s] for u, s in _t.symbols])
         _blob = b"".join(v.to_bytes(4, "big") for v in _ents)
         _at = (_cave_top + 0x7f) & ~0x7f
         if any(img[_at - BASE:_at - BASE + len(_blob)]):
@@ -1335,7 +1386,8 @@ def main():
                          f"0x{rd32(_ra):08x}, not 0x{_old:08x}; refusing")
             wr32(_ra, _at)
         print(f"  {_m.key}: table {_t.label} {_t.count}+{len(_t.symbols)} entries at "
-              f"0x{_at:08x}, {len(_t.refs)} refs repointed")
+              f"0x{_at:08x}, {len(_t.refs)} refs repointed"
+              + (f", inserted at {_t.insert_at}" if _t.insert_at is not None else ""))
 
     for _m, _d in [(remix_modules()[_k], _d) for _k in REMIX.modules
                    for _d in getattr(remix_modules()[_k], "detours", ())]:
@@ -3020,13 +3072,17 @@ hostquit:
             print(f"    poke 0x{_aa:08x}: {_aexp.hex()} -> {_aw.hex()}  {_anote}")
         _pappend, _psyms2, _boot, _pnames = platform_build.build(
             [(_m.key, _u) for _m, _u in _dram], _payloads, pathlib.Path("out/platform"),
-            reserve=_reserve, defsyms=_defsym_ovr, preboot=_pres,
-            includes={_u.label: _u.include({_k: remix_modules()[_k] for _k in REMIX.modules})
-                      for _m, _u in _dram if _u.include is not None})
+            reserve=_reserve, defsyms=_pdefs, preboot=_pres, unit_defs=_unit_defs,
+            includes={_u.label: _u.include(_sel) for _m, _u in _dram if _u.include is not None})
         if _psyms2 != _psyms or _platform_at is None:
             sys.exit("analog bd: the platform runtime linked differently the second time")
         _appends[_platform_at] = (
             "octabam loader + payloads (" + ", ".join(_pnames) + ")", _pappend)
+
+    # ... and after everything is written but the appends.
+    _kept = _keep.violations(img, BASE, [remix_modules()[k] for k in REMIX.modules])
+    if _kept:
+        sys.exit("this build wrote bytes a module keeps stock:\n  " + "\n  ".join(_kept))
 
     _grown = ""
     for _aname, _append in _appends:

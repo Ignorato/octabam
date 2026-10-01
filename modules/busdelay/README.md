@@ -119,7 +119,10 @@ sample 16K away. The DEV hatch (payload A, beside the reverb's tank) keeps
 two 16K lines in the shared half; `tools/remix/geom.py` selects the
 `; @B` / `; @DEV` lines, and the two geometries render bit-identically at
 any TIME both can hold (`verify_twocore`). The ledger refuses a second
-owner of the private region on the same payload (`Claims.owns_fx2_buffers`).
+owner of the private region on the same payload (`Claims.owns_fx2_buffers`)
+and anything else declared in LineL's half (`Claims.dsp_ranges`,
+`Y:0x38000–0x3FFFF`); `verify_set` holds the port's shared-window write
+census to it.
 
 Stored TIME bytes from before (64 + knob·128) now mean twice the time:
 `ot_project.py stamp-slot <project> busdelay 1 20` puts every part's T1 at

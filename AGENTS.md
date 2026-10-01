@@ -14,8 +14,10 @@ carries one module for its gates).
 `make modules` lists them, with the compatibility matrix; `make remix`
 composes one. `docs/contributing/MODULES.md` is the contributor guide and
 `CONTRIBUTING.md` the contract. The build refuses to start when two selected
-modules claim the same FX2 id, cave, hook site, detour site, poke, runtime
-write, core-private Y word, or the per-core FX2 buffer region — by name.
+modules claim the same FX2 id, cave, hook or detour span, poke, table or
+symbol ref, runtime write, kept stock bytes, grown stock table,
+core-private Y word, per-core FX2 buffer region or DSP data range
+(`Claims.dsp_ranges`), or declare each other a conflict — by name.
 
 **Modules come in kinds, and the traps below say which they belong to.** A
 **ColdFire module** (linked GNU-as units, detours by symbol, a runtime in
@@ -447,8 +449,9 @@ family as "disassemble what you assemble".
 
 **IN THE SHIPPING REMIX, payload A's half of the shared window is FULLY
 OWNED** (a remix without the reverb frees it, which is how the insert
-collection has room to stack): BusVerb's
-relocated buffers at `0x30000`/`0x34000`, bus scratch at `0x36000-0x36157`
+collection has room to stack): stock's staging at `0x30000-0x30047`,
+BusVerb's buffers at `0x30800-0x357FF` (its `Claims.dsp_ranges`), bus
+scratch at `0x36000-0x36157`
 (grew 12 Aug for the DELAY send counts + reciprocal table, 17 Aug when the
 accumulators went to FOUR buffers for the cross-core race fix, and 22 Sep
 2026 to EIGHT buffers plus the chain at `0x360d8..`).

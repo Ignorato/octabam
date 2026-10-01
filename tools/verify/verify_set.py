@@ -33,6 +33,11 @@ the machine back:
             NOT FOUND for a sample the gate did not stage is a failure
             (a PART record with the wrong index byte logs "Couldn't read
             bank file ... ('PARSE ERROR')" here, as the unit does)
+  dsp data  every 256-word region of the shared window (Y:0x30000-0x3FFFF)
+            a core wrote meets a range that core may write: a module's
+            Claims.dsp_ranges on that payload, the bus scratch, stock's
+            staging (tools/remix/dsp_ranges.py; the port's --dsp-writes
+            census, non-zero writes only)
 
 SKIPs without a project (OT_PROJECT / --project), without the port
 (`make emu-cf`) or without the emulator .venv. What it cannot see: the
@@ -269,7 +274,8 @@ def main():
         # the stock emitter's per-channel cache and dirty bitmap, the engine's queue
         dumps.update(cccache=OUT / "cccache.bin", ccbits=OUT / "ccbits.bin", engq=OUT / "engq.bin")
     blocks, cmds, log, card_after = OUT / "port.dump", OUT / "port.cmds", OUT / "port.txt", OUT / "card_after.img"
-    if not (a.reuse and blocks.is_file() and all(p.is_file() for p in dumps.values())):
+    writes = OUT / "dsp_writes.txt"
+    if not (a.reuse and blocks.is_file() and writes.is_file() and all(p.is_file() for p in dumps.values())):
         card = OUT / "card.img"
         audio, mb = stage(pdir, part, a.set_name, a.name, OUT / "tree", a.image_mb, bank, card)
         print(f"  card: {mb} MB, {len(audio)} sample file(s) staged for bank {bank} part {part_no}")
@@ -277,6 +283,7 @@ def main():
                "--sequencer", "--internal-clock", "--frames", str(a.frames), "--load-ms", str(a.load_ms),
                "--dsp", "--main-level", "64", "--audio-in", "tones", "--poke-trig", "2", "--midi", str(midi),
                "--block-dump", str(blocks), "--cmd-log", str(cmds), "--card-out", str(card_after),
+               "--dsp-writes", str(writes),
                "--mem-dump", f"{LIVE_IDS:#x},16={dumps['ids']};{RECORDS:#x},512={dumps['records']};{LANES:#x},576={dumps['lanes']}"
                + (f";0x46c7bf2c,2048={dumps['cccache']};0x46c7d7d8,256={dumps['ccbits']};0x460d17ce,16={dumps['engq']}" if midi_out else ""),
                "--dsp-peek", "0:Y:36082,1;1:Y:36082,1;1:X:6229,1;1:X:6275,1;0:Y:36081,1;0:Y:9f4,1"] \
@@ -493,6 +500,13 @@ def main():
     n_nf = sum(1 for l in cd["log"].splitlines() if unstaged.search(l))
     check("card: the firmware's LOG has no error beyond the unstaged samples", not errors,
           f"{n_nf} FILE NOT FOUND" + ("; " + " | ".join(l.split(" ERROR ", 1)[1] for l in errors[:4]) if errors else ""))
+
+    # dsp data: the shared window's writes against the declared claims
+    from remix import dsp_ranges
+    census = dsp_ranges.parse_census(writes.read_text())
+    stray = dsp_ranges.violations(census, [registry.by_key(k) for k in mods])
+    check("dsp data: every shared-window write lies in a range its core may write", not stray,
+          "; ".join(stray[:4]) + (f" (+{len(stray) - 4} more)" if len(stray) > 4 else ""))
 
     print(f"verify_set: bank {bank} part {part_no} of {pdir.name} on {a.remix}: {fails} failure(s) -- {OUT}")
     return 1 if fails else 0

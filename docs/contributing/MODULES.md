@@ -775,6 +775,16 @@ that module's channel count; `modules/usb-audio-*`: the layout `.set` that
 picks which of three builds of one source the unit is). Works for
 both forms since 25 Sep 2026.
 
+`Linked.defsyms=(("NAME", value), ...)` (as `CavePatch.defsyms`) defines
+symbols the source uses and does not define, for both `m68k-elf-as` (so
+`.ifdef NAME` / `.ifndef NAME` gates see them) and `m68k-elf-ld`. Each
+value resolves to a bridge's continuation target (`Override.defsym`)
+first, then a global of a unit or cave linked earlier, else the declared
+value. A name the source itself defines (a label or `.equ`) is refused;
+two DRAM units resolving one name to different values are refused (one
+link). A switch that depends on another module being in the image is
+`include`'s job, not a defsym's.
+
 DRAM units are assembled for the chip itself (`-mcpu=54455`, ISA C):
 GNU ld refuses to link an ISA-C object beside ISA-B ones, and an ISA-C
 assembly of ISA-A/B text is the same bytes (refhash, 25 Sep 2026), so a
@@ -789,10 +799,16 @@ operand of a six-byte `lea abs.l,An`. `pad_to` nops the rest of a displaced
 span longer than six bytes; `target=` names a stock address instead of a
 symbol.
 
-A **`Poke`** is a plain asserted rewrite. **`TableGrow`** relocates a stock
-pointer array into free space with your symbols appended and repoints
-every reference. An **`Override`** says a bridge's claim at a site stands
-in for another module's (`modules/scenes-kits/`).
+A **`Poke`** is a plain asserted rewrite. A **`Keep`** names stock bytes
+your module relies on and does not write: the ledger refuses any other
+module's write there, and the build asserts them on the stock image and
+again on the finished one. **`TableGrow`** relocates a stock pointer array
+into free space with your symbols appended (or, with `insert_at=i`,
+inserted before stock entry `i` -- which renumbers every entry after it)
+and repoints every reference. An **`Override`** says a bridge's claim at a
+site stands in for another module's (`modules/scenes-kits/`).
+`conflicts=(("<KEY>", "<why>"),)` names a module yours must never share an
+image with although no claim overlaps.
 
 **`Runtime`** is the third form: a recipe (`firmware.json`) the build
 compiles, packs, identity-checks and appends as its own payload of the
@@ -802,7 +818,10 @@ loader (Octakit's shape). One per image.
 
 A port is done when the author's build and this repo's build agree byte for byte.
 `Linked.reference=(addr, sha256)` re-links the unit at the author's own
-address on every build and compares; a `Runtime` re-derives every identity
+address on every build, with its declared `defsyms` and this remix's
+`remix.inc`, and compares; a unit whose bytes depend on the remix gives
+`reference=fn` instead, `fn(modules) -> (addr, sha256)` naming the variant
+the author ratified for that selection; a `Runtime` re-derives every identity
 its recipe pins. `tools/verify/verify_midiscenes.py` and
 `verify_octakit.py` are the standing proofs. When you port someone else's
 mod, run their build against the shared stock image first and use its
@@ -819,8 +838,8 @@ etiquette.
 
 ### What the gates prove, and what they cannot
 
-`make check REMIX=<name>` builds, runs the ledger (detour sites, pokes,
-runtime writes and caves checked against every other selected module;
+`make check REMIX=<name>` builds, runs the ledger (every fixed-address
+write span, kept bytes and caves checked against every other selected module;
 `make modules` prints the pairwise matrix), the oracle, and boots the image
 under the ColdFire port (`tools/verify/verify_dram_boot.py`): the loader
 ran once, its hash gates passed, the boot reached the RTOS handoff, and
@@ -1080,10 +1099,16 @@ own.
 ## Resource claims and the ledger
 
 `tools/remix/ledger.py` refuses a build whose selected modules collide, and
-names both: FX2 ids, cave ranges, hook sites, detour sites, pokes, runtime
-writes, DSP hook sites per payload (`DspSection.hooks`), on-chip SRAM
-windows (`Claims.sram`), core-private Y words, the per-core FX2 instance
-buffer region, appended runtimes (one per image), arena reserves.
+names both: FX2 ids, declared conflicts (`Module.conflicts`), every
+fixed-address write by the bytes it covers (cave ranges, cave hooks and
+detours over their whole span, pokes, table and symbol refs, emit pokes,
+runtime writes), kept stock bytes (`Module.keeps`), two modules growing
+one stock array, DSP hook sites per payload (`DspSection.hooks`), on-chip
+SRAM windows (`Claims.sram`), core-private Y words, the per-core FX2
+instance buffer region, DSP data ranges (`Claims.dsp_ranges`), appended
+runtimes (one per image), arena reserves. A key named in `conflicts`,
+`requires` or an `Override` must be a module's, or the registry refuses
+to load.
 
 Core-private Y is derived by scanning your source for `y:>$09xx`. Low Y is
 per core, not per instance. Declare `Claims(reserved_private_y=…)` only for
@@ -1095,9 +1120,20 @@ hardcoded there, so two such modules on one core overwrite each other. A scan ca
 static scanning could not locate the stock reverbs' buffers, which compute
 their bases at runtime (`docs/firmware/DSP.md` section 7c).
 
-The shared 64K window (`Y:0x30000`-`0x3FFFF`) is not checked: the servers'
-buffer extents there are not established well enough to write down.
-`AGENTS.md`'s ownership notes are the map: payload A's half is fully owned.
+DSP data a module writes outside its r7 block and the regions above is
+declared as `Claims(dsp_ranges=(DspRange(space, start, length, what), ...))`.
+`half_relative=True` makes `start` an offset from the payload's half of the
+shared window (0x30000 on A, 0x38000 on B). In the shared 64K window
+(`Y:0x30000`-`0x3FFFF`) X, Y and P alias and both cores see it, so a range
+there is checked against every module's on either payload, against the bus
+scratch `0x36000-0x361FF` unless the module is a bus participant, and
+against stock's per-frame staging `0x30000-0x30047`; below it, against the
+same space on the same payload, the FX2 buffer region and core-private Y
+words. With a project, `verify_set` records the port's write census
+(`--dsp-writes`) and refuses a shared-window region a core wrote that no
+range it may write meets (`tools/remix/dsp_ranges.py`). The census counts
+non-zero writes per 256 words, so a clear of zeroed memory is invisible to
+it: a range a warm-up clears is declared from the source.
 
 `python3 tools/remix/selftest.py` (in `make check`) proves the ledger
 catches each collision it claims to.

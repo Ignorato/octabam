@@ -62,10 +62,18 @@ MODULE = Module(
         #      write=bytes.fromhex("6012"), note="bne -> bra: never re-apply"),
     ),
 
+    # Stock bytes your code relies on and does not write: the ledger refuses
+    # another module's write there and the build asserts them.
+    # keeps=(Keep(0x400xxxxx, expect=bytes.fromhex("48780064"),
+    #             note="the restore's pea 0x64"),),
+
     # A stock pointer array that needs more entries: TableGrow relocates it
-    # into free space with your symbols appended and repoints every
-    # reference.
+    # into free space with your symbols appended (or inserted before stock
+    # entry `insert_at`) and repoints every reference.
     # tables=(TableGrow("...", old=0x400xxxxx, count=16,
     #                   symbols=(("unit", "my_row"),),
-    #                   refs=((0x400xxxxx, 0x400xxxxx),)),),
+    #                   refs=((0x400xxxxx, 0x400xxxxx),), insert_at=None),),
+
+    # A module this one must never share an image with although no claim
+    # overlaps: conflicts=(("OTHER KEY", "why"),),
 )

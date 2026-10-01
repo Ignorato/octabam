@@ -56,7 +56,7 @@ on which remix is selected, so a run over several remixes does it once:
 
 | step | proves |
 |---|---|
-| `tools/remix/selftest.py` | the ledger refuses every collision it claims to (FX2 id, cave, hook, detour, poke, runtime write, private Y word, FX2 buffer region, DSP hook site), every shipped remix is clean, the placer fills non-contiguous runs in both payloads |
+| `tools/remix/selftest.py` | the ledger refuses every collision it claims to (FX2 id, declared conflict, cave, hook and detour span, poke, table and symbol ref, runtime write, kept bytes, grown table, private Y word, FX2 buffer region, DSP data range, DSP hook site), every shipped remix is clean, the placer fills non-contiguous runs in both payloads |
 | `verify_slots` | no dead store in BusVerb's per-instance state block |
 | `verify_replaces --static` | a declared replacement names a real stock effect and carries its id (the registry only) |
 | `verify_docs` | the README module table and the remix index match the manifests and selections (`make docs`); every remix has a README |
