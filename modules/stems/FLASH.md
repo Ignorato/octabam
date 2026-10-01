@@ -2,6 +2,9 @@
 
 ## Flash B — `stems`: the stock effects back (staged 1 Oct 2026)
 
+**Flashed 1 Oct 2026** on Yves's MKII: no error, and FX2's page shows the
+stock effects. Results in `docs/firmware/STEM_REC.md` section 17.2.
+
 STEMS1 ran on Yves's MKII on 30 Sep 2026 (`docs/firmware/STEM_REC.md`
 section 17.1). STEMS2 is the same STEM REC code on the stock effects: the
 remix now lists the 14 stock effects, so FX2's chooser is stock's and PLATE,

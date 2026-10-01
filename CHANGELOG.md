@@ -63,6 +63,12 @@ Docs
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
 
+## STEMS2 — 1 Oct 2026 (`stems` at `d646e83`)
+
+On the unit (Yves's MKII): it flashed, and FX2's page shows the stock
+effects again (`docs/firmware/STEM_REC.md` section 17.2).
+- The remix: STEM REC on the 14 stock effects; STEM REC's code is STEMS1's.
+
 ## STEMS1 — 30 Sep 2026 (`stems` at `4ec1276`)
 
 On the unit (Yves's MKII): T1 alone, then T1-T8 for about two minutes, every

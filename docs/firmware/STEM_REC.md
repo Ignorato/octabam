@@ -7241,3 +7241,13 @@ instrument read any of them.
 - **Not reported:** the checklist's tests 4 to 7 (the card's speed at 1, 2,
   4 and 8 tracks, a static machine playing, the level against the stock
   recorder, and stock saves).
+
+### 17.2 Flash B: STEMS2 on Yves's MKII, 1 Oct 2026
+
+The image is STEMS2 (`BUILD=2`, from `d646e83`; `modules/stems/FLASH.md`):
+STEMS1's STEM REC on the 14 stock effects. Yves reported it from the unit.
+
+- ✅ **The flash.** It flashed with no error.
+- ✅ **FX2's page displays correctly.** The stock effects are back in it.
+- **Not yet reported:** the checklist's first-boot audio (test 1), the
+  level three ways (test 3), and flash A's open tests (test 4).

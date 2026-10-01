@@ -12,7 +12,7 @@ from remix.schema import Proof, Remix
 
 REMIX = Remix(
     name="stems",
-    family="mods", proof=Proof.HARDWARE, proof_note="Yves's MKII, 30 Sep 2026 (STEMS1)",
+    family="mods", proof=Proof.HARDWARE, proof_note="Yves's MKII, 1 Oct 2026 (STEMS2)",
     doc="STEM REC on the stock effects: every track to the card while the sequencer plays, streamed.",
     modules=("STEM REC",
              "FILTER", "EQUALIZER", "DJ EQ", "PHASER", "FLANGER", "CHORUS",
