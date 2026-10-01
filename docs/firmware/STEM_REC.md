@@ -7254,6 +7254,6 @@ STEMS1's STEM REC on the 14 stock effects. Yves reported it from the unit.
   loaded the saved project before trying a new one.
 - ✅ **A stem doesn't follow the fader.** T1 recorded while its LEVEL moved:
   the take doesn't change level. That's the tap of section 9: post-FX,
-  before the fader. Piece 5 changes it
-  (`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`).
+  before the fader. Piece 5 changes it (its spec is on branch
+  `stem-rec-p5`).
 - **Not yet reported:** the card's speed (test 4).
