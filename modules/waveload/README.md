@@ -54,6 +54,23 @@ the remix (CF METER's `remix.inc` sets `WAVE_LOAD`); above 12 it renders 12.
   instructions a frame mean, 3,956 max, under the port
   (`modules/synth/upstream/synth/README.md`); a 4-voice wave engine is
   8,963 mean, 10,339 worst.
+- ✅ Under the port (`waveload-port`, `OCTABAM89_setgate` with T8 FX2 =
+  CF METER, BURN = K, 12,000 frames, `verify_set.py`, decoded with
+  `cfmeter.py --dump`, 2 Oct 2026):
+
+  | K | isr mean | every verify_set gate |
+  |---|---|---|
+  | 0 | 154.4 µs | pass |
+  | 1 | 210.5 µs | pass |
+  | 2 | 266.2 µs | pass |
+  | 4 | — | T1's chain silent, the readout's sync lost |
+
+  +56.1 and +55.9 µs per engine; at K = 4 the interrupt (154.4 + 4 × 56)
+  passes the 362.8 µs period. The port prices every instruction at one
+  step of its own clock, so these are the port's µs, not the unit's: one
+  4-voice engine is 36 % of what stock's frame interrupt executes in this
+  project, and that ratio is what carries to the unit only if both run
+  at the same cycles per instruction.
 - ✅ CF METER's image and build report for remix `cfmeter` are
   byte-identical with and without the `WAVE_LOAD` change (built both ways,
   2 Oct 2026).
