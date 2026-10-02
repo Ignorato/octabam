@@ -1,7 +1,7 @@
 # `plocks-p2` — PLOCKS P2
 
 Parameter locks on page 2 of FX1 and FX2. `Kind.CF_PATCH`: one DRAM
-unit, 50 detours, nothing on the DSP. Requires SCENES P2.
+unit, 52 detours, nothing on the DSP. Requires SCENES P2.
 
 ## Use
 
@@ -27,6 +27,10 @@ SCENES P2 KITS), project OCTABAM89_setgate:
   measured by hand the same day).
 - SAVE PROJECT writes `p2lk03.work` and `p2lk03.strd` with the lock; a
   second boot of that card has it in the table after the load.
+- Power cycles (`ot_emu --cs1-in` with the first run's CS1, `--no-post`
+  for the firmware's own power-up load): a saved lock, a lock never saved,
+  and a saved lock with the CS1 copy cleared (read from `p2lk03.work`)
+  are each in the table after the power-up.
 
 ## On the unit
 
@@ -34,13 +38,10 @@ Not flashed.
 
 ## Open
 
-- The current bank between saves. Stock's background save skips the
-  bank being played (`0x40084d8c`: the dirty mask less the current bank)
-  and keeps it in RAM and a battery-backed copy (`0x1001614e`) until a
-  bank change or SAVE PROJECT. This module has no battery-backed copy:
-  page-2 locks edited in the current bank since the last save are lost on
-  a power cut, where stock's page-1 locks may survive. Whether stock
-  restores the current bank from that copy at boot is not measured.
+- The CS1 copy holds 10,229 locks; a current bank with more has no copy
+  and a power cut loses its page-2 locks back to the last save.
+- That CS1 keeps its contents over a power-off on the unit is read from
+  stock's use of it (the power-up check and restore), not measured here.
 - Bank reload and project reload (the `.strd` → `.work` copies) are
   hooked and not exercised by the gate.
 - The dial draw with trigs held (SCENES P2's dial hooks call `plk_dial`;
@@ -88,6 +89,18 @@ trig. Nothing carries page 2, and every byte of the pattern data is used.
   follows in the same shape (two 6,144 B mirrors for the buffers). memcpy
   itself runs before the loader has placed the runtime, so its call sites
   are hooked, not its entry.
+- **The current bank over a power-off.** Stock keeps the current bank in
+  CS1 (`0x10000000`): `0x4000faf0` copies a bank there, edits write
+  through, and at power-up `0x40025770` checks it, `0x4000fbb4` restores
+  the bank and the firmware's load reads only the other banks from the
+  card. The page-2 locks of that bank follow, sparse, in CS1's unused top
+  (`0x100f8600..0x100ffe00`): 16 bytes of header (`P2NV` written last,
+  bank, count, sum) and 3 bytes a lock (step index << 7 | value). The copy
+  is rewritten when stock copies a bank into CS1 and after every change
+  to that bank; at power-up it is applied after stock's restore, or, with
+  no valid copy, that bank's `p2lkNN.work` is read at the first bank load.
+  Before 2 Oct 2026 nothing read the current bank at power-up, so its
+  page-2 locks came back empty even when saved (measured under the port).
 - **Files**: `p2lkNN.work` / `p2lkNN.strd` beside `bankNN.*` in the
   project directory, 16 bytes of header (`P2LK`, version 1, bank, length)
   and the bank's 98,304 B. Written where stock writes `bankNN.work`
@@ -98,6 +111,6 @@ trig. Nothing carries page 2, and every byte of the pattern data is used.
 
 ## Octakit
 
-Built and gated beside Octakit in bottleservice: none of the 50 sites is
+Built and gated beside Octakit in bottleservice: none of the 52 sites is
 one her recipe writes. The masked bank loader `0x400905d4` (her entry
 wrapper) is reached through its call sites.

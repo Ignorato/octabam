@@ -95,7 +95,26 @@ Format strings in the image: `%s/bank%02d.work`, `%s/bank%02d.strd`,
 | `0x4008ded0` | bank deserialize | 📖 (Octakit) |
 | `0x40016864` / `0x40016564` / `0x400166b8` / `0x4001660c` / `0x4001677c` | buffered open / read / write / seek / close; `0x40025230` the project directory | 📖 (Octakit) |
 
-## 6. Octakit's patches on these paths
+## 6. The current bank over a power-off
+
+CS1 (`0x10000000`, 1 MB decode) holds the current bank: `0x4000faf0(bank)`
+copies its patterns (`0x1001614e`), Parts (`0x100a4ece`), saved Parts and
+marks there (callers `0x40025b00`, `0x400622b2`, `0x400907c4`); edits
+write through (the lock editor's second store). At power-up `0x40025770`
+range-checks the UI state there (`0x4000fda8`) and validates every Part
+copy and pattern, then `0x4000fbb4(bank)` copies the bank back
+(`0x40025808`), and the firmware's own load reads every other bank from
+the card (`0x400905d4` with mask `0xfffb`, from `0x40084d60`). ✅ Under the
+port with `--cs1-in` and `--no-post`, 2 Oct 2026: a page-1 lock recorded
+and never saved is in the pattern after the power-up. That CS1 keeps its
+contents with the power off on the unit is inferred from this use.
+
+Stock references nothing in `0x100f859c..0x100fff00`; its whole-CS1
+initialise (`0x4001fa76`) writes it. `0x100fff00..` is a checksummed
+settings record (`0x4001f218..`); `0x10000004..0x10016143` is filled by a
+file read at load.
+
+## 7. Octakit's patches on these paths
 
 Octakit (`modules/octakit`) patches the call sites of every routine in
 section 5, the entry of `0x400905d4`, `0x4002b9b0`'s entry, `0x40026eb0`
