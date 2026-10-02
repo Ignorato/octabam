@@ -184,6 +184,17 @@ state things you might assume:
   `none|HP|LP|BOTH`: the words come from the renderer, not the
   descriptor). Every enabled slot needs an explicit in-range default
   (`verify_menu`).
+- **Raw descriptor words**, for a drawing no `Formatter` names:
+  `Param(formatter_word=, widget_word=, word_12a=)` write `P+0x0ca`,
+  `P+0x0fa` and `P+0x12a` for that slot. Each is `None` (the donor's word),
+  an int (a stock address or a literal, `0` included), or a `(unit, symbol)`
+  pair naming a `Linked` or `CavePatch` label in the remix and a symbol it
+  exports. They are written after every other descriptor pass, so they are
+  what the slot holds; a slot with any of them takes no `formatter` and no
+  `FormatterReg`. `verify_menu` checks such a slot against the declaration
+  (int exact, symbol non-zero and not the donor's, `None` the donor's) in
+  place of the count rule. The stock formatters and widgets are in
+  `docs/firmware/PARAM_PAGES.md` section 7.
 - **A `name` of `None` inherits the donor's; `b""` blanks it.** Write the
   name explicitly even when the donor has it: the harness reads these.
 - A labelled select wider than five values normally falls back to a plain
@@ -448,13 +459,23 @@ dsp=DspSection(
   spelled `$30000`, and the literal is censused.
 - **`ptable`**: a tuple of words the build parks in the stock curve bank
   (X:0x4840) and points the source's `$fab1e0` literal at.
+- **`subst`**: per-payload text substitutions applied to the source before
+  the build's own rewrites, `{"A": {"@SBASE@": "$33e00"}, "B": {"@SBASE@":
+  "$3be00"}}` (`dsp_asm` has no `equ` and no expressions). Both payloads name
+  the same keys and exactly the section's `payloads`; every key must occur in
+  the source; a key or value overlapping a marker the build substitutes
+  (`schema.SUBST_RESERVED`: `$30000`, `$facade`, `$fab1e0`, `; ROTLATCH`, ...)
+  is refused. The build report prints each `SUBST` line.
 - **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
   label)`). The two stock words at `site` become `jsr >label` after
   placement, the build asserting them first; the section replays the
-  displaced instruction. A section with hooks and no `MenuEntry` is placed
-  on `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject
-  at the frame head, P:0x88, on payload A. The ledger refuses two sections
-  on one site of one payload.
+  displaced instruction. `site` is one P address for every payload, or
+  `{"A": addr, "B": addr}` naming exactly the section's payloads when the
+  stock code sits at a different address on each (the payloads are linked
+  separately). A section with hooks and no `MenuEntry` is placed on
+  `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject at
+  the frame head, P:0x88, on payload A. The ledger refuses two hooks whose
+  two-word spans share a word on one payload.
 - **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
 
 ### Rules for DSP code, each established on hardware
@@ -692,13 +713,23 @@ dsp=DspSection(
   spelled `$30000`, and the literal is censused.
 - **`ptable`**: a tuple of words the build parks in the stock curve bank
   (X:0x4840) and points the source's `$fab1e0` literal at.
+- **`subst`**: per-payload text substitutions applied to the source before
+  the build's own rewrites, `{"A": {"@SBASE@": "$33e00"}, "B": {"@SBASE@":
+  "$3be00"}}` (`dsp_asm` has no `equ` and no expressions). Both payloads name
+  the same keys and exactly the section's `payloads`; every key must occur in
+  the source; a key or value overlapping a marker the build substitutes
+  (`schema.SUBST_RESERVED`: `$30000`, `$facade`, `$fab1e0`, `; ROTLATCH`, ...)
+  is refused. The build report prints each `SUBST` line.
 - **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
   label)`). The two stock words at `site` become `jsr >label` after
   placement, the build asserting them first; the section replays the
-  displaced instruction. A section with hooks and no `MenuEntry` is placed
-  on `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject
-  at the frame head, P:0x88, on payload A. The ledger refuses two sections
-  on one site of one payload.
+  displaced instruction. `site` is one P address for every payload, or
+  `{"A": addr, "B": addr}` naming exactly the section's payloads when the
+  stock code sits at a different address on each (the payloads are linked
+  separately). A section with hooks and no `MenuEntry` is placed on
+  `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject at
+  the frame head, P:0x88, on payload A. The ledger refuses two hooks whose
+  two-word spans share a word on one payload.
 - **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
 
 ### Porting a published algorithm
@@ -1185,6 +1216,15 @@ descriptors are not), so both FX1 tables are repointed in place, the
 id-indexed lookup and the row the encoder scrolls; the build asserts they
 hold stock's descriptor first. Replacing an FX2-only effect (DELAY, the
 reverbs) leaves FX1 alone.
+
+`MenuEntry(..., replaces="COMPRESSOR", stock_dsp=True)` keeps the stock
+effect's own DSP: the id's two dispatch words stay the pristine image's
+(stock init/proc, on FX1 and FX2), the descriptor is cloned as usual, and
+the module's `DspSection` is code reached through its `DspHook`s only (at
+least one is required; no `init`/`proc` labels). It is placed on its
+`payloads` like a hooked section. `verify_replaces` checks the dispatch
+words; `make cycles` does not price the section, since stock's code runs
+there. A `stock_dsp` module cannot be the remix's fallback.
 
 If your replacement allocates a buffer, size it for FX1: an FX2 slot is
 16,384 words, an FX1 slot 3,072 (measured, `X:0x255` in both payloads).
