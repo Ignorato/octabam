@@ -35,11 +35,32 @@ if __package__ in (None, ""):
 from remix.schema import HALF_BASE, SHARED_WINDOW, BusRole  # noqa: E402
 
 BUS_SCRATCH = (0x36000, 0x36200)        # the send bus's accumulators and mailboxes, both cores
-STOCK_STAGING = (0x30000, 0x30048)      # payload A's per-frame parameter staging (CHIP.md section 3)
-# Payload B's per-frame exchange: P:0x172-0x179 copies y:$1f0.. (16 words)
-# to X:0x38000 every frame. Stock's own write, so the census allows it on
-# core 1; it is inside BusDelay's LineL, which the ledger does not refuse.
-STOCK_EXCHANGE_B = (0x38000, 0x38010)
+# Payload A's per-frame parameter staging (CHIP.md section 3). Payload B
+# reads X:0x30000-0x30045 and writes X:0x30044 (P:0x8f-0x133).
+STOCK_STAGING = (0x30000, 0x30048)
+# Stock's per-frame mailbox from core 1 to core 0, 16 words: payload B
+# writes it (P:0x4b-0x56 in its frame loop, P:0x172-0x179 at frame end) and
+# payload A reads it into y:$280 (P:0x9b-0xa2). Every build places it here
+# (STOCK_PATCHES): stock's 0x38000 is the first word of payload B's half,
+# BusDelay's LineL and the base of a stock effect on bank track 3 FX2.
+# Nothing else writes 0x37F00-0x37F0F: it is inside only payload A's
+# bank-track-4 FX2 slot (0x34000-0x37FFF), where no stock effect writes
+# past +0x3DA2.
+STOCK_MAILBOX = (0x37F00, 0x37F10)
+# The stock operands every build rewrites: (payload, P word, stock, written,
+# what). Payload B's boot zero loop (P:0x40-0x4a, `do b` over y:(r4)+ and
+# y:(r5)+) is widened to start 0x100 words lower on both pointers, so it
+# zeroes Y:0x3F00-0xBFFF and 0x37F00-0x3FFFF -- the mailbox included --
+# before B's first mailbox read at P:0x4b, as stock's loop zeroes 0x38000.
+# No payload loads a Y record into 0x3F00-0xBFFF.
+STOCK_PATCHES = (
+    ("A", 0x9c, 0x038000, 0x037F00, "mailbox read base (move #>$38000,r0)"),
+    ("B", 0x4c, 0x038000, 0x037F00, "mailbox exchange base (move #>$38000,r1)"),
+    ("B", 0x173, 0x038000, 0x037F00, "mailbox frame-end base (move #>$38000,r0)"),
+    ("B", 0x41, 0x008000, 0x008100, "boot zero count (move #>$8000,b)"),
+    ("B", 0x43, 0x004000, 0x003F00, "boot zero private base (move #>$4000,r4)"),
+    ("B", 0x45, 0x038000, 0x037F00, "boot zero shared base (move #>$38000,r5)"),
+)
 FX2_REGION = (0x4000, 0xC000)
 REGION = 0x100                          # the census granularity, in words
 CORE_PAYLOAD = {0: "A", 1: "B"}
@@ -95,14 +116,16 @@ def owners(selected) -> list[Owned]:
         out.append(Owned("the bus", f"scratch ({', '.join(members)})", "shared", *BUS_SCRATCH,
                          bus_shared=True))
     out.append(Owned("stock", "per-frame parameter staging", "shared", *STOCK_STAGING))
+    out.append(Owned("stock", "core 1 -> core 0 mailbox", "shared", *STOCK_MAILBOX))
     return out
 
 
 def allowed(selected) -> dict[int, list[tuple[int, int, str]]]:
     """Per core, the (start, end, whose) shared-window ranges it may write."""
     out: dict[int, list[tuple[int, int, str]]] = {0: [], 1: []}
-    out[0].append((*STOCK_STAGING, "stock staging"))
-    out[1].append((*STOCK_EXCHANGE_B, "stock exchange"))
+    for core in out:
+        out[core].append((*STOCK_STAGING, "stock staging"))
+    out[1].append((*STOCK_MAILBOX, "stock mailbox"))
     if any(bus_member(m) for m in selected):
         for core in out:
             out[core].append((*BUS_SCRATCH, "bus scratch"))

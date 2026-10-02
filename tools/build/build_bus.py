@@ -39,7 +39,7 @@ from remix import stock as stock_mod  # noqa: E402
 import label_fmt  # noqa: E402
 import mode_names  # noqa: E402
 import wide_dial  # noqa: E402
-from remix import ledger  # noqa: E402
+from remix import dsp_ranges, ledger  # noqa: E402
 
 OUT = pathlib.Path("out/mainos_bus.bin")
 DIS = pathlib.Path("vendor/dsp56300/build/source/dsp_host/dsp_asm")
@@ -2146,6 +2146,17 @@ mkgo:""",
             return rec[0]
 
         print(f"-- payload {tag} --")
+
+        # Stock's core 1 -> core 0 mailbox is at X:0x37F00 in every image,
+        # and payload B's boot zero loop covers it
+        # (remix.dsp_ranges.STOCK_PATCHES).
+        for _pt, _pa, _stock, _new, _what in dsp_ranges.STOCK_PATCHES:
+            if _pt != tag:
+                continue
+            if rdw_p_at(_pa) != _stock:
+                sys.exit(f"payload {tag}: P:0x{_pa:05x} ({_what}) holds "
+                         f"{rdw_p_at(_pa):06x}, not stock {_stock:06x}; refusing")
+            wrw_p_at(_pa, _new)
 
         # ---- the servers pack into the HARVESTED effects' code -----------
         # The donor region is not a place, it is a choice: the thirteen DSP

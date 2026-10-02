@@ -46,8 +46,9 @@ Checked, and how it knows:
                      and P alias there), against every other module's
                      ranges, FX2 buffer region and core-private Y words,
                      the bus scratch Y:0x36000-0x361FF (bus participants
-                     share it by protocol) and stock's per-frame staging
-                     Y:0x30000-0x30047. verify_set measures the shared
+                     share it by protocol), stock's per-frame staging
+                     0x30000-0x30047 and stock's core 1 -> core 0 mailbox
+                     0x37F00-0x37F0F. verify_set measures the shared
                      window's writes under the port and holds them to these
                      (tools/remix/dsp_ranges.py).
   appended runtimes  one per image (the end of the OS and the loader's
@@ -578,8 +579,8 @@ def check(selected) -> list[str]:
     # Each declared range against everything else that owns DSP data words:
     # other modules' declared ranges, FX2 buffer regions and core-private Y
     # words (on the payloads both run on), the bus scratch (when the remix
-    # has a bus and the module is not part of it) and stock's per-frame
-    # staging. The derived claims are checked among themselves above.
+    # has a bus and the module is not part of it), stock's per-frame staging
+    # and its mailbox. The derived claims are checked among themselves above.
     from remix import dsp_ranges
     owned = dsp_ranges.owners(selected)
     for i, a in enumerate(owned):

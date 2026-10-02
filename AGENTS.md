@@ -450,7 +450,9 @@ family as "disassemble what you assemble".
 **IN THE SHIPPING REMIX, payload A's half of the shared window is FULLY
 OWNED** (a remix without the reverb frees it, which is how the insert
 collection has room to stack): stock's staging at `0x30000-0x30047`,
-BusVerb's buffers at `0x30800-0x357FF` (its `Claims.dsp_ranges`), bus
+BusVerb's buffers at `0x30800-0x357FF` (its `Claims.dsp_ranges`),
+stock's core 1 -> core 0 mailbox at `0x37F00-0x37F0F` (moved there from
+`0x38000` by every build; `docs/firmware/DSP.md` section 5), bus
 scratch at `0x36000-0x36157`
 (grew 12 Aug for the DELAY send counts + reciprocal table, 17 Aug when the
 accumulators went to FOUR buffers for the cross-core race fix, and 22 Sep

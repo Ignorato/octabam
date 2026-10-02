@@ -26,7 +26,7 @@ class ResolveTests(unittest.TestCase):
 
 
 class CensusTests(unittest.TestCase):
-    CENSUS = ("cmd 1 tx 0 0X30000:72 0Y30800:5 0Y36000:9 1X38000:16\n"
+    CENSUS = ("cmd 1 tx 0 0X30000:72 0Y30800:5 0Y36000:9 1X37f00:16\n"
               "cmd 2 tx 1 0Y30800:3 0Y31000:2 1Y3a000:4\n")
 
     def test_parse_sums_frames(self):
@@ -48,6 +48,11 @@ class CensusTests(unittest.TestCase):
         self.assertEqual(len(got), 2)
         self.assertIn("core 0 (A) wrote Y:0x31000-0x310ff (2 non-zero writes)", got[0])
         self.assertIn("core 1 (B) wrote Y:0x3a000-0x3a0ff", got[1])
+
+    def test_stock_mailbox_is_core_1s_at_0x37f00_only(self):
+        self.assertEqual(dsp_ranges.violations(dsp_ranges.parse_census("cmd 1 tx 0 1X37f00:16\n"), []), [])
+        self.assertEqual(len(dsp_ranges.violations(dsp_ranges.parse_census("cmd 1 tx 0 1X38000:16\n"), [])), 1)
+        self.assertEqual(len(dsp_ranges.violations(dsp_ranges.parse_census("cmd 1 tx 0 0X37f00:16\n"), [])), 1)
 
     def test_scratch_needs_a_bus(self):
         c = dsp_ranges.parse_census("cmd 1 tx 0 0Y36000:9\n")

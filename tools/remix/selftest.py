@@ -192,6 +192,8 @@ CASES = [
     ("a non-bus module's range in the bus scratch",
      [_ranged("alpha", DspRange("y", 0x36100, 0x10, "state")),
       _ranged("beta", role=BusRole.CLIENT)], "DSP data"),
+    ("a range over stock's core 1 -> core 0 mailbox",
+     [_ranged("alpha", DspRange("y", 0x7e00, 0x200, "line", half_relative=True))], "DSP data"),
     ("a range on another module's core-private Y word",
      [_ranged("alpha", DspRange("y", 0x0900, 0x10, "state")),
       _effect("beta", 0x1e, reserved=(0x0905,))], "DSP data"),
