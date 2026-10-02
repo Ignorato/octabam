@@ -1543,9 +1543,14 @@ namespace ot
 		// constantly, so the step count is dominated by the OTHER tasks
 		// running underneath it, not by the call itself.
 		m_machine.countPc(g_loadHandler);
-		out.posted = callAsMain(g_postLoad, {g_projectName}, d0, 200000000);
-		if(!out.posted)
-			out.postWhy = m_why;
+		if(m_noPost)
+			out.postWhy = "not posted (--no-post)";
+		else
+		{
+			out.posted = callAsMain(g_postLoad, {g_projectName}, d0, 200000000);
+			if(!out.posted)
+				out.postWhy = m_why;
+		}
 		// Run until the engine has taken LOAD PROJECT and is next at its
 		// queue receive with nothing queued (g_engineQueue), within the
 		// budget. The handler
@@ -1559,7 +1564,7 @@ namespace ot
 			out.stop = runToPc(g_engineReceive, left);
 			if(out.stop != Stop::Gate)
 				break;
-			if(m_machine.pcCount() > 0 && m_machine.peek32(g_engineQueue + 4) == 0)
+			if((m_noPost || m_machine.pcCount() > 0) && m_machine.peek32(g_engineQueue + 4) == 0)
 			{
 				out.handledMs = (m_sample - postSample) / g_sampleHz * 1000.0;
 				out.handledInstr = m_machine.instructions();

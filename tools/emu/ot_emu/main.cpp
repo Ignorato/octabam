@@ -1247,6 +1247,8 @@ int main(int _argc, char** _argv)
 	double dspLazy = ot::DspPair::g_lazyDefault;	// O16c: --dsp-lazy N -- the pair's ticks are booked and replayed in chunks of up to N DSP instructions at the ColdFire's touch points (0 = the per-tick path); the default in every mode, byte-identical to it
 	std::string pokeAfterLoad;	// O9c: "addr=byte;addr=byte" written after the load, before the frames (drive an apply the load skips)
 	std::string pokeEarly;		// the same, written before --call (the current-track byte 0x80000000 an editor call reads)
+	bool noPost = false;		// 2 Oct 2026: --no-post: no LOAD PROJECT post; the firmware's own power-up load (with --cs1-in, a power cycle)
+	std::string cs1In;		// 2 Oct 2026: --cs1-in FILE: CS1 (0x10000000, the memory that keeps the current bank over a power-off) holds FILE's bytes before the boot; with a --mem-dump of 0x10000000,0x100000 from an earlier run it is a power cycle
 	std::string callSpec;		// "addr[,arg,...]": a firmware routine called AS MAIN after the load (a menu action the port has no panel for -- Part Reload, 14 Sep 2026)
 	int callAt = -1;			// with --sequencer: make that call this many frames AFTER the transport start instead (a panel edit while playing: the transport start re-applies the part over the live lane, so an edit made before it is gone)
 	std::vector<std::string> scenarios;	// 29 Sep 2026: --scenario "LOG ARGS...", repeatable: after the load the port forks one child per scenario; each starts from the same loaded machine (the snapshot is the fork), writes its stdout to LOG and takes ARGS as its post-load options (--sequencer, --frames, --step, --poke, --call, --midi, --mem-dump, --live-script, ...). One LOAD PROJECT instead of one per run
@@ -1337,6 +1339,8 @@ int main(int _argc, char** _argv)
 		else if(a == "--card-out" && i + 1 < _argc)	cardOut = _argv[++i];
 		else if(a == "--poke" && i + 1 < _argc)		pokeAfterLoad = _argv[++i];
 		else if(a == "--poke-early" && i + 1 < _argc)	pokeEarly = _argv[++i];
+		else if(a == "--cs1-in" && i + 1 < _argc)	cs1In = _argv[++i];
+		else if(a == "--no-post")				noPost = true;
 		else if(a == "--call" && i + 1 < _argc)		callSpec = _argv[++i];
 		else if(a == "--call-at" && i + 1 < _argc)	callAt = std::atoi(_argv[++i]);
 		else if(a == "--step" && i + 1 < _argc)		steps.emplace_back(_argv[++i]);
@@ -1362,6 +1366,8 @@ int main(int _argc, char** _argv)
 			"              [--interactive] [--rtc host|off|EPOCH] [--dsp-rt]    the line protocol on stdin/stdout (tools/panel)\n"
 			"              [--step FRAME:call|poke|dump:SPEC]...              a gate's whole script on one boot: FRAME '-' = after the load, N = N frames after the transport start\n"
 			"              [--live-script FILE]                              '<emulated ms> key|enc|pot|midi|quit ...' lines, transport stopped, no wall-clock pacing\n"
+			"              [--no-post]                                       no LOAD PROJECT post: the firmware's own power-up load\n"
+			"              [--cs1-in FILE]                                   CS1 (0x10000000) from FILE before the boot: a power cycle with an earlier --mem-dump 0x10000000,0x100000\n"
 			"              [--scenario \"LOG ARGS...\"]... [--scenario-jobs N]  load once, fork one child per scenario (stdout to LOG, ARGS its post-load options)\n");
 			return false;
 		}
@@ -1416,6 +1422,18 @@ int main(int _argc, char** _argv)
 	std::printf("image      : %s (%zu bytes) at %#x\n", image.c_str(), img.size(), ot::Machine::g_imageBase);
 
 	ot::Machine m(img);
+	if(!cs1In.empty())
+	{
+		const auto cs1 = readFile(cs1In);
+		if(cs1.empty() || cs1.size() > 0x100000)
+		{
+			std::printf("--cs1-in %s: empty or larger than CS1's 1 MB\n", cs1In.c_str());
+			return 1;
+		}
+		for(size_t i = 0; i < cs1.size(); ++i)
+			m.write8(0x10000000u + static_cast<uint32_t>(i), cs1[i]);
+		std::printf("cs1        : %zu bytes from %s at 0x10000000 (before the boot)\n", cs1.size(), cs1In.c_str());
+	}
 	// --mkii: boot as an MKII. The boot probe at 0x4001f8a0 sets the MKII flag
 	// 0x46c8d18c, then ten times drives GPIO 0xfc0a403a bit 5 high and low
 	// and reads bit 6: on the MKII the two pins are tied, bit 6 follows bit 5
@@ -1818,6 +1836,7 @@ int main(int _argc, char** _argv)
 				m.setPeriphTrace(!periphTrace.empty());
 				if(ataLatency >= 0.0)
 					rtos.setAtaLatency(ataLatency);
+				rtos.setNoPost(noPost);
 				load = rtos.loadProjectLive(setName, projectName, loadMs, 3000.0, namesEarly);
 				const auto& r = load;
 				m.setPeriphTrace(false);
@@ -1839,7 +1858,10 @@ int main(int _argc, char** _argv)
 						  "after the BANK= parse -- RTOS_FORK.md section 7)" : "");
 				{
 					static const char* const g_loadStop[] = {"GATE", "TIME", "FAULT", "ILLEGAL"};
-					if(r.stop == ot::Rtos::Stop::Gate)
+					if(r.stop == ot::Rtos::Stop::Gate && noPost)
+						std::printf("             load run ended: the power-up load done, the engine idle %.1f ms after the names (instruction %llu)\n",
+							r.handledMs, static_cast<unsigned long long>(r.handledInstr));
+					else if(r.stop == ot::Rtos::Stop::Gate)
 						std::printf("             load run ended: LOAD PROJECT handled, %.1f ms after the post (instruction %llu)\n",
 							r.handledMs, static_cast<unsigned long long>(r.handledInstr));
 					else

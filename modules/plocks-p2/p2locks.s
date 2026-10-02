@@ -72,6 +72,11 @@
         .set    PROJDIR,    0x40025230      | (0, 0) -> the project directory
         .set    SPRINTF,    0x40013a08
         .set    IOB_LEN,    0x1000
+        .set    NV,         0x100f8600      | CS1: the current bank's page 2, sparse (see nv_save)
+        .set    NV_END,     0x100ffe00
+        .set    NV_MAX,     (NV_END-NV-16)/3
+        .set    NV_MAGIC,   0x50324e56      | 'P2NV'
+        .set    CUR_BANK,   0x80000002
 
         .text
         .globl  plk_edit, plk_fill_slide, plk_fill_plain, plk_s2p_a, plk_s2p_b
@@ -79,6 +84,7 @@
         .globl  plk_place, plk_clrlocks, plk_clrtrack, plk_tcopy, plk_tpaste, plk_memcpy
         .globl  plk_saveb, plk_fcopy, plk_loadall, plk_loadmask, plk_newproj, plk_newproj2
         .globl  plk_d5_ef9a, plk_d5_f02e, plk_d5_f2a6, plk_d5_f33a
+        .globl  plk_tocs1, plk_fromcs1
 
 | ---------------------------------------------------------------- record ----
 | Entry state of 0x400508e4: sp@(4) = slot (0..5), sp@(8) = ticks.
@@ -235,6 +241,8 @@ pe_c1:  addl    %a0@(0x9a),%d1
 pe_c2:  moveb   %d0,%a1@
         bra.w   pe_loop
 pe_commit:
+        bsr.w   ui_bank                | CS1, when it holds this bank
+        bsr.w   nv_touch
         | the stock lock editor's marks: the bank edited, the project
         | edited, the dirty call; the slot's redraw
         movel   DBPTR,%d0
@@ -544,6 +552,8 @@ plk_place:
         mulu.l  %d3,%d0
         addal   %d0,%a0
         bsr.w   fill12
+        bsr.w   ui_bank
+        bsr.w   nv_touch
         movem.l %sp@,%d0-%d2/%a0
         lea     %sp@(16),%sp
         jmp     0x40060374
@@ -563,6 +573,8 @@ plk_clrlocks:
         moveq   #0,%d3
         movew   %sp@(38),%d3           | mask
         bsr.w   clr_mask               | a0 track, d1 first step, d3 mask
+        bsr.w   ui_bank
+        bsr.w   nv_touch
         movem.l %sp@,%d0-%d3/%a0
         lea     %sp@(20),%sp
         lea     %sp@(-44),%sp          | the displaced prologue, then on
@@ -613,6 +625,8 @@ ct_loop:
         movel   %d0,%a0@+
         subql   #1,%d1
         bne.s   ct_loop
+        bsr.w   ui_bank
+        bsr.w   nv_touch
         movem.l %sp@,%d0-%d2/%a0
         lea     %sp@(16),%sp
 ct_out: lea     %sp@(-60),%sp          | the displaced prologue, then on
@@ -703,6 +717,8 @@ plk_tpaste:
         moveal  %a0,%a1
         moveal  %sp@+,%a0
         bsr.w   copy12
+        bsr.w   ui_bank
+        bsr.w   nv_touch
 tp_out: movem.l %sp@,%d0-%d2/%a0-%a1
         lea     %sp@(20),%sp
         jmp     0x4002cb58
@@ -717,22 +733,22 @@ plk_memcpy:
         cmpil   #TRK_STRIDE,%d0
         beq.s   mc_go
         cmpil   #PTN_STRIDE,%d0
-        bne.s   mc_stock
+        bne.w   mc_stock
 mc_go:  movel   INITED,%d1
         cmpil   #MAGIC,%d1
-        bne.s   mc_stock
+        bne.w   mc_stock
         lea     %sp@(-12),%sp
         movem.l %d2-%d4,%sp@
         movel   %sp@(12+8),%d0         | src
         bsr.w   p2loc                  | -> a0, d1 = track
         movel   %a0,%d0
-        beq.s   mc_out
+        beq.w   mc_out
         movel   %d1,%d3
         moveal  %a0,%a1
         movel   %sp@(12+4),%d0         | dst
         bsr.w   p2loc
         movel   %a0,%d0
-        beq.s   mc_out
+        beq.w   mc_out
         movel   %a0,%d4                | a0 = src, a1 = dst
         moveal  %a1,%a0
         moveal  %d4,%a1
@@ -741,12 +757,25 @@ mc_go:  movel   INITED,%d1
         cmpil   #PTN_STRIDE,%d0
         bne.s   mc_copy
         orl     %d1,%d3                | ... or a whole pattern, both at track 0
-        bne.s   mc_out
+        bne.w   mc_out
         lsll    #3,%d2
 mc_copy:
         movel   %a0@+,%a1@+
         subql   #1,%d2
         bne.s   mc_copy
+        movel   %a1,%d0                | a1 is past the copy: its start's bank
+        subil   #TRACK_B,%d0
+        movel   %sp@(12+12),%d1
+        cmpil   #PTN_STRIDE,%d1
+        bne.s   mc_t
+        subil   #7*TRACK_B,%d0
+mc_t:   subil   #STORE,%d0
+        bcs.s   mc_out
+        movel   #BANK_B,%d1
+        divu.l  %d1,%d0
+        cmpil   #16,%d0
+        bcc.s   mc_out
+        bsr.w   nv_touch               | CS1, when it holds that bank
 mc_out: movem.l %sp@,%d2-%d4
         lea     %sp@(12),%sp
 mc_stock:
@@ -1119,10 +1148,13 @@ plk_loadall:
         movem.l %d2-%d3,%sp@
         bsr.w   plk_init
         bsr.w   reset_pipe
+        clrl    NEEDFILE
         moveq   #0,%d3
 la_loop:
         movel   %d3,%d0
         bsr.w   read_bank
+        movel   %d3,%d0
+        bsr.w   nv_touch
         addql   #1,%d3
         cmpil   #16,%d3
         bne.s   la_loop
@@ -1143,10 +1175,21 @@ lm_loop:
         beq.s   lm_next
         movel   %d4,%d0
         bsr.w   read_bank
+        movel   %d4,%d0
+        bsr.w   nv_touch
 lm_next:
         addql   #1,%d4
         cmpil   #16,%d4
         bne.s   lm_loop
+        movel   NEEDFILE,%d0           | the power-up's CS1 bank with no copy there
+        beq.s   lm_done
+        clrl    NEEDFILE
+        subql   #1,%d0
+        movel   %d0,%d4
+        bsr.w   read_bank
+        movel   %d4,%d0
+        bsr.w   nv_save
+lm_done:
         movem.l %sp@,%d2-%d4
         lea     %sp@(12),%sp
         jmp     0x400905d4
@@ -1208,6 +1251,186 @@ FMT_WORK:
 MODE_R: .asciz  "r"
 MODE_W: .asciz  "w"
         .align  4
+
+| ------------------------------------------------------------------- CS1 ----
+| Stock keeps the current bank in CS1 (0x10000000), the memory that holds
+| over a power-off: 0x4000faf0(bank) copies a bank there, every edit writes
+| through, and at power-up 0x40025770 checks it and 0x4000fbb4(bank) puts
+| it back; the firmware's own load then reads every OTHER bank from the
+| card (mask 0xfffb at 0x40084d60). The page-2 locks of that bank go the
+| same way, sparse, in CS1's unused top (0x100f8600..0x100ffe00, no stock
+| reference and no module's; written only by stock's whole-CS1 init):
+|   +0 'P2NV' (written last), +4 bank, +8 count, +12 sum of the entries,
+|   +16 entries of 3 bytes: step index (bank-relative, 17 bits) << 7 | value.
+| More locks than fit (NV_MAX), or an interrupted write, leave no magic:
+| the power-up then reads that bank's p2lkNN.work instead.
+
+| nv_save: d0 = bank -> CS1 holds its page 2. Keeps every register.
+nv_save:
+        lea     %sp@(-32),%sp
+        movem.l %d0-%d5/%a0-%a1,%sp@
+        lea     NV,%a1
+        clrl    %a1@                   | no magic while it is written
+        movel   %d0,NVBANK
+        movel   %d0,%a1@(4)
+        bsr.w   bank_at                | a0 = the bank's page 2
+        lea     %a1@(16),%a1
+        moveq   #0,%d2                 | count
+        moveq   #0,%d3                 | sum
+        moveq   #0,%d4                 | index
+ns_loop:
+        cmpil   #BANK_B,%d4
+        bcc.s   ns_done
+        movel   %a0@(0,%d4:l),%d0      | four at a time past the empty ones
+        moveq   #-1,%d1
+        cmpl    %d1,%d0
+        bne.s   ns_byte
+        addql   #4,%d4
+        bra.s   ns_loop
+ns_byte:
+        moveq   #3,%d5
+ns_b4:  moveq   #0,%d0
+        moveb   %a0@(0,%d4:l),%d0
+        cmpil   #0xff,%d0
+        beq.s   ns_next
+        cmpil   #0x7f,%d0
+        bhi.s   ns_out                 | not a knob value: no copy
+        cmpil   #NV_MAX,%d2
+        bcc.s   ns_out                 | does not fit: no copy
+        movel   %d4,%d1
+        lsll    #7,%d1
+        orl     %d0,%d1                | the entry
+        addl    %d1,%d3
+        moveb   %d1,%a1@(2)
+        lsrl    #8,%d1
+        moveb   %d1,%a1@(1)
+        lsrl    #8,%d1
+        moveb   %d1,%a1@
+        addql   #3,%a1
+        addql   #1,%d2
+ns_next:
+        addql   #1,%d4
+        subql   #1,%d5
+        bpl.s   ns_b4
+        bra.s   ns_loop
+ns_done:
+        lea     NV,%a1
+        movel   %d2,%a1@(8)
+        movel   %d3,%a1@(12)
+        movel   #NV_MAGIC,%d0
+        movel   %d0,%a1@
+ns_out: movem.l %sp@,%d0-%d5/%a0-%a1
+        lea     %sp@(32),%sp
+        rts
+
+| nv_apply: d0 = bank -> 1 in d0 when CS1 held that bank's page 2 and it
+| is in STORE now; 0 otherwise (STORE untouched).
+nv_apply:
+        lea     %sp@(-28),%sp
+        movem.l %d1-%d5/%a0-%a1,%sp@
+        movel   %d0,%d5
+        lea     NV,%a1
+        movel   %a1@,%d0
+        cmpil   #NV_MAGIC,%d0
+        bne.s   na_no
+        cmpl    %a1@(4),%d5
+        bne.s   na_no
+        movel   %a1@(8),%d2
+        cmpil   #NV_MAX,%d2
+        bhi.s   na_no
+        lea     %a1@(16),%a0           | the sum first
+        moveq   #0,%d3
+        movel   %d2,%d4
+na_sum: subql   #1,%d4
+        bmi.s   na_chk
+        bsr.s   nv_entry
+        addl    %d1,%d3
+        bra.s   na_sum
+na_chk: cmpl    %a1@(12),%d3
+        bne.s   na_no
+        movel   %d5,%d0
+        bsr.w   blank
+        movel   %d5,%d0
+        bsr.w   bank_at
+        moveal  %a0,%a1                | a1 = the bank's page 2
+        lea     NV+16,%a0
+na_put: subql   #1,%d2
+        bmi.s   na_yes
+        bsr.s   nv_entry
+        movel   %d1,%d0
+        lsrl    #7,%d0                 | index
+        andil   #0x7f,%d1              | value
+        cmpil   #BANK_B,%d0
+        bcc.s   na_put
+        moveb   %d1,%a1@(0,%d0:l)
+        bra.s   na_put
+na_yes: movel   %d5,NVBANK
+        moveq   #1,%d0
+        bra.s   na_out
+na_no:  moveq   #0,%d0
+na_out: movem.l %sp@,%d1-%d5/%a0-%a1
+        lea     %sp@(28),%sp
+        rts
+
+| nv_entry: a0 = an entry -> d1 = its 24 bits, a0 past it. Clobbers d0.
+nv_entry:
+        moveq   #0,%d1
+        moveb   %a0@+,%d1
+        lsll    #8,%d1
+        moveq   #0,%d0
+        moveb   %a0@+,%d0
+        orl     %d0,%d1
+        lsll    #8,%d1
+        moveb   %a0@+,%d0
+        orl     %d0,%d1
+        rts
+
+| nv_touch: d0 = a bank whose page 2 changed -> CS1 again when it is the
+| bank CS1 holds. Keeps every register.
+nv_touch:
+        movel   %d1,%sp@-
+        movel   NVBANK,%d1
+        cmpl    %d0,%d1
+        bne.s   nt_out
+        bsr.w   nv_save
+nt_out: movel   %sp@+,%d1
+        rts
+
+| 0x4000faf0(bank): stock copies the bank into CS1; its page 2 goes too.
+plk_tocs1:
+        movel   %d0,%sp@-
+        bsr.w   plk_init
+        movel   %sp@(8),%d0
+        bsr.w   nv_save
+        movel   %sp@+,%d0
+        movel   %a2,%sp@-              | the displaced instructions, then on
+        movel   %d2,%sp@-
+        movel   #0x8ed80,%sp@-
+        jmp     0x4000fafa
+
+| the power-up's 0x4000fbb4(bank) call at 0x40025808: the bank back from
+| CS1, and its page 2 with it -- or, when CS1 has no copy of it, from its
+| file at the first bank load (the card is not mounted yet).
+plk_fromcs1:
+        movel   %sp@(4),%sp@-
+        jsr     0x4000fbb4
+        addql   #4,%sp
+        lea     %sp@(-8),%sp
+        movem.l %d0-%d1,%sp@
+        bsr.w   plk_init
+        movel   %sp@(8+4),%d0          | bank
+        movel   %d0,%d1
+        bsr.w   nv_apply
+        tstl    %d0
+        bne.s   fc1_out
+        addql   #1,%d1
+        movel   %d1,NEEDFILE
+        subql   #1,%d1
+        movel   %d1,NVBANK
+fc1_out:
+        movem.l %sp@,%d0-%d1
+        lea     %sp@(8),%sp
+        rts
 
 | ------------------------------------------------------------------ dial ----
 | plk_dial: d0 = the value the dial would draw, d6 = kind (0 FX1, 1 FX2),
@@ -1302,6 +1525,8 @@ in_out: movem.l %sp@,%d0-%d1/%a0
 | contiguous (plk_init fills them as one run).
         .align  4
 INITED: .long   0
+NVBANK: .long   -1                      | the bank whose page 2 CS1 holds
+NEEDFILE: .long 0                       | bank + 1: read it from its file at the next bank load
 EDITED: .long   0                       | set by a page-2 lock edit (the file pass reads it)
 P2STAGE: .fill  8*REC,1,0xff            | the staging record, by track
 P2PEND: .fill   24*REC,1,0xff           | pending slots n = 0..2, index n*8 + track

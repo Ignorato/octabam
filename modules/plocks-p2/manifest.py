@@ -140,6 +140,12 @@ MODULE = Module(
         Detour(0x4009159A, H("4ebaf43c2003"), "p2locks", "plk_newproj2",
                "a new, empty project (the pc-relative call and the move after it)",
                kind="jmp", pad_to=6),
+        # the current bank over a power-off
+        Detour(0x4000FAF0, H("2f0a2f022f3c0008ed80"), "p2locks", "plk_tocs1",
+               "stock copies the current bank into CS1: its page 2 goes too", kind="jmp",
+               pad_to=10),
+        Detour(0x40025808, H("4eb94000fbb4"), "p2locks", "plk_fromcs1",
+               "power-up: the bank back from CS1, its page 2 with it", kind="jsr"),
     ),
     requires=("SCENES P2",),
     gates=(Gate('tools/verify/verify_plocksp2.py'),),

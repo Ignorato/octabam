@@ -95,6 +95,20 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
   - A module that adds interrupts or work during LOAD PROJECT under
     Octakit is exposed to this ordering: CC FEEDBACK's first build
     transmitted 272 CCs inside the load and tripped it.
+- **A power cycle.** CS1 (`0x10000000`, 1 MB) is the memory that keeps
+  the current bank over a power-off: stock copies the bank there
+  (`0x4000faf0`), writes edits through, and at power-up checks it
+  (`0x40025770`), puts the bank back (`0x4000fbb4`) and loads every other
+  bank from the card (mask `0xfffb` at `0x40084d60`). The port starts with
+  CS1 empty and posts LOAD PROJECT, which reads every bank from the card,
+  like loading from the menu.
+  - `--cs1-in FILE` puts FILE's bytes in CS1 before the boot; `--mem-dump
+    0x10000000,0x100000=FILE` of an earlier run makes it that run's CS1.
+  - `--no-post` posts nothing: the load is the firmware's own power-up
+    one; the run still ends when the engine is idle.
+  - Measured 2 Oct 2026 on the stock image: a page-1 lock recorded and
+    never saved is in the pattern after `--cs1-in` + `--no-post` with the
+    first run's card, and gone with the posted load.
 - **Cost.** Wall time is about 2× the emulated time; about 15 frames/s with
   both cores live.
 - **Panel actions and scripts:**

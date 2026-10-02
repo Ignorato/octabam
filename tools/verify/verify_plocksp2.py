@@ -31,12 +31,18 @@ forked (`ot_emu --scenario`):
            YES, YES): the card holds p2lkNN.work and p2lkNN.strd for the
            edited bank with the lock; a second boot of that card has it in
            STORE after the load.
+  power    the same card and that run's CS1 (`--cs1-in`), booted with the
+           firmware's own power-up load (`--no-post`: the current bank from
+           CS1, the rest from the card): the lock is in STORE. Likewise a
+           lock recorded and never saved (the CS1 copy), and the saved one
+           with the CS1 copy's magic cleared (read from p2lkNN.work).
 
 SKIPs without a project, without the port, or for a remix without PLOCKS
 P2. What it cannot see: the dial draw (the LCD is not decoded), the
 hardware, a slide trig (page 2 does not slide).
 """
 import argparse, os, pathlib, shutil, subprocess, sys
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
 from remix import registry  # noqa: E402
@@ -50,6 +56,7 @@ BLOB, BANK_STRIDE, PART_STRIDE, PTN_STRIDE, TRK_STRIDE = 0x400e21e0, 0x9b340, 0x
 DBPTR, UI_TRACK, UI_PART = 0x46c82456, 0x100b14cc, 0x100b14cf
 ID2_OFF, P2_OFF, DESC2, LIVE_IDS = 0x8ed88, 0x8f07e, 0x400d5fdc, 0x80000ec4
 LANES = 0x80000810
+CS1, CS1_LEN, NV = 0x10000000, 0x100000, 0x100f8600
 REC, TRACK_B = 12, 64 * 12
 K = dict(no=0x32, fx2=0x26, rec=0x29, play=0x28, stop=0x27, func=0x2d, pattern=0x2e,
          mixer=0x30, right=0x21, down=0x20, yes=0x31, t1=0x00, t2=0x01, t5=0x04)
@@ -236,7 +243,16 @@ def main():
     saved = OUT / "saved.img"
     scen.append(f"{OUT / 'save.txt'} " + " ".join(
         (["--poke", ";".join(pokes)] if pokes else []) + ["--live-script", str(OUT / "save.script"),
-                                                          "--card-out", str(saved)]))
+                                                          "--card-out", str(saved),
+                                                          "--mem-dump", f"{CS1:#x},{CS1_LEN:#x}={OUT / 'cs1_saved.bin'}"]))
+    # unsaved: record, a pause, the card and CS1 as a power cut leaves them
+    s = Script(); record(s); s.send("enc 6 0", 2000)
+    (OUT / "unsaved.script").write_text(s.text())
+    unsaved = OUT / "unsaved.img"
+    scen.append(f"{OUT / 'unsaved.txt'} " + " ".join(
+        (["--poke", ";".join(pokes)] if pokes else []) + ["--live-script", str(OUT / "unsaved.script"),
+                                                          "--card-out", str(unsaved),
+                                                          "--mem-dump", f"{CS1:#x},{CS1_LEN:#x}={OUT / 'cs1_unsaved.bin'}"]))
     cmd = base + [x for sc in scen for x in ("--scenario", sc)]
     run(cmd, OUT / "port.txt")
 
@@ -290,6 +306,31 @@ def main():
             OUT / "reload.txt")
         got = reload_dump.read_bytes()[0] if reload_dump.is_file() else None
         check(f"load: the saved card's lock is in STORE after the load ({got})", got == v)
+
+    # ---- power cycles -----------------------------------------------------------
+    cs1s, cs1u = OUT / "cs1_saved.bin", OUT / "cs1_unsaved.bin"
+    if cs1s.is_file():
+        d = bytearray(cs1s.read_bytes())
+        d[NV - CS1:NV - CS1 + 4] = bytes(4)            # no CS1 copy: the file
+        (OUT / "cs1_nocopy.bin").write_bytes(d)
+    s = Script(); s.tap("no", 400)
+    (OUT / "power.script").write_text(s.text())
+
+    def power(tag, img_, cs1_):
+        if not (img_.is_file() and cs1_.is_file()):
+            return tag, None
+        dump = OUT / f"power_{tag}.bin"
+        run([EMU, "--image", image, "--card", img_, "--cs1-in", cs1_, "--no-post", "--set", a.set_name,
+             "--project", a.name, "--load-ms", "90000", "--live-script", OUT / "power.script",
+             "--mem-dump", f"{block(0, trk) + 6:#x},1={dump}"], OUT / f"power_{tag}.txt")
+        return tag, dump.read_bytes()[0] if dump.is_file() else None
+    jobs = [("saved", saved, cs1s), ("unsaved", unsaved, cs1u), ("nocopy", saved, OUT / "cs1_nocopy.bin")]
+    with ThreadPoolExecutor(3) as ex:
+        got = dict(ex.map(lambda j: power(*j), jobs))
+    check(f"power cycle, saved: the lock is in STORE ({got['saved']})", got["saved"] == v)
+    check(f"power cycle, never saved: the lock is in STORE from CS1 ({got['unsaved']})", got["unsaved"] == v)
+    check(f"power cycle, no CS1 copy: the lock is in STORE from p2lk{bank + 1:02d}.work ({got['nocopy']})",
+          got["nocopy"] == v)
     print(f"verify_plocksp2: {'FAIL' if fails else 'ok'} ({fails} failure(s))")
     return 1 if fails else 0
 
