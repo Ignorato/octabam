@@ -326,6 +326,25 @@ def main():
                       f"widget is the rts 0x{NO_WIDGET:08x} and 0x12a is 0 "
                       f"(got 0x{f2:08x}/0x{f3:08x})")
                 continue
+            _pr = _MODS[name].params[i] if i < len(_MODS[name].params) else None
+            if _pr is not None and _pr.has_raw_words:
+                # Param.formatter_word/widget_word/word_12a: the declaration
+                # is the rule. An int is checked exactly; a (unit, symbol)
+                # word is non-zero and not the donor's; None is the donor's.
+                _dP = _MODS[name].menu.donor_desc + 0x38
+                for _lbl, _off, _w, _got in (("A", P_FMT1, _pr.formatter_word, f1),
+                                              ("B", P_FMT2, _pr.widget_word, f2),
+                                              ("0x12a", P_FMT3, _pr.word_12a, f3)):
+                    _don = rd32(stock, _dP + _off + i * 4)
+                    if _w is None:
+                        ok, want = _got == _don, f"the donor's 0x{_don:08x}"
+                    elif isinstance(_w, tuple):
+                        ok, want = _got not in (0, _don), f"{_w[0]}:{_w[1]}"
+                    else:
+                        ok, want = _got == _w, f"0x{_w:08x}"
+                    check(ok, f"{name}: p{i} {_lbl} is {want} as declared "
+                              f"(got 0x{_got:08x})")
+                continue
             if cnt < 128:
                 # The "A" callback may be one of our label
                 # caves instead of stock's 0x4003c718 -- that is the whole

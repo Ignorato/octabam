@@ -134,6 +134,16 @@ def check_image(name, img, pristine, fails):
         fx1_slot = FX1_IDS + eid * 4
         on_fx1 = rd32(pristine, fx1_slot) != FX1_NONE
         if eid in declared:
+            # MenuEntry.stock_dsp: the id still dispatches the stock code
+            if mods[declared[eid]].menu.stock_dsp:
+                for tag, xtab, _ni, _np in PAYLOADS:
+                    for slot in (eid, 32 + eid):
+                        got, want = rdw(img, xtab + slot * 3), rdw(pristine, xtab + slot * 3)
+                        if got != want:
+                            fails.append(
+                                f"{name}: payload {tag} dispatch[0x{eid:02x}] is "
+                                f"0x{got:05x}, but {declared[eid]} keeps stock "
+                                f"{eff.key}'s DSP (stock_dsp) at 0x{want:05x}")
             # A declared replacement must have taken FX1 too, or FX1 would
             # run its code under the stock effect's knob names.
             if not on_fx1:

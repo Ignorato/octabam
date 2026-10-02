@@ -12,7 +12,9 @@ worse than none, so a field exists only where a check consumes it.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from enum import Enum
 
 
@@ -165,8 +167,41 @@ class Param:
     # (slots 0-1, 1-2, 3-4, 4-5 and the page-2 equivalents); stock never
     # links across 2-3.
     link: bool = False
+    # The slot's three descriptor words written as declared, for a drawing
+    # no Formatter names: P+0x0ca formatter A, P+0x0fa widget B, P+0x12a
+    # (docs/firmware/PARAM_PAGES.md section 7). Each is None (the donor's
+    # word), an int (a stock address or a literal; 0 included), or a
+    # (unit, symbol) pair resolved like a Detour's: a Linked or CavePatch
+    # label in this remix and a symbol it exports. A slot with any of the
+    # three set takes no `formatter` and is checked by verify_menu against
+    # these words instead of the count rule.
+    formatter_word: int | tuple[str, str] | None = None
+    widget_word: int | tuple[str, str] | None = None
+    word_12a: int | tuple[str, str] | None = None
+
+    @property
+    def raw_words(self) -> tuple:
+        """(formatter_word, widget_word, word_12a)."""
+        return (self.formatter_word, self.widget_word, self.word_12a)
+
+    @property
+    def has_raw_words(self) -> bool:
+        return any(w is not None for w in self.raw_words)
 
     def __post_init__(self):
+        for _f, _w in zip(("formatter_word", "widget_word", "word_12a"), self.raw_words):
+            if _w is None or (isinstance(_w, int) and not isinstance(_w, bool)
+                              and 0 <= _w <= 0xFFFFFFFF):
+                continue
+            if (isinstance(_w, tuple) and len(_w) == 2
+                    and all(isinstance(x, str) and x for x in _w)):
+                continue
+            raise ValueError(f"param {self.name!r}: {_f} is {_w!r} -- an int "
+                             f"(u32) or a (unit, symbol) pair")
+        if self.has_raw_words and self.formatter is not Formatter.INHERIT:
+            raise ValueError(
+                f"param {self.name!r}: formatter={self.formatter.value} and raw "
+                f"descriptor words together -- the raw words are the drawing")
         if self.link and not self.active:
             raise ValueError(f"param {self.name!r}: link on a slot that is not drawn")
         if self.name is not None and len(self.name) > 5:
@@ -256,8 +291,17 @@ class MenuEntry:
     # FX1's tables (its id lookup and the row the encoder scrolls), in place,
     # and verify_replaces.py checks both menus in both directions.
     replaces: str | None = None
+    # The replaced effect's own DSP stays its dispatch entry: init/proc are
+    # stock's, and the module's DspSection is code reached from its
+    # DspHooks only (SIDECHAIN_COMPRESSOR: stock COMPRESSOR plus a detector
+    # tap). Requires `replaces`; the build leaves both dispatch words of
+    # the id as the pristine image has them and verify_replaces checks it.
+    stock_dsp: bool = False
 
     def __post_init__(self):
+        if self.stock_dsp and not self.replaces:
+            raise ValueError(f"stock_dsp keeps the donor's dispatch entry, so "
+                             f"it needs replaces=<the stock effect's key>")
         # 0x00-0x03 are the ids stock treats as bare synonyms for "no effect";
         # the first hardware test used them and got correct names with dead
         # knobs and garbage audio.
@@ -292,10 +336,25 @@ class DspHook:
     inject at the frame head, P:0x88.
     """
 
-    site: int                                  # P address of the displaced instruction
+    # P address of the displaced instruction: one int for every payload,
+    # or {"A": addr, "B": addr} naming exactly the section's payloads when
+    # the stock code sits at a different address on each (the two payloads
+    # are linked separately; AGENTS.md "payload-relative addresses").
+    site: int | Mapping[str, int]
     stock: tuple[int, int]                     # its two words, as the image has them
     label: str                                 # the section's entry for this site
     note: str = ""
+
+    def __post_init__(self):
+        if isinstance(self.site, Mapping):
+            object.__setattr__(self, "site", MappingProxyType(dict(self.site)))
+            if not self.site or set(self.site) - {"A", "B"}:
+                raise ValueError(f"DspHook {self.label!r}: site keys are payload "
+                                 f"tags A/B, got {sorted(self.site)}")
+
+    def site_on(self, payload: str) -> int:
+        """The hook's P address on one payload."""
+        return self.site[payload] if isinstance(self.site, Mapping) else self.site
 
 
 @dataclass(frozen=True)
@@ -337,6 +396,61 @@ class DspSection:
     # with hooks and no MenuEntry is placed on `payloads` only and takes no
     # dispatch entry; one with a menu may carry hooks as well.
     hooks: tuple[DspHook, ...] = ()
+    # Per-payload text substitutions applied to the source before anything
+    # else the build does to it: {"A": {"@SBASE@": "$33e00"}, "B":
+    # {"@SBASE@": "$3be00"}}. dsp_asm has no equ and no expressions, so a
+    # value that differs per core is written per core. Both payloads name
+    # the same keys; every key occurs in the source (refused at build); no
+    # key may overlap a marker the build substitutes itself (SUBST_RESERVED).
+    subst: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+
+    def __post_init__(self):
+        object.__setattr__(self, "subst", MappingProxyType(
+            {pl: MappingProxyType(dict(kv)) for pl, kv in self.subst.items()}))
+        for h in self.hooks:
+            if isinstance(h.site, Mapping) and set(h.site) != set(self.payloads):
+                raise ValueError(
+                    f"DspHook {h.label!r}: site names payloads {sorted(h.site)}, "
+                    f"the section is placed on {sorted(self.payloads)}")
+        if self.subst:
+            if set(self.subst) != set(self.payloads):
+                raise ValueError(f"subst names payloads {sorted(self.subst)}, "
+                                 f"the section is placed on {sorted(self.payloads)}")
+            keys = [frozenset(kv) for kv in self.subst.values()]
+            if len(set(keys)) != 1:
+                raise ValueError("subst: every payload names the same keys "
+                                 + "; ".join(f"{pl}: {sorted(kv)}" for pl, kv
+                                             in sorted(self.subst.items())))
+            for k in keys[0]:
+                if not k.strip():
+                    raise ValueError(f"subst: empty key {k!r}")
+                hit = [r for r in SUBST_RESERVED if r in k or k in r]
+                if hit:
+                    raise ValueError(f"subst key {k!r} overlaps the build's own "
+                                     f"marker {hit[0]!r}")
+            for pl, kv in self.subst.items():
+                for k, v in kv.items():
+                    if any(r in v for r in SUBST_RESERVED):
+                        raise ValueError(f"subst {pl} {k!r}: value {v!r} carries "
+                                         f"a marker the build substitutes")
+
+    def source_for(self, payload: str, src: str) -> str:
+        """`src` with this payload's subst applied (refuses a key the source
+        does not carry)."""
+        for k, v in self.subst.get(payload, {}).items():
+            if k not in src:
+                raise ValueError(f"{self.asm}: subst key {k!r} does not occur "
+                                 f"in the source")
+            src = src.replace(k, v)
+        return src
+
+
+# Text the build substitutes in DSP sources itself (build_bus.py), which a
+# DspSection.subst key or value may not overlap. AGENTS.md "build-time
+# markers and base literals count when they appear in COMMENTS".
+SUBST_RESERVED = ("$30000", "$facade", "$fab1e0", "; ROTLATCH", "; ROTINIT",
+                  "_OVERRIDE", "XBUS_GATE", "; HOSTGUARD",
+                  "LFO lines 0-1: ROLLED TOO")
 
 
 @dataclass(frozen=True)
@@ -1132,6 +1246,11 @@ class Module:
                     f"0x{self.menu.fx2_id:02x} is not a stock effect's -- a "
                     f"replacement must carry the id it replaces, or the stock "
                     f"effect stays and yours is a separate row")
+        if self.menu is not None and self.menu.stock_dsp and (
+                self.dsp is None or not self.dsp.hooks):
+            raise ValueError(f"{self.name}: stock_dsp keeps {self.menu.replaces}'s "
+                             f"dispatch entry, so its DspSection is reached only "
+                             f"through DspHooks and must declare at least one")
         if self.dsp is not None and self.menu is None and not self.dsp.hooks:
             raise ValueError(f"{self.name}: DSP code with no menu entry and no "
                              f"DspHook is unreachable -- nothing dispatches it")

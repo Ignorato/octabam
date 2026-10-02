@@ -230,6 +230,13 @@ HOOKED = [k for k in REMIX.modules
           if _MODS[k].dsp is not None and _MODS[k].menu is None]
 for _k in HOOKED:
     _DEF_ASM[_k] = _MODS[_k].dsp.asm
+# A replacement that keeps the stock effect's own DSP (MenuEntry.stock_dsp):
+# cloned like any menu module, its section placed like a HOOKED one -- on
+# its payloads, with no dispatch entry.
+STOCK_DSP = [k for k in CARRIED if _MODS[k].menu.stock_dsp]
+if REMIX.fallback in STOCK_DSP:
+    sys.exit(f"fallback={REMIX.fallback!r} keeps stock's dispatch entry "
+             f"(MenuEntry.stock_dsp), so it has no entry points to alias id 0 to")
 
 
 # ---- P-relative field offsets (PARAM_PAGES.md section 5b) ------------------
@@ -1573,6 +1580,39 @@ def main():
             _ovf_top = (_at + len(_wb) + 3) & ~3
         print(f"  shared wide dial: {len(_wb)} B at 0x{_at:08x}, "
               + ", ".join(f"{n} p{i} {nm}" for _, _, n, i, nm in _wide))
+    # ---- raw descriptor words (Param.formatter_word/widget_word/word_12a) --
+    # Written last of the descriptor passes, so they are what the slot
+    # holds. A raw slot's undeclared words are put back to the donor's: the
+    # stepped pass above zeroes A and B for every slot of a module with a
+    # stepped select.
+    _pristine_desc = IMG.read_bytes()
+    _regd = {(c.registers_formatter.module, c.registers_formatter.slot)
+             for k in REMIX.modules for c in remix_modules()[k].cf_patches
+             if c.registers_formatter is not None}
+    for name in CLONED_ORDER:
+        for idx, _pr in enumerate(_MODS[name].params):
+            if not _pr.has_raw_words:
+                continue
+            if (name, idx) in _regd:
+                sys.exit(f"{name} p{idx}: raw descriptor words and a "
+                         f"FormatterReg both draw this slot")
+            _out = []
+            for _off, _w in zip((0x0ca, 0x0fa, 0x12a), _pr.raw_words):
+                _a = clone_addr[name] + _off + idx * 4
+                if _w is None:
+                    _da = DESC_DONORS[name] + 0x38 + _off + idx * 4 - BASE
+                    _v = int.from_bytes(_pristine_desc[_da:_da + 4], "big")
+                elif isinstance(_w, tuple):
+                    if _w[0] not in _sym or _w[1] not in _sym[_w[0]]:
+                        sys.exit(f"{name} p{idx}: {_w[0]}:{_w[1]} is not a "
+                                 f"symbol of a unit in this remix")
+                    _v = _sym[_w[0]][_w[1]]
+                else:
+                    _v = _w
+                wr32(_a, _v)
+                _out.append(_v)
+            print(f"  {name} p{idx} {(_pr.name or b'').decode()}: descriptor words "
+                  f"A 0x{_out[0]:08x} B 0x{_out[1]:08x} 0x12a 0x{_out[2]:08x}")
     # ==== 1d. FX1 ROWS, for modules that asked for one =====================
     # THE OTHER HALF OF "BOTH SLOTS". The DSP dispatch is ONE table indexed by
     # the raw id and shared by the menus, so a module's CODE already runs from
@@ -2477,9 +2517,20 @@ mkgo:""",
         # It MAY also declare its own DEV repro hooks below -- the generic version of the arms the three
         # core sources have at the top of main().
         for _k in CARRIED + [k for k in HOOKED if tag in _MODS[k].dsp.payloads]:
+            if _k in STOCK_DSP and tag not in _MODS[_k].dsp.payloads:
+                continue
             if _k not in _texts and _k in ASM_SRC:
                 _src_k = pathlib.Path(ASM_SRC[_k]).read_text()
                 _mk = remix_modules().get(_k)
+                if (_mk is not None and _mk.dsp is not None and _mk.dsp.subst
+                        and ASM_SRC[_k] == _mk.dsp.asm):
+                    try:
+                        _src_k = _mk.dsp.source_for(tag, _src_k)
+                    except ValueError as _e:
+                        sys.exit(f"payload {tag}: {_k}: {_e}")
+                    print(f"  SUBST: {_k} payload {tag} -- "
+                          + ", ".join(f"{a} -> {b}" for a, b
+                                      in sorted(_mk.dsp.subst[tag].items())))
                 if (_x and _mk is not None and _mk.harness is not None
                         and _mk.harness.bus_client):
                     _n9 = len(re.findall(r"\$9[0-9a-f]{2}\b", _src_k))
@@ -2804,11 +2855,12 @@ hostquit:
             _r, tab, src, cursor, words, _syms = _fit
             _hooks = remix_modules()[name].dsp.hooks if name in remix_modules() else ()
             init_a, proc_a = _syms.get("init"), _syms.get("proc")
-            if name not in HOOKED and (init_a is None or proc_a is None):
+            if (name not in HOOKED and name not in STOCK_DSP
+                    and (init_a is None or proc_a is None)):
                 sys.exit(f"payload {tag}: {name} has no init/proc labels")
             for _h in _hooks:
                 if _h.label not in _syms:
-                    sys.exit(f"payload {tag}: {name}'s hook at P:0x{_h.site:05x} names "
+                    sys.exit(f"payload {tag}: {name}'s hook at P:0x{_h.site_on(tag):05x} names "
                              f"label {_h.label!r}, which the source does not define")
             if tab is not None and _xa is not None:
                 if len(tab) != _xa[1]:
@@ -2844,18 +2896,21 @@ hostquit:
             for _h in _hooks:
                 # the two stock words become `jsr >label`; the section
                 # replays the displaced instruction (schema.DspHook)
-                _got = (rdw_p_at(_h.site), rdw_p_at(_h.site + 1))
+                _hs = _h.site_on(tag)
+                _got = (rdw_p_at(_hs), rdw_p_at(_hs + 1))
                 if _got != tuple(_h.stock):
-                    sys.exit(f"payload {tag}: {name}'s hook site P:0x{_h.site:05x} holds "
+                    sys.exit(f"payload {tag}: {name}'s hook site P:0x{_hs:05x} holds "
                              f"{_got[0]:06x} {_got[1]:06x}, not stock "
                              f"{_h.stock[0]:06x} {_h.stock[1]:06x}; refusing")
-                wrw_p_at(_h.site, 0x0BF080)
-                wrw_p_at(_h.site + 1, _syms[_h.label])
-                print(f"  {'HOOK':13} P:0x{_h.site:05x} -> {name} {_h.label} "
+                wrw_p_at(_hs, 0x0BF080)
+                wrw_p_at(_hs + 1, _syms[_h.label])
+                print(f"  {'HOOK':13} P:0x{_hs:05x} -> {name} {_h.label} "
                       f"P:0x{_syms[_h.label]:05x}  {_h.note}")
-            if name in HOOKED:
+            if name in HOOKED or name in STOCK_DSP:
                 print(f"  {name:13} P:0x{cursor:05x}..0x{cursor + len(words):05x} "
-                      f"({len(words):4} words)  no dispatch entry: reached by its hook(s)")
+                      f"({len(words):4} words)  no dispatch entry: reached by its hook(s)"
+                      + (f"; id 0x{NEW_IDS[name]:02x} dispatches stock "
+                         f"{_MODS[name].menu.replaces}" if name in STOCK_DSP else ""))
                 cursor += len(words)
                 continue
             wrw_p(pp["xtab"] + NEW_IDS[name] * 3, init_a)

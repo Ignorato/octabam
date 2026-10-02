@@ -154,6 +154,11 @@ def prep(name):
             src = src.replace(anchor, anchor + (ROOT / inc).read_text(), 1)
         return src
     src = _ASM[name].read_text()
+    _m = next((m for m in registry.modules().values() if m.dsp is not None
+               and pathlib.Path(m.dsp.asm).stem == name and m.dsp.subst), None)
+    if _m is not None:
+        # the first payload's values: a module is priced once
+        src = _m.dsp.source_for(sorted(_m.dsp.payloads)[0], src)
     if name == "delay_server":
         from remix import geom as _geom
         src = _geom.select(src, False)          # the shipping geometry
@@ -479,7 +484,8 @@ def main():
                  server=(m.dsp.bus_role is BusRole.SERVER),
                  fx1_only=(m.claims is not None and m.claims.fx1_only),
                  replaces=(m.menu.replaces if m.menu is not None else None))
-            for m in registry.selected(remix) if m.dsp is not None and m.menu is not None]
+            for m in registry.selected(remix) if m.dsp is not None and m.menu is not None
+            and not m.menu.stock_dsp]   # stock's own code runs there; the section is hooks
     from remix import stock as _stock
     _all = registry.modules()
     _stock_fx1 = {k for k in _stock.MODULES_BY_KEY

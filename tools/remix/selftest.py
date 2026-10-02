@@ -19,7 +19,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 from remix import ledger, registry, schema, state, stock  # noqa: E402
 from remix.schema import (BusRole, CavePatch, Claims, Detour, DspHook, DspRange,  # noqa: E402
-                          DspSection, Keep, Kind, MenuEntry, Module, Param,
+                          DspSection, Formatter, Keep, Kind, MenuEntry, Module, Param,
                           Poke, SymbolRef, TableGrow, YBase)
 
 
@@ -111,6 +111,10 @@ CASES = [
       _cave("beta", 0x400d7100, hook_addr=0x40004d40)], "hook site"),
     ("two DSP sections hooking one stock P word on one payload",
      [_hooked("alpha"), _hooked("beta")], "DSP hook site"),
+    ("two per-payload DSP hooks sharing one word on payload B",
+     [_hooked("alpha", site={"A": 0x88, "B": 0x29c}, payloads=frozenset({"A", "B"})),
+      _hooked("beta", site={"A": 0x4a7, "B": 0x29d}, payloads=frozenset({"A", "B"}))],
+     "DSP hook site"),
     ("two modules claiming one on-chip SRAM window",
      [_hooked("alpha", sram=((0x80007c00, 1024, "dTDs"),)),
       _hooked("beta", site=0x90, sram=((0x80007e00, 512, "reply"),))], "on-chip SRAM"),
@@ -212,7 +216,10 @@ CLEAN_STOCK_PAIR = [_stock("chorus", 0x12, True), _stock("comb", 0x13, True),
                     _effect("alpha", 0x07)]
 # One site, two payloads: no clash, each core has its own P.
 CLEAN_HOOK_PAIR = [_hooked("alpha", payloads=frozenset({"A"})),
-                   _hooked("beta", payloads=frozenset({"B"}))]
+                   _hooked("beta", payloads=frozenset({"B"})),
+                   # per-payload sites: one address, a different payload each
+                   _hooked("gamma", site={"A": 0x4a7, "B": 0x29c}, payloads=frozenset({"A", "B"})),
+                   _hooked("delta", site={"A": 0x29c, "B": 0x4a7}, payloads=frozenset({"A", "B"}))]
 # Adjacent pokes, matching keepers, one half-relative range on each half, a
 # private X range on two payloads, and a conflict naming a module that is absent.
 CLEAN_CLAIMS = [_cf("alpha", pokes=(_poke(0x4001f322, 4),),
@@ -328,7 +335,42 @@ def main():
              lambda: TableGrow("t", 0x40100000, 4, (), (), insert_at=5)),
             ("a DspRange straddling the shared window", lambda: DspRange("y", 0x2ff00, 0x200, "x")),
             ("a half-relative DspRange past its half",
-             lambda: DspRange("y", 0x7f00, 0x200, "x", half_relative=True))):
+             lambda: DspRange("y", 0x7f00, 0x200, "x", half_relative=True)),
+            ("a per-payload DspHook site naming a payload the section is not on",
+             lambda: _hooked("h", site={"A": 0x4a7, "B": 0x29c})),
+            ("a per-payload DspHook site missing one of the section's payloads",
+             lambda: _hooked("h", site={"A": 0x4a7}, payloads=frozenset({"A", "B"}))),
+            ("MenuEntry.stock_dsp without replaces",
+             lambda: MenuEntry(fx2_id=0x1f, donor_desc=0x400d58b8, abbr=b"F",
+                               fullname=b"F", stock_dsp=True)),
+            ("a stock_dsp module with no DspHook",
+             lambda: Module(name="sd", key="SD", kind=Kind.DSP_EFFECT, doc="fixture",
+                            menu=MenuEntry(fx2_id=0x18, donor_desc=0x400d5a4a,   # COMPRESSOR
+                                           abbr=b"SD", fullname=b"SD",
+                                           replaces="COMPRESSOR", stock_dsp=True),
+                            params=tuple([Param(b"A", 0, active=True)] + [Param()] * 11),
+                            dsp=schema.DspSection(asm="does/not/exist.asm", priority=0))),
+            ("a Param with a formatter and raw descriptor words",
+             lambda: Param(b"MON", 0, count=2, active=True, formatter=Formatter.STEPPED,
+                           labels=("OFF", "ON"), widget_word=0x40046f10)),
+            ("a raw descriptor word that is neither a u32 nor a (unit, symbol)",
+             lambda: Param(b"KEY", 0, active=True, formatter_word=("unit",))),
+            ("DspSection.subst on a payload the section is not placed on",
+             lambda: schema.DspSection(asm="x.asm", priority=0, payloads=frozenset({"A"}),
+                                subst={"A": {"@S@": "$1"}, "B": {"@S@": "$2"}})),
+            ("DspSection.subst with different keys per payload",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"@S@": "$1"}, "B": {"@T@": "$2"}})),
+            ("DspSection.subst key overlapping the build's $30000 rewrite",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"$3000": "$1"}, "B": {"$3000": "$2"}})),
+            ("DspSection.subst value carrying a build marker",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"@S@": "; ROTLATCH"}, "B": {"@S@": "$2"}})),
+            ("DspSection.subst on a source without the key",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"@S@": "$1"}, "B": {"@S@": "$2"}}
+                                ).source_for("A", "        nop\n"))):
         try:
             make()
             bad += 1

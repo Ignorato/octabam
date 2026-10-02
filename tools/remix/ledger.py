@@ -25,9 +25,10 @@ Checked, and how it knows:
   overrides          a bridge's claim stands in for the overridden module's
                      at that site; a bridge naming a module the remix does
                      not carry is refused.
-  DSP hook sites     declared (DspSection.hooks). Two sections hooking one
-                     stock P word on one payload: the second jsr overwrites
-                     the first.
+  DSP hook sites     declared (DspSection.hooks), per payload (DspHook.site
+                     may differ per payload). Two hooks whose two-word jsr
+                     spans share a stock P word on one payload: the second
+                     jsr overwrites the first.
   on-chip SRAM       declared (Claims.sram). A DMA engine's descriptors and
                      buffers there; two modules on one window corrupt each
                      other's transfers.
@@ -181,15 +182,20 @@ def check(selected) -> list[str]:
             regions.append((off, length, m.name, what))
 
     # ---- DSP hook sites (DspSection.hooks), per payload ---------------------
+    # A hook writes two words (jsr >label), so two hooks clash when their
+    # word pairs share a word.
     dsp_hooks: dict[tuple[str, int], str] = {}
     for m in selected:
         for h in (m.dsp.hooks if m.dsp is not None else ()):
             for pl in sorted(m.dsp.payloads):
-                if (pl, h.site) in dsp_hooks:
-                    clash("DSP hook site", dsp_hooks[(pl, h.site)], m.name,
-                          f"P:0x{h.site:05x} on payload {pl} -- the second jsr "
+                site = h.site_on(pl)
+                hit = next((w for w in (site, site + 1) if (pl, w) in dsp_hooks), None)
+                if hit is not None:
+                    clash("DSP hook site", dsp_hooks[(pl, hit)], m.name,
+                          f"P:0x{site:05x} on payload {pl} -- the second jsr "
                           f"overwrites the first, so the first section never runs")
-                dsp_hooks[(pl, h.site)] = m.name
+                for w in (site, site + 1):
+                    dsp_hooks[(pl, w)] = m.name
 
     # ---- on-chip SRAM windows (Claims.sram) --------------------------------
     sram: list[tuple[int, int, str, str]] = []
