@@ -264,12 +264,11 @@ MODULES = (
 # that; the build reports which survived and the remixer reads its answer
 # (state.measure). Kept as a tuple because the ORDER is the meaning.
 # ---- where each effect's CODE lives, per payload ---------------------------
-# The thirteen DSP effects are laid out CONTIGUOUSLY and every one of them is
-# self-contained: no control flow leaves its own span and nothing enters it
-# but its own dispatch entry (measured, tools/build/dsp_reach.py over
-# both payloads; the one apparent exception is PLATE's `do #<$6,>$1267`,
-# whose operand is a loop END and therefore exclusive). That is what makes
-# any of them harvestable for its words, not just the three reverbs.
+# The thirteen DSP effects are laid out CONTIGUOUSLY, which is what makes
+# any of them harvestable for its words, not just the three reverbs. They
+# are NOT self-contained: five call routines in another effect's span
+# (pinned(), below; measured 3 Oct 2026). "No control flow leaves its own
+# span", which this comment said until then, was wrong.
 #
 #   payload A  P:0x007d1..0x01fdf     payload B  P:0x00591..0x01d9f
 #   6,158 words each, same effects, same sizes, different bases.
@@ -411,8 +410,11 @@ def consumed_at(key: int | str, harvest=CONSUMED) -> int:
 
 def region_words(harvest=CONSUMED) -> int:
     """The whole placeable region for a harvested set. 2,724 for the three
-    reverbs, which is the figure every document quoted as a constant."""
-    return sum(WORDS[k] for k in harvest)
+    reverbs, which is the figure every document quoted as a constant.
+    Less the words a kept effect still runs (pinned(); the same counts on
+    both payloads)."""
+    return (sum(WORDS[k] for k in harvest)
+            - sum(n for _a, n, _k, _c in pinned("A", harvest)))
 
 # The one stock row with nothing on the DSP to render.
 NO_DSP = frozenset({"DELAY"})
@@ -494,3 +496,117 @@ def curve_bank_record(img: bytes, tag: str):
         if space == 1 and addr == CURVE_BANK[0] and cnt == CURVE_BANK[1]:
             return va - dm.BASE + data, cnt
     return None
+
+
+# ---- words a KEPT effect reaches inside a HARVESTED one ---------------------
+# The thirteen spans are not self-contained. Stock effects call routines that
+# sit in another effect's span (measured on both payloads, 3 Oct 2026, Zac
+# Kyoti's report of DARK REV dying under REPITCH revs 10-13):
+#
+#   caller -> routine in    payload A             payload B
+#   DARK   -> SPRING REV    P:0x1586..0x15a8      P:0x1346..0x1368
+#   PLATE  -> DARK REV      P:0x1a47..0x1aa3      P:0x1807..0x1863
+#   PLATE, SPRING, DARK, DJ EQ, and DARK's routine above -> FILTER
+#                           P:0x09ad..0x09b8      P:0x076d..0x0778
+#   SPATIALIZER -> FILTER   P:0x09c6..0x09d4      P:0x0786..0x0794
+#
+# so a harvest that takes the callee and keeps a caller would place module
+# code over words the kept effect still runs. pinned() is what the placer
+# leaves alone: every harvested word reached by control flow from a kept
+# effect's two dispatch entries, from the interrupt vectors or from the
+# bootstraps. It is a walk over the vendored disassembler's decode, so it
+# follows jsr/bsr/jmp/bra/Bcc/Jcc/do targets and fall-through and nothing
+# held in a register: a `jsr (rN)` into another span, or a P table read
+# across spans, is invisible to it. Falsifier: a DSP PC-watch under the port
+# with a remix that harvests a pinned routine's owner, reporting a PC in a
+# placed word.
+_XTAB = {"A": 0x400e2345, "B": 0x400f5a10}   # init[32] then proc[32], 24-bit words
+_DIS = ROOT / "vendor/dsp56300/build/source/disassemble/dsp56kDisassemble"
+_reach: dict[str, dict[str, frozenset[int]]] = {}
+
+
+def _reached(payload: str) -> dict[str, frozenset[int]]:
+    """{effect key, or "PLATFORM": every P word its code reaches}."""
+    if payload in _reach:
+        return _reach[payload]
+    import re as _re, subprocess as _sp, sys as _sys, tempfile as _tf
+    _sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+    import toolpath  # noqa: F401
+    import dsp_modmap as dm
+    img = dm.IMG.read_bytes()
+    va, ln = [(v, l) for t, v, l in dm.PAYLOADS if t == payload][0]
+    mods, b = dm.modules(img, va, ln)
+    insn: dict[int, tuple[str, int]] = {}     # address -> (text, words)
+    tmp = pathlib.Path(_tf.mkdtemp(prefix="stockreach"))
+    line_re = _re.compile(r"^([0-9a-f]{6}):\s+(.*?)\s*;\s*([0-9a-f]{6})( [0-9a-f]{6})?\s*$")
+    for space, addr, cnt, data in mods:
+        if space != 0:
+            continue
+        (tmp / "m.bin").write_bytes(b[data:data + cnt * 3])
+        out = _sp.run([str(_DIS), "-in", str(tmp / "m.bin"), "-pc", f"{addr:x}",
+                       "-le"], capture_output=True, text=True, check=True).stdout
+        for line in out.splitlines():
+            m = line_re.match(line)
+            if m:
+                insn[int(m[1], 16)] = (m[2], 2 if m[4] else 1)
+    if not insn:
+        raise RuntimeError(f"payload {payload}: the disassembler decoded "
+                           f"nothing ({_DIS})")
+    stop = _re.compile(r"^(jmp|bra|rts|rti|stop)\b")
+    target = _re.compile(r"func_([0-9a-f]+)|>\$([0-9a-f]+)")
+
+    def walk(seeds):
+        seen, work = set(), list(seeds)
+        while work:
+            a = work.pop()
+            if a in seen or a not in insn:
+                continue
+            seen.add(a)
+            text, n = insn[a]
+            # func_ is the disassembler's name for a branch/call target;
+            # `>$` is only a target as a `do` loop's end (a move's `>$` is
+            # data).
+            for m in target.finditer(text):
+                if m[1] or text.startswith("do"):
+                    work.append(int(m[1] or m[2], 16))
+            if not stop.match(text):
+                work.append(a + n)
+        return frozenset(w for a in seen for w in range(a, a + insn[a][1]))
+
+    def rd(i):
+        o = _XTAB[payload] - dm.BASE + i * 3
+        return img[o] | img[o + 1] << 8 | img[o + 2] << 16
+
+    out = {}
+    for mod in MODULES:
+        if mod.key in p_spans(payload):
+            fid = mod.menu.fx2_id
+            out[mod.key] = walk((rd(fid), rd(32 + fid)))
+    out["PLATFORM"] = walk([a for a in range(0x40) if a in insn]
+                           + [a for a in (0x30000, 0x38000) if a in insn])
+    _reach[payload] = out
+    return out
+
+
+def pinned(payload: str, harvest) -> tuple[tuple[int, int, str, str], ...]:
+    """(P address, words, owner, callers) for each run of harvested words
+    that code outside the harvest still reaches. The placer skips them."""
+    sp = p_spans(payload)
+    harvest = set(harvest)
+    owner = {w: k for k in harvest if k in sp
+             for w in range(sp[k][0], sp[k][0] + sp[k][1])}
+    by_word: dict[int, set[str]] = {}
+    for caller, words in _reached(payload).items():
+        if caller in harvest:
+            continue
+        for w in words:
+            if w in owner:
+                by_word.setdefault(w, set()).add(caller)
+    runs: list[list] = []
+    for w in sorted(by_word):
+        if runs and runs[-1][0] + runs[-1][1] == w and runs[-1][2] == owner[w]:
+            runs[-1][1] += 1
+            runs[-1][3] |= by_word[w]
+        else:
+            runs.append([w, 1, owner[w], set(by_word[w])])
+    return tuple((a, n, k, ", ".join(sorted(c))) for a, n, k, c in runs)

@@ -719,6 +719,25 @@ def main():
         elif not _wrong:
             print(f"  [PASS] payload {_pay}: {len(_sp)} effects contiguous, "
                   f"P:0x{_lo:05x}..0x{_hi:05x} = {_hi - _lo:,} words")
+    # Routines a kept effect calls inside a harvested span (stock.pinned):
+    # the scan must find the measured four on each payload, and nothing for
+    # the default harvest. An empty scan (no disassembler, a decode change)
+    # would otherwise read as "nothing to keep".
+    _pin_want = {
+        "A": {("SPRING REV",): ((0x1586, 35),), ("DARK REV",): ((0x1a47, 93),),
+              ("FILTER",): ((0x09ad, 12), (0x09c6, 15)), stock.CONSUMED: ()},
+        "B": {("SPRING REV",): ((0x1346, 35),), ("DARK REV",): ((0x1807, 93),),
+              ("FILTER",): ((0x076d, 12), (0x0786, 15)), stock.CONSUMED: ()},
+    }
+    for _pay, _cases in _pin_want.items():
+        for _h, _exp in _cases.items():
+            _got = tuple((a, n) for a, n, _k, _c in stock.pinned(_pay, _h))
+            if _got != _exp:
+                bad += 1
+                print(f"  [FAIL] payload {_pay}: pinned({_h}) = {_got}, "
+                      f"expected {_exp}")
+    print("  [PASS] the routines kept effects call inside a harvest are "
+          "found on both payloads")
     # ⚠️ AND THE DERIVED HARVEST MUST REPRODUCE WHAT THE BUILD HAS ALWAYS
     # DONE. "On neither chooser" gives every shipped remix exactly the three
     # reverbs -- FX1 lists ten of the thirteen and the reverbs are FX2-only
@@ -832,10 +851,18 @@ def main():
                 _in = {k: next((i for i, (lo, hi) in enumerate(_rs)
                                 if lo <= a < hi), None)
                        for k, a in _at.items()}
+                # PLATE, kept, calls the last 93 words of DARK's span
+                # (stock.pinned), so the SPRING+DARK run ends where they start.
+                _pin = stock.pinned(_p, ("FLANGER", "CHORUS", "SPRING REV",
+                                         "DARK REV"))
                 if len(_rs) != 2:
                     bad += 1; _ok = False
                     print(f"  [FAIL] 'placer probe' payload {_p}: {len(_rs)} "
                           f"runs, expected 2")
+                elif len(_pin) != 1 or _rs[1][1] != _pin[0][0]:
+                    bad += 1; _ok = False
+                    print(f"  [FAIL] 'placer probe' payload {_p}: run 2 ends "
+                          f"at 0x{_rs[1][1]:05x}, the pinned routine is {_pin}")
                 elif sorted(_at) != ["EUCLID", "MINIVERB"]:
                     bad += 1; _ok = False
                     print(f"  [FAIL] 'placer probe' payload {_p}: placed "
@@ -857,10 +884,27 @@ def main():
                     print(f"  [FAIL] 'placer probe' payload {_p}: MINIVERB went "
                           f"to run {_in['MINIVERB'] + 1}, not the 618-word "
                           f"opening it fits")
+            # The pinned routine is still stock in the image.
+            import dsp_modmap as _dm
+            _out = (ROOT / "out/mainos_bus.bin").read_bytes()
+            _stk = (ROOT / _dm.IMG).read_bytes()
+            for _p, _va, _ln in _dm.PAYLOADS:
+                _recs, _b = _dm.modules(_stk, _va, _ln)
+                _hv = ("FLANGER", "CHORUS", "SPRING REV", "DARK REV")
+                for _a, _n, _k, _c in stock.pinned(_p, _hv):
+                    for _sp_, _ra, _rc, _ro in _recs:
+                        if _sp_ == 0 and _ra <= _a and _a + _n <= _ra + _rc:
+                            _o = _va - _dm.BASE + _ro + (_a - _ra) * 3
+                            if _out[_o:_o + _n * 3] != _stk[_o:_o + _n * 3]:
+                                bad += 1; _ok = False
+                                print(f"  [FAIL] 'placer probe' payload {_p}: "
+                                      f"P:0x{_a:05x}+{_n} ({_k}, called by "
+                                      f"{_c}) is not stock in the image")
             if _ok:
-                print(f"  [PASS] 'placer probe' fills both of its "
-                      f"non-contiguous runs in BOTH payloads (MiniVerb into "
-                      f"the 618-word opening, Euclid into the big run)")
+                print(f"  [PASS] 'placer probe' fills its non-contiguous "
+                      f"runs in BOTH payloads (MiniVerb into the 618-word "
+                      f"opening, Euclid into the big run) and leaves PLATE's "
+                      f"routine in DARK's span stock")
 
     # ---- FX1 rows (Remix.fx1) -------------------------------------------
     # The schema half. The BUILD half -- the relocated list, FX1's own id and
