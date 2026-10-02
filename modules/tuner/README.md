@@ -51,8 +51,9 @@ MIDI, USB AUDIO OUT TRACKS MAIN CUE and USB AUDIO IN ABCD.
 
 ## On the unit
 
-- In Tim's 2.9 images on his MKI; its function is not confirmed on
-  hardware. The sources are unchanged since `v2.8`. The hook sites are read
+- Works on Tim's MKI: UP + TEMPO opens the window and tunes (test build
+  3.0 b40 = `octatrick` at BUILD 40, 29 Sep 2026). The sources are
+  unchanged since `v2.8`. The hook sites are read
   from the image and the build refuses on a difference; the other three
   modules' hooks in the same remix ran on Tim's MKI (the test builds
   2.3 .. 2.8 and the 2.9 line).
