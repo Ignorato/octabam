@@ -1,7 +1,7 @@
 """ERASE_EMPTY_TRIGLESS_LOCKS -- a trigless lock whose last lock is erased disappears instead of staying lit; FUNC + TRIG trigless locks are left alone.
 
 Source: `upstream/` is Zac Kyoti's repository (Zac-Kyoti/octatrack-kyoti-fw,
-submodule, pinned to `8773713`). The declaration is
+submodule, pinned to `77f132f`). The declaration is
 `upstream/octabam-modules/erase-empty-trigless-locks/manifest.py`: one ROM cave (`patch_triglock.s`), each re-linked and
 compared with the author's own bytes (`reference`) every build. Its source
 paths are derived from its own directory, so it is executed here from the

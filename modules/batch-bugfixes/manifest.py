@@ -1,7 +1,7 @@
 """BATCH_BUGFIXES -- three stock 1.40C fixes as one module: MIDI Plays-Free trig, empty-pattern LED, Part-change carryover.
 
 Source: `upstream/` is Zac Kyoti's repository (Zac-Kyoti/octatrack-kyoti-fw,
-submodule, pinned to `8773713`). The declaration is
+submodule, pinned to `77f132f`). The declaration is
 `upstream/octabam-modules/batch-bugfixes/manifest.py`: three ROM caves (`patch_trigscale.s`, `patch_pattern_led.s`, `patch_partreapply.s`), each re-linked and
 compared with the author's own bytes (`reference`) every build. Its source
 paths are derived from its own directory, so it is executed here from the

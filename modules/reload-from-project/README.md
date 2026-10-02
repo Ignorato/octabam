@@ -3,7 +3,7 @@
 Reload one track's sequence from the CF card without stopping the transport: `[PTN]` + `[TRACK n]` reloads that track's card-saved sequence with the Part untouched; `[BANK]` + `[TRACK n]` also re-applies the saved Part. A toast confirms.
 
 Built from [Zac-Kyoti/octatrack-kyoti-fw](https://github.com/Zac-Kyoti/octatrack-kyoti-fw)
-(submodule `upstream/`, pinned to `8773713`). `Kind.CF_PATCH`. One DRAM unit (`patch_reload3.s`, `Linked(dram=True)`) and six `jmp` detours. A remix with this module carries the platform loader and its 10 MiB arena reserve, unless another DRAM module already brings them.
+(submodule `upstream/`, pinned to `77f132f`). `Kind.CF_PATCH`. One DRAM unit (`patch_reload3.s`, `Linked(dram=True)`) and six `jmp` detours. A remix with this module carries the platform loader and its 10 MiB arena reserve, unless another DRAM module already brings them.
 `upstream/octabam-modules/reload-from-project/README.md` is the full description, with what was measured and what was inferred.
 
 ## Measured
@@ -21,3 +21,4 @@ Built from [Zac-Kyoti/octatrack-kyoti-fw](https://github.com/Zac-Kyoti/octatrack
 ## Notes
 
 - All-tracks and whole-bank reload are not implemented.
+- Not with OCTAKIT, for now: the module declares the conflict. `[BANK]` + `[TRACK n]` calls stock Part RELOAD (`0x4004aab4`) from the unit, and Octakit's replacement of that routine halts for any caller but the menu's and FUNC+CUE's (the class `kits-reload` bridges for MIDI SCENES). The ledger cannot see it, because the call is not a `Detour`. A bridge is planned (`upstream/reference/handoffs/DIRECTJUMP_OCTAKIT_SCOPE.md`).

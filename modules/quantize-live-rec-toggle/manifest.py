@@ -1,7 +1,7 @@
 """QUANTIZE_LIVE_REC_TOGGLE -- QUANTIZE LIVE REC from the front panel: [REC] + [PLAY] shows it, a second [PLAY] while the toast is up inverts it.
 
 Source: `upstream/` is Zac Kyoti's repository (Zac-Kyoti/octatrack-kyoti-fw,
-submodule, pinned to `8773713`). The declaration is
+submodule, pinned to `77f132f`). The declaration is
 `upstream/octabam-modules/quantize-live-rec-toggle/manifest.py`: one ROM cave (`patch_qlrec.s`), each re-linked and
 compared with the author's own bytes (`reference`) every build. Its source
 paths are derived from its own directory, so it is executed here from the
