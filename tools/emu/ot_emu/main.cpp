@@ -1705,6 +1705,8 @@ int main(int _argc, char** _argv)
 					std::printf("usb        : cannot listen on %s\n", usbHost.c_str());
 					return 1;
 				}
+				usb->setBenchDeadline(std::chrono::steady_clock::now()
+					+ std::chrono::milliseconds(static_cast<long long>(usbHoldMs)));
 				if(usbFs)
 					usb->command("speed fs", [](const std::string&) {});
 				std::printf("usb        : device controller modelled; bench on %s (%s speed)\n", usbHost.c_str(), usbFs ? "full" : "high");
@@ -2608,6 +2610,7 @@ int main(int _argc, char** _argv)
 			// on the wall clock.
 			std::printf("usb        : holding for a bench client (up to %.0f wall ms; ends when the client disconnects)\n", usbHoldMs);
 			const auto start = std::chrono::steady_clock::now();
+			usb->setBenchDeadline(start + std::chrono::milliseconds(static_cast<long long>(usbHoldMs)));
 			bool capped = false;
 			ot::Rtos::Stop rs;
 			for(;;)
