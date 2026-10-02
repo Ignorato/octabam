@@ -19,23 +19,49 @@ def words(w):
         v = (w[i] << 8) | (w[i + 1] >> 8); out.append(v - (1 << 24) if v >= 1 << 23 else v)
     return out
 
+UNITY_RATE = 0x40000
+
+
+def is_header(rec, i):
+    """A segment header at word i: (count, 0, rate, tag), count <= 16 output
+    samples, rate a positive playback increment."""
+    return (i + 4 <= len(rec) and rec[i + 1] == 0 and 0 < rec[i + 2] < 0x800000
+            and 0 <= rec[i] <= 16)
+
+
 def record_audio(rec, right=False):
-    """One 84-word track record -> its 16 audio samples (L, or R).
+    """One 84-word track record -> its source samples for the frame's 16
+    output samples (L, or R).
     The record is a sequence of segments, each a 4-word header (count, 0,
-    0x40000, tag) followed by `count` stereo pairs, 16 pairs in all (measured
-   : a THRU voice ships two empty headers then 16 pairs; a FLEX
-    voice splits them, the split moving one sample per frame)."""
+    rate, tag) followed by the source stereo pairs that `count` output
+    samples consume; the counts sum to 16 (measured: a THRU voice ships two
+    empty headers then 16 pairs; a FLEX voice splits them, the split moving
+    one sample per frame). `rate` is the segment's playback increment, the
+    top 24 bits of the ColdFire long the builder stores at header +8
+    (0x40003d16, from the pitch tables): 0x40000 is one source sample per
+    output sample (0x04000000 = 2^26, the position unit, `lsrl #26` at
+    0x40003d90; the empty header at 0x40003c28 carries it), so a segment
+    holds count pairs at 0x40000 and about count * rate / 0x40000 pairs
+    otherwise (0x20000: count 16 -> 8 pairs; count 4 -> 2). The pair count
+    is taken from where the next header starts when one is within a pair
+    of the estimate, a header at the same rate first."""
     o = 1 if right else 0
-    pairs = []; i = 0
-    while len(pairs) < 16 and i + 4 <= len(rec):
-        if rec[i + 1] == 0 and rec[i + 2] == 0x40000 and 0 <= rec[i] <= 16:
-            cnt = rec[i]; i += 4
-            if cnt:
-                pairs += [rec[i + 2 * k + o] for k in range(cnt)]; i += 2 * cnt
+    pairs = []; out = 0; i = 0
+    while out < 16 and i + 4 <= len(rec):
+        if is_header(rec, i):
+            cnt, rate = rec[i], rec[i + 2]; i += 4
+            n = (cnt * rate + UNITY_RATE // 2) // UNITY_RATE
+            near = [m for m in (n, n - 1, n + 1) if m >= 0 and is_header(rec, i + 2 * m)]
+            same = [m for m in near if rec[i + 2 * m + 2] == rate]
+            n = (same or near or [n])[0]
+            n = min(n, (len(rec) - i) // 2)
+            pairs += [rec[i + 2 * k + o] for k in range(n)]; i += 2 * n
+            out += cnt
             continue
-        take = 16 - len(pairs)
+        take = min(16 - out, (len(rec) - i) // 2)
         pairs += [rec[i + 2 * k + o] for k in range(take)]; i += 2 * take
-    return pairs[:16]
+        out += take
+    return pairs
 
 def track_audio(c, track, right=False):
     core = 0 if track >= 5 else 1; pos = (track - 1) % 4

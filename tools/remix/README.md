@@ -10,7 +10,9 @@ The code that turns `modules/<name>/manifest.py` files and a
 |---|---|
 | `schema.py` | what a module and a remix may declare (`Module`, `Remix`, `Gate`, `Linked`, `Detour`, `CavePatch`, `Runtime`, ...) |
 | `registry.py` | finds every `modules/*/manifest.py` and `remixes/**/remix.py`; no central list |
-| `ledger.py` | cross-module resource collisions (FX2 id, cave, hook site, detour, poke, runtime write, core-private Y, FX2 buffer region), refused by name before a byte is written |
+| `ledger.py` | cross-module resource collisions (FX2 id, declared conflict, every fixed-address write span, kept bytes, grown table, core-private Y, FX2 buffer region, DSP data range), refused by name before a byte is written |
+| `dsp_ranges.py` | who owns each DSP data word in a selection (the ledger's DSP data check), and the port census check `verify_set` runs on the shared window |
+| `keep.py` | the build's assert that kept stock bytes (`schema.Keep`) still hold stock, before the first write and on the finished image |
 | `stock.py` | the stock FX2 effects as rows a remix can keep in the chooser; what a remix harvests |
 | `rig.py` | a module's category, track range and chooser, derived from the manifests |
 | `index.py` | `make modules`, `make docs`: the module table in `README.md` and the remix index |

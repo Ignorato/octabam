@@ -18,12 +18,11 @@ known frequency over the same window: lag = (phase_track - phase_main) /
 residue; the one lag in [-SEARCH, SEARCH] that fits them all is reported, in
 samples and in 16-sample blocks; MAIN R against the right channels likewise.
 
-    tools/harness/usb_align.py [--source <project>] [--remix usb-audio] [--frames 3000]
+    tools/harness/usb_align.py [--source <project>] [--remix usb-out-tracks-main-cue] [--frames 3000]
 
 The source project is the template usb_sig_project.py needs (a locally saved
 Octatrack project; default OT_PROJECT or ~/.octabam_project). The remix must
-carry USB AUDIO OUT TRACKS MAIN CUE and the tone project's FX modules (the
-rig's: `usb-audio`). Needs the port (make emu-cf) and the .venv.
+carry USB AUDIO OUT TRACKS MAIN CUE. Needs the port (make emu-cf) and the .venv.
 """
 import argparse
 import cmath
@@ -83,7 +82,7 @@ def main():
     ap.add_argument("--source", default=os.environ.get("OT_PROJECT") or
                     (pathlib.Path("~/.octabam_project").expanduser().read_text().strip()
                      if pathlib.Path("~/.octabam_project").expanduser().is_file() else ""))
-    ap.add_argument("--remix", default="usb-audio")
+    ap.add_argument("--remix", default="usb-out-tracks-main-cue")
     ap.add_argument("--frames", type=int, default=3000, help="DSP frames the port runs after the transport start (the ring holds the last 1,024)")
     ap.add_argument("--image", default="", help="a built image (default: build the remix)")
     a = ap.parse_args()
@@ -107,8 +106,8 @@ def main():
             sys.exit(f"usb_align: build failed\n{r.stdout[-800:]}{r.stderr[-800:]}")
         shutil.copy2(ROOT / "out/mainos_bus.bin", image)
     proj = OUT / "project"
-    r = subprocess.run([str(PY), "tools/harness/usb_sig_project.py", "--source", a.source, "--out", str(proj),
-                        "--remix", a.remix], cwd=ROOT, capture_output=True, text=True)
+    r = subprocess.run([str(PY), "tools/harness/usb_sig_project.py", "--source", a.source, "--out", str(proj)],
+                       cwd=ROOT, capture_output=True, text=True)
     if r.returncode:
         sys.exit(f"usb_align: usb_sig_project failed\n{r.stdout[-800:]}{r.stderr[-800:]}")
     # MASTER TRACK off, as verify_set runs: MAIN is then the plain mix, and

@@ -225,13 +225,17 @@ every map. Switching the map is an untested lever (`modules/send/README.md`).
 | `0x30000-0x300AA` (171 words) | the DSP host-port loader + ESAI setup, payload A, boot-time (the ESAIs carry audio, 8-slot network mode; `DSP.md` section 6c) | module dump |
 | `0x31000-0x31031` (50 words) | bootstrap A | `DSP.md` |
 | `0x32000-0x32039` (58 words) | bootstrap B | `DSP.md` |
-| `0x38000-0x38012` (19 words) | payload B's entry stub, `jsr`s into `0x30082`/`0x3008a` (stock cross-core code sharing) | module dump |
+| `0x38000-0x38012` (19 words) | payload B's entry stub, `jsr`s into `0x30082`/`0x3008a` (stock cross-core code sharing), boot-time: payload B's own init zeroes `0x37F00-0x3FFFF` (B `P:0x040-0x04a`) right after it, and nothing executes there again | module dump |
 | `0x30000-0x37FFF` | zeroed at init | `P:0x040` |
-| `0x38000` | referenced in a DMA setup (`M_DCR2`) | `P:0x098` |
+| `0x37F00-0x37F0F` in every octabam image (`0x38000-0x3800F` in stock) | the per-frame mailbox from core 1 to core 0, 16 words: B writes it (`P:0x04b-0x056` in its frame loop, `P:0x172-0x179` at frame end), A reads it into `y:$280` (`P:0x09b-0x0a2`, after the `M_DCR2` setup at `P:0x099`). `0x37F00` lies only in payload A's bank-track-4 FX2 slot, where no stock effect writes past `+0x3DA2`; B's boot zero loop covers it (`DSP.md` section 5) | disassembly; port census; `dsp_host` sentinels |
 | X data tables | ~20 lookup tables uploaded to both DSPs at boot | `TABLES.md` |
 
 The boot loader occupies `0x30000` as P; init zeroes `0x30000-0x37FFF`;
-the same words are then staging and FX2 buffer. A raw word scan finds
+the same words are then staging and FX2 buffer. Payload B's entry stub at
+`0x38000-0x38012` is the first 19 words of BusDelay's LineL; it runs once at
+boot and B's init zeroes it before any effect runs, so LineL owns those words
+afterwards. B's init zero loop clears `Y:0x3F00-0xBFFF` and `0x37F00-0x3FFFF`
+in every octabam image (`DSP.md` section 5). A raw word scan finds
 values, not addresses (`0x3a667` disassembles as `teq x1,a r6,r7`);
 disassemble before believing.
 

@@ -18,8 +18,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 from remix import ledger, registry, schema, state, stock  # noqa: E402
-from remix.schema import (CavePatch, Claims, DspHook, DspSection, Kind, MenuEntry,  # noqa: E402
-                          Module, Param, YBase)
+from remix.schema import (BusRole, CavePatch, Claims, Detour, DspHook, DspRange,  # noqa: E402
+                          DspSection, Keep, Kind, MenuEntry, Module, Param,
+                          Poke, SymbolRef, TableGrow, YBase)
 
 
 def _effect(name, fx2_id, priority=0, reserved=(), buffers=False,
@@ -81,6 +82,24 @@ def _cave(name, cave_addr, length=16, hook_addr=None):
     )
 
 
+def _cf(name, **kw):
+    """A ColdFire module declaring fixed-address writes and claims."""
+    return Module(name=name, key=name.upper(), kind=Kind.CF_PATCH, doc="fixture", **kw)
+
+
+def _poke(addr, n=2):
+    return Poke(addr, b"\x00" * n, b"\x4e\x71"[:n] * (n // 2 or 1))
+
+
+def _ranged(name, *ranges, payloads=frozenset({"A"}), role=BusRole.NONE, buffers=False):
+    """A hooked DSP section declaring data ranges."""
+    return Module(
+        name=name, key=name.upper(), kind=Kind.HYBRID, doc="fixture",
+        dsp=DspSection(asm="does/not/exist.asm", priority=20, payloads=payloads, bus_role=role,
+                       hooks=(DspHook(0x88 + len(name), (0x627000, 0x000204), "inject"),)),
+        claims=Claims(dsp_ranges=tuple(ranges), owns_fx2_buffers=buffers))
+
+
 CASES = [
     ("two modules claiming one FX2 id",
      [_effect("alpha", 0x07), _effect("beta", 0x07)], "fx2 id"),
@@ -122,6 +141,62 @@ CASES = [
     ("a table module beside a module addressing the stock curve bank",
      [_effect("alpha", 0x07, ptable=(1, 2, 3)),
       _effect("beta", 0x1e, asm=str(_HARD_ASM))], "X:0x4840 curve bank"),
+    # ---- fixed-address spans, plain against plain ----------------------
+    ("two plain pokes overlapping by one byte",
+     [_cf("alpha", pokes=(_poke(0x4001f322, 4),)), _cf("beta", pokes=(_poke(0x4001f324, 2),))],
+     "poke site"),
+    ("a plain poke inside a pinned cave",
+     [_cave("alpha", 0x400d7000, 64), _cf("beta", pokes=(_poke(0x400d7010),))], "ColdFire cave"),
+    ("a plain poke inside a cave hook's span",
+     [_cave("alpha", 0x400d7000, hook_addr=0x40004d40), _cf("beta", pokes=(_poke(0x40004d46),))],
+     "hook site"),
+    ("two symbol refs on one pointer (synth and Analog BD's FLEX renderer)",
+     [_cf("alpha", symbol_refs=(SymbolRef(0x400d6438, 0x40004008, "u", "a"),)),
+      _cf("beta", symbol_refs=(SymbolRef(0x400d6438, 0x40004008, "u", "b"),))], "poke site"),
+    ("a table ref on a plain poke",
+     [_cf("alpha", tables=(TableGrow("t", 0x40100000, 4, (("u", "s"),), ((0x40065bd8, 0x40100000),)),)),
+      _cf("beta", pokes=(_poke(0x40065bda),))], "poke site"),
+    ("a detour's pad_to span over another's site",
+     [_cf("alpha", detours=(Detour(0x40079816, b"\x00" * 8, "u", "a", pad_to=8),)),
+      _cf("beta", detours=(Detour(0x4007981c, b"\x00" * 6, "u", "b"),))], "hook site"),
+    # ---- kept bytes ------------------------------------------------------
+    ("a poke on bytes another module keeps",
+     [_cf("alpha", keeps=(Keep(0x4001f322, bytes.fromhex("48780064"), "pea 0x64"),)),
+      _cf("beta", pokes=(Poke(0x4001f322, bytes.fromhex("48780064"), bytes.fromhex("48780070")),))],
+     "kept bytes"),
+    ("a detour over kept bytes",
+     [_cf("alpha", keeps=(Keep(0x4001f324, bytes.fromhex("0064"), "pea operand"),)),
+      _cf("beta", detours=(Detour(0x4001f322, b"\x00" * 6, "u", "b"),))], "kept bytes"),
+    ("two keepers expecting different stock",
+     [_cf("alpha", keeps=(Keep(0x4001f322, bytes.fromhex("48780064")),)),
+      _cf("beta", keeps=(Keep(0x4001f322, bytes.fromhex("48780070")),))], "kept bytes"),
+    # ---- grown tables ----------------------------------------------------
+    ("two modules growing one stock array",
+     [_cf("alpha", tables=(TableGrow("t", 0x40100000, 4, (("u", "a"),), ((0x40065bd8, 0x40100000),)),)),
+      _cf("beta", tables=(TableGrow("t", 0x40100008, 2, (("u", "b"),), ((0x40065d3e, 0x40100008),)),))],
+     "grown table"),
+    # ---- declared conflicts ----------------------------------------------
+    ("two designs of one behaviour",
+     [_cf("alpha", pokes=(_poke(0x40100000),), conflicts=(("BETA", "both retime a cued pattern"),)),
+      _cf("beta", pokes=(_poke(0x40100010),))], "declared conflict"),
+    # ---- DSP data ranges -------------------------------------------------
+    ("two modules on one shared-window range from different payloads",
+     [_ranged("alpha", DspRange("y", 0x3a000, 0x100, "buf")),
+      _ranged("beta", DspRange("y", 0x3a080, 0x100, "buf"), payloads=frozenset({"B"}))], "DSP data"),
+    ("two modules on one private X range on one payload",
+     [_ranged("alpha", DspRange("x", 0x6000, 0x10, "table")),
+      _ranged("beta", DspRange("x", 0x6008, 0x10, "table"))], "DSP data"),
+    ("a declared range in another module's FX2 buffer region",
+     [_ranged("alpha", DspRange("y", 0x8000, 0x10, "state")),
+      _ranged("beta", buffers=True)], "DSP data"),
+    ("a non-bus module's range in the bus scratch",
+     [_ranged("alpha", DspRange("y", 0x36100, 0x10, "state")),
+      _ranged("beta", role=BusRole.CLIENT)], "DSP data"),
+    ("a range over stock's core 1 -> core 0 mailbox",
+     [_ranged("alpha", DspRange("y", 0x7e00, 0x200, "line", half_relative=True))], "DSP data"),
+    ("a range on another module's core-private Y word",
+     [_ranged("alpha", DspRange("y", 0x0900, 0x10, "state")),
+      _effect("beta", 0x1e, reserved=(0x0905,))], "DSP data"),
 ]
 
 CLEAN = [_effect("alpha", 0x07, reserved=(0x0905,)),
@@ -138,6 +213,17 @@ CLEAN_STOCK_PAIR = [_stock("chorus", 0x12, True), _stock("comb", 0x13, True),
 # One site, two payloads: no clash, each core has its own P.
 CLEAN_HOOK_PAIR = [_hooked("alpha", payloads=frozenset({"A"})),
                    _hooked("beta", payloads=frozenset({"B"}))]
+# Adjacent pokes, matching keepers, one half-relative range on each half, a
+# private X range on two payloads, and a conflict naming a module that is absent.
+CLEAN_CLAIMS = [_cf("alpha", pokes=(_poke(0x4001f322, 4),),
+                    keeps=(Keep(0x40100000, bytes.fromhex("48780064")),),
+                    conflicts=(("ABSENT", "fixture"),)),
+                _cf("beta", pokes=(_poke(0x4001f326, 2),),
+                    keeps=(Keep(0x40100002, bytes.fromhex("0064")),)),
+                _ranged("gamma", DspRange("y", 0x0800, 0x100, "buf", half_relative=True),
+                        DspRange("x", 0x6000, 0x10, "table")),
+                _ranged("delta", DspRange("y", 0x0800, 0x100, "buf", half_relative=True),
+                        DspRange("x", 0x6000, 0x10, "table"), payloads=frozenset({"B"}))]
 
 
 def _submodule_preflight() -> int:
@@ -215,7 +301,9 @@ def main():
                         ("two buffered stock effects + a zero-buffer insert",
                          CLEAN_STOCK_PAIR),
                         ("two DSP sections hooking one site on different payloads",
-                         CLEAN_HOOK_PAIR)):
+                         CLEAN_HOOK_PAIR),
+                        ("adjacent pokes, agreeing keepers, ranges on different payloads",
+                         CLEAN_CLAIMS)):
         found = ledger.check(mods)
         if found:
             bad += 1
@@ -229,6 +317,45 @@ def main():
         print("  [FAIL] a module on a stock FX2 id (0x0c, EQUALIZER) was accepted")
     except ValueError:
         print("  [PASS] a module on a stock FX2 id is refused")
+
+    for label, make in (
+            ("a module keeping bytes it pokes",
+             lambda: _cf("k", pokes=(_poke(0x40100000, 4),), keeps=(Keep(0x40100002, b"\x00\x00"),))),
+            ("a key in both requires and conflicts",
+             lambda: _cf("k", requires=("X",), conflicts=(("X", "fixture"),))),
+            ("a conflict with itself", lambda: _cf("k", conflicts=(("K", "fixture"),))),
+            ("TableGrow.insert_at past the stock count",
+             lambda: TableGrow("t", 0x40100000, 4, (), (), insert_at=5)),
+            ("a DspRange straddling the shared window", lambda: DspRange("y", 0x2ff00, 0x200, "x")),
+            ("a half-relative DspRange past its half",
+             lambda: DspRange("y", 0x7f00, 0x200, "x", half_relative=True))):
+        try:
+            make()
+            bad += 1
+            print(f"  [FAIL] {label} was accepted")
+        except ValueError:
+            print(f"  [PASS] {label} is refused")
+    got = registry.validate_keys({"ALPHA": _cf("alpha", conflicts=(("NOPE", "fixture"),))})
+    if got:
+        print(f"  [PASS] an unknown conflicts key is refused -> {got[0]}")
+    else:
+        bad += 1
+        print("  [FAIL] an unknown conflicts key was accepted")
+    grown = TableGrow("t", 0, 3, (), (), insert_at=1).entries([1, 2, 3], [9, 8])
+    if grown == [1, 9, 8, 2, 3] and TableGrow("t", 0, 3, (), ()).entries([1, 2, 3], [9]) == [1, 2, 3, 9]:
+        print("  [PASS] TableGrow inserts a block at insert_at and appends by default")
+    else:
+        bad += 1
+        print(f"  [FAIL] TableGrow.entries gave {grown}")
+    # The real pair the plain-span pass newly refuses: both rewrite the FLEX
+    # renderer pointer 0x400d6438, and synth's machine-window detour spans
+    # Analog BD's at 0x4007981c.
+    pair = ledger.check([registry.by_key("SYNTH MACHINE"), registry.by_key("ANALOG BD")])
+    if any(p.startswith(("poke site", "hook site")) for p in pair):
+        print(f"  [PASS] SYNTH MACHINE + ANALOG BD are refused -> {pair[0]}")
+    else:
+        bad += 1
+        print(f"  [FAIL] SYNTH MACHINE + ANALOG BD: {pair}")
 
     try:
         Param(b"SIXSIX")
@@ -567,15 +694,20 @@ def main():
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
     _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
-             "usb-out-main-cue": (), "usb-out-main": (),     # stock effects + ColdFire modules, no DSP words
-             "repitch": (),
+             "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (),     # stock effects + ColdFire modules, no DSP words
+             "repitch": (), "analog-bassdrum": ("SPRING REV",),
+             # Zac Kyoti's ColdFire modules on the stock effects, no DSP words
+             **{_k: () for _k in ("direct-jump-kyoti", "batch-bugfixes", "reload-from-project",
+                                  "quantize-live-rec-toggle", "erase-empty-trigless-locks",
+                                  "mute-modes", "kyoti-mute-jump", "kyoti-fixes")},
              # the twelve io remixes: the IN module's RX inject is placed in SPATIALIZER's words
              **{f"usb-io-{o}-{i}": ("SPATIALIZER",) for o in ("tracks", "tracks-main-cue", "main-cue", "main") for i in ("ab", "cd", "abcd")},
              "octatrick": ("SPATIALIZER",),   # USB AUDIO IN ABCD's inject, as in the io remixes
              "sos-capture": ("SPATIALIZER",),   # usb-io-tracks-ab + the recorder fixes
              "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
+             "waveload": ("DARK REV",), "waveload-port": ("DARK REV",),   # CF METER's readout insert, as cfmeter
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "usb": _rig, "usb-audio": _rig, "bottleservice": _rig}
+             "rig": _rig, "bottleservice": _rig}
     for _n in registry.remix_names():
         _r = registry.remix(_n)
         _hv = stock.region_of(stock.harvested(

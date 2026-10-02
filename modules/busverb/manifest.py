@@ -4,7 +4,7 @@ Clones DARK REV's descriptor. Every slot states its name, including the ones
 the donor already carries, because the harness reads these names.
 """
 
-from remix.schema import (Gate, Category, Proof, BusRole, Claims, YBase, DspSection, Formatter,
+from remix.schema import (Gate, Category, Proof, BusRole, Claims, DspRange, YBase, DspSection, Formatter,
                           Harness, Kind, MenuEntry, Module, Param)
 
 _PLAIN = Formatter.PLAIN
@@ -164,8 +164,14 @@ MODULE = Module(
     ),
     # The eight tank lines are hardcoded into Y:0x4000-0xBFFF, the per-core
     # FX2 instance buffer region; the ledger refuses anything else that owns
-    # memory there on the same core.
-    claims=Claims(owns_fx2_buffers=True),
+    # memory there on the same core. Every other buffer is in payload A's
+    # half of the shared window, +0x0800..0x57FF: the warm-up clears that
+    # whole span (base+0x800 + count*80, 256 blocks), and the port census
+    # (verify_set, OCTABAM89_setgate bank 2, 900 frames) saw non-zero writes
+    # in +0x0800-0x0FFF, 0x2000-0x43FF, 0x4500-0x45FF and 0x4800-0x57FF.
+    claims=Claims(owns_fx2_buffers=True, dsp_ranges=(
+        DspRange("y", 0x0800, 0x5000, "shimmer, pre-delay, allpasses, tank state, bloom",
+                 half_relative=True),)),
     harness=Harness(layout_char="R", is_server=True),
     # the bus's two-core and one-aux gates (shared with BusDelay; run once)
     gates=(Gate('tools/verify/verify_twocore.py', remix_arg=False),

@@ -12,7 +12,7 @@ package: `brew install libusb`, then
 and run this with `/usr/local/bin/python3` (25 Sep 2026).
 A device-recipient control request needs no interface claim, so the
 audio and MIDI drivers macOS attaches stay attached. The unit must be
-running a `usb-audio` image; on any other image the request STALLs
+running an image with a USB AUDIO OUT module; on any other image the request STALLs
 (reported here, not an error).
 
 Meaning (from usbaudio.s): produced/consumed are frame counts (the ring is

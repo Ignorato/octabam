@@ -37,7 +37,7 @@ Image 64, `usb-audio`, Sam's MKII, 25 Sep 2026:
 Also carried on Tim Hastie's MKI (`octatrick-usb`, OCTATRICK9, 26 Sep 2026),
 Bryan T's MKII (`usb-lean` image 90, 25 Sep 2026) and Sam's MKII as image 88
 (`bottleservice`, 27 Sep 2026); none of those runs measured MIDI itself.
-The `usb` remix (this module without USB AUDIO) has not been flashed.
+The `usb-midi` remix (this module on the stock effects) has not been flashed.
 
 ## Open
 

@@ -227,6 +227,10 @@ the base literal per payload); 65,536 words per server:
 | `shared+0x4500..0x453f` | 8 × 6 + 8 × 2 | tank state table A (tap loop: read offset, fraction, d0 carry, damping state, LO state, output) at `+0x4500`, table B (feedback: weight, gain) at `+0x4530` |
 | `shared+0x4800` / `0x5000` | 2 × 2048 | bloom allpasses (output branch), taps 1801/1291 |
 
+`shared+0x0800..0x57FF` is declared as `Claims.dsp_ranges` (payload A:
+`Y:0x30800–0x357FF`); the warm-up clears all of it, and `verify_set`
+holds the port's shared-window write census to it.
+
 r7 block: `$84+` hangs the DSP; `$82` warm-up counter (`$2c0000 | blocks`,
 capped 0x100), `$83` write phase; the asm header is the slot map, from a
 census of the source (23 Sep 2026: sixteen slots unreferenced, listed
