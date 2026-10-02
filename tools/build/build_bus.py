@@ -2200,9 +2200,9 @@ mkgo:""",
 
         # ---- the servers pack into the HARVESTED effects' code -----------
         # The donor region is not a place, it is a choice: the thirteen DSP
-        # effects are contiguous and each is self-contained, so any unbroken
-        # run of them is placeable ground (schema.Remix.harvest,
-        # stock.p_spans). `DEFAULT_HARVEST` is the three reverbs, which is
+        # effects are contiguous, so any unbroken run of them is placeable
+        # ground (schema.Remix.harvest, stock.p_spans), less the routines a
+        # kept effect calls inside it (stock.pinned). `DEFAULT_HARVEST` is the three reverbs, which is
         # what every remix did before -- so a default selection
         # writes the same bytes it always has (refhash).
         #
@@ -2263,6 +2263,23 @@ mkgo:""",
                      f"{sum(n for _a, n in _want)} words but their P records "
                      f"total {_have} -- the module map and stock.p_spans "
                      f"disagree")
+        # Words inside the harvest that a kept effect still runs (DARK REV's
+        # call into SPRING's span, stock.pinned) are cut out of the records,
+        # so the stream is placed around them.
+        for _pa, _pn, _pk, _pc in stock_mod.pinned(tag, _harvest):
+            _cut = []
+            for _sp_, _a, _c, _o in region:
+                if _a + _c <= _pa or _pa + _pn <= _a:
+                    _cut.append((_sp_, _a, _c, _o))
+                    continue
+                if _a < _pa:
+                    _cut.append((_sp_, _a, _pa - _a, _o))
+                if _pa + _pn < _a + _c:
+                    _e = _pa + _pn
+                    _cut.append((_sp_, _e, _a + _c - _e, _o + (_e - _a) * 3))
+            region = _cut
+            print(f"payload {tag}: P:0x{_pa:05x}+{_pn} kept ({_pk}'s words, "
+                  f"called by {_pc})")
         runs = []
         for _rec in region:
             if runs and runs[-1]["base"] + runs[-1]["words"] == _rec[1]:
@@ -3024,8 +3041,11 @@ hostquit:
         # (kept = harvested, unreached, and NOT replaced: a replaced effect's
         # code may be untouched but its dispatch is ours, so it is not
         # stock any more and must not be reported as kept.)
+        # Every word, not the first: a span that starts with a pinned run
+        # (stock.pinned) is written above it.
         kept = [d for d, (a, _n) in _hv.items()
-                if not _written(a) and d not in _replaced]
+                if not any(_written(w) for w in range(a, a + _n))
+                and d not in _replaced]
         # A harvested reader of the curve bank whose code the stream never
         # reached would keep its stock dispatch and read our tables as its
         # curves. Its code is untouched, its data is not: null it, and say so.

@@ -150,9 +150,13 @@ off **both** choosers is the decision to give up its words
 (`stock.harvested`); removing it from one menu while it still has a row on
 the other frees nothing. The three reverbs are only the default harvest:
 the biggest, and FX2-only, so taking them costs FX1 nothing. The thirteen
-DSP effects are laid out contiguously and each is self-contained, so any
-unbroken run of them is ground a module can be placed into; the map under
-the budget draws a bracket per run.
+DSP effects are laid out contiguously, so any unbroken run of them is
+ground a module can be placed into; the map under the budget draws a
+bracket per run. A routine that a kept effect calls inside a harvested one
+stays where it is and the run is placed around it (DARK REV calls 35 words
+in SPRING's span, PLATE calls 93 in DARK's, five effects call 27 in
+FILTER's; `stock.pinned`, printed by the build as `kept (... called by
+...)`).
 
 A module must fit inside one run: two runs of 1,500 words will not take a
 2,000-word module, so the budget names the largest opening beside the
