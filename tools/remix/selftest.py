@@ -695,7 +695,7 @@ def main():
                  "DJ EQ", "COMB FILTER")
     _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
              "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (),     # stock effects + ColdFire modules, no DSP words
-             "repitch": (), "analog-bassdrum": ("SPRING REV",),
+             "repitch": (), "plocks-p2": (), "analog-bassdrum": ("SPRING REV",),
              # Zac Kyoti's ColdFire modules on the stock effects, no DSP words
              **{_k: () for _k in ("direct-jump-kyoti", "batch-bugfixes", "reload-from-project",
                                   "quantize-live-rec-toggle", "erase-empty-trigless-locks",

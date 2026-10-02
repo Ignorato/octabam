@@ -109,6 +109,8 @@ def preboot_layout(layout, entries):
         raise ValueError('pre-boot payloads require a declared platform arena layout')
     occupied = [('runtime', layout['base'], layout['runtime_end']),
                 ('runtime stage', layout['stage'], layout['stage_end'])]
+    if 'bss_end' in layout:
+        occupied.append(('runtime .bss', layout['runtime_end'], layout['bss_end']))
     result = []
     for entry in entries:
         for role, length in (('dst', entry['rawlen']), ('stage', len(entry['blob']))):
@@ -166,12 +168,22 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
                      f"{len(raw):,} B at 0x{base:08x}, stage 0x{stage:08x}..0x{stage_end:08x}, "
                      f"ceiling 0x{ceiling:08x} ({size:,} B). Reserve more pages "
                      f"(tools/remix/arena.py PLATFORM_PAGES).")
+        # A unit's .bss follows the image, is never loaded and holds whatever
+        # the boot left (the stage sits inside it until the depack is done):
+        # the unit initialises it. It has to end below the ceiling.
+        bss_end = symbols.get("_end", base + len(raw))
+        if bss_end > ceiling:
+            sys.exit(f"platform build: the runtime's .bss ends at 0x{bss_end:08x}, past the "
+                     f"reserve's ceiling 0x{ceiling:08x} ({size:,} B). Reserve more pages "
+                     f"(tools/remix/arena.py PLATFORM_PAGES).")
         entries.append(dict(name="octabam", blob=SIGNATURE + packed,
                             stage=stage + UNCACHED, dst=base + UNCACHED,
                             rawlen=len(raw), rhash=roll(raw), backup=0))
         (work / "runtime.raw").write_bytes(raw)
         layout.update(base=base, runtime_end=base + len(raw), stage=stage,
                       stage_end=stage_end, ceiling=ceiling, size=size)
+        if bss_end > symbols.get("__bss_start", bss_end):
+            layout.update(bss_end=bss_end)
     if preboot:
         try:
             layout['preboot'] = preboot_layout(layout, preboot)
