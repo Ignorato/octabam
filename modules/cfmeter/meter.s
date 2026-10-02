@@ -32,6 +32,12 @@
 |   5  frame period (segment / interrupts), counts / 4
 |   6  the idle loop's shortest step, counts
 |   7  BURN, counts / 4
+|
+| With WAVE LOAD in the remix (remix.inc sets WAVE_LOAD), BURN is K
+| instead: m_isr renders K 4-voice wave engines (cl_load) where it would
+| busy-wait, and slot 7 still prints BURN x 66.
+
+        .include "remix.inc"
 
         .equ    DTCN3,      0xfc07c00c
         .equ    LANE8,      0x80000a08          | 0x80000810 + 7 * 72
@@ -58,6 +64,10 @@ m_isr:
         bne.s   2f                              | T8's FX2 is not CF METER: no burn
         move.b  BURN,%d1
         beq.s   2f
+        .ifdef  WAVE_LOAD
+        jsr     cl_load                         | K = BURN wave engines
+        bra.s   2f
+        .endif
         mulu.w  #264,%d1                        | 2 us per step
         add.l   %d0,%d1                         | deadline
 1:      move.l  DTCN3,%d0

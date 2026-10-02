@@ -8,13 +8,20 @@ handler's epilogue with an exit stamp and the publisher. Every 125 ms the
 publisher writes one of eight values into track 8's FX2 page-2 lane,
 beside a fixed reference; the DSP insert (`meter_out.asm`) on T8's FX2
 prints both as a square wave. `tools/harness/cfmeter.py` decodes a
-capture. README.md has the procedure.
+capture. README.md has the procedure. With WAVE LOAD in the remix, BURN
+is the number of wave engines rendered per frame instead
+(modules/waveload/README.md).
 """
 
 from remix.schema import (BusRole, Category, Detour, DspSection, Formatter, Harness, Kind,
                           Linked, MenuEntry, Module, Param, Proof, YBase)
 
 _BLANK = Param(b"", None, active=False)
+
+
+def load_inc(modules):
+    """WAVE LOAD in the remix: m_isr calls its cl_load with BURN as K."""
+    return "        .set    WAVE_LOAD, 1\n" if "WAVE LOAD" in modules else ""
 
 MODULE = Module(
     name="cfmeter",
@@ -44,7 +51,7 @@ MODULE = Module(
         r7_latch_slot=None,
         gate_label=None,
     ),
-    linked=(Linked("cfmeter", "modules/cfmeter/meter.s", dram=True),),
+    linked=(Linked("cfmeter", "modules/cfmeter/meter.s", dram=True, include=load_inc),),
     detours=(
         Detour(0x4001fbf8, bytes.fromhex("48794000aad0"), "cfmeter", "m_isr",
                "main's install of vector 0x41 (the frame interrupt): pea m_isr", kind="lea"),

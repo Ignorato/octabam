@@ -705,6 +705,7 @@ def main():
              "octatrick": ("SPATIALIZER",),   # USB AUDIO IN ABCD's inject, as in the io remixes
              "sos-capture": ("SPATIALIZER",),   # usb-io-tracks-ab + the recorder fixes
              "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
+             "waveload": ("DARK REV",), "waveload-port": ("DARK REV",),   # CF METER's readout insert, as cfmeter
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
              "rig": _rig, "bottleservice": _rig}
     for _n in registry.remix_names():
