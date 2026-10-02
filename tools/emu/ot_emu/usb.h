@@ -40,6 +40,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -127,7 +128,18 @@ namespace ot
 		// can count. A bulk IN is served the moment it can be (tryAll);
 		// an isochronous one only here, so a host script that polls as fast
 		// as the socket allows still drains at the device's own rate.
+		//
+		// With a socket client connected, the bench IS the host's schedule:
+		// an enabled isochronous IN endpoint with no IN waiting holds device
+		// time here until the bench's next command arrives, so a bench that is
+		// late on the wall clock (a loaded machine) costs wall time, not
+		// device time. The hold ends early when the bench has a transfer or
+		// request outstanding (the device must run to finish it), on hangup,
+		// or at the wall deadline (setBenchDeadline), after which polls are
+		// answered as before. A direct `command()` caller (a test) is never
+		// held.
 		bool isoPoll();		// true when an enabled isochronous IN found no request waiting
+		void setBenchDeadline(std::chrono::steady_clock::time_point _t) { m_benchDeadline = _t; }
 		double isoPollHz() const { return m_isoHz > 0 ? m_isoHz : m_speedHs ? 4000.0 : 1000.0; }
 		bool isIso(int _ep, bool _in) const;
 
@@ -164,6 +176,9 @@ namespace ot
 		void reply(const std::string& _s);
 		void writeSocket(const std::string& _s);
 		void closeClient();
+		bool isoInStarved() const;			// an enabled isochronous IN endpoint with no IN waiting
+		bool benchBusy() const;				// a bench transfer or request still outstanding
+		void awaitBench();
 
 		Read8 m_read8;
 		Write8 m_write8;
@@ -180,6 +195,7 @@ namespace ot
 		bool m_hostPresent = false;
 		bool m_resetPending = false;
 		std::unique_ptr<Request> m_request;
+		std::chrono::steady_clock::time_point m_benchDeadline = std::chrono::steady_clock::time_point::max();
 		std::function<void(const std::string&)> m_sink;	// where replies go while a command is being served
 		std::string m_line;
 		Stats m_stats;

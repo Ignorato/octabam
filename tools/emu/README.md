@@ -266,6 +266,18 @@ tools/harness/usb_host.py /tmp/ot-usb.sock audio 3 2.0 capture.pcm 4
 - **Polling cadence.** The bench polls an isochronous endpoint on the
   endpoint's own schedule in device time: 250 µs at high speed for
   bInterval 2, 1 ms at full speed.
+- **The bench sets the pace.** While a client is connected and an
+  isochronous IN endpoint is enabled with no IN waiting, the port holds
+  device time until the client's next command, so a bench that is slow on
+  the wall clock (a loaded machine) costs wall time, not polls. The hold
+  ends early while the client has a transfer or a `poke`/`call` outstanding
+  (the device must run to finish it), on hangup, and at the `--usb-hold-ms`
+  wall cap. A poll it lets through with no IN waiting is counted in the
+  final "iso poll(s) with no IN waiting". The bench issues one command at
+  a time, so a poll slot that falls inside an EP0 control transfer made
+  while the stream is enabled (`verify_usb_in`: SET_INTERFACE 5, the two
+  vendor 0x56 reads, alt 0 on close) is one of these: 0-2 per
+  `verify_usb_in` run, under load or not.
 - **Gates.**
   - `verify_usb` enumerates the stock stack (INQUIRY `Elektron Octatrack
     DPS-1 0002`) and streams from the `usb-audio-*` modules.

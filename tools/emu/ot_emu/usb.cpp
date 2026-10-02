@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -313,9 +314,47 @@ namespace ot
 		}
 	}
 
+	bool UsbDevice::isoInStarved() const
+	{
+		for(int ep = 1; ep < g_endpoints; ++ep)
+		{
+			const uint32_t epctrl = m_regs[(R_EPCTRL0 + 4u * ep) / 4];
+			if((epctrl & (1u << 23)) && isIso(ep, true) && !m_in[ep].pending)
+				return true;
+		}
+		return false;
+	}
+
+	bool UsbDevice::benchBusy() const
+	{
+		if(m_request)
+			return true;
+		for(int ep = 0; ep < g_endpoints; ++ep)
+			if(m_in[ep].pending || m_out[ep].pending)
+				return true;
+		return false;
+	}
+
+	void UsbDevice::awaitBench()
+	{
+		while(m_fd >= 0 && isoInStarved() && !benchBusy())
+		{
+			const auto now = std::chrono::steady_clock::now();
+			if(now >= m_benchDeadline)
+				return;
+			const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(m_benchDeadline - now).count();
+			pollfd p{m_fd, POLLIN, 0};
+			::poll(&p, 1, int(std::min<long long>(left, 100)));
+			pollIo();
+		}
+	}
+
 	bool UsbDevice::isoPoll()
 	{
 		if(!connected() || !m_regs[R_EPLISTADDR / 4])
+			return false;
+		awaitBench();
+		if(!connected())
 			return false;
 		bool missed = false;
 		for(int ep = 0; ep < g_endpoints; ++ep)
