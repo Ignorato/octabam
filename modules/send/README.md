@@ -333,7 +333,8 @@ in time and nothing else.
 | range | what | notes |
 |---|---|---|
 | `0x30000–0x30047` | stock's per-frame parameter staging ✅ | rewritten every frame |
-| `0x30000–0x37FFF` | core 0's half: BusVerb's relocated buffers (`0x30000`, `0x34000`), shimmer line, tank state | fully owned |
+| `0x30000–0x37FFF` | core 0's half: BusVerb's buffers `0x30800–0x357FF` (shimmer, allpasses, tank state, bloom; `Claims.dsp_ranges`) | fully owned |
+| `0x37F00–0x37F0F` | stock's core 1 → core 0 mailbox, 16 words a frame; at `0x38000` in stock, moved here by every build ✅ | rewritten every frame |
 | `0x31000` / `0x32000` | stock bootstraps A and B ✅ | dead after boot |
 | `0x36000+` | bus scratch (`docs/firmware/CHIP.md` for the extent) | both cores touch it |
 | `0x38000–0x3FFFF` | core 1's half: BusDelay's LineL, 32,768 words (LineR is core 1's private `Y:0x4000–0xBFFF`, 15 Sep 2026) | 741 ms per line |

@@ -12,8 +12,9 @@ it is, not an address; the build decides which bytes land where.
 | **Appended runtime** | `Runtime` (a recipe: Octakit's `firmware.json`) + `ArenaReserve` | its own pages of the same arena, as a payload of the same loader | the author's (Octakit: 528 pages) |
 
 The OS-image edits every class needs (a detour at a stock instruction, a
-poke, a grown table) are `Detour`, `Poke`, `TableGrow`, wired by symbol.
-`tools/remix/ledger.py` refuses two modules that claim one address before
+poke, a grown table) are `Detour`, `Poke`, `TableGrow`, wired by symbol;
+stock bytes a module relies on without writing are a `Keep`.
+`tools/remix/ledger.py` refuses two modules that claim one byte before
 a byte is written.
 
 ## The free ROM (measured)

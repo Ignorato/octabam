@@ -3,10 +3,12 @@ image, packed, and appended after the OS behind the loader (loader.S)
 together with any other payload -- Em's Kit runtime -- as equals.
 
 One link for all DRAM units means cross-unit symbols resolve without any
---defsym; other payloads' symbols (her gk_*) are offered as defsyms so a
-unit may call into them. The loader itself is assembled here with the
-payload table and blobs `.incbin`'d after it, so every address in the
-append is the assembler's, not arithmetic in Python.
+--defsym; other payloads' symbols (her gk_*), the units' resolved
+Linked.defsyms and a bridge's continuation targets are offered as
+defsyms, and each unit's own Linked.defsyms also go to its assembly. The
+loader itself is assembled here with the payload table and blobs
+`.incbin`'d after it, so every address in the append is the assembler's,
+not arithmetic in Python.
 """
 
 from __future__ import annotations
@@ -45,11 +47,30 @@ def _nm(elf, cwd):
     return {f[2]: int(f[0], 16) for f in rows if len(f) == 3 and not f[2].startswith(".L")}
 
 
-def link_runtime(units, work: pathlib.Path, defsyms: dict, base: int, includes=None) -> tuple[bytes, dict]:
+def as_defsyms(defs) -> list[str]:
+    """`m68k-elf-as` arguments defining each (name, value)."""
+    return [x for n, v in defs for x in ("--defsym", f"{n}=0x{v:x}")]
+
+
+def redefined(obj, defs) -> list[str]:
+    """Names in `defs` that the object's own source defines: the assembler
+    lets a label or `.equ` silently override `--defsym`, so a declared
+    name that comes back as a section symbol, or as an absolute with
+    another value, is the source's own."""
+    want = dict(defs)
+    rows = [l.split() for l in _run(["m68k-elf-nm", obj], ROOT).splitlines()]
+    return sorted(f[2] for f in rows if len(f) == 3 and f[2] in want
+                  and (f[1] not in ("a", "A") or int(f[0], 16) != want[f[2]] & 0xFFFFFFFF))
+
+
+def link_runtime(units, work: pathlib.Path, defsyms: dict, base: int, includes=None,
+                 unit_defs=None) -> tuple[bytes, dict]:
     """Assemble every (module key, Linked) unit and link them together at
     `base`. Returns (raw image, symbols). `includes` = {unit label: text}
     for units with `Linked.include`: the text is written as `remix.inc`
-    beside the unit's object and the assembler searches there."""
+    beside the unit's object and the assembler searches there.
+    `unit_defs` = {unit label: ((name, value), ...)}, that unit's resolved
+    Linked.defsyms, passed to its assembly."""
     work.mkdir(parents=True, exist_ok=True)
     objs = []
     for i, (key, u) in enumerate(units):
@@ -66,7 +87,12 @@ def link_runtime(units, work: pathlib.Path, defsyms: dict, base: int, includes=N
         # the whole link, and an ISA-C assembly of ISA-A/B text is the same
         # bytes (refhash: every runtime bit-identical, 25 Sep 2026).
         # `Linked.cpu` still governs the ROM-cave form.
-        _run(["m68k-elf-as", "-mcpu=54455", *inc, "-o", obj, ROOT / u.source], work)
+        mine = tuple((unit_defs or {}).get(u.label, ()))
+        _run(["m68k-elf-as", "-mcpu=54455", *inc, *as_defsyms(mine), "-o", obj, ROOT / u.source], work)
+        own = redefined(obj, mine) if mine else []
+        if own:
+            sys.exit(f"platform build: {u.source} defines {', '.join(own)}, which its "
+                     f"Linked.defsyms also declares")
         objs.append(obj)
     elf, raw = work / "runtime.elf", work / "runtime.bin"
     _run(["m68k-elf-ld", f"-Ttext=0x{base:x}",
@@ -101,7 +127,8 @@ def preboot_layout(layout, entries):
     return result
 
 
-def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, preboot=(), includes=None):
+def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, preboot=(), includes=None,
+          unit_defs=None):
     """units: [(module key, Linked)] with dram=True, in link order.
     payloads: [dict(name, blob, stage, dst, rawlen, rhash, backup)] for
     payloads built elsewhere (Octakit): `blob` = signature + GKA3 stream.
@@ -112,7 +139,8 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
     boot-continue call (Analog BD's DSP uploads); the loader
     carries that section only when there is one. Returns
     (append bytes, symbols of the octabam runtime, boot poke, payload
-    names) and writes LAYOUT."""
+    names) and writes LAYOUT. unit_defs: {unit label: resolved
+    Linked.defsyms} for each unit's assembly (link_runtime)."""
     import json
     work = work.resolve()
     work.mkdir(parents=True, exist_ok=True)
@@ -128,7 +156,7 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
         for p in payloads:
             defs.update(p.get("symbols", {}))
         defs.update(defsyms or {})
-        raw, symbols = link_runtime(units, work / "runtime", defs, base, includes)
+        raw, symbols = link_runtime(units, work / "runtime", defs, base, includes, unit_defs)
         packed = runtime_build.PACKED_MAGIC + len(raw).to_bytes(4, "big") + \
             runtime_build.pack(raw, MAX_CANDIDATES)
         stage = (base + len(raw) + STAGE_ALIGN - 1) & ~(STAGE_ALIGN - 1)

@@ -234,8 +234,10 @@ is a PR that changes the SHA and the version comment beside it.
 - Read the traps in `AGENTS.md` before trusting an assembler, an
   emulator, or a null result.
 - Collisions are refused by name; `make modules` prints the matrix. If
-  your module cannot share an image with another, say so in its README
-  and say why (a shared hook site, a shared data structure).
+  your module cannot share an image with another although no claim
+  overlaps (two designs of one behaviour), declare it:
+  `conflicts=(("<KEY>", "<why>"),)`. Bytes your module relies on staying
+  stock are a `Keep`, not a poke that writes what it expects.
 - Keep the report text stable, keep `priority` stable (it is
   byte-load-bearing), keep `key` stable.
 - A PR that touches a submodule pin says which upstream commit and why.
