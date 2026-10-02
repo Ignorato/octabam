@@ -3,7 +3,7 @@
 A trigless lock whose last remaining lock is erased disappears from the trig row instead of staying lit. A deliberately empty trigless lock placed with `FUNC` + `TRIG` is left alone.
 
 Built from [Zac-Kyoti/octatrack-kyoti-fw](https://github.com/Zac-Kyoti/octatrack-kyoti-fw)
-(submodule `upstream/`, pinned to `7f80b85`). `Kind.CF_PATCH`. One ROM cave (`patch_triglock.s`).
+(submodule `upstream/`, pinned to `77f132f`). `Kind.CF_PATCH`. One ROM cave (`patch_triglock.s`).
 `upstream/octabam-modules/erase-empty-trigless-locks/README.md` is the full description, with what was measured and what was inferred.
 
 ## Measured
