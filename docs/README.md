@@ -40,7 +40,8 @@ Where each doc is, by who reads it. A module's own page is
 [ARCHITECTURE.md](firmware/ARCHITECTURE.md); [CHIP.md](firmware/CHIP.md)
 is the silicon and the cycle budget, [DSP.md](firmware/DSP.md) the audio
 DSP, and the rest one subsystem each (kernel, tables, parameter pages,
-menus, panel, MIDI, LFO, level law, recorder, sample save, storage).
+menus, panel, MIDI, LFO, level law, recorder, sample save, storage,
+step locks).
 
 ## Proposals
 

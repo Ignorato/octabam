@@ -27,10 +27,12 @@ def next_inc(modules):
     """Where a turn with no scene held continues: the stock prologue replay
     inside the unit, or, when Octakit is in the image, nothing here -- the
     SCENES P2 KITS bridge overrides her writes at the two editor entries and
-    the build defines P2_NEXT2 / P2_NEXT1 as her wrappers."""
+    the build defines P2_NEXT2 / P2_NEXT1 as her wrappers. PLOCKS = 1 when
+    PLOCKS P2 is in the remix: the dial shows a held step's page-2 lock."""
+    plocks = f"        .set    PLOCKS, {1 if 'PLOCKS P2' in modules else 0}\n"
     if "OCTAKIT" in modules:
-        return "| P2_NEXT2 / P2_NEXT1: Octakit's editor wrappers (SCENES P2 KITS)\n"
-    return ("        .set    P2_NEXT2, fx2_stock\n"
+        return plocks + "| P2_NEXT2 / P2_NEXT1: Octakit's editor wrappers (SCENES P2 KITS)\n"
+    return (plocks + "        .set    P2_NEXT2, fx2_stock\n"
             "        .set    P2_NEXT1, fx1_stock\n")
 
 MODULE = Module(

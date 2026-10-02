@@ -775,11 +775,12 @@ dial1_hook:
         jmp     0x40037be4
 
 | dial: a0 = the Part byte, d6 = kind, fp / d4 as above -> d6 = the value
-| to draw. Keeps everything but d6 and a0.
+| to draw: a held scene's lock, else (with PLOCKS P2 in the remix) a held
+| step's page-2 lock, else the Part byte. Keeps everything but d6 and a0.
 dial:   moveq   #0,%d0
         moveb   %a0@,%d0
         tstl    SCENE_HELD
-        beq.w   dknob
+        beq.w   dnoscene
         lea     %sp@(-32),%sp
         movem.l %d1-%d5/%a1/%a4/%a5,%sp@
         movel   %d0,%d3                | the knob, the fallback
@@ -823,6 +824,10 @@ db1:    moveq   #0,%d2
 dnone:  movel   %d3,%d0
         movem.l %sp@,%d1-%d5/%a1/%a4/%a5
         lea     %sp@(32),%sp
+dnoscene:
+        .if     PLOCKS
+        jsr     plk_dial               | PLOCKS P2: a held step's page-2 lock
+        .endif
 dknob:  movel   %d0,%d6
         rts
 

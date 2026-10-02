@@ -112,7 +112,9 @@ position.
   (`0x40038c30(scene)`) drops them.
 - **The dial.** The page-2 knob draw reads the Part byte at `0x40037840`
   (FX2) and `0x40037bdc` (FX1); with a scene held it shows that scene's
-  lock instead, as the page-1 dials do.
+  lock instead, as the page-1 dials do. With PLOCKS P2 in the remix and
+  no scene held, trigs held show the first held step's page-2 lock
+  (`plk_dial`).
 
 ## Octakit
 

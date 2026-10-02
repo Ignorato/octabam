@@ -166,6 +166,14 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
                      f"{len(raw):,} B at 0x{base:08x}, stage 0x{stage:08x}..0x{stage_end:08x}, "
                      f"ceiling 0x{ceiling:08x} ({size:,} B). Reserve more pages "
                      f"(tools/remix/arena.py PLATFORM_PAGES).")
+        # A unit's .bss follows the image, is never loaded and holds whatever
+        # the boot left (the stage sits inside it until the depack is done):
+        # the unit initialises it. It has to end below the ceiling.
+        bss_end = symbols.get("_end", base + len(raw))
+        if bss_end > ceiling:
+            sys.exit(f"platform build: the runtime's .bss ends at 0x{bss_end:08x}, past the "
+                     f"reserve's ceiling 0x{ceiling:08x} ({size:,} B). Reserve more pages "
+                     f"(tools/remix/arena.py PLATFORM_PAGES).")
         entries.append(dict(name="octabam", blob=SIGNATURE + packed,
                             stage=stage + UNCACHED, dst=base + UNCACHED,
                             rawlen=len(raw), rhash=roll(raw), backup=0))
