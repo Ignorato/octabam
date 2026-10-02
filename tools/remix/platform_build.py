@@ -109,6 +109,8 @@ def preboot_layout(layout, entries):
         raise ValueError('pre-boot payloads require a declared platform arena layout')
     occupied = [('runtime', layout['base'], layout['runtime_end']),
                 ('runtime stage', layout['stage'], layout['stage_end'])]
+    if 'bss_end' in layout:
+        occupied.append(('runtime .bss', layout['runtime_end'], layout['bss_end']))
     result = []
     for entry in entries:
         for role, length in (('dst', entry['rawlen']), ('stage', len(entry['blob']))):
@@ -180,6 +182,8 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
         (work / "runtime.raw").write_bytes(raw)
         layout.update(base=base, runtime_end=base + len(raw), stage=stage,
                       stage_end=stage_end, ceiling=ceiling, size=size)
+        if bss_end > symbols.get("__bss_start", bss_end):
+            layout.update(bss_end=bss_end)
     if preboot:
         try:
             layout['preboot'] = preboot_layout(layout, preboot)
