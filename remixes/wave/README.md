@@ -1,8 +1,9 @@
 # `wave` — a wavetable synth on any sample track (experiment)
 
 **An experiment.** WAVE turns a sample track into a 4-voice wavetable synth:
-the voice of [CHOMPI](https://github.com/CHOMPI-Club/CHOMPI)'s WAVE firmware
-(its wavetable oscillator, DJ filter and LFOs), running on the Octatrack's
+a voice ported from CHOMPI Club's open-source WAVE firmware
+([CHOMPI-Club/CHOMPI](https://github.com/CHOMPI-Club/CHOMPI), MIT: its
+wavetable oscillator, DJ filter and LFOs), running on the Octatrack's
 DSP as an FX2 effect. The track plays a plain sine sample; WAVE hears its
 pitch and its level and plays four voices at that pitch, shaped by that
 level. So everything that moves a sample's pitch or volume plays the synth:
@@ -12,6 +13,8 @@ the AMP envelope.
 It is built to be extended (more tables, its own envelope, per-voice notes,
 a cheaper control path); [the module page](../../modules/wave/README.md)
 says what is in it and what is open.
+
+Not affiliated with or endorsed by CHOMPI Club or Chase Bliss, and not an official CHOMPI Club release; CHOMPI is CHOMPI Club's trademark (their `TRADEMARKS.md`), used here only to say where the code comes from.
 
 ```mermaid
 flowchart LR

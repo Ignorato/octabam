@@ -62,8 +62,8 @@ Docs
 
 ## Image 93 — 3 Oct 2026 (`wave` at `e90912d9`)
 
-On the unit (Sam's MKII): WAVE, a 4-voice wavetable synth on FX2 (CHOMPI
-WAVE's voice on the DSP), played by WAVCAR.wav on a FLEX track with loop
+On the unit (Sam's MKII): WAVE, a 4-voice wavetable synth on FX2 (ported
+from CHOMPI Club's WAVE firmware, MIT), played by WAVCAR.wav on a FLEX track with loop
 on. It plays; PTCH and the CHROMATIC keys move the pitch; with AMP REL at
 INF the note holds until the AMP envelope ends it. DSP headroom not
 measured.

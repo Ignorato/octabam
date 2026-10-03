@@ -14,8 +14,7 @@ ColdFire's limit, and meant to be extended: the Open section lists where.
 The voice is ported from
 [CHOMPI-Club/CHOMPI](https://github.com/CHOMPI-Club/CHOMPI)'s WAVE firmware
 (`a73d732`), MIT, Copyright (c) 2026 CHOMPI Club; the full notice is in
-[LICENSE-CHOMPI](LICENSE-CHOMPI). The CHOMPI name is CHOMPI Club's
-trademark and is not this module's.
+[LICENSE-CHOMPI](LICENSE-CHOMPI). Not affiliated with or endorsed by CHOMPI Club or Chase Bliss, and not an official CHOMPI Club release; CHOMPI is CHOMPI Club's trademark (their `TRADEMARKS.md`), used here only to say where the code comes from.
 
 ## Playing it
 
@@ -36,13 +35,13 @@ writes its tables.
 | page | slot | name | range | what it does |
 |---|---|---|---|---|
 | 1 | 0 | FRAM | 0–127, default 0 | table position: sine, triangle, saw, square, pulses 1/4 to 1/32; morphs between neighbours |
-| 1 | 1 | CUT | 0–127, default 80 | CHOMPI's DJ filter: low-pass below the middle, high-pass above |
+| 1 | 1 | CUT | 0–127, default 80 | the DJ filter: low-pass below the middle, high-pass above |
 | 1 | 2 | RES | 0–127, default 40 | resonance |
 | 1 | 3 | CHRD | UNI OCT 5TH MAJ MIN MAJ7 MIN7 SUS4 | the four voices' intervals over the note |
 | 1 | 4 | OCT | −4 … 0, default −2 | octaves below the carrier |
 | 1 | 5 | LEVL | 0–127, default 64 | output level |
 | 2 | 6 | FDEP | 0–127, default 0 | filter LFO depth |
-| 2 | 7 | FRAT | 16 steps, 0.14–65 Hz, default 5.6 Hz | filter LFO rate (CHOMPI's law) |
+| 2 | 7 | FRAT | 16 steps, 0.14–65 Hz, default 5.6 Hz | filter LFO rate (the original's rate law) |
 | 2 | 8 | VDEP | 0–127, default 0 | vibrato depth, up to ±2 semitones |
 | 2 | 9 | VRAT | 16 steps, 0.14–65 Hz, default 5.6 Hz | vibrato rate |
 | 2 | 10 | DETN | 0–127, default 0 | spreads the four voices, up to ±60 cents on the outer two |

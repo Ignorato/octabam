@@ -8,7 +8,7 @@ from remix.schema import Proof, Remix
 REMIX = Remix(
     name="wave",
     family="effects", proof=Proof.HARDWARE, proof_note="Sam's MKII, image 93, 3 Oct 2026: plays, PTCH and the CHROMATIC keys move the pitch",
-    doc="Experiment: a 4-voice wavetable synth (CHOMPI WAVE's voice) on FX2, played by a sine on its track; SCALE QUANTIZER, page-2 tools, USB out; DARK and SPRING REV give up their words.",
+    doc="Experiment: a 4-voice wavetable synth on FX2, played by a sine on its track; SCALE QUANTIZER, page-2 tools, USB out; DARK and SPRING REV give up their words.",
     modules=("WAVE", "SCALE QUANTIZER", "CC MAP", "SCENES P2", "PLOCKS P2",
              "USB MIDI", "USB AUDIO OUT TRACKS MAIN CUE",
              "FILTER", "EQUALIZER", "DJ EQ", "PHASER", "FLANGER", "CHORUS",

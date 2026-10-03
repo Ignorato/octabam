@@ -22,7 +22,7 @@ MODULE = Module(
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.HARDWARE, proof_note="Sam's MKII, image 93, 3 Oct 2026: plays, PTCH and the CHROMATIC keys move the pitch",
-    doc="Experiment: a 4-voice wavetable synth on FX2 (CHOMPI WAVE's voice); a sine on the track sets pitch and level.",
+    doc="Experiment: a 4-voice wavetable synth on FX2; a sine on the track sets its pitch and level.",
     menu=MenuEntry(fx2_id=0x0b, donor_desc=0x400d58b8,     # DARK REV's descriptor
                    abbr=b"WAVE", fullname=b"Wave Synth", build_tag=False),
     params=(
@@ -41,11 +41,11 @@ MODULE = Module(
         Param(b"LEVL", 64, active=True, formatter=Formatter.PLAIN,
               doc="output level"),
         Param(b"FDEP", 0, active=True, formatter=Formatter.PLAIN,
-              doc="filter LFO depth (CHOMPI's filter LFO)"),
+              doc="filter LFO depth"),
         Param(b"FRAT", 9, count=16, active=True, formatter=Formatter.WIDE_STEPPED,
               labels=_gen.RATE_LABELS, doc="filter LFO rate, Hz"),
         Param(b"VDEP", 0, active=True, formatter=Formatter.PLAIN,
-              doc="vibrato depth, up to +-2 semitones (CHOMPI's pitch LFO)"),
+              doc="vibrato depth, up to +-2 semitones"),
         Param(b"VRAT", 9, count=16, active=True, formatter=Formatter.WIDE_STEPPED,
               labels=_gen.RATE_LABELS, doc="vibrato rate, Hz"),
         Param(b"DETN", 0, active=True, formatter=Formatter.PLAIN,
