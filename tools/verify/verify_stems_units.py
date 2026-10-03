@@ -138,7 +138,7 @@ class Rt:
         self.uc.mem_write(self.CODE, code)
         self.uc.emu_start(self.CODE, self.CODE + len(code))
 
-    def set_emac(self, macsr, acc0, accext01):
+    def set_emac(self, macsr, acc0, acc1, accext01):
         """The interrupted code's EMAC state, as the hook finds it: written in
         integer mode, then its MACSR."""
         self.run(assemble(f"""
@@ -146,6 +146,8 @@ class Rt:
         move.l  %d0,%macsr
         move.l  #{acc0:#x},%d0
         move.l  %d0,%acc0
+        move.l  #{acc1:#x},%d0
+        move.l  %d0,%acc1
         move.l  #{accext01:#x},%d0
         move.l  %d0,%accext01
         move.l  #{macsr:#x},%d0
@@ -153,7 +155,7 @@ class Rt:
 """))
 
     def get_emac(self):
-        """(MACSR, ACC0, ACCEXT01), ACC0 and ACCEXT01 read in integer mode."""
+        """(MACSR, ACC0, ACC1, ACCEXT01), the accumulators read in integer mode."""
         self.run(assemble(f"""
         move.l  %macsr,%d0
         move.l  %d0,{self.SAVE:#x}
@@ -161,11 +163,13 @@ class Rt:
         move.l  %d1,%macsr
         move.l  %acc0,%d1
         move.l  %d1,{self.SAVE + 4:#x}
-        move.l  %accext01,%d1
+        move.l  %acc1,%d1
         move.l  %d1,{self.SAVE + 8:#x}
+        move.l  %accext01,%d1
+        move.l  %d1,{self.SAVE + 12:#x}
         move.l  %d0,%macsr
 """))
-        return tuple(self.r32(self.SAVE + 4 * i) for i in range(3))
+        return tuple(self.r32(self.SAVE + 4 * i) for i in range(4))
 
 
 def main():
@@ -193,7 +197,7 @@ def layout_now(rt):
 
 
 LV_PAGES, LV_SENT = 0x80005460, 0x80004804      # STEM_REC.md 18.1: four pages, the index sent
-DIRTY_EMAC = (0x40, 0x5a5a5a5a, 0x00a5005a)     # an interrupted task's EMAC: MACSR, ACC0, ACCEXT01
+DIRTY_EMAC = (0x40, 0x5a5a5a5a, 0x3c3c3c3c, 0x00a5005a)   # an interrupted task's EMAC: MACSR, ACC0, ACC1, ACCEXT01
 
 
 def random_page(rng):
@@ -265,7 +269,7 @@ def mirror(rt, n=4000, seed=5):
             break
     check(f"mirror: {n} pages, every slot's state and gains equal the model", first is None,
           f"first difference (page, mirror, model, gains, model's): {first}" if first else "")
-    check("mirror: the caller's MACSR, ACC0 and ACCEXT01 come back", emac is None,
+    check("mirror: the caller's MACSR, ACC0, ACC1 and ACCEXT01 come back", emac is None,
           f"page, after, before: {emac}" if emac else f"{tuple(hex(v) for v in caller)}")
     check("mirror: every register comes back", kept is None, f"page, changed: {kept}" if kept else "")
     check("mirror: no page index jump counted", rt.r32(s["stems_lvskip"]) == 0)
@@ -317,6 +321,108 @@ def mirror_idx4(rt):
     rt.call("stems_mirror")
     check("mirror_idx4: the 0 after it is a page, and no jump", rt.r32(s["stems_gqn"]) == before[1] + 1
           and rt.r32(s["stems_lvskip"]) == 0, f"gqn {rt.r32(s['stems_gqn'])}, skip {rt.r32(s['stems_lvskip'])}")
+
+
+def post16(g, x):
+    return max(-0x8000, min(0x7fff, (g * x) >> 29))
+
+
+def _track(rt, name, out_bytes, conv, n=200, seed=6, junk=False, dirty=False):
+    """One track routine against `conv` on n random frames: random gains (0
+    and 0x7fffff among them) and random samples (both full scales), the
+    gains GAIN_LAG frames behind the newest, the samples where TRACK_HALF and
+    TRACK_DELAY put them. `junk`: each long's low byte random, as the half
+    core 0 mixes carries it (0xff on positive samples, STEM_REC.md 18.5);
+    the DSP takes only the top 24 bits. `dirty`: the interrupted task's
+    EMAC, ACC1 included, before the caller's stems_emac_in. Returns the
+    first difference, or None."""
+    s = rt.s
+    rng = random.Random(seed)
+    for i in range(n):
+        k = rng.randrange(8)
+        gains = [rng.choice((0, 0x7fffff, 0x1f7fe0, rng.randrange(0x800000))) for _ in range(16)]
+        xs = [rng.choice((0x7fffff, -0x800000, 0, rng.randrange(-0x800000, 0x800000))) for _ in range(32)]
+        lows = [rng.choice((0, 0xff, rng.randrange(256))) if junk else 0 for _ in range(32)]
+        gqn = rng.randrange(GQ_N + 1, 1000)
+        rt.w32(s["stems_gqn"], gqn)
+        frame = (gqn - 1 - GAIN_LAG) % GQ_N
+        rt.wmem(s["stems_gq"] + frame * 512 + 64 * k, b"".join(g.to_bytes(4, "big") for g in gains))
+        if TRACK_DELAY:
+            src = s["stems_tdelay"] + 0x80 * k
+        else:
+            src = 0x80003190 + (0x400 if TRACK_HALF else 0) + 0x80 * k
+        rt.wmem(src, b"".join((((x << 8) | lo) & 0xffffffff).to_bytes(4, "big") for x, lo in zip(xs, lows)))
+        if dirty:
+            rt.set_emac(*DIRTY_EMAC)
+        rt.call("stems_emac_in")
+        rt.call(name, d4=0x80003190, d5=0x80 * k, a1=s["stems_ring"])
+        rt.call("stems_emac_out")
+        got = rt.rmem(s["stems_ring"], out_bytes)
+        want = b"".join(conv(gains[j], xs[2 * j + c]) for j in range(16) for c in (0, 1))
+        if got != want:
+            j = next(b for b in range(out_bytes) if got[b] != want[b])
+            return (i, k, f"byte {j}", got[j & ~3:(j & ~3) + 4].hex(), want[j & ~3:(j & ~3) + 4].hex())
+    return None
+
+
+def _post16_bytes(g, x):
+    return (post16(g, x) & 0xffff).to_bytes(2, "big")
+
+
+@unit
+def track16(rt):
+    """stems_track16 against post16, big-endian halves L : R, on longs whose
+    low byte is not zero: only the top 24 bits are the sample."""
+    bad = _track(rt, "stems_track16", 64, _post16_bytes, junk=True)
+    check("track16: 200 frames equal post16 of each long's top 24 bits", bad is None,
+          f"first difference (frame, slot, where, got, want) {bad}" if bad else "")
+
+
+def _main_top16_bytes(g, x):
+    """MAIN's own arithmetic for one track (STEM_REC.md 18.2): the 24-bit
+    mix limited, then its top 16 bits."""
+    v = max(-0x800000, min(0x7fffff, (g * x) >> 21)) >> 8
+    return (v & 0xffff).to_bytes(2, "big")
+
+
+@unit
+def track16_rails(rt):
+    """Review Focus 2: past both rails, the stem is the top 16 bits of MAIN's
+    limited 24-bit mix. Gains up to 0x7fffff times samples at both full
+    scales reach four times full scale; one THRU track can't get there
+    under the port (STEM_REC.md 18.7), so this is where the rails are shown."""
+    s = rt.s
+    rng = random.Random(9)
+    bad, rails = None, 0
+    for i in range(100):
+        k = rng.randrange(8)
+        gains = [rng.choice((0x7fffff, 0x7c0980, 0x400000, rng.randrange(0x200000, 0x800000))) for _ in range(16)]
+        xs = [rng.choice((0x7fffff, -0x800000, 0x400000, -0x400000, rng.randrange(-0x800000, 0x800000)))
+              for _ in range(32)]
+        gqn = rng.randrange(GQ_N + 1, 1000)
+        rt.w32(s["stems_gqn"], gqn)
+        rt.wmem(s["stems_gq"] + ((gqn - 1 - GAIN_LAG) % GQ_N) * 512 + 64 * k,
+                b"".join(g.to_bytes(4, "big") for g in gains))
+        rt.wmem(s["stems_tdelay"] + 0x80 * k, b"".join(((x << 8) & 0xffffffff).to_bytes(4, "big") for x in xs))
+        rt.call("stems_emac_in")
+        rt.call("stems_track16", d4=0x80003190, d5=0x80 * k, a1=s["stems_ring"])
+        rt.call("stems_emac_out")
+        got = rt.rmem(s["stems_ring"], 64)
+        want = b"".join(_main_top16_bytes(gains[j], xs[2 * j + c]) for j in range(16) for c in (0, 1))
+        rails += sum(1 for b in range(0, 64, 2) if want[b:b + 2] in (b"\x7f\xff", b"\x80\x00"))
+        if bad is None and got != want:
+            bad = (i, k, got[:8].hex(), want[:8].hex())
+    check("track16_rails: 100 frames past both rails equal MAIN's limited top 16 bits",
+          bad is None and rails > 500, f"{rails} samples on a rail" if bad is None else f"first difference {bad}")
+
+
+@unit
+def track16_emac(rt):
+    """stems_track16 with an interrupted task's EMAC state, ACC0 and ACC1 not
+    zero, before stems_emac_in: the same samples as from a clean one."""
+    bad = _track(rt, "stems_track16", 64, _post16_bytes, seed=8, dirty=True)
+    check("track16_emac: 200 frames equal post16 after an interrupted task's EMAC", bad is None,
+          f"first difference (frame, slot, where, got, want) {bad}" if bad else "")
 
 
 if __name__ == "__main__":

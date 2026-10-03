@@ -76,6 +76,8 @@
         .equ    STACK_FILL,    0x5354454d   | "STEM": the untouched stack
         .equ    HDR_SIZE,      44
         .equ    GAIN_LAG,      2            | frames before the newest mirrored page: the MAIN in 0x80005e60 (18.5)
+        .equ    TRACK_HALF,    1            | the samples core 0 mixes: the half PING doesn't name (18.5)
+        .equ    TRACK_DELAY,   1            | ... one frame older than that half holds (18.5)
         .equ    GQ_N,          4            | frames of per-sample gains kept; GAIN_LAG < GQ_N
         .equ    GQ_FRAME,      8*16*4       | one frame of gains: 8 slots x 16 longs
         .equ    GQ_ALWAYS,     GAIN_LAG >= 2 | gains in IDLE too, so a take started while playing has them
@@ -91,6 +93,19 @@
         .macro  RAWCALL ptr
         movea.l \ptr,%a0
         jsr     (%a0)
+        .endm
+
+| A value limited to 16 bits: one compare on the common path. Uses d0.
+        .macro  LIM16 reg
+        move.l  \reg,%d0
+        addi.l  #0x8000,%d0
+        cmpi.l  #0xffff,%d0
+        bls.s   .Ll16\@
+        tst.l   \reg
+        smi     \reg
+        extb.l  \reg                        | -1 below the range, 0 above
+        eori.l  #0x7fff,\reg                | 0x7fff above, -0x8000 below
+.Ll16\@:
         .endm
 
         .text
@@ -123,6 +138,8 @@ stems_gstate_prev: .space 8*12      | the same, one frame earlier
 stems_gqn:       .long   0          | frames written to stems_gq
 stems_gq:        .space  GQ_N*GQ_FRAME
 stems_emac_save: .space  16         | the caller's MACSR, ACC0, ACC1, ACCEXT01
+        .global stems_tdelay
+stems_tdelay:    .space  8*0x80     | per track slot, the block one frame older (TRACK_DELAY)
         .include "remix.inc"        | stems_gtab: core 0's gain table, from the user's image (18.4)
         .balign 4
 stems_mask:      .long   0          | the latched mask
@@ -420,8 +437,8 @@ stems_frame_hook:
 .Lh_notrace:
         tst.l   stems_state
         beq.w   .Lh_stock           | IDLE
-        lea     -36(%sp),%sp
-        movem.l %d0-%d5/%a0-%a2,(%sp)
+        lea     -48(%sp),%sp
+        movem.l %d0-%d7/%a0-%a3,(%sp)
         move.l  stems_state,%d0
         moveq   #ST_FINISHING,%d1
         cmp.l   %d1,%d0
@@ -433,10 +450,11 @@ stems_frame_hook:
         bne.s   .Lh_rec
         tst.l   %d2                 | ARMED
         bne.w   .Lh_out             | still stopped (0 or 2)
-        bsr.w   stems_layout        | latch the mask and the ring's geometry
-        moveq   #ST_RECORDING,%d0   | the first playing frame is recorded
+        bsr.w   stems_layout        | latch the layout
+        moveq   #ST_RECORDING,%d0
         move.l  %d0,stems_state
-        bra.s   .Lh_copy
+        bsr.w   stems_tdelay_step   | the take's first frame is the next one: its older blocks
+        bra.w   .Lh_out
 .Lh_rec:                            | RECORDING
         tst.l   %d2
         beq.s   .Lh_copy
@@ -457,37 +475,24 @@ stems_frame_hook:
         addq.l  #1,%d0              | frames in the ring with this one
         cmp.l   stems_peak,%d0
         bls.s   .Lh_nopeak
-        move.l  %d0,stems_peak      | the take's largest fill (the menu's status row)
+        move.l  %d0,stems_peak      | the take's largest fill (the menu's PEAK row)
 .Lh_nopeak:
-        move.l  PING,%d4            | the half holding this frame (Task 3)
-        eori.l  #PING_XOR,%d4
-        moveq   #1,%d5
-        and.l   %d5,%d4
-        moveq   #10,%d5
-        lsl.l   %d5,%d4             | * 0x400
-        addi.l  #READBACK,%d4       | this half's T1 block
         movea.l stems_wr_off,%a1
         adda.l  #stems_ring,%a1
-        move.l  stems_mask,%d3
-        moveq   #0,%d5              | track k's offset, k * 0x80
+        bsr.w   stems_emac_in
+        bsr.w   stems_half          | d4
+        move.l  stems_mask,%d6
+        moveq   #0,%d5              | k * 0x80
 .Lh_trk:
-        lsr.l   #1,%d3              | C = track k's bit
-        bcc.w   .Lh_next
-        movea.l %d4,%a0
-        adda.l  %d5,%a0
-| Each sample is one long on the host port: its top 16 bits, then its low
-| 8 bits shifted up. Keep the top halves of L and R as one long.
-        .rept   16
-        move.l  (%a0)+,%d0          | L
-        move.l  (%a0)+,%d1          | R
-        swap    %d1
-        move.w  %d1,%d0             | L top 16 : R top 16
-        move.l  %d0,(%a1)+
-        .endr
+        lsr.l   #1,%d6              | C = track k's bit
+        bcc.s   .Lh_next
+        bsr.w   stems_track16
 .Lh_next:
         addi.l  #0x80,%d5
-        tst.l   %d3
-        bne.w   .Lh_trk
+        tst.l   %d6
+        bne.s   .Lh_trk
+        bsr.w   stems_emac_out
+        bsr.w   stems_tdelay_step
         move.l  stems_wr_off,%d0
         add.l   stems_fbytes,%d0
         cmp.l   stems_rlimit,%d0
@@ -504,8 +509,8 @@ stems_frame_hook:
         moveq   #ST_FINISHING,%d0   | the 60-minute cap
         move.l  %d0,stems_state
 .Lh_out:
-        movem.l (%sp),%d0-%d5/%a0-%a2
-        lea     36(%sp),%sp
+        movem.l (%sp),%d0-%d7/%a0-%a3
+        lea     48(%sp),%sp
 .Lh_stock:
         jsr     FRAME_ROUTINE
         move.w  #0x2700,%sr
@@ -552,8 +557,8 @@ stems_layout:
 | The moves run in integer mode, as the frame interrupt's own save does
 | (0x4000ac96, 0x4000d968); the work runs in MACSR_FRAC. The hook runs
 | before that save, inside whatever code the interrupt stopped, so ACC0
-| holds that code's sum: it is cleared after the save, or the first
-| mac.l adds into it. MACSR is read into an address register: stock never
+| and ACC1 hold that code's sums: they are cleared after the save, or
+| the first mac.l into each adds into them. MACSR is read into an address register: stock never
 | reads it into a data register (0x400031ac, 0x4000ac98). d0 and a0 are
 | preserved.
 stems_emac_in:
@@ -572,6 +577,7 @@ stems_emac_in:
         move.l  %d0,stems_emac_save+12
         moveq   #0,%d0
         move.l  %d0,%acc0
+        move.l  %d0,%acc1
         move.l  %d0,%accext01
         moveq   #MACSR_FRAC,%d0
         move.l  %d0,%macsr
@@ -801,6 +807,109 @@ stems_mirror:
         movem.l (%sp),%d1-%d7/%a0-%a6
         lea     56(%sp),%sp
         move.l  (%sp)+,%d0
+        rts
+
+| ---- d4 = T1's block in the read-back half PING names (Task 3 of piece 1) --
+stems_half:
+        move.l  PING,%d4
+        eori.l  #PING_XOR,%d4
+        andi.l  #1,%d4
+        moveq   #10,%d0
+        lsl.l   %d0,%d4
+        addi.l  #READBACK,%d4
+        rts
+
+| ---- a2 = the 16 samples core 0 mixed for track k (d5 = k * 0x80) --------
+stems_track_src:
+        .if     TRACK_DELAY
+        lea     stems_tdelay,%a2
+        adda.l  %d5,%a2
+        .else
+        movea.l %d4,%a2
+        .if     TRACK_HALF
+        move.l  %a2,%d0
+        eori.l  #0x400,%d0
+        movea.l %d0,%a2
+        .endif
+        adda.l  %d5,%a2
+        .endif
+        rts
+
+| ---- a3 = track k's 16 gains for the MAIN now in 0x80005e60 (d5 = k * 0x80)
+stems_track_gains:
+        move.l  stems_gqn,%d0
+        subq.l  #1+GAIN_LAG,%d0
+        moveq   #GQ_N-1,%d1
+        and.l   %d1,%d0
+        move.l  #GQ_FRAME,%d1
+        mulu.l  %d1,%d0
+        move.l  %d5,%d1
+        lsr.l   #1,%d1                      | k * 0x40: the slot's 16 longs
+        add.l   %d1,%d0
+        movea.l %d0,%a3
+        adda.l  #stems_gq,%a3
+        rts
+
+| ---- one track's ring frame after the fader, 16-bit (d5 = k * 0x80, a1 = the
+| ring). Each sample: floor(g*x / 2^15) on the EMAC (MACSR_FRAC, set by the
+| caller), its top 16 bits as floor(g*x / 2^29), limited to 16 bits as
+| core 0 limits MAIN to 24 (STEM_REC.md 18.2). Uses d0-d3, a2, a3.
+        .global stems_track16
+stems_track16:
+        bsr.w   stems_track_src
+        bsr.w   stems_track_gains
+        moveq   #16,%d3
+.Lp_s:
+        move.l  (%a3)+,%d0
+        lsl.l   #8,%d0                      | g << 8
+        move.l  (%a2)+,%d1                  | L, left-justified 24 bits
+        move.l  (%a2)+,%d2                  | R
+        clr.b   %d1                         | the DSP takes the top 24 bits; the half core 0
+        clr.b   %d2                         | mixes has 0xff here on positive samples (18.5)
+        mac.l   %d0,%d1,%acc0
+        mac.l   %d0,%d2,%acc1
+        movclr.l %acc0,%d1                  | floor(g*x / 2^15)
+        movclr.l %acc1,%d2
+        moveq   #14,%d0
+        asr.l   %d0,%d1                     | floor(g*x / 2^29)
+        asr.l   %d0,%d2
+        LIM16   %d1
+        LIM16   %d2
+        swap    %d1
+        move.w  %d2,%d1                     | L : R, big-endian halves, as before
+        move.l  %d1,(%a1)+
+        subq.l  #1,%d3
+        bne.s   .Lp_s
+        rts
+
+| ---- the one-frame track delay (TRACK_DELAY, STEM_REC.md 18.5) -----------
+| Each latched track's block in the half the copy takes is kept for the next
+| frame. Uses d0-d2, d4, d6, a0, a2.
+stems_tdelay_step:
+        .if     TRACK_DELAY
+        bsr.w   stems_half
+        .if     TRACK_HALF
+        eori.l  #0x400,%d4
+        .endif
+        move.l  stems_mask,%d6
+        moveq   #0,%d1                      | k * 0x80
+.Lt_k:
+        lsr.l   #1,%d6
+        bcc.s   .Lt_n
+        movea.l %d4,%a2
+        adda.l  %d1,%a2
+        lea     stems_tdelay,%a0
+        adda.l  %d1,%a0
+        moveq   #32,%d2
+.Lt_c:
+        move.l  (%a2)+,(%a0)+
+        subq.l  #1,%d2
+        bne.s   .Lt_c
+.Lt_n:
+        addi.l  #0x80,%d1
+        cmpi.l  #0x400,%d1
+        bne.s   .Lt_k
+        .endif
         rts
 
 | ---- test seam: one frame of what the hook sees (STEM_REC.md 18.5) -----

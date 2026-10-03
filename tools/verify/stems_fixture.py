@@ -8,7 +8,7 @@ mirror; T1's FX1 and FX2 = SEND; slot 1's TSMODE=0, so "the record IS the
 file" (no timestretch grains to fit around). The kick itself is ours
 (`scripts/make_test_audio.py kick`), never Elektron's.
 
-    python3 tools/verify/stems_fixture.py [--eight | --fat32 | --thru | --thru1] [PROJECT_DIR]
+    python3 tools/verify/stems_fixture.py [--eight | --fat32 | --thru | --thru1 | --thru1hot | --thru1master] [PROJECT_DIR]
 
 PROJECT_DIR defaults to `out/projects/Ultimate FX 1.5.3`. The template is
 copied into a scratch folder first and only the copy is edited -- the
@@ -228,16 +228,16 @@ def build8(project_dir=DEFAULT_PROJECT):
     return result
 
 
-def write_input_wav(path, live=(0, 1, 2, 3), seconds=30, seed=0x57E4):
-    """Four channels of independent seeded noise at -12 dBFS peak, 44.1 kHz,
-    16-bit: inputs A to D through `ot_emu --audio-in`. A channel not in
-    `live` is silent (Task 1's routing probe). Noise never repeats, so a take
-    can match its track only at the true offset."""
+def write_input_wav(path, live=(0, 1, 2, 3), seconds=30, seed=0x57E4, amp=8192):
+    """Four channels of independent seeded noise, peak `amp` (8192: -12 dBFS;
+    32767: full scale), 44.1 kHz, 16-bit: inputs A to D through `ot_emu
+    --audio-in`. A channel not in `live` is silent (Task 1's routing probe).
+    Noise never repeats, so a take can match its track only at the true
+    offset."""
     import array
     import random
     import wave
     rng = [random.Random(seed + c) for c in range(4)]
-    amp = 8192
     n = 44100 * seconds
     data = array.array("h", (rng[c].randint(-amp, amp) if c in live else 0
                              for _ in range(n) for c in range(4)))
@@ -265,10 +265,43 @@ def set_thru_inputs(pdir, inputs):
         ot_project._bank_write(pdir, bank, mut, guard=False)
 
 
-def build_thru(project_dir=DEFAULT_PROJECT, inputs=None):
+def set_amp_vol(pdir, track, value):
+    """A track's AMP VOL in every part record (current and saved) of the
+    fixture's banks: page 1 is LFO, AMP, FX1, FX2, six bytes each per track
+    (docs/firmware/PARAM_PAGES.md 5a), ot_project.P1_OFF is FX1's, and AMP's
+    bytes are ATK HOLD REL VOL BAL XVOL (the template reads 0 127 127 64 64
+    127). VOL 127 raises a THRU track by 256/65 over the default 64
+    (STEM_REC.md 18.7)."""
+    for bank in FIXTURE_BANKS:
+        def mut(data):
+            for p in range(ot_project.NPARTS_ALL):
+                off = ot_project.PART_BASE + p * ot_project.PART_STRIDE
+                data[off + ot_project.P1_OFF - 3 + (track - 1) * ot_project.TRACK_STRIDE] = value
+        ot_project._bank_write(pdir, bank, mut, guard=False)
+
+
+def set_master_track(pdir):
+    """MASTER_TRACK=1 in project.work, and in project.strd when there is one
+    (the edit STEM_REC.md 18.8 was measured with)."""
+    import re
+    for suffix in ("work", "strd"):
+        path = pathlib.Path(pdir) / f"project.{suffix}"
+        if not path.is_file():
+            continue
+        raw = path.read_bytes().decode("latin1")
+        new, n = re.subn(r"(MASTER_TRACK=)\d+", r"\g<1>1", raw, count=1)
+        if n != 1:
+            sys.exit(f"MASTER_TRACK not found in project.{suffix}")
+        path.write_bytes(new.encode("latin1"))
+
+
+def build_thru(project_dir=DEFAULT_PROJECT, inputs=None, input_wav=INPUT_WAV, amp=8192, master_track=False,
+               amp_vol=None):
     """Every track a THRU machine (every part of banks 1 and 2), a trig on
     step 1 of every pattern, FX1 and FX2 SEND, each track's inputs in its
-    part records (THRU_INPUTS, or `inputs`); the card and the input WAV."""
+    part records (THRU_INPUTS, or `inputs`); the card and the input WAV
+    (`input_wav`, noise of peak `amp`). `master_track`: MASTER_TRACK=1 in
+    the project's settings (STEM_REC.md 18.8). `amp_vol`: {track: AMP VOL}."""
     import shutil
     if SCRATCH_THRU.exists():
         shutil.rmtree(SCRATCH_THRU)
@@ -285,12 +318,16 @@ def build_thru(project_dir=DEFAULT_PROJECT, inputs=None):
         ot_project.set_fx(SCRATCH_THRU, "fx1", t, "SEND", guard=False)
         ot_project.set_fx(SCRATCH_THRU, "fx2", t, "SEND", guard=False)
     set_thru_inputs(SCRATCH_THRU, inputs or THRU_INPUTS)
+    if master_track:
+        set_master_track(SCRATCH_THRU)
+    for t, v in (amp_vol or {}).items():
+        set_amp_vol(SCRATCH_THRU, t, v)
     card_bytes, name = emu_card.stage_project(SCRATCH_THRU, SET_NAME, PROJECT_NAME,
                                               tree=str(STAGE_TREE))
     THRU_CARD.write_bytes(card_bytes)
-    write_input_wav(INPUT_WAV)
+    write_input_wav(input_wav, amp=amp)
     result = {"card": str(THRU_CARD), "set": SET_NAME, "project": name, "staged": [],
-              "audio_in": str(INPUT_WAV)}
+              "audio_in": str(input_wav)}
     THRU_JSON.write_text(json.dumps(result, indent=2) + "\n")
     print(f"card:    {result['card']}")
     print(f"-> {THRU_JSON}")
@@ -315,11 +352,36 @@ def build_thru1(project_dir=DEFAULT_PROJECT):
     return res
 
 
+def build_thru1_variant(name, amp=8192, master_track=False, amp_vol=None, project_dir=DEFAULT_PROJECT):
+    """A one-THRU fixture variant, in its own card and JSON,
+    out/stems_fixture_<name>.json: a hot take (a full-scale input and T1's
+    AMP VOL at 127: MAIN peaks at 0.984 of full scale, STEM_REC.md 18.7),
+    or MASTER TRACK on (the project's settings, as 18.8 measured it)."""
+    inputs = {t: (0, 0) for t in range(1, 9)}
+    inputs[1] = (1, 0)
+    wav = ROOT / "out" / "test_audio" / f"stems_in4_{name}.wav"
+    res = build_thru(project_dir, inputs=inputs, input_wav=wav, amp=amp, master_track=master_track,
+                     amp_vol=amp_vol)
+    card = ROOT / "out" / f"stems_fixture_{name}_card.img"
+    out = ROOT / "out" / f"stems_fixture_{name}.json"
+    card.write_bytes(pathlib.Path(res["card"]).read_bytes())
+    res = {**res, "card": str(card)}
+    out.write_text(json.dumps(res, indent=2) + "\n")
+    print(f"-> {out}")
+    return res
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--eight":
         build8(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
     elif len(sys.argv) > 1 and sys.argv[1] == "--thru1":
         build_thru1(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
+    elif len(sys.argv) > 1 and sys.argv[1] == "--thru1hot":
+        build_thru1_variant("thru1hot", amp=32767, amp_vol={1: 127},
+                            project_dir=sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
+    elif len(sys.argv) > 1 and sys.argv[1] == "--thru1master":
+        build_thru1_variant("thru1master", master_track=True,
+                            project_dir=sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
     elif len(sys.argv) > 1 and sys.argv[1] == "--thru":
         build_thru(sys.argv[2] if len(sys.argv) > 2 else DEFAULT_PROJECT)
     elif len(sys.argv) > 1 and sys.argv[1] == "--fat32":

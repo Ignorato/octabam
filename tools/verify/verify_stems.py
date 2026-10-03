@@ -59,6 +59,10 @@ TEMPLATE = pathlib.Path(os.environ.get("STEMS_TEMPLATE") or "out/projects/Ultima
 KEY_STOP = 0x4000a1e0
 STOP_GATE = 0x80000029     # the STOP handler returns early while this byte is 0 (STEM_REC.md 1.6)
 PRE_ROLL = 40              # frames before the transport start; the dump includes them
+TRACK_HALF, TRACK_DELAY = 1, 1             # stems.s: the samples core 0 mixes (STEM_REC.md 18.5)
+# A take's first frame is one frame after the edge (the frame that latches
+# records nothing), and its samples are the half and the frame core 0 mixes.
+STEM_LAG = PRE_ROLL + 1 - TRACK_DELAY - TRACK_HALF
 ST_IDLE, ST_ARMED, ST_RECORDING, ST_FINISHING = 0, 1, 2, 3   # stems.s
 STACK_SIZE, STACK_FILL = 0x2000, 0x5354454d                   # stems.s: DramRegion stems_stack, "STEM"
 STACK_LIMIT = 6 * 1024     # above this, the plan raises the stack to 16 KB before a flash
@@ -178,17 +182,30 @@ def rebuilt_peak(ws):
     return peak
 
 
-def t1_frames(dump_path):
-    """T1's 16-bit stereo frames from a --block-dump, in frame order: the even
-    words of T1's 64-word block in each read-back. One entry per frame, each
-    32 signed samples, L R L R ..."""
-    import blockdump
-    out = []
-    for d, frame, ch, core, ram, w in blockdump.read(dump_path):
-        if ram in (0x80003190, 0x80003590) and d == READBACK_DIR:
-            base = T1_OFFSET // 2
-            out.append((frame, [x - 65536 if x >= 32768 else x for x in w[base:base + 64:2]]))
-    return [s for _, s in sorted(out)]
+def t1_frames(dump_path, g=None):
+    """T1's stereo frames from a --block-dump, in frame order (slot_frames)."""
+    return slot_frames(dump_path, T1_OFFSET // 0x80, g)
+
+
+def post16(g, x24):
+    """A 16-bit stem sample: the top 16 bits of the track's 24-bit share of
+    MAIN (STEM_REC.md 18.2), limited as core 0 limits MAIN."""
+    return max(-0x8000, min(0x7fff, (g * x24) >> 29))
+
+
+def main_capture(prefix):
+    """MAIN from `--audio-out PREFIX`: TX0 ring words 2 and 3 of core 0's
+    24-bit WAV, as L R L R ..."""
+    import wave
+    with wave.open(f"{prefix}_core0.wav") as w:
+        n, c = w.getnframes(), w.getnchannels()
+        raw = w.readframes(n)
+    return [int.from_bytes(raw[(i * c + ch) * 3:(i * c + ch) * 3 + 3], "little", signed=True)
+            for i in range(n) for ch in (2, 3)]
+
+
+def take16(data):
+    return list(struct.unpack_from(f"<{(len(data) - 44) // 2}h", data, 44))
 
 
 def core1_slot_peaks(dump_path):
@@ -264,6 +281,85 @@ def gains(s):
         check(f"{tag}: T1's gain moved off its start", len(dsp) == 8 and dsp[0][2] not in (0, 0x1f7fe0),
               f"{dsp[0] if dsp else None}")
         check(f"{tag}: the sent page index never jumped", longs("skip") == [0], f"{longs('skip')}")
+
+
+def against_main(tag, card, fixture, aud):
+    """T1.wav of the take against the captured MAIN's top 16 bits: found once,
+    then equal at every sample. Returns (T1 samples, MAIN segment) or None."""
+    files = dict(take_files(card, fixture))
+    data = files.get("T1.wav") or files.get("T1.WAV")
+    check(f"{tag}: T1.wav exists", data is not None, f"{sorted(files)}")
+    if not data:
+        return None
+    got = take16(data)
+    main = [m >> 8 for m in main_capture(aud)]
+    loud = next((i for i, v in enumerate(got) if v), None)
+    check(f"{tag}: the take holds sound", loud is not None)
+    if loud is None:
+        return None
+    key = got[loud:loud + 64]
+    pos = next((i for i in range(len(main) - 64) if main[i:i + 64] == key), None)
+    check(f"{tag}: T1.wav's first sound is found in MAIN", pos is not None)
+    if pos is None:
+        return None
+    seg = main[pos - loud:pos - loud + len(got)] if pos >= loud else []
+    bad = next((i for i, (a, b) in enumerate(zip(got, seg)) if a != b), None)
+    check(f"{tag}: every sample of T1.wav equals MAIN", bad is None and len(seg) == len(got),
+          f"{len(got)} samples" if bad is None else f"first difference at sample {bad}: {got[bad]} vs {seg[bad]}")
+    return got, seg
+
+
+def postfader(s):
+    """Gates 2-3, one track: on the one-THRU fixture (T1 alone sounds) a take
+    armed before play with T1's LEVEL stepped during it. MAIN is T1's share
+    alone, so T1.wav equals MAIN's top 16 bits at every sample -- through
+    every step, the cut ramp included."""
+    steps, midi = level_steps(LEVEL_STEPS)
+    aud = run_path("postfader", "aud")
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="postfader", fixture=FIXTURE_THRU1,
+                                     steps=steps, midi_lines=midi, extra=("--audio-out", str(aud)))
+    against_main("postfader", card, FIXTURE_THRU1, aud)
+
+
+def postmove(s):
+    """Review Focus 1: the take starts while playing (REC at frame 58), two
+    frames before the first LEVEL step: equal to MAIN from its first frame."""
+    steps, midi = level_steps(LEVEL_STEPS)
+    aud = run_path("postmove", "aud")
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="postmove", fixture=FIXTURE_THRU1,
+                                     calls_before=(), calls=((58, s["stems_action"]),),
+                                     steps=steps, midi_lines=midi, extra=("--audio-out", str(aud)))
+    against_main("postmove", card, FIXTURE_THRU1, aud)
+
+
+def clip(s):
+    """Review Focus 2: T1 at LEVEL 127, the MAIN level at 127, a full-scale
+    input, AMP VOL 127: the take equals MAIN at every sample at the top of
+    the range. One THRU track can't clip MAIN under the port (it peaks at
+    0.984 of full scale, STEM_REC.md 18.7), so the rails themselves are
+    proven in Unicorn (verify_stems_units track16_rails, against MAIN's own
+    formula)."""
+    aud = run_path("clip", "aud")
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="clip", fixture=FIXTURE_THRU1_HOT,
+                                     pokes_before=[(MAIN_LEVEL_SRC, 127)], extra=("--audio-out", str(aud)))
+    res = against_main("clip", card, FIXTURE_THRU1_HOT, aud)
+    if res:
+        got, seg = res
+        peak = max(abs(v) for v in got)
+        check("clip: the take reaches the top of the range", peak >= 0.95 * 32767,
+              f"peak {peak} of 32767")
+
+
+def master(s):
+    """Review Focus 5: MASTER TRACK on (STEM_REC.md 18.8): the take is whole --
+    T1.wav as long as the frames recorded, and the task ends IDLE with no error."""
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="master", fixture=FIXTURE_THRU1_MASTER)
+    st, status, _, wr, rd, nfr = words
+    files = dict(take_files(card, FIXTURE_THRU1_MASTER))
+    data = files.get("T1.wav") or files.get("T1.WAV")
+    check("master: IDLE, no error, T1.wav holds every frame",
+          st == ST_IDLE and status == 0 and data is not None and len(data) == 44 + 64 * nfr,
+          f"state {st}, status {status}, {len(data) if data else None} bytes for {nfr} frames")
 
 
 def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
@@ -377,7 +473,7 @@ def tap(s):
     check("T1's slot is the only core-1 slot with sound",
           peaks[k1] > 256 and all(p < 64 for i, p in enumerate(peaks) if i != k1),
           f"peaks by slot {peaks}, T1's slot {k1}")
-    want = t1_frames(dump)
+    want = t1_frames(dump, gain_of(log, 0))
     lag = next((L for L in range(len(want) - nfr + 1) if want[L:L + nfr] == got), None)
     check("every ring frame equals T1's read-back at one fixed lag", nfr > 0 and lag is not None,
           f"lag {lag} frames (pre-roll {PRE_ROLL})" if lag is not None
@@ -429,10 +525,11 @@ def new_entries(files, fixture=None):
     return sorted(n for n in names if n.lower() not in staged)
 
 
-def wav_check(card_path, nfr, dump, tag, lag_want=PRE_ROLL):
+def wav_check(card_path, nfr, dump, tag, lag_want=STEM_LAG, g=None):
     """The take on the card: one new folder in the set's AUDIO folder, its
     T1.wav with the header STEM REC writes, and every sample equal to T1's
-    read-back at the lag a take armed before play starts at (the pre-roll).
+    read-back after the fader (g, the run's settled gain) at the lag a take
+    armed before play starts at (STEM_LAG).
     The file must also hold sound: under the port the fixture's kick sounds
     for four frames, and a silent file equals the read-back at almost any
     lag, which is how a wrap test once passed on a file of zeros."""
@@ -462,7 +559,7 @@ def wav_check(card_path, nfr, dump, tag, lag_want=PRE_ROLL):
         check(f"{tag}: every sample equals T1's read-back at one fixed lag", False, "file too short")
         return
     got = [list(struct.unpack_from("<32h", data, 44 + 64 * f)) for f in range(nfr)]
-    want = t1_frames(dump)
+    want = t1_frames(dump, g)
     same = nfr > 0 and want[lag_want:lag_want + nfr] == got
     check(f"{tag}: every sample equals T1's read-back at lag {lag_want}", same,
           "" if same else f"matching lags {[L for L in range(len(want) - nfr + 1) if want[L:L + nfr] == got][:5]}")
@@ -485,7 +582,7 @@ def full(s):
     check("full: the task finished (state IDLE, no error)", st == ST_IDLE and status == 0,
           f"state {st}, status {status}")
     check("full: the task drained every frame", rd == wr == nfr, f"rd {rd}, wr {wr}, frames {nfr}")
-    wav_check(card, nfr, dump, "full")
+    wav_check(card, nfr, dump, "full", g=gain_of(log, 0))
     return log, words
 
 
@@ -500,7 +597,7 @@ def rowstop(s):
           f"state {st}, status {status}")
     check("rowstop: the task drained every frame", rd == wr == nfr, f"rd {rd}, wr {wr}, frames {nfr}")
     check("rowstop: the row stopped it near frame 200", 150 < nfr < 260, f"{nfr} frames")
-    wav_check(card, nfr, dump, "rowstop")
+    wav_check(card, nfr, dump, "rowstop", g=gain_of(log, 0))
 
 
 def stream(s):
@@ -518,7 +615,7 @@ def stream(s):
           f"state {st}, status {status}")
     check("stream: the task drained every frame", nfr > 3 * CHUNK_FRAMES and rd == wr,
           f"rd {rd}, wr {wr}, frames {nfr}")
-    wav_check(card, nfr, dump, "stream")
+    wav_check(card, nfr, dump, "stream", g=gain_of(log, 0))
     if "stems_peak" in s:
         raw = run_path("stream", "peak")
         peak = int.from_bytes(raw.read_bytes(), "big") if raw.exists() else None
@@ -547,7 +644,7 @@ def wrap(s):
     want = (off + 64 * nfr) % RING_SIZE_T1
     check("wrap: both offsets wrapped and end where the take does", nfr > 3 and wr_off == rd_off == want,
           f"wr_off {wr_off}, rd_off {rd_off}, want {want} ({nfr} frames)")
-    wav_check(card, nfr, dump, "wrap")
+    wav_check(card, nfr, dump, "wrap", g=gain_of(log, 0))
 
 
 def cap(s):
@@ -639,13 +736,17 @@ FIXTURE8 = pathlib.Path("out/stems_fixture8.json")   # tools/verify/stems_fixtur
 FIXTURE32 = pathlib.Path("out/stems_fixture32.json")   # tools/verify/stems_fixture.py --fat32
 FIXTURE_THRU = pathlib.Path("out/stems_fixture_thru.json")   # stems_fixture.py --thru
 FIXTURE_THRU1 = pathlib.Path("out/stems_fixture_thru1.json")   # stems_fixture.py --thru1
+FIXTURE_THRU1_HOT = pathlib.Path("out/stems_fixture_thru1hot.json")         # --thru1hot: a full-scale input
+FIXTURE_THRU1_MASTER = pathlib.Path("out/stems_fixture_thru1master.json")   # --thru1master: MASTER TRACK on
 GQ_N = 4                                   # stems.s: frames of per-sample gains kept
 MOVER = pathlib.Path("out/stems_runs/lv_mover.txt")     # STEM_REC.md 18.1: "poke 0x80000c50"
 MAIN_LEVEL_SRC = 0x80000035                # STEM_REC.md 18.1: the byte the page builder reads for MAIN
 LEVEL_STEPS = ((60, 64), (61, 100), (90, 20), (120, 127))   # two steps a frame apart cut a ramp
 GTAB_OFF, GTAB_LEN = 0xe9d8a, 258 * 3      # STEM_REC.md 18.4: X:0x6c00's words in the stock slice
 FIXTURE_MODES = [("", FIXTURE), ("--eight", FIXTURE8), ("--fat32", FIXTURE32),
-                 ("--thru1", FIXTURE_THRU1), ("--thru", FIXTURE_THRU)]   # --thru1 passes through the THRU card: before --thru
+                 ("--thru1", FIXTURE_THRU1), ("--thru1hot", FIXTURE_THRU1_HOT),
+                 ("--thru1master", FIXTURE_THRU1_MASTER),
+                 ("--thru", FIXTURE_THRU)]   # the --thru1 builds pass through the THRU card: before --thru
 CARD_READY = 0x460d1cb8     # emu_card.FW_CARD_READY: := 1 after the firmware's card init and mount
 SUFFIX = ""                 # appended to every run's tag: "32" while the FAT32 checks run
 
@@ -709,15 +810,32 @@ def take_files(card_path, fixture=FIXTURE):
                   and p.upper().endswith(".WAV"))
 
 
-def slot_frames(dump_path, k):
-    """Track k's (0-based) 16-bit stereo frames from a --block-dump, like t1_frames."""
+def slot_frames(dump_path, k, g=None):
+    """Track k's (0-based) stereo frames from a --block-dump, in frame order,
+    32 samples each, L R L R ... g=None: each sample's top 16 bits as the DSP
+    sent the read-back (the tap before piece 5; STEM_REC.md 9.2). A gain: the
+    16-bit stem after the fader, post16, of the words the ColdFire sends
+    core 0 (the '>' transfer of the read-back, every track in one block):
+    the words core 0 mixes, which differ from the DSP's own in the last bit
+    of positive samples (STEM_REC.md 18.5). A sample is two words, its top
+    16 bits, then its low 8 bits shifted up."""
     import blockdump
-    ram_for = (0x80003190, 0x80003590) if k < 4 else (0x80003390, 0x80003790)
-    base = (k % 4) * 0x40
+    if g is None:
+        ram_for, base = ((0x80003190, 0x80003590) if k < 4 else (0x80003390, 0x80003790)), (k % 4) * 0x40
+    else:
+        ram_for, base = (0x80003190, 0x80003590), k * 0x40
     out = []
     for d, frame, ch, core, ram, w in blockdump.read(dump_path):
-        if ram in ram_for and d == READBACK_DIR:
+        if ram not in ram_for:
+            continue
+        if g is None and d == READBACK_DIR:
             out.append((frame, [x - 65536 if x >= 32768 else x for x in w[base:base + 64:2]]))
+        elif g is not None and d == ">" and core == 0:
+            fr = []
+            for i in range(32):
+                v = (w[base + 2 * i] << 8) | (w[base + 2 * i + 1] >> 8)
+                fr.append(post16(g, v - 0x1000000 if v & 0x800000 else v))
+            out.append((frame, fr))
     return [s for _, s in sorted(out)]
 
 
@@ -751,7 +869,7 @@ def eight(s):
     for k, (name, data) in enumerate(files[:8]):
         got = [[int.from_bytes(data[44 + f * 64 + 2 * j:44 + f * 64 + 2 * j + 2], "little", signed=True)
                 for j in range(32)] for f in range((len(data) - 44) // 64)]
-        want = slot_frames(dump, k)
+        want = slot_frames(dump, k, gain_of(log, k))
         lag = next((L for L in range(len(want) - len(got) + 1) if want[L:L + len(got)] == got), None)
         peak = max((abs(x) for f in got for x in f), default=0)
         check(f"eight: {name} equals track {k + 1}'s read-back at one fixed lag, and is not silence",
@@ -1096,7 +1214,7 @@ def mask_take(s, mask, tag, stop_at=THRU_STOP, frames=THRU_FRAMES, pokes=(), ext
     datas = []
     for k, (name, data) in zip(want, files):
         got = [list(struct.unpack_from("<32h", data, 44 + 64 * f)) for f in range((len(data) - 44) // 64)]
-        ref = slot_frames(dump, k)
+        ref = slot_frames(dump, k, gain_of(log, k))
         lag = next((L for L in range(len(ref) - len(got) + 1) if ref[L:L + len(got)] == got), None)
         first = next((i for i, f in enumerate(got) if any(f)), None)
         silent = [i for i in range(first + 1, len(got)) if not any(got[i])] if first is not None else []
@@ -1244,6 +1362,7 @@ def main():
         return 1 if fails else 0
     only = next((a.split("=", 1)[1].split(",") for a in sys.argv if a.startswith("--only=")), None)
     runs = [("probe", probe), ("thru", thru), ("tap", tap), ("full", full), ("gains", gains),
+            ("postfader", postfader), ("postmove", postmove), ("clip", clip), ("master", master),
             ("rowstop", rowstop),
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
