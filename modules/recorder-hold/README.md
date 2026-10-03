@@ -1,6 +1,6 @@
 # `recorder-hold` — RECORDER HOLD
 
-Three ColdFire code caves, no DSP code: a recorder-buffer FLEX voice that
+Five ColdFire code caves, no DSP code: a recorder-buffer FLEX voice that
 reads one sample past its recording repeats the last sample instead of
 playing a zero.
 
@@ -12,6 +12,18 @@ of samples the spacings alternate (82,687 / 82,688 at 128 BPM), and on each
 pass where the window is one sample longer the voice fetches index END
 (`+0x64`). No block is mapped there, so the fetch returns the pool base
 `0x40a955e0`, one zero sample plays, and SRC3 records it back into the loop.
+
+After a second transport start (PLAY again, or PLAY after CONTROL > MEMORY
+reallocates the recorders) the zero comes from a different place. The
+recording stays 82,687 samples long on every pass (`+0x64` = `0x142ff`)
+while the window still alternates, and the recorder's position (`+0x34`) is
+past END when the voice reaches it. The plain copy caps a voice reading the
+buffer its own recorder writes at END − index (`0x400086f0..0x4000871e`); at
+index END the cap is 0, and stock stops the voice (`0x40008722`) and
+zero-fills the rest of the frame (`0x4000872c`); the crossfade copy has the
+same cap (`0x40008582..0x400085e2`, against the further of its two read
+positions). The fetch never sees index END, so the first three caves do not
+act; the fourth and fifth sit on the two caps.
 This page also carries the user guide to the whole recorder loop click and
 its four fixes ([below](#the-loop-click-what-it-is-and-how-to-test-it)).
 
@@ -44,17 +56,63 @@ runtime the caves compared against the stock base and never fired: 0
 substitutions and 31 zero samples at RLEN 4 in the port. Found by Bryan T
 on his USB recording remix, 26 Sep 2026.
 
+### After a second transport start (port, 4 Oct 2026)
+
+`sos-capture` image, fixtures from `sos_capture.py fixture` (SOSCAP: 128
+BPM, RLEN 16, trig on step 1; RLEN 4 with trigs 1/5/9/13; 120 BPM RLEN 16;
+the self-loop, REC3 cleared, at RLEN 16 and 4), the `sos_capture.py`
+signal delayed 4 s. "Second start" is `ot_emu --step
+9000:call:0x4009b964,0`, the transport start called again while the
+pattern plays; the MEMORY rows run the page's confirm (`0x40066844`) with
+the staged settings at frame 100, before it. Events on T1 (two-tap
+predictor residual > 3 % of the local amplitude, then the samples):
+
+| take | three caves | five caves |
+|---|---|---|
+| SOSCAP, one start | repeat on each long wrap | bit-identical |
+| SOSCAP, second start | zero on each long wrap (3) | repeat (3) |
+| SOSCAP, same MEMORY settings applied, second start | zero (3) | repeat (3) |
+| SOSCAP, 24 → 16 → 24-bit, second start | zero (3) | repeat (3) |
+| SOSCAP, 24 → 16-bit, second start | zero (3) | repeat (3) |
+| RLEN 4, one start | 20 repeats | bit-identical |
+| RLEN 4, second start | 18 repeats, 3 zeros (1 pass in 8) | 21 repeats |
+| 120 BPM, one start | none | bit-identical |
+| 120 BPM, second start | 2 zeros in the first pass, as the signal arrives | 1 repeat, 1 zero, same place |
+| self-loop RLEN 16, one start | 1 repeat | bit-identical |
+| self-loop RLEN 16, second start | 1 zero | 1 repeat |
+| self-loop RLEN 4, one start | 1 repeat | bit-identical |
+| self-loop RLEN 4, second start | 1 zero | 1 repeat |
+
+Every row also has the end of the input signal (a ZERO with L = 0 on both
+sides in the self-loop rows), left out above. With five caves T1 differs
+from three caves only at the wrap samples; T8 in this project carries T1
+about 34 samples later and differs in those spans. The zero is written at
+`0x4000872c` into the ColdFire's block to the DSP (core 1, T1's last
+sample of that frame), measured with a write watch on the slot.
+
 ## On the unit
 
-Bryan T, 26 Sep 2026, his USB recording remix with the caves following the
-moved base: 128 BPM / RLEN 16 still clicks every other pass. The port shows
-the caves firing on those wraps in the same configuration.
+- Bryan T, 26 Sep 2026, his USB recording remix with the caves following
+  the moved base: 128 BPM / RLEN 16 still clicks every other pass.
+- Bryan T, 3 Oct 2026, `sos-capture` BUILD=94 over USB: in steady state
+  every long-pass wrap is an exact repeat (the caves fire). Right after a
+  recorder reallocation every long-pass wrap is one sample of digital
+  zero, for the whole take; reproduced twice. The port reproduces this
+  with a second transport start, with or without the reallocation (above);
+  the fourth and fifth caves are not yet on the unit.
 
 ## Open
 
-- Whether the caves fire on the unit.
+- The fourth and fifth caves on the unit.
+- Whether the port's second start (the transport start called while the
+  pattern plays) is what PLAY does on the unit after STOP.
+- Why a second transport start leaves the recording 82,687 samples on
+  every pass.
+- The crossfade cap's wrapping layout (`+0x17` set) and reverse reads stay
+  stock.
 - Reverse playback (the fixup acts on forward fetches only).
-- 16-bit recorder formats (the fixture records 24-bit).
+- 16-bit recorder formats: the second-start take above repeats at 16-bit
+  as well; the one-start path is not measured at 16-bit.
 
 ## Gates
 
@@ -64,24 +122,33 @@ Assemble from the repo root (for the `.include`):
 
 ## The caves
 
-Each cave sits after one fetch of the forward copy paths and runs the shared
-fixup in `fix.inc`: a fetch of exactly END that came back unmapped becomes a
-fetch of END − 1 with a count of one.
+The first three sit after one fetch of the forward copy paths and run the
+shared fixup in `fix.inc`: a fetch of exactly END that came back unmapped
+becomes a fetch of END − 1 with a count of one. The fourth and fifth replace
+the plain and crossfade copies' caps at END.
 
 | cave | hook | stock bytes |
 |---|---|---|
 | `hold_copy.s` | `0x400086c2` | `move.l d0,d3 / addq.l #8,sp / tst.l d1` |
 | `hold_xfade_a.s` | `0x4000853e` | `movea.l d0,a3 / move.l d1,d4 / move.l (76,a2),-(sp)` |
 | `hold_xfade_b.s` | `0x4000854e` | `move.l d0,d7 / lea (16,sp),sp / tst.l d4` |
+| `hold_guard.s` | `0x40008716` | `suba.l d0,a1 / cmpa.l d2,a1 / bge.s` |
+| `hold_xguard.s` | `0x400085d8` | `sub.l d0,d5 / cmp.l d2,d5 / bge.s` |
 
-Conditions: the fetch returned the arena base with a positive count, `+0x15`
-is negative (a recorder buffer) and the fetched index equals `+0x64`.
-Anything further past END is stock.
+Conditions, first three: the fetch returned the arena base with a positive
+count, `+0x15` is negative (a recorder buffer) and the fetched index equals
+`+0x64`. Fourth and fifth: the copy's cap comes out at 0 with the index exactly at
+`+0x64` and forward fetches (the fifth also needs `+0x17` clear); it fetches
+END − 1 and, when that is mapped, copies one sample from it instead of
+stopping the voice (the fifth replaces whichever of its two reads sits at
+END). Anything further
+past END is stock.
 
 The arena base is `0x40a955e0` on stock. A remix with a DRAM runtime (USB
 AUDIO, any `dram=True` unit) moves it by the platform's 1,707 pages to
 `0x41495de0`, and the fetch then returns the moved base. The manifest
-declares the caves' three base literals each (`pool_base_literals`); the
+declares each cave's base literals (three in each fetch cave, one in each
+cap cave) (`pool_base_literals`); the
 build checks the count and rewrites them with the firmware's own base sites
 (build report: `arena: hold cave ...: 3 arena-base literal(s) -> ...`).
 
