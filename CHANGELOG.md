@@ -60,6 +60,16 @@ Docs
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
 
+## Image 93 — 3 Oct 2026 (`wave` at `e90912d9`)
+
+On the unit (Sam's MKII): WAVE, a 4-voice wavetable synth on FX2 (ported
+from CHOMPI Club's WAVE firmware, MIT), played by WAVCAR.wav on a FLEX track with loop
+on. It plays; PTCH and the CHROMATIC keys move the pitch; with AMP REL at
+INF the note holds until the AMP envelope ends it. DSP headroom not
+measured.
+- The remix: WAVE + SCALE QUANTIZER + CC MAP + SCENES P2 + PLOCKS P2 + USB MIDI + USB AUDIO OUT TRACKS MAIN CUE; the stock effects less DARK REV and SPRING REV.
+- The carrier goes in the set's audio pool (`<set>/AUDIO/`), not the card root's `AUDIO`.
+
 ## Image 92 — 3 Oct 2026 (`waveload` at `d99fa690`)
 
 On the unit (Sam's MKII), CF METER's first readings; T8 FX2 = CF Meter,

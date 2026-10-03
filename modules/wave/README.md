@@ -7,15 +7,14 @@ the carrier's pitch and level, and its four voices follow them. So PTCH,
 the CHROMATIC keys, [SCALE QUANTIZER](../quantizer/README.md), p-locks,
 LFOs on PTCH and the AMP envelope all play it.
 
-Built for fun, as the DSP route after [WAVE LOAD](../waveload/README.md)
-measured one 4-voice track as the ColdFire's limit. Optimisation is left
-open (below).
+**An experiment**, built for fun as the DSP route after
+[WAVE LOAD](../waveload/README.md) measured one 4-voice track as the
+ColdFire's limit, and meant to be extended: the Open section lists where.
 
 The voice is ported from
 [CHOMPI-Club/CHOMPI](https://github.com/CHOMPI-Club/CHOMPI)'s WAVE firmware
 (`a73d732`), MIT, Copyright (c) 2026 CHOMPI Club; the full notice is in
-[LICENSE-CHOMPI](LICENSE-CHOMPI). The CHOMPI name is CHOMPI Club's
-trademark and is not this module's.
+[LICENSE-CHOMPI](LICENSE-CHOMPI). Not affiliated with or endorsed by CHOMPI Club or Chase Bliss, and not an official CHOMPI Club release; CHOMPI is CHOMPI Club's trademark (their `TRADEMARKS.md`), used here only to say where the code comes from.
 
 ## Playing it
 
@@ -36,20 +35,20 @@ writes its tables.
 | page | slot | name | range | what it does |
 |---|---|---|---|---|
 | 1 | 0 | FRAM | 0–127, default 0 | table position: sine, triangle, saw, square, pulses 1/4 to 1/32; morphs between neighbours |
-| 1 | 1 | CUT | 0–127, default 80 | CHOMPI's DJ filter: low-pass below the middle, high-pass above |
+| 1 | 1 | CUT | 0–127, default 80 | the DJ filter: low-pass below the middle, high-pass above |
 | 1 | 2 | RES | 0–127, default 40 | resonance |
 | 1 | 3 | CHRD | UNI OCT 5TH MAJ MIN MAJ7 MIN7 SUS4 | the four voices' intervals over the note |
 | 1 | 4 | OCT | −4 … 0, default −2 | octaves below the carrier |
 | 1 | 5 | LEVL | 0–127, default 64 | output level |
 | 2 | 6 | FDEP | 0–127, default 0 | filter LFO depth |
-| 2 | 7 | FRAT | 16 steps, 0.14–65 Hz, default 5.6 Hz | filter LFO rate (CHOMPI's law) |
+| 2 | 7 | FRAT | 16 steps, 0.14–65 Hz, default 5.6 Hz | filter LFO rate (the original's rate law) |
 | 2 | 8 | VDEP | 0–127, default 0 | vibrato depth, up to ±2 semitones |
 | 2 | 9 | VRAT | 16 steps, 0.14–65 Hz, default 5.6 Hz | vibrato rate |
 | 2 | 10 | DETN | 0–127, default 0 | spreads the four voices, up to ±60 cents on the outer two |
 
 ## What it costs
 
-- **DSP code:** 1,269 words. In remix [`wave`](../../remixes/test/wave/README.md)
+- **DSP code:** 1,269 words. In remix [`wave`](../../remixes/wave/README.md)
   it lives in DARK REV's and SPRING REV's harvested words (768 left), so
   both reverbs are off the chooser there.
 - **DSP memory:** one 16,384-word FX2 buffer per instance from the
@@ -114,10 +113,22 @@ Every instruction form in `wave.asm` (97) has a site in a stock payload
   plus two digits so none is another's prefix. `generate.py` writes
   `wave.asm`; `verify_wave` refuses a stale one.
 
+## On the unit
+
+Image 93 (remix `wave` at `e90912d9`), Sam's MKII, 3 Oct 2026: WAVCAR.wav
+on a FLEX track with loop on, FX2 = Wave Synth. It plays; PTCH and the
+CHROMATIC keys move the pitch. With loop on and AMP REL at INF it holds
+until the AMP envelope ends it, as the carrier does. Not measured on the
+unit: DSP headroom, how many instances fit.
+
 ## Open
 
-- On the unit: whether it plays, and how many instances fit beside a
-  project (CF METER cannot see DSP time; a DSP burn sweep can).
+- How many instances fit beside a project on the unit (CF METER cannot
+  see DSP time; a DSP burn sweep can).
 - Optimisation: the per-sample control path (LFOs, the cubes, slews,
   Newton steps, vibrato; ~200 instructions a sample) could run once a
   block.
+- Extensions: the tables from a sample (a Serum table loaded as the
+  carrier's companion, or written by the ColdFire into the buffer); an
+  ADSR per voice; chords snapped to SCALE QUANTIZER's scale; CHOMPI's
+  delay and reverb as their own effects.

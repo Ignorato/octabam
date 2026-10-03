@@ -9,8 +9,7 @@ The engine is a port of the voice in
 [CHOMPI-Club/CHOMPI](https://github.com/CHOMPI-Club/CHOMPI)'s WAVE firmware
 (`firmware/chompi-wave/code/src` at `a73d732`: `subtractiveEngine.h`,
 `WavetableManager.h`, `DJFilter.h`, `BasicMMF.h`), MIT, Copyright (c) 2026
-CHOMPI Club; the full notice is in [LICENSE-CHOMPI](LICENSE-CHOMPI). The
-CHOMPI name is CHOMPI Club's trademark and is not this module's. WAVE
+CHOMPI Club; the full notice is in [LICENSE-CHOMPI](LICENSE-CHOMPI).  Not affiliated with or endorsed by CHOMPI Club or Chase Bliss, and not an official CHOMPI Club release; CHOMPI is CHOMPI Club's trademark (their `TRADEMARKS.md`), used here only to say where the code comes from. WAVE
 LOAD is a measurement, not a playable machine.
 
 ## Knobs
