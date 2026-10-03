@@ -66,7 +66,14 @@ STEM_LAG = PRE_ROLL + 1 - TRACK_DELAY - TRACK_HALF
 ST_IDLE, ST_ARMED, ST_RECORDING, ST_FINISHING = 0, 1, 2, 3   # stems.s
 STACK_SIZE, STACK_FILL = 0x2000, 0x5354454d                   # stems.s: DramRegion stems_stack, "STEM"
 STACK_LIMIT = 6 * 1024     # above this, the plan raises the stack to 16 KB before a flash
-RING_SIZE_T1 = 0x400000            # T1 only: 65,536 frames of 64 bytes
+RING_SIZE = 0x800000               # stems.s: the ring, 8 MiB (piece 5)
+RING_SIZE_T1 = RING_SIZE           # T1 only: 131,072 frames of 64 bytes
+FILE_NAMES = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "MAIN", "CUE", "AB", "CD", "A", "B", "C", "D"]
+LAYOUT_CASES = [  # (sources, format, files, ring frame bytes)
+    (0x001, 0b110, ["T1"], 64),
+    (0x0ff, 0b110, [f"T{k}" for k in range(1, 9)], 512),
+    (0x0a5, 0b110, ["T1", "T3", "T6", "T8"], 256),
+]
 MAX_FRAMES = 9922500               # 60 minutes
 CHUNK_FRAMES = 512
 
@@ -114,8 +121,8 @@ def regions(s):
     from remix import platform_build
     lay = json.loads((LAYOUT_DIR / platform_build.LAYOUT).read_text())
     ring, stack, buf = s["stems_ring"], s["stems_stack"], s["stems_buf"]
-    check("ring is 4 MiB ending at the reserve ceiling", ring + 0x400000 == lay["ceiling"],
-          f"0x{ring:08x} + 4 MiB vs ceiling 0x{lay['ceiling']:08x}")
+    check(f"ring is {RING_SIZE >> 20} MiB ending at the reserve ceiling", ring + RING_SIZE == lay["ceiling"],
+          f"0x{ring:08x} + {RING_SIZE >> 20} MiB vs ceiling 0x{lay['ceiling']:08x}")
     check("stack sits just below the ring", stack + 0x2000 <= ring, f"0x{stack:08x}")
     check("sector buffers sit below the stack, 512-aligned", buf + 270336 <= stack and buf % 512 == 0,
           f"0x{buf:08x}")
@@ -281,6 +288,28 @@ def gains(s):
         check(f"{tag}: T1's gain moved off its start", len(dsp) == 8 and dsp[0][2] not in (0, 0x1f7fe0),
               f"{dsp[0] if dsp else None}")
         check(f"{tag}: the sent page index never jumped", longs("skip") == [0], f"{longs('skip')}")
+
+
+def layout(s):
+    """The file table the hook latches at the start edge, for each case: the
+    files in order, the ring frame, and the ring's capacity, RING_SIZE //
+    frame bytes, with its wrap point."""
+    for src, fmt, names, fb in LAYOUT_CASES:
+        tag = f"layout{src:03x}{fmt}"
+        log, _, _, _, _ = port(s, 120, stop_at=80, tag=tag, mask=None, dump_blocks=False,
+                               pokes_before=[(s["stems_tracks"] + 2, src >> 8), (s["stems_tracks"] + 3, src & 0xff),
+                                             (s["stems_fmt"] + 3, fmt)],
+                               mems=((s["stems_nf"], 4 + 4 * 14, "ftab"), (s["stems_fbytes"], 12, "geom")))
+        raw = run_path(tag, "ftab").read_bytes()
+        nf = int.from_bytes(raw[:4], "big")
+        ftab = [int.from_bytes(raw[4 + 4 * i:8 + 4 * i], "big") for i in range(nf)]
+        kinds = [FILE_NAMES[d >> 24] for d in ftab]
+        geom = run_path(tag, "geom").read_bytes()
+        fbytes, rframes, rlimit = (int.from_bytes(geom[i:i + 4], "big") for i in (0, 4, 8))
+        check(f"{tag}: the files", kinds == names, f"{kinds}")
+        check(f"{tag}: the ring frame", fbytes == fb == sum(d & 0xffff for d in ftab), f"{fbytes}")
+        check(f"{tag}: the capacity", rframes == RING_SIZE // fb and rlimit == rframes * fb,
+              f"{rframes} frames, wrap at {rlimit}")
 
 
 def against_main(tag, card, fixture, aud):
@@ -879,15 +908,15 @@ def eight(s):
 
 
 ERR_OVERFLOW, ERR_EXISTS, ERR_WRITE = 1, 4, 5
-RING_SIZE = 0x400000
 DRIVER_DRQ_POLL = 0x40014cf4             # the stock write command's wait for DRQ (STEM_REC.md 11.4)
 # The overflow run: STOP at OVERFLOW_STOP, the row at OVERFLOW_FRAMES - 200,
-# the end at OVERFLOW_FRAMES. The task writes the whole 4 MiB ring after the
-# guard; under upstream's card latency (8 samples a sector, 30b530a) that
-# takes 5,167 frames from FINISHING to IDLE (measured 27 Sep 2026), so the
-# row must come later than the 3,800 it did while the card answered at once.
-OVERFLOW_STOP = 3600
-OVERFLOW_FRAMES = 7200
+# the end at OVERFLOW_FRAMES. The task writes the whole ring after the
+# guard; under upstream's card latency (8 samples a sector, 30b530a) the
+# 4 MiB ring took 5,167 frames from FINISHING to IDLE (measured 27 Sep
+# 2026), so the row must come later than the 3,800 it did while the card
+# answered at once. The 8 MiB ring (piece 5) takes twice the frames.
+OVERFLOW_STOP = 7200
+OVERFLOW_FRAMES = 14400
 
 
 def watched(s, extra=(), span=8):
@@ -1246,7 +1275,7 @@ def wrap8(s):
     mask_take(s, 0xFF, "wrap8", stop_at=9000, frames=10500)
 
 
-RING_FRAMES_8 = 0x400000 // 512      # 8,192
+RING_FRAMES_8 = RING_SIZE // 512     # 16,384
 
 
 def overflow8(s):
@@ -1363,6 +1392,7 @@ def main():
     only = next((a.split("=", 1)[1].split(",") for a in sys.argv if a.startswith("--only=")), None)
     runs = [("probe", probe), ("thru", thru), ("tap", tap), ("full", full), ("gains", gains),
             ("postfader", postfader), ("postmove", postmove), ("clip", clip), ("master", master),
+            ("layout", layout),
             ("rowstop", rowstop),
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))

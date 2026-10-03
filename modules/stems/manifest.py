@@ -12,14 +12,14 @@ Every stock fact the unit uses: docs/firmware/STEM_REC.md.
 
 HOW, in one breath: a detour at the per-frame routine's only call site
 (0x40004b12) packs each enabled track's post-FX2 read-back block into a
-4 MiB ring each frame; an RTOS task of the module's own streams the ring
+8 MiB ring each frame; an RTOS task of the module's own streams the ring
 to the card while the take runs, through the file layer's raw sector
 routines from its own buffers (never the buffered API or its shared
 staging buffer), then rewrites each file's header and sets its length;
 the ring and the task's stack are DramRegions at the free top of the
 platform reserve, so the module costs no sample memory beyond what any
 DRAM remix already gives up. The writer's sector buffers are a third
-region, `stems_buf`: eight 33,280-byte stream buffers and eight 512-byte
+region, `stems_buf`: fourteen 49,664-byte stream buffers and fourteen 512-byte
 sector-0 copies.
 
 ⚠️ UNFLASHED. No module upstream hooks the frame site or grows MAIN
@@ -90,9 +90,9 @@ MODULE = Module(
                       refs=((ROOT_DESC + 0x18, ROOT_ROWS),)),),
     pokes=(Poke(ROOT_DESC, expect=(ROOT_N).to_bytes(4, "big"),
                 write=(ROOT_N + 1).to_bytes(4, "big"), note="MAIN MENU categories 4 -> 5 (STEMS)"),),
-    dram_regions=(DramRegion("stems_ring", 0x400000),
+    dram_regions=(DramRegion("stems_ring", 0x800000),
                   DramRegion("stems_stack", 0x2000),
-                  DramRegion("stems_buf", 270336, align=512),),
+                  DramRegion("stems_buf", 14 * (512 * 96 + 512) + 14 * 512, align=512),),
     # verify_stems builds its own stems image and its fixture cards (from the
     # project template STEMS_TEMPLATE names, default out/projects/Ultimate FX
     # 1.5.3; it SKIPs the port runs by name without one) and runs the takes

@@ -56,12 +56,17 @@
         .equ    ST_ARMED,      1
         .equ    ST_RECORDING,  2
         .equ    ST_FINISHING,  3
-        .equ    RING_SIZE,     0x400000     | = DramRegion stems_ring
-        .equ    TRACK_BYTES,   64           | one track's frame: 16 stereo 16-bit samples
+        .equ    RING_SIZE,     0x800000     | = DramRegion stems_ring (piece 5: 8 MiB)
+        .equ    MAX_FILES,     14
+        .equ    FB_MAX,        96           | one file's frame at most: 16 stereo 24-bit samples
+        .equ    K_MAIN,        8            | the kinds after the tracks: MAIN, CUE, AB, CD, then A B C D
+        .equ    K_AB,          10
+        .equ    K_A,           12
+        .equ    SRC_BITS,      0xff         | the sources a take may latch (Task 8: 0xfff)
         .equ    MAX_FRAMES,    9922500      | 60 minutes
         .equ    CHUNK_FRAMES,  512          | frames per write while recording
-        .equ    SBUF_SIZE,     CHUNK_FRAMES*64+512   | one track's stream buffer: a chunk plus a carry
-        .equ    SEC0_BASE,     8*SBUF_SIZE  | the sector-0 copies follow the eight stream buffers
+        .equ    SBUF_SIZE,     CHUNK_FRAMES*FB_MAX+512  | one file's stream buffer: a chunk plus a carry
+        .equ    SEC0_BASE,     MAX_FILES*SBUF_SIZE      | the sector-0 copies follow the stream buffers
         .equ    STACK_SIZE,    0x2000       | = DramRegion stems_stack
         .equ    TASK_PRIO,     1
         .equ    PATH_MAX,      256
@@ -122,7 +127,9 @@ stems_rd:        .long   0          | frames the task has taken out
 stems_frames:    .long   0          | frames recorded (= stems_wr)
 stems_peak:      .long   0          | the take's largest ring fill, frames; reset at the arm
         .global stems_tracks, stems_hold, stems_wr_off, stems_rd_off, stems_probe, stems_probe_res
-stems_tracks:    .long   0xFF       | the track mask, bit k = track k+1; latched at the start
+        .global stems_fmt, stems_nf, stems_ftab, stems_fbytes
+stems_tracks:    .long   0xFF       | the sources: bits 0-7 T1-T8, 8 MAIN, 9 CUE, 10 AB, 11 CD
+stems_fmt:       .long   6          | bit 0 24 BIT, bit 1 AB STEREO, bit 2 CD STEREO
 stems_hold:      .long   0          | test seam: non-zero pauses the writer while RECORDING
         .global stems_trace, stems_trace_buf
 stems_trace:     .long   0          | test seam: 1..TRACE_N records that frame into stems_trace_buf, then counts on
@@ -142,18 +149,20 @@ stems_emac_save: .space  16         | the caller's MACSR, ACC0, ACC1, ACCEXT01
 stems_tdelay:    .space  8*0x80     | per track slot, the block one frame older (TRACK_DELAY)
         .include "remix.inc"        | stems_gtab: core 0's gain table, from the user's image (18.4)
         .balign 4
-stems_mask:      .long   0          | the latched mask
-stems_nt:        .long   0          | its bit count
-stems_fbytes:    .long   0          | a ring frame: 64 x stems_nt
+stems_lsrc:      .long   0          | the sources latched at the start
+stems_lfmt:      .long   0          | the format latched at the start
+stems_nf:        .long   0          | files in the take
+stems_ftab:      .space  4*MAX_FILES  | per file: kind << 24 | channels << 16 | bytes per frame
+stems_fbytes:    .long   0          | a ring frame: the sum of the files' frames
 stems_rframes:   .long   0          | the ring's capacity in frames
 stems_rlimit:    .long   0          | stems_rframes x stems_fbytes: offsets wrap here
 stems_wr_off:    .long   0          | the hook's next frame, a byte offset into the ring
 stems_rd_off:    .long   0          | the task's next frame
 stems_nopen:     .long   0          | files open
 stems_wfail:     .long   0          | a card write failed: finish without writing more
-stems_handle:    .space  32         | one per open file, in track order
-stems_slen:      .space  32         | bytes waiting in each stream buffer
-stems_fpos:      .space  32         | bytes of each file on the card
+stems_handle:    .space  4*MAX_FILES  | one per open file, in file order
+stems_slen:      .space  4*MAX_FILES  | bytes waiting in each stream buffer
+stems_fpos:      .space  4*MAX_FILES  | bytes of each file on the card
 stems_tcb:       .space  TCB_SIZE   | zero until the one create (STEM_REC.md 3.8)
 stems_probe:     .long   0          | test seam: non-zero runs stems_probe_run once
 stems_probe_res: .space  28
@@ -167,14 +176,7 @@ peak_buf0:       .space  16
 peak_buf1:       .space  16
 stems_name:      .space  16         | YYMMDD-HHMM
 stems_path:      .space  PATH_MAX   | <set>/AUDIO/<name>
-stems_fpath:     .space  PATH_MAX   | <set>/AUDIO/<name>/T<n>.wav
-| The ring's capacity and wrap point for 1 to 8 tracks: whole frames only.
-rframes_tab:
-        .long   RING_SIZE/64, RING_SIZE/128, RING_SIZE/192, RING_SIZE/256
-        .long   RING_SIZE/320, RING_SIZE/384, RING_SIZE/448, RING_SIZE/512
-rlimit_tab:
-        .long   (RING_SIZE/64)*64, (RING_SIZE/128)*128, (RING_SIZE/192)*192, (RING_SIZE/256)*256
-        .long   (RING_SIZE/320)*320, (RING_SIZE/384)*384, (RING_SIZE/448)*448, (RING_SIZE/512)*512
+stems_fpath:     .space  PATH_MAX   | <set>/AUDIO/<name>/<file>.wav
 | The 44-byte header, little-endian as RIFF wants, sizes 0: the placeholder
 | every file starts with. The real sizes go into the sector-0 copy at the end.
 stems_hdr:
@@ -193,6 +195,16 @@ stems_hdr:
 fmt_dir:   .asciz  "/AUDIO/%s"
 fmt_file:  .asciz  "/T%d.wav"
 probe_name: .asciz "/PROBE.BIN"
+        .balign 4
+bus_names:  .long   nm_main, nm_cue, nm_ab, nm_cd, nm_a, nm_b, nm_c, nm_d
+nm_main:    .asciz  "/MAIN.wav"
+nm_cue:     .asciz  "/CUE.wav"
+nm_ab:      .asciz  "/AB.wav"
+nm_cd:      .asciz  "/CD.wav"
+nm_a:       .asciz  "/A.wav"
+nm_b:       .asciz  "/B.wav"
+nm_c:       .asciz  "/C.wav"
+nm_d:       .asciz  "/D.wav"
         .balign 2
 
 | ---- the STEMS category (docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md)
@@ -480,17 +492,7 @@ stems_frame_hook:
         movea.l stems_wr_off,%a1
         adda.l  #stems_ring,%a1
         bsr.w   stems_emac_in
-        bsr.w   stems_half          | d4
-        move.l  stems_mask,%d6
-        moveq   #0,%d5              | k * 0x80
-.Lh_trk:
-        lsr.l   #1,%d6              | C = track k's bit
-        bcc.s   .Lh_next
-        bsr.w   stems_track16
-.Lh_next:
-        addi.l  #0x80,%d5
-        tst.l   %d6
-        bne.s   .Lh_trk
+        bsr.w   stems_copy_frame    | every file of the table
         bsr.w   stems_emac_out
         bsr.w   stems_tdelay_step
         move.l  stems_wr_off,%d0
@@ -517,31 +519,77 @@ stems_frame_hook:
         rts
 
 | ---- the layout, latched at the start edge (in the hook) ---------------
-| Uses d0, d1 and a0 only. Offsets poked past this layout's wrap go to 0.
+| The sources and the format, then the file table in file order (T1..T8,
+| MAIN, CUE, AB or A B, CD or C D), the ring frame and the ring's capacity.
+| Uses d0-d3 and a0. Offsets past this layout's wrap go to 0.
 stems_layout:
         move.l  stems_tracks,%d0
-        andi.l  #0xff,%d0
+        andi.l  #SRC_BITS,%d0
         bne.s   .Ll_some
-        moveq   #1,%d0              | no track: T1
+        moveq   #1,%d0              | no source: T1
 .Ll_some:
-        move.l  %d0,stems_mask
-        moveq   #0,%d1
-.Ll_pop:
-        lsr.l   #1,%d0
-        bcc.s   .Ll_zero
+        move.l  %d0,stems_lsrc
+        move.l  stems_fmt,%d2
+        andi.l  #7,%d2
+        move.l  %d2,stems_lfmt
+        moveq   #32,%d3             | one channel's frame: 16 samples of 2 bytes,
+        btst    #0,%d2
+        beq.s   .Ll_w
+        moveq   #48,%d3             | or of 3 with 24 BIT
+.Ll_w:
+        lea     stems_ftab,%a0
+        moveq   #0,%d1              | the kind
+.Ll_src:
+        btst    %d1,%d0
+        beq.s   .Ll_next
+        cmpi.l  #K_AB,%d1
+        bcs.s   .Ll_stereo          | a track, MAIN or CUE: stereo
+        move.l  %d1,%d2
+        subi.l  #K_AB-1,%d2         | the format bit: 1 for AB, 2 for CD
+        btst    %d2,stems_lfmt+3
+        bne.s   .Ll_stereo          | the pair as one stereo file
+        move.l  %d1,%d2             | two mono files: A B (or C D)
+        subi.l  #K_AB,%d2
+        add.l   %d2,%d2
+        addi.l  #K_A,%d2
+        swap    %d2
+        lsl.l   #8,%d2
+        ori.l   #0x10000,%d2
+        add.l   %d3,%d2
+        move.l  %d2,(%a0)+
+        addi.l  #0x01000000,%d2     | the pair's second input
+        move.l  %d2,(%a0)+
+        bra.s   .Ll_next
+.Ll_stereo:
+        move.l  %d1,%d2
+        swap    %d2
+        lsl.l   #8,%d2              | kind << 24
+        ori.l   #0x20000,%d2        | two channels
+        add.l   %d3,%d2
+        add.l   %d3,%d2
+        move.l  %d2,(%a0)+
+.Ll_next:
         addq.l  #1,%d1
-.Ll_zero:
-        tst.l   %d0
-        bne.s   .Ll_pop
-        move.l  %d1,stems_nt
-        move.l  %d1,%d0
-        lsl.l   #6,%d0
-        move.l  %d0,stems_fbytes
-        lea     rframes_tab,%a0
-        move.l  -4(%a0,%d1.l*4),%d0
+        cmpi.l  #K_AB+2,%d1
+        bne.s   .Ll_src
+        move.l  %a0,%d0
+        subi.l  #stems_ftab,%d0
+        lsr.l   #2,%d0
+        move.l  %d0,stems_nf
+        moveq   #0,%d2              | the ring frame
+        lea     stems_ftab,%a0
+.Ll_sum:
+        moveq   #0,%d1
+        move.w  2(%a0),%d1
+        add.l   %d1,%d2
+        addq.l  #4,%a0
+        subq.l  #1,%d0
+        bne.s   .Ll_sum
+        move.l  %d2,stems_fbytes
+        move.l  #RING_SIZE,%d0
+        divu.l  %d2,%d0
         move.l  %d0,stems_rframes
-        lea     rlimit_tab,%a0
-        move.l  -4(%a0,%d1.l*4),%d0
+        mulu.l  %d2,%d0
         move.l  %d0,stems_rlimit
         cmp.l   stems_wr_off,%d0
         bhi.s   .Ll_wr
@@ -882,6 +930,28 @@ stems_track16:
         bne.s   .Lp_s
         rts
 
+| ---- one ring frame: every file of the table, in order ------------------
+| a1 = the ring frame. The caller set the EMAC. Uses d0-d7, a0, a2, a3.
+stems_copy_frame:
+        bsr.w   stems_half                  | d4
+        moveq   #0,%d6                      | file j
+.Lc_file:
+        cmp.l   stems_nf,%d6
+        bcc.s   .Lc_done
+        move.l  %d6,%d0
+        lsl.l   #2,%d0
+        lea     stems_ftab,%a0
+        move.l  (%a0,%d0.l),%d7
+        move.l  %d7,%d5
+        moveq   #24,%d0
+        lsr.l   %d0,%d5                     | the kind: a track in this task
+        lsl.l   #7,%d5                      | k * 0x80
+        bsr.w   stems_track16
+        addq.l  #1,%d6
+        bra.s   .Lc_file
+.Lc_done:
+        rts
+
 | ---- the one-frame track delay (TRACK_DELAY, STEM_REC.md 18.5) -----------
 | Each latched track's block in the half the copy takes is kept for the next
 | frame. Uses d0-d2, d4, d6, a0, a2.
@@ -891,7 +961,7 @@ stems_tdelay_step:
         .if     TRACK_HALF
         eori.l  #0x400,%d4
         .endif
-        move.l  stems_mask,%d6
+        move.l  stems_lsrc,%d6              | its low byte: the tracks
         moveq   #0,%d1                      | k * 0x80
 .Lt_k:
         lsr.l   #1,%d6
@@ -1282,7 +1352,7 @@ stems_make_folder:
         moveq   #-1,%d0
         rts
 
-| ---- a file path: stems_path + /T<k+1>.wav, k in d3 ---------------------
+| ---- a file path: stems_path + the name of file d3 ----------------------
 stems_make_file:
         lea     stems_path,%a0
         lea     stems_fpath,%a1
@@ -1291,15 +1361,62 @@ stems_make_file:
         bne.s   .Lm_copy
         subq.l  #1,%a1
         move.l  %d3,%d0
-        addq.l  #1,%d0
+        lsl.l   #2,%d0
+        lea     stems_ftab,%a0
+        move.l  (%a0,%d0.l),%d0
+        moveq   #24,%d1
+        lsr.l   %d1,%d0                     | the kind
+        cmpi.l  #K_MAIN,%d0
+        bcc.s   .Lm_named
+        addq.l  #1,%d0                      | T<k+1>
         move.l  %d0,-(%sp)
         pea     fmt_file
         move.l  %a1,-(%sp)
         jsr     SPRINTF
         lea     12(%sp),%sp
         rts
+.Lm_named:
+        subq.l  #K_MAIN,%d0
+        lsl.l   #2,%d0
+        lea     bus_names,%a0
+        movea.l (%a0,%d0.l),%a0
+.Lm_name:
+        move.b  (%a0)+,(%a1)+
+        bne.s   .Lm_name
+        rts
 
-| ---- start: name, folder, one file per latched track ---------------------
+| ---- file d3's header into a2: the template with its channels, its bytes a
+| second, its block align and its bits, little-endian as RIFF wants -------
+stems_hdr_fill:
+        lea     stems_hdr,%a0
+        movea.l %a2,%a1
+        moveq   #HDR_SIZE/4,%d0
+.Lhf_cp:
+        move.l  (%a0)+,(%a1)+
+        subq.l  #1,%d0
+        bne.s   .Lhf_cp
+        move.l  %d3,%d0
+        lsl.l   #2,%d0
+        lea     stems_ftab,%a0
+        move.l  (%a0,%d0.l),%d1
+        swap    %d1
+        andi.l  #0xff,%d1                   | channels
+        move.l  stems_lfmt,%d2
+        andi.l  #1,%d2
+        addq.l  #2,%d2                      | bytes a sample: 2, or 3 with 24 BIT
+        move.b  %d1,22(%a2)                 | channels
+        move.l  %d1,%d0
+        mulu.l  %d2,%d0                     | block align
+        move.b  %d0,32(%a2)
+        lsl.l   #3,%d2
+        move.b  %d2,34(%a2)                 | bits
+        move.l  #44100,%d1
+        mulu.l  %d1,%d0                     | bytes a second
+        BYTEREV 0
+        move.l  %d0,28(%a2)
+        rts
+
+| ---- start: name, folder, one file per entry of the file table ----------
 | d0 = 0 with every file open, or -1 with stems_status set and none open.
 stems_start:
         lea     -12(%sp),%sp
@@ -1320,11 +1437,10 @@ stems_start:
         pea     stems_path
         jsr     (%a0)
         addq.l  #4,%sp
-        move.l  stems_mask,%d2
-        moveq   #0,%d3              | track k
-.Ls_trk:
-        lsr.l   #1,%d2
-        bcc.w   .Ls_next
+        moveq   #0,%d3              | file j
+.Ls_file:
+        cmp.l   stems_nf,%d3
+        bcc.s   .Ls_all
         bsr.w   stems_make_file
         pea     MODE_W
         pea     stems_fpath
@@ -1332,26 +1448,20 @@ stems_start:
         addq.l  #8,%sp
         tst.l   %d0
         ble.w   .Ls_open
-        move.l  stems_nopen,%d1     | slot j
         lea     stems_handle,%a0
-        move.l  %d0,(%a0,%d1.l*4)
+        move.l  %d0,(%a0,%d3.l*4)
         lea     stems_fpos,%a0
-        clr.l   (%a0,%d1.l*4)
+        clr.l   (%a0,%d3.l*4)
         lea     stems_slen,%a0
         moveq   #HDR_SIZE,%d0
-        move.l  %d0,(%a0,%d1.l*4)   | the stream starts with the placeholder header
-        bsr.w   stems_sbuf
-        lea     stems_hdr,%a0
-        moveq   #HDR_SIZE/4,%d0
-.Ls_hdr:
-        move.l  (%a0)+,(%a2)+
-        subq.l  #1,%d0
-        bne.s   .Ls_hdr
+        move.l  %d0,(%a0,%d3.l*4)   | the stream starts with the placeholder header
+        move.l  %d3,%d1
+        bsr.w   stems_sbuf          | a2: stream buffer j
+        bsr.w   stems_hdr_fill
         addq.l  #1,stems_nopen
-.Ls_next:
         addq.l  #1,%d3
-        tst.l   %d2
-        bne.w   .Ls_trk
+        bra.s   .Ls_file
+.Ls_all:
         moveq   #0,%d0
         bra.s   .Ls_out
 .Ls_open:
@@ -1417,16 +1527,19 @@ stems_drain:
 .Ld_frame:
         movea.l stems_rd_off,%a3
         adda.l  #stems_ring,%a3
-        moveq   #0,%d4              | slot j
-.Ld_trk:
+        moveq   #0,%d4              | file j
+.Ld_file:
         move.l  %d4,%d1
         bsr.w   stems_sbuf          | a2 = stream buffer j
         lea     stems_slen,%a0
         move.l  (%a0,%d4.l*4),%d0
         adda.l  %d0,%a2
-        addi.l  #TRACK_BYTES,%d0
+        lea     stems_ftab,%a1
+        move.l  (%a1,%d4.l*4),%d1
+        andi.l  #0xffff,%d1         | this file's bytes in the frame
+        add.l   %d1,%d0
         move.l  %d0,(%a0,%d4.l*4)
-        moveq   #16,%d1
+        lsr.l   #2,%d1              | longs: two 16-bit samples each
 .Ld_s:                              | [L1 L0 R1 R0] -> [L0 L1 R0 R1]
         move.l  (%a3)+,%d0
         BYTEREV 0
@@ -1435,8 +1548,8 @@ stems_drain:
         subq.l  #1,%d1
         bne.s   .Ld_s
         addq.l  #1,%d4
-        cmp.l   stems_nt,%d4
-        bcs.s   .Ld_trk
+        cmp.l   stems_nf,%d4
+        bcs.s   .Ld_file
         move.l  stems_rd_off,%d0
         add.l   stems_fbytes,%d0
         cmp.l   stems_rlimit,%d0
@@ -1456,7 +1569,7 @@ stems_drain:
         tst.l   %d0
         bmi.s   .Ld_err
         addq.l  #1,%d4
-        cmp.l   stems_nt,%d4
+        cmp.l   stems_nf,%d4
         bcs.s   .Ld_flush
         bra.w   .Ld_more
 .Ld_done:
@@ -1579,7 +1692,20 @@ stems_finish:
         bpl.s   .Lz_pos
         moveq   #0,%d3
 .Lz_pos:
-        andi.l  #-4,%d3
+        move.l  %d4,%d0
+        lsl.l   #2,%d0
+        lea     stems_ftab,%a0
+        move.l  (%a0,%d0.l),%d1
+        swap    %d1
+        andi.l  #0xff,%d1                   | channels
+        move.l  stems_lfmt,%d0
+        andi.l  #1,%d0
+        addq.l  #2,%d0                      | bytes a sample: 2, or 3 with 24 BIT
+        mulu.l  %d0,%d1                     | block align
+        move.l  %d3,%d0
+        divu.l  %d1,%d0
+        mulu.l  %d1,%d0
+        move.l  %d0,%d3                     | whole frames of this file only
         moveq   #HDR_SIZE,%d2
         add.l   %d3,%d2             | the length: 44 + data
         lea     stems_fpos,%a0

@@ -25,7 +25,7 @@ for p in ("tools/emu", "tools", "tools/verify"):
     sys.path.insert(0, str(ROOT / p))
 import toolpath  # noqa: E402,F401
 import emu_bringup  # noqa: E402  (exports LIBUNICORN_PATH before unicorn loads)
-from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN  # noqa: E402
+from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN, UC_HOOK_INTR  # noqa: E402
 from unicorn import m68k_const as K  # noqa: E402
 import stems_gain as sg  # noqa: E402,F401
 
@@ -104,6 +104,26 @@ class Rt:
         t0 = TABLE - 0x40000400
         self.table = [int.from_bytes(img[t0 + 3 * i:t0 + 3 * i + 3], "little") for i in range(258)]
         uc.reg_write(K.UC_M68K_REG_SR, 0x2700)
+        self.trap = None
+        uc.hook_add(UC_HOOK_INTR, self._on_intr)
+
+    def _on_intr(self, uc, intno, user):
+        self.trap = (intno, uc.reg_read(K.UC_M68K_REG_PC))
+        uc.emu_stop()
+
+    def _start(self, pc, until, count=2_000_000):
+        """emu_start with the ISA C instructions Unicorn's CFV4E lacks (bitrev,
+        byterev, ff1: vector 4) emulated by emu_bringup's shim, as the port
+        runs them; any other trap is an error."""
+        while True:
+            self.trap = None
+            self.uc.emu_start(pc, until, count=count)
+            if self.trap is None:
+                return
+            npc = emu_bringup._isa_c_shim(self.uc, self)
+            if npc is None:
+                raise RuntimeError(f"trap vector {self.trap[0]} at {self.trap[1]:#x}")
+            pc = npc
 
     def call(self, name, **regs):
         uc = self.uc
@@ -111,7 +131,7 @@ class Rt:
             uc.reg_write(self.REGS[r], v & 0xffffffff)
         uc.reg_write(K.UC_M68K_REG_A7, STACK - 4)
         uc.mem_write(STACK - 4, struct.pack(">I", STOP))
-        uc.emu_start(self.s[name], STOP, count=2_000_000)
+        self._start(self.s[name], STOP)
         assert uc.reg_read(K.UC_M68K_REG_PC) == STOP, f"{name} did not return"
         sp = uc.reg_read(K.UC_M68K_REG_A7)
         assert sp == STACK, f"{name}: the stack is off by {sp - STACK}"
@@ -136,7 +156,7 @@ class Rt:
 
     def run(self, code):
         self.uc.mem_write(self.CODE, code)
-        self.uc.emu_start(self.CODE, self.CODE + len(code))
+        self._start(self.CODE, self.CODE + len(code))
 
     def set_emac(self, macsr, acc0, acc1, accext01):
         """The interrupted code's EMAC state, as the hook finds it: written in
@@ -183,17 +203,62 @@ def main():
     return 1 if fails else 0
 
 
+def layout_ref(src, fmt):
+    """The file table a source word and a format should latch (spec section 3)."""
+    src &= SRC_BITS
+    src = src or 1
+    w = 48 if fmt & 1 else 32
+    files = []
+    for k in range(12):
+        if not src >> k & 1:
+            continue
+        if k >= 10 and not fmt >> (k - 9) & 1:
+            a = 12 + 2 * (k - 10)
+            files += [(a << 24) | 0x10000 | w, ((a + 1) << 24) | 0x10000 | w]
+        else:
+            files.append((k << 24) | 0x20000 | 2 * w)
+    fb = sum(f & 0xffff for f in files)
+    return files, fb, 0x800000 // fb, 0x800000 // fb * fb
+
+
 @unit
-def layout_now(rt):
-    """The harness on code that exists: piece 3's stems_layout for one and
-    eight tracks. Task 7 replaces it with the file table's test."""
+def layout(rt):
+    """stems_layout against layout_ref for every source word and format."""
     s = rt.s
-    for mask, nt in ((0x01, 1), (0xff, 8)):
-        rt.w32(s["stems_tracks"], mask)
-        rt.call("stems_layout")
-        got = tuple(rt.r32(s[n]) for n in ("stems_nt", "stems_fbytes", "stems_rframes", "stems_rlimit"))
-        want = (nt, 64 * nt, 0x400000 // (64 * nt), 0x400000 // (64 * nt) * 64 * nt)
-        check(f"layout_now: mask {mask:#04x}", got == want, f"{got} vs {want}")
+    bad = None
+    for src in range(4096):
+        for fmt in range(8):
+            rt.w32(s["stems_tracks"], src)
+            rt.w32(s["stems_fmt"], fmt)
+            rt.w32(s["stems_wr_off"], 0)
+            rt.w32(s["stems_rd_off"], 0)
+            rt.call("stems_layout")
+            nf = rt.r32(s["stems_nf"])
+            got = ([rt.r32(s["stems_ftab"] + 4 * i) for i in range(nf)], rt.r32(s["stems_fbytes"]),
+                   rt.r32(s["stems_rframes"]), rt.r32(s["stems_rlimit"]))
+            if got != layout_ref(src, fmt):
+                bad = (hex(src), fmt, got, layout_ref(src, fmt))
+                break
+        if bad:
+            break
+    check("layout: every source word and format (32,768 cases)", bad is None,
+          f"first difference {bad}" if bad else "")
+
+
+@unit
+def header(rt):
+    """stems_hdr_fill for 16 and 24 bits, mono and stereo."""
+    s = rt.s
+    for fmt, entry, ch, bits in ((0, 0x00020040, 2, 16), (0, 0x0c010020, 1, 16),
+                                 (1, 0x08020060, 2, 24), (1, 0x0d010030, 1, 24)):
+        rt.w32(s["stems_lfmt"], fmt)
+        rt.w32(s["stems_ftab"], entry)
+        rt.call("stems_hdr_fill", d3=0, a2=s["stems_buf"])
+        h = rt.rmem(s["stems_buf"], 44)
+        got = struct.unpack_from("<HIIHH", h, 22)
+        want = (ch, 44100, 44100 * ch * bits // 8, ch * bits // 8, bits)
+        check(f"header: {ch} channel(s), {bits} bits", got == want and h[:4] == b"RIFF" and h[36:40] == b"data",
+              f"{got}")
 
 
 LV_PAGES, LV_SENT = 0x80005460, 0x80004804      # STEM_REC.md 18.1: four pages, the index sent
