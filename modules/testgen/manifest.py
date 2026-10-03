@@ -5,7 +5,7 @@ track's output (analog, or a channel of the USB audio out) carries it: for
 measuring the Octatrack's path, the USB audio stream, or any module's
 response. modules/testgen/README.md says what each signal is proved to be.
 
-SINE at ISO third-octave frequencies, an exponential SWEEP (20 Hz to 20 kHz
+SINE at ISO third-octave frequencies and A 440, with a fine tune, an exponential SWEEP (20 Hz to 20 kHz
 over LEN, then 1 s of silence, repeating), PINK and WHITE noise, and an
 IMPULSE train; LEVL in 0.5 dB steps, CHAN routing.
 """
@@ -22,21 +22,22 @@ def _q23(v):
     return min(round(v * (1 << 23)), 0x7FFFFF) & 0xFFFFFF
 
 
-ISO_THIRDS = (20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800,
-              1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000)
+FREQS = (20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 440, 500, 630, 800,
+         1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000)
+# the ISO third-octave centres, and A 440 between 400 and 500
 
-# P table, 191 words, read through the ptable literal:
+# P table, 192 words, read through the ptable literal:
 #   +0    LEVEL[128]  LEVL k -> 10^(-(127 - k) * 0.5 / 20), Q23 (0 dBFS held at 0x7fffff);
 #                     LEVL 0 is silence, and the default: choosing TESTGEN makes no sound
 #                     until LEVL is turned up (a full-level tone on insert, Ignorato's MKII)
-#   +128  FINC[31]    FREQ k -> the phase increment f / FS * 2^24 for ISO_THIRDS[k]
+#   +128  FINC[32]    FREQ k -> the phase increment f / FS * 2^24 for FREQS[k]
 #                     (a cycle is 2^24; 1 kHz is 380436, 1000.0007 Hz)
-#   +159  SWN[16]     LEN step t = LEN >> 3 -> the sweep's length, (t + 1) s in samples
-#   +175  SWD[16]     the sweep's growth per sample, (r - 1) * 2^35, r^N = 20 kHz / 20.0007 Hz
+#   +160  SWN[16]     LEN step t = LEN >> 3 -> the sweep's length, (t + 1) s in samples
+#   +176  SWD[16]     the sweep's growth per sample, (r - 1) * 2^35, r^N = 20 kHz / 20.0007 Hz
 # The sine's polynomial, the noise generator and the pink filter are
 # immediates in testgen.asm; testgen_ref.py holds the same laws.
 LEVEL = (0,) + tuple(_q23(10 ** (-(127 - k) * 0.5 / 20)) for k in range(1, 128))
-FINC = tuple(round(f / _FS * (1 << 24)) for f in ISO_THIRDS)
+FINC = tuple(round(f / _FS * (1 << 24)) for f in FREQS)
 _SWEEP_INC0 = 7609                              # 20.0007 Hz; testgen_ref.SWEEP_INC0
 SWN = tuple((t + 1) * int(_FS) for t in range(16))
 SWD = tuple(round(((20000.0 / (_SWEEP_INC0 * _FS / (1 << 24))) ** (1.0 / n) - 1.0) * (1 << 35)) for n in SWN)
@@ -49,7 +50,7 @@ _BLANK = Param(b"", 0)
 MODE_LABELS = ("SINE", "SWEP", "PINK", "WHIT", "IMPL")
 CHAN_LABELS = ("L+R", "L", "R", "L-R")
 FREQ_LABELS = ("20", "25", "31.5", "40", "50", "63", "80", "100", "125", "160", "200", "250", "315",
-               "400", "500", "630", "800", "1k", "1k25", "1k6", "2k", "2k5", "3k15", "4k", "5k",
+               "400", "A440", "500", "630", "800", "1k", "1k25", "1k6", "2k", "2k5", "3k15", "4k", "5k",
                "6k3", "8k", "10k", "12k5", "16k", "20k")
 
 MODULE = Module(
@@ -69,11 +70,13 @@ MODULE = Module(
     params=(
         Param(b"LEVL", 0, 128, active=True, formatter=_P,
               doc="output level: 0 = silent (the default), 1 = -63 dBFS .. 127 = 0 dBFS, 0.5 dB a step"),
-        Param(b"FREQ", 17, 31, active=True, formatter=_W, labels=FREQ_LABELS,
-              doc="SINE frequency, shown in Hz: the 31 ISO third-octave centres, 20 Hz to 20 kHz"),
+        Param(b"FREQ", 18, 32, active=True, formatter=_W, labels=FREQ_LABELS,
+              doc="SINE frequency, shown in Hz: the ISO third-octave centres 20 Hz to 20 kHz, and A440"),
         Param(b"LEN", 32, 128, active=True, formatter=_P,
               doc="SWEEP length 1..16 s (LEN/8 + 1) and IMPULSE period, a quarter of that"),
-        _BLANK, _BLANK, _BLANK,
+        Param(b"FINE", 64, 128, active=True, formatter=Formatter.BIPOLAR,
+              doc="SINE fine tune: -64..+63 is -200..+197 cents, 3.125 a step; 0 = the FREQ step exactly"),
+        _BLANK, _BLANK,
         Param(b"MODE", 0, 5, active=True, formatter=_S, labels=MODE_LABELS,
               doc="the signal: SINE, SWEEP (20 Hz-20 kHz), PINK, WHITE, IMPULSE"),
         _BLANK,
@@ -93,5 +96,5 @@ MODULE = Module(
     ),
     harness=Harness(layout_char="G", is_server=False),
     gates=(Gate("tools/verify/verify_testgen.py", remix_arg=False),),
-    dear={"LEVL": 127, "FREQ": 30, "LEN": 127, "MODE": 0, "CHAN": 3},
+    dear={"LEVL": 127, "FREQ": 31, "FINE": 127, "LEN": 127, "MODE": 0, "CHAN": 3},
 )

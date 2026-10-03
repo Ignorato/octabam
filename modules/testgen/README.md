@@ -23,8 +23,9 @@ A change of MODE, FREQ or LEN restarts the signal from its first sample: a sine 
 | page | slot | name | range | what it does |
 |---|---|---|---|---|
 | 1 | 0 | LEVL | 0-127 | output level: 0 = silent (the default), 1 = -63 dBFS, 127 = 0 dBFS, 0.5 dB a step (115 = -6 dBFS) |
-| 1 | 1 | FREQ | select, shown in Hz | SINE frequency: the 31 ISO third-octave centres, 20 Hz to 20 kHz, across the knob's whole turn; 1k is the default |
+| 1 | 1 | FREQ | select, shown in Hz | SINE frequency: the 31 ISO third-octave centres, 20 Hz to 20 kHz, and A440, across the knob's whole turn; 1k is the default |
 | 1 | 2 | LEN | 0-127 | SWEEP length in whole seconds, LEN/8 + 1 (0 = 1 s, 32 = 5 s, the default, 120 = 16 s); the IMPULSE period is a quarter of it (0.25 s to 4 s) |
+| 1 | 3 | FINE | -64..+63 | SINE fine tune: -200 to +197 cents in 3.125-cent steps, so FREQ and FINE together reach any frequency from 17.8 Hz to 20 kHz; 0 is the FREQ step exactly. Turning it does not restart the tone |
 | 2 | 6 | MODE | select | SINE, SWEP, PINK, WHIT, IMPL |
 | 2 | 8 | CHAN | select | L+R, L only, R only, L and inverted R (a polarity check) |
 
@@ -34,23 +35,24 @@ The FREQ steps:
 
 | FREQ | Hz | FREQ | Hz | FREQ | Hz | FREQ | Hz |
 |---|---|---|---|---|---|---|---|
-| 0 | 20 | 8 | 125 | 16 | 800 | 24 | 5000 |
-| 1 | 25 | 9 | 160 | 17 | 1000 | 25 | 6300 |
-| 2 | 31.5 | 10 | 200 | 18 | 1250 | 26 | 8000 |
-| 3 | 40 | 11 | 250 | 19 | 1600 | 27 | 10000 |
-| 4 | 50 | 12 | 315 | 20 | 2000 | 28 | 12500 |
-| 5 | 63 | 13 | 400 | 21 | 2500 | 29 | 16000 |
-| 6 | 80 | 14 | 500 | 22 | 3150 | 30 | 20000 |
-| 7 | 100 | 15 | 630 | 23 | 4000 | | |
+| 0 | 20 | 8 | 125 | 16 | 630 | 24 | 4000 |
+| 1 | 25 | 9 | 160 | 17 | 800 | 25 | 5000 |
+| 2 | 31.5 | 10 | 200 | 18 | 1000 | 26 | 6300 |
+| 3 | 40 | 11 | 250 | 19 | 1250 | 27 | 8000 |
+| 4 | 50 | 12 | 315 | 20 | 1600 | 28 | 10000 |
+| 5 | 63 | 13 | 400 | 21 | 2000 | 29 | 12500 |
+| 6 | 80 | 14 | 440 (A) | 22 | 2500 | 30 | 16000 |
+| 7 | 100 | 15 | 500 | 23 | 3150 | 31 | 20000 |
 
 ## Measured
 
 All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scratch image, 3 Oct 2026, unless stated.
 
 - ✅ The output does not depend on the input: full-scale noise in and silence in give identical output.
-- ✅ 80 cycles a sample at most, in SWEEP (SINE 46, PINK 50, WHITE 17, IMPULSE 19; `make cycles REMIX=testgen`): four instances on one core price at 320 of 4,535.
+- ✅ 86 cycles a sample at most, in SWEEP (SINE 51, PINK 50, WHITE 17, IMPULSE 19; `make cycles REMIX=testgen`): four instances on one core price at 344 of 4,535.
 - ✅ Every FREQ index matches the sine the phase accumulator defines, sin(2 pi n inc / 2^24), within 3 LSB at 0 dBFS, from sample 0.
-- ✅ Every frequency is within 0.0013 Hz of its ISO nominal value (1 kHz measures 1000.0007 Hz; the accumulator's resolution is 0.0026 Hz).
+- ✅ Every FREQ step is within 0.0013 Hz of its nominal value (1 kHz measures 1000.0007 Hz, A440 440.0007 Hz; the accumulator's resolution is 0.0026 Hz).
+- ✅ FINE moves the frequency to FREQ x 2^(FINE/384) within half an accumulator step plus 1 ppm, from -64 to +63 (the 2^x polynomial is within 0.19 ppm); FINE 0 is the FREQ step bit for bit; THD at 1 kHz with FINE +63 is -149.4 dB; 20 kHz with FINE up holds at 20 kHz.
 - ✅ THD at 0 dBFS: -149.5 dB at 1 kHz, -140.5 dB at 100 Hz (nine harmonics, Blackman window, 65,536 samples).
 - ✅ Every LEVL step from 1 to 127 is 0.5 dB within 0.0006 dB; LEVL 127 peaks within 1 LSB of full scale (RMS -3.010 dBFS); LEVL 0, the default, is silent in every MODE.
 - ✅ CHAN: L+R gives equal channels, L only and R only silence the other side, and L with inverted R gives R = -L within 1 LSB.

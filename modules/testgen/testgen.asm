@@ -28,12 +28,13 @@
 ; per block. A change of MODE, FREQ or LEN restarts every generator, so a
 ; capture lines up with the reference from the change on.
 ;
-; ---- the P table (the manifest's ptable, 191 words) -------------------------
+; ---- the P table (the manifest's ptable, 192 words) -------------------------
 ;   +0   LEVEL  10^(-(127 - k)/40), k = 0..127 (0.5 dB steps, 127 = $7fffff)
-;   +128 FINC   the phase increment of ISO third-octave k, k = 0..30
-;   +159 SWN    the sweep's length in samples, LEN step t = LEN >> 3
-;   +175 SWD    the sweep's growth, (r - 1) * 2^35
-; The module (390 words) and its table fill PLATE REV's 594 words but for 13.
+;   +128 FINC   the phase increment of FREQ step k, k = 0..31 (the ISO
+;               third-octave centres, and A 440 between 400 and 500)
+;   +160 SWN    the sweep's length in samples, LEN step t = LEN >> 3
+;   +176 SWD    the sweep's growth, (r - 1) * 2^35
+; The module (392 words) and its table fill PLATE REV's 594 words but for 10.
 ;
 ; ---- r7 slots ---------------------------------------------------------------
 ; persistent, set at init and on a restart:
@@ -42,7 +43,7 @@
 ;   $0a impulse countdown
 ; persistent, the knobs last block (init sets -1, so the first block restarts):
 ;   $01 FREQ index   $02 MODE   $0b LEN step
-; per block:
+; per block (FINE is applied here, without a restart, so tuning by ear is smooth):
 ;   $10 gL   $11 gR   $12 the sine's inc   $13 the sweep's N   $14 d
 ;   $15 the impulse period less one   $16 N + the gap
 ;
@@ -80,7 +81,7 @@ proc:
         move    #>$000004,x0
         cmp     x0,a
         tgt     y0,a                    ; an invalid saved byte -> SINE
-        move    a1,x1                   ; mode, kept for the dispatch
+        move    a1,x1                   ; mode
         move    x:(r7+$02),a
         cmp     x1,a
         tne     x0,b                    ; changed (x0 is non-zero)
@@ -88,7 +89,7 @@ proc:
         move    x:(r6+$1),a             ; FREQ: value/128 in bits 22..16
         and     #>$7f0000,a
         asr     #$10,a,a
-        move    #>$00001e,x0            ; 30, the last ISO third (20 kHz)
+        move    #>$00001f,x0            ; 31, the last step (20 kHz)
         cmp     x0,a
         tgt     x0,a
         move    a1,y1
@@ -127,11 +128,38 @@ tg_keep:
         add     #>$000080,a             ; + 128, FINC
         move    a1,n5
         move    (r5)+n5
-        move    p:(r5),x0
-        move    x0,x:(r7+$12)           ; the sine's inc
+        move    p:(r5),x1               ; FINC[k]
+; FINE: inc = FINC[k] * 2^(y/3), y = value/128 - 1/2: +-200 cents, 3.125 a step.
+; m/2 = 1/2 + y (a/2 + y (a^2/4 + y (a^3/12 + y a^4/48))), a = ln 2 / 3:
+; within 1.9e-7 of 2^(y/3) (0.0002 Hz at 1 kHz); FINE 0 gives m/2 = 1/2
+; exactly, so the tone is FINC[k]'s, bit for bit.
+        move    x:(r6+$3),a
+        and     #>$7fffff,a
+        sub     #>$400000,a
+        move    a,y1                    ; y
+        move    #>$0001f2,x0            ; a^4/48
+        move    #>$0021ae,a             ; a^3/12
+        mac     x0,y1,a
+        move    a,x0
+        move    #>$01b552,a             ; a^2/4
+        mac     x0,y1,a
+        move    a,x0
+        move    #>$0ec982,a             ; a/2
+        mac     x0,y1,a
+        move    a,x0
+        move    #>$400000,a             ; 1/2
+        mac     x0,y1,a
+        move    a,x0                    ; m/2
+        mpy     x1,x0,a
+        asl     #$1,a,a                 ; FINC[k] m
+        rnd     a
+        move    #>$74198b,x0            ; 20 kHz (FINC[31]): FINE does not go above it (near
+        cmp     x0,a                    ; 22.05 kHz a sine is a few samples a cycle)
+        tgt     x0,a
+        move    a,x:(r7+$12)            ; the sine's inc
         move    r4,r5
         move    x:(r7+$0b),a
-        add     #>$00009f,a             ; + 159, SWN
+        add     #>$0000a0,a             ; + 160, SWN
         move    a1,n5
         move    (r5)+n5
         move    p:(r5),a
@@ -177,7 +205,7 @@ tg_keep:
         move    b,x:(r7+$11)
         move    #$1,n0
 ; ---- the mode's loop ---------------------------------------------------------------
-        move    x1,a
+        move    x:(r7+$02),a            ; mode
         tst     a
         beq     tg_sin
         move    #>$000001,x0
@@ -199,34 +227,7 @@ tg_sin:
         move    b,a
         add     x0,a
         move    a1,x:(r7+$00)           ; p + inc, wrapped (a1 is not limited)
-        sub     #>$400000,b             ; the quarter wave: u = 2 (1/2 - |wrap(p - 1/2)|)
-        move    b1,x0                   ; wrapped
-        move    x0,b
-        abs     b
-        neg     b
-        add     #>$400000,b
-        asl     #$1,b,b
-        move    b,y1                    ; u (+1 limited to $7fffff)
-        move    y1,x0
-        mpyr    x0,x0,a
-        move    a,x1                    ; w = u^2
-        move    #>$000279,x0            ;  c9/2 =  0.000150817160/2
-        move    #>$ffb373,a             ;  c7/2 = -0.00467222026/2
-        macr    x1,x0,a
-        move    a,x0
-        move    #>$05199e,a             ;  c5/2 =  0.0796884748/2
-        macr    x1,x0,a
-        move    a,x0
-        move    #>$d6a889,a             ;  c3/2 = -0.645963358/2
-        macr    x1,x0,a
-        move    a,x0
-        move    #>$6487ed,a             ;  c1/2 =  1.57079629/2
-        macr    x1,x0,a
-        move    a,x0                    ; P/2
-        mpy     x0,y1,a                 ; s/2 = u P/2, 48 bits
-        asl     #$1,a,a                 ; s
-        rnd     a
-        move    a,x0                    ; (limited)
+        bsr     tg_core                 ; x0 = sin(pi b)
         move    x:(r7+$10),y1           ; gL
         mpyr    x0,y1,a
         move    a,x:(r0)+
@@ -240,35 +241,9 @@ tg_xsin:
 ; ---- SWEEP --------------------------------------------------------------------------
 tg_swp:
         do      n7,>tg_xswp
-        move    x:(r7+$00),b            ; p: the sine of it, as SINE
-        sub     #>$400000,b
-        move    b1,x0
-        move    x0,b
-        abs     b
-        neg     b
-        add     #>$400000,b
-        asl     #$1,b,b
-        move    b,y1                    ; u
-        move    y1,x0
-        mpyr    x0,x0,a
-        move    a,x1                    ; w
-        move    #>$000279,x0
-        move    #>$ffb373,a
-        macr    x1,x0,a
-        move    a,x0
-        move    #>$05199e,a
-        macr    x1,x0,a
-        move    a,x0
-        move    #>$d6a889,a
-        macr    x1,x0,a
-        move    a,x0
-        move    #>$6487ed,a
-        macr    x1,x0,a
-        move    a,x0
-        mpy     x0,y1,a
-        asl     #$1,a,a
-        rnd     a
-        move    a,y0                    ; s
+        move    x:(r7+$00),b            ; p
+        bsr     tg_core
+        move    x0,y0                   ; s
 ; p += inc_hi; inc += (inc_hi * d) >> 12
         move    x:(r7+$03),x0           ; inc_hi
         move    x:(r7+$00),a
@@ -409,4 +384,37 @@ tg_imp:
         move    a,x:(r0)+
 tg_ximp:
         nop
+        rts
+
+; ---- the sine core: x0 = sin(pi b), b the phase (a cycle is 2^24) ------------------
+; Uses a, b, x0, x1, y1.
+tg_core:
+        sub     #>$400000,b             ; the quarter wave: u = 2 (1/2 - |wrap(p - 1/2)|)
+        move    b1,x0                   ; wrapped
+        move    x0,b
+        abs     b
+        neg     b
+        add     #>$400000,b
+        asl     #$1,b,b
+        move    b,y1                    ; u (+1 limited to $7fffff)
+        move    y1,x0
+        mpyr    x0,x0,a
+        move    a,x1                    ; w = u^2
+        move    #>$000279,x0            ;  c9/2 =  0.000150817160/2
+        move    #>$ffb373,a             ;  c7/2 = -0.00467222026/2
+        macr    x1,x0,a
+        move    a,x0
+        move    #>$05199e,a             ;  c5/2 =  0.0796884748/2
+        macr    x1,x0,a
+        move    a,x0
+        move    #>$d6a889,a             ;  c3/2 = -0.645963358/2
+        macr    x1,x0,a
+        move    a,x0
+        move    #>$6487ed,a             ;  c1/2 =  1.57079629/2
+        macr    x1,x0,a
+        move    a,x0                    ; P/2
+        mpy     x0,y1,a                 ; s/2 = u P/2, 48 bits
+        asl     #$1,a,a                 ; s
+        rnd     a
+        move    a,x0                    ; (limited)
         rts

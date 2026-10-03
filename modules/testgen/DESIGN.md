@@ -36,7 +36,7 @@ Every MODE restarts from the same state when the module initialises (on load or 
 
 - No per-sample division, log or exp: the sweep's increment is multiplied by a constant ratio each sample (exponential law), in 48-bit precision; the sine is a short odd polynomial on a quarter wave (five rounded MACs); levels come from a table per block.
 - No buffers, no lookahead: an insert on any track, cheap: 80 cycles a sample at most (SWEEP).
-- Size: it runs in PLATE REV's 594 words. The first full build was one word over; the impulse period is now computed from the sweep length instead of read from a table (581 words: 390 of code, 191 of table).
+- Size: it runs in PLATE REV's 594 words. The first full build was one word over; the impulse period is now computed from the sweep length instead of read from a table (581 words: 390 of code, 191 of table); with FINE and A440, 584 (392 and 192: the sine core became a shared subroutine to make room).
 - Output replaces the input: a THRU track becomes a signal source.
 
 ## The reference (testgen_ref.py)

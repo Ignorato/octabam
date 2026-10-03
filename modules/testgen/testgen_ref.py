@@ -7,8 +7,9 @@ import math
 import numpy as np
 
 FS = 44100.0                       # the Octatrack's rate
-ISO_THIRDS = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000,
-              1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000]
+FREQS = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 440, 500, 630, 800, 1000,
+         1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000]
+# the ISO third-octave centres, and A 440 between 400 and 500
 
 
 def level_lin(k):
@@ -16,9 +17,9 @@ def level_lin(k):
     return 10 ** (-(127 - k) * 0.5 / 20)
 
 
-def freq_hz(k):
-    """FREQ 0..127 -> ISO third-octave centre (held at 20 kHz past the end)."""
-    return ISO_THIRDS[min(k, len(ISO_THIRDS) - 1)]
+def freq_hz(k, fine=64):
+    """FREQ step k (held at 20 kHz past the end), FINE 0..127 (64 = none): +-200 cents, 3.125 a step."""
+    return FREQS[min(k, len(FREQS) - 1)] * 2 ** ((fine - 64) / 384)
 
 
 def sine(f, n, level=1.0):
@@ -191,5 +192,5 @@ if __name__ == "__main__":
     db = 20 * np.log10(Hm[band] / np.median(Hm[band]))
     flat = float(np.max(np.abs(db)))
     print(f"the module's 1 s sweep law through an identity path: flat within {flat:.2f} dB, 40 Hz-16 kHz"); ok &= flat < 0.5
-    print(f"LEVL 127 = {20 * math.log10(level_lin(127)):.1f} dBFS, LEVL 0 = {20 * math.log10(level_lin(0)):.1f} dBFS; FREQ 17 = {freq_hz(17)} Hz")
+    print(f"LEVL 127 = {20 * math.log10(level_lin(127)):.1f} dBFS, LEVL 0 = {20 * math.log10(level_lin(0)):.1f} dBFS; FREQ 18 = {freq_hz(18)} Hz, FREQ 14 = {freq_hz(14)} Hz")
     print("SELF-CHECK", "OK" if ok else "FAILED")

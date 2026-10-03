@@ -11,7 +11,9 @@ Gates:
 SINE
   the law        -> every FREQ index matches sin(2 pi n inc / 2^24) at LEVL 127
                     within 4 LSB, from sample 0 (the phase starts at 0)
-  frequency      -> each tone's measured frequency is ISO_THIRDS[k] within 0.003 Hz
+  frequency      -> each tone's measured frequency is FREQS[k] within 0.003 Hz
+  FINE           -> FREQS[k] * 2^(FINE/384) within 1 ppm; THD at +63; 20 kHz + FINE
+                    stays below Nyquist; FINE 0 keeps the law above bit for bit; 20 kHz is the top
   THD            -> 1 kHz and 100 Hz at 0 dBFS below -120 dB
   level          -> LEVL k is (127 - k) * 0.5 dB below full scale within 0.01 dB,
                     for k = 1..127; LEVL 127 peaks within 1 LSB of full scale;
@@ -146,30 +148,51 @@ check("replaces: the output is the same with noise in and with silence in",
 
 # ---- the law, every FREQ index ----------------------------------------------------------
 worst, worst_k = 0, None
-for k in range(len(MAN.ISO_THIRDS)):
+for k in range(len(MAN.FREQS)):
     L, R = render(N, LEVL=127, FREQ=k)
     ref = exact(k, len(L)) * FULL
     e = int(np.max(np.abs(L - ref)))
     if e > worst:
         worst, worst_k = e, k
-    if k in (0, 17, 30):
-        print(f"  [info] FREQ {k} ({MAN.ISO_THIRDS[k]} Hz): max error {e} LSB, first samples {[int(v) for v in L[:3]]}")
+    if k in (0, 14, 18, 31):
+        print(f"  [info] FREQ {k} ({MAN.FREQS[k]} Hz): max error {e} LSB, first samples {[int(v) for v in L[:3]]}")
 check(f"the law: every FREQ index within 4 LSB of the exact phase-accumulator sine, from sample 0",
       worst <= 4, f"(worst {worst} LSB at FREQ {worst_k})")
 L, _ = render(N, LEVL=127, FREQ=99)
-check("FREQ above 30 holds at 20 kHz", np.array_equal(L, render(N, LEVL=127, FREQ=30)[0]))
+check("FREQ above 31 holds at 20 kHz", np.array_equal(L, render(N, LEVL=127, FREQ=31)[0]))
 
 # ---- frequency -------------------------------------------------------------------------
 fworst = 0.0
-for k in range(len(MAN.ISO_THIRDS)):
+for k in range(len(MAN.FREQS)):
     L, _ = render(N, LEVL=127, FREQ=k)
     fworst = max(fworst, abs(measured_hz(L) - REF.freq_hz(k)))
-check("frequency: every ISO third within 0.003 Hz of nominal", fworst < 0.003, f"(worst {fworst:.5f} Hz)")
-L, _ = render(N, LEVL=127, FREQ=17)
-print(f"  [info] FREQ 17 measures {measured_hz(L):.4f} Hz (the increment gives {MAN.FINC[17] * FS / (1 << 24):.4f})")
+check("frequency: every FREQ step within 0.003 Hz of nominal", fworst < 0.003, f"(worst {fworst:.5f} Hz)")
+for k in (18, 14):
+    L, _ = render(N, LEVL=127, FREQ=k)
+    print(f"  [info] FREQ {k} measures {measured_hz(L):.4f} Hz (the increment gives {MAN.FINC[k] * FS / (1 << 24):.4f})")
+
+# ---- FINE --------------------------------------------------------------------------------
+fw, fdesc = 0.0, ""
+for k, fine in ((18, 0), (18, 1), (18, 32), (18, 63), (18, 65), (18, 96), (18, 127), (0, 0), (14, 127), (30, 127)):
+    L, _ = render(N, LEVL=127, FREQ=k, FINE=fine)
+    want = REF.freq_hz(k, fine)
+    if k == 31 and fine > 64:
+        want = 20000.0                       # held at 20 kHz
+    # the accumulator's step is FS / 2^24 = 0.0026 Hz: half a step, plus 1 ppm for 2^x
+    err = abs(measured_hz(L) - want) / (0.5 * FS / (1 << 24) + 1e-6 * want)
+    if err > fw:
+        fw, fdesc = err, f"FREQ {k} FINE {fine - 64:+d}: {measured_hz(L):.4f} Hz, want {want:.4f}"
+check("FINE: the frequency is FREQS[k] * 2^(FINE/384) within half an accumulator step + 1 ppm",
+      fw < 1.0, f"(worst {fw:.2f} of the tolerance, {fdesc})")
+L, _ = render(1 << 16, LEVL=127, FREQ=18, FINE=127)
+t = REF.thd_db(np.asarray(L, float) / (1 << 23), REF.freq_hz(18, 127))
+check(f"FINE +63 at 1 kHz: THD {t:.1f} dB", t < -120)
+L, _ = render(N, LEVL=127, FREQ=31, FINE=127)
+f = measured_hz(L)
+check(f"20 kHz with FINE +63 holds at 20 kHz", abs(f - 20000) < 0.003, f"({f:.4f} Hz)")
 
 # ---- THD ----------------------------------------------------------------------------------
-for k in (17, 7):
+for k in (18, 7):
     L, _ = render(1 << 16, LEVL=127, FREQ=k)
     t = REF.thd_db(np.asarray(L, float) / (1 << 23), REF.freq_hz(k))
     check(f"THD at {REF.freq_hz(k)} Hz, 0 dBFS: {t:.1f} dB", t < -120)
@@ -255,7 +278,7 @@ for t in (0, 3):
 check("an invalid MODE byte (7) plays SINE", np.array_equal(render(N // 4, LEVL=127, MODE=7)[0], render(N // 4, LEVL=127, MODE=0)[0]))
 
 # ---- every knob at both ends renders ----------------------------------------------------------
-for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("MODE", 4), ("CHAN", 3)):
+for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("FINE", 127), ("MODE", 4), ("CHAN", 3)):
     for v in (0, hi):
         render(N // 8, noise, **{name: v})
 check("every knob at both ends renders", True)
