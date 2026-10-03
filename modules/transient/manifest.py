@@ -50,7 +50,7 @@ MODULE = Module(
     key="TRANSIENT",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, image OCTABAM2 (remix transient), 3 Oct 2026",
+    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, images OCTABAM2 and OCTABAM3 (remix transient), 3 Oct 2026",
     doc="Transient shaper: ATCK and SUST reshape onsets and tails, level-independent.",
     menu=MenuEntry(
         fx2_id=0x0f,
