@@ -82,7 +82,7 @@ off and the output is mono to both channels.
 
 Image 28 (15 Sep 2026), the two 32K lines: "sounds fantastic now".
 
-On Sam's unit in every rig flash. Heard: REVERSE 371 ms over 93 ("the long
+On Sam's unit in every flash that carried the bus. Heard: REVERSE 371 ms over 93 ("the long
 one is better"); GRAIN DENS 32 → 127 on the loop "sounds pretty good".
 
 ## Open

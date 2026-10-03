@@ -260,7 +260,7 @@ What "sample analysis" and the "correlation search" do is his reading,
 unverified here.
 
 The lockstep port measured 23,946 instructions per 16-sample frame
-(17 Sep 2026, stock, the rig project). The hottest loop is the stock
+(17 Sep 2026, stock image, the port's `RIG` fixture project). The hottest loop is the stock
 delay's EMAC mix at `0x40003734` (`COLDFIRE_DELAY.md`).
 
 ## 7. Memory map

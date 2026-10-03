@@ -65,4 +65,4 @@ frame then sets SCTR over it.
 
 Generated per remix by `manifest.table_inc` (`Linked.include`), one entry
 per module in the image with views: `id, mode slot, nviews`, then per view
-`mode, npairs, (slot, value)*`; `0xff` ends it. 528 B linked in the rig.
+`mode, npairs, (slot, value)*`; `0xff` ends it. 528 B linked in bottleservice.

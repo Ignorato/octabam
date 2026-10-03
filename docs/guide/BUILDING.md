@@ -223,7 +223,7 @@ decodes the official file, validates its checksum and round-trips ours.
 1. **The version.** The boot screen and **SYSTEM STATUS → OS VERSION** read
    `OCTABAM1`. If it still says `1.40C`, the stock OS is running.
 2. **Stamp old projects** after flashing a remix that changes an effect's
-   parameter layout (the bus engines, the rig's hosts):
+   parameter layout (the bus engines, and RIG HOSTS' T1/T5 FX2 assignments):
 
    ```bash
    python3 tools/hw/ot_project.py stamp-defaults "<card>/<set>/<project>" <remix>

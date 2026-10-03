@@ -658,7 +658,7 @@ CALLS IT BARE HALTS THE UNIT.** Her recipe repoints the three stock calls
 to the page-1 writer `0x40054cd8` at her wrapper and rewrites the writer's
 dirty store to check a token long 12 bytes above the arguments; the wrapper
 accepts only the three stock return addresses. TEMPO BUS and MODE DEFAULTS
-called the writer bare, so `bottleservice` (the rig + USB + Octakit) halted
+called the writer bare, so `bottleservice` (the bus, the FX1 stations, USB and Octakit) halted
 under the port at frame 40 of `verify_set` on the first CC 68 (26 Sep 2026;
 never flashed). Both push the token now (`P1TOKEN`, read back from her
 `abi.inc` by `modules/octakit/manifest.py`), and the Kit save / reload /

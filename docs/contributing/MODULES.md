@@ -296,7 +296,7 @@ operator arrives at this mode.
 | | the remixer | the unit |
 |---|---|---|
 | `names` | the UNIT pane's rows follow the current MODE (`Module.knob_map_in`); `send_probe --set SCTR=40` resolves the alias | `tools/build/mode_names.py` emits a MODE formatter that rewrites the descriptor's name fields before printing its own word |
-| `defaults` | applied the moment MODE changes | `modules/mode-defaults` (in the rig): the FX1 and FX2 page-2 editors are detoured, and a MODE turned on the panel writes the view -- page 1 through the stock page-1 writer, page 2 with the editor's own stores; without the module, `stamp-defaults` writes them; a MODE over CC MAP goes through the same unit (the cave calls it) |
+| `defaults` | applied the moment MODE changes | `modules/mode-defaults` (in bottleservice): the FX1 and FX2 page-2 editors are detoured, and a MODE turned on the panel writes the view -- page 1 through the stock page-1 writer, page 2 with the editor's own stores; without the module, `stamp-defaults` writes them; a MODE over CC MAP goes through the same unit (the cave calls it) |
 
 The unit half needs no new hook: a descriptor carries its twelve parameter
 names as 12 × 6 bytes at `E+0x4e`, the clones are writable RAM, and every
@@ -950,7 +950,7 @@ Specific to a module:
   silently (`AGENTS.md`).
 
 `dsp_host` boots both payloads (`-memB`; `tools/harness/rig_render.py` for
-the whole rig), so a server on core 1 renders on core 1 with the shared
+all eight tracks), so a server on core 1 renders on core 1 with the shared
 window shared. No local test is evidence that a cross-core timing defect is
 absent: the two cores run lock-step or under a chosen `-skew`.
 

@@ -1,7 +1,7 @@
 # The tooling, end to end
 
 What each tool is and where it sits in the pipeline. The audition and
-measurement rig in depth: `tools/harness/README.md`.
+measurement harness in depth: `tools/harness/README.md`.
 
 The pipeline, left to right:
 
@@ -163,7 +163,7 @@ Render on the desktop at ~6× real time instead of flashing.
 | tool | what it does |
 |---|---|
 | `tools/harness/dsp_host` | the emulator harness: boots a payload dump (both payloads, `-memB`, shared window shared), calls effects through the recovered ABI, captures audio, polices memory, meters instructions per block |
-| `tools/harness/rig_render.py` (`make render-rig`) | the whole rig locally: eight tracks on both cores, FX1→FX2 chained per track, ids and knobs from a project part or by name, stems in, per-track + mix wavs and `meter.txt` out |
+| `tools/harness/rig_render.py` (`make render-rig`) | all eight tracks locally on both cores, FX1→FX2 chained per track, ids and knobs from a project part or by name, stems in, per-track + mix wavs and `meter.txt` out |
 | `tools/verify/verify_twocore.py` (`make verify-twocore`, in `make check`) | the two-core gate: the servers on their real cores render bit-identical to the DEV hatch, and under four interleave skews |
 | `tools/verify/verify_onebus.py` (`make verify-onebus`, in `make check`) | the one aux bus on both cores: the chain, each host's print, WET passthrough (sample-exact), the track-8 send refusal, a stored RET byte inert, stations without sends, four skews |
 | `tools/harness/render_reverb.py` (`make reverb IN=..`) | wav → BusVerb → wav, knobs by name, sweeps, wet-only |
@@ -194,7 +194,7 @@ CI). The family, and what each proves:
 ## 7. Hardware measurement and control
 
 For the claims the emulator structurally cannot make (`tools/harness/README.md`,
-last section), the hardware rig — protocol in `docs/history/CAPTURE_18AUG.md`:
+last section), the hardware capture setup — protocol in `docs/history/CAPTURE_18AUG.md`:
 
 | tool | what it does |
 |---|---|
@@ -205,13 +205,13 @@ last section), the hardware rig — protocol in `docs/history/CAPTURE_18AUG.md`:
 | `tools/harness/usb_align.py` | the twenty-channel stream's MAIN-to-track alignment under the port: the tone project on a staged card, EP3 IN drained once the sequencer plays, the lag from each tone's phase in its track channel and in MAIN |
 | `tools/hw/rec.swift` | drop-free CoreAudio HAL recorder (compiled on demand); the ffmpeg/avfoundation path drops samples |
 | `tools/hw/ot_midi.py` | drives the Octatrack over CoreMIDI from the CLI: CC, notes, raw bytes |
-| `tools/hw/bcr2000.py` | programs a Behringer BCR2000 for the rig: BCL from the manifests (page-1 CCs + CC MAP's page 2), sent over SysEx with per-line acks or written for BC Manager |
+| `tools/hw/bcr2000.py` | programs a Behringer BCR2000 for bottleservice: BCL from the manifests (page-1 CCs + CC MAP's page 2), sent over SysEx with per-line acks or written for BC Manager |
 | `tools/hw/hw_sweep.py` | scripted sweeps: MIDI steps + capture + per-step metrics in one process |
 | `tools/hw/level_cap.py` | quick capture with peak/RMS/crest/clip-run reporting per channel |
 | `tools/hw/gain_pass.py` | gain-matches a whole project bank-by-bank over MIDI |
 | `tools/hw/ot_project.py` | reads and writes Octatrack project/bank files on the CF card: `stamp-defaults` after a layout change, `set-fx`, `stamp-slot`, `rigproj` |
 | `tools/hw/ot_soak.py`, `hw_bus_test.py`, `hw_knob_sweep.py`, `hw_flash7.py`, `midi_flash.py`, `ot_clock.py` | a soak run that reports a freeze or the idle tick; synchronous-detection A/B of a parameter over MIDI; every knob's liveness; the one-aux bus claims driven over MIDI; OS flashing over MIDI; transport |
-| `tools/hw/ot_ladder.py` | the rig LADDER: one configuration per bank in a card project (effect selection without the panel), stepped by program change, each rung measured by level, spectrum and the tail after STOP (bus connected, reverb T60, delay time); `proj` / `run` / `analyse` / `summary` |
+| `tools/hw/ot_ladder.py` | the LADDER: one configuration per bank in a card project (effect selection without the panel), stepped by program change, each rung measured by level, spectrum and the tail after STOP (bus connected, reverb T60, delay time); `proj` / `run` / `analyse` / `summary` |
 | `tools/hw/decode_tempo_probe.py` | decodes captures from the tempo probe build, which streams the DSP's parameter staging block out through the audio |
 
 ## Conventions the tooling enforces

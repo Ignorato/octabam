@@ -182,7 +182,7 @@ three fit; the cycle pass that followed prices four inside the budget and
 has not been measured on the unit.
 
 Metered on 15 Sep 2026 (`rig_render.py --project OCTABAM89 --bank 3
---part 2`, the rig of that date with a T8 return; instructions/sample,
+--part 2`, the bus and FX1 stations of that date, with a T8 return; instructions/sample,
 worst block): 1,301 on core 0 and 561 on core 1 with every station at its
 passthrough and the delay on CLEAN; delay GRAIN takes core 1 to 1,276. The
 delay alone: CLEAN 476, GRAIN 1,191, REVERSE 497. A station at neutral

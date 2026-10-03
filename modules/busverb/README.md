@@ -5,7 +5,7 @@ shimmer, a gate and mid/side width.
 
 The reverb stage of the bus ([`send`](../send/README.md)): every track's
 REV send, plus the delay's repeats × DLY, feed it, and it prints its tail
-under its own host's dry. Hosted on T5's FX2 in the rig, on payload A
+under its own host's dry. Hosted on T5's FX2 (RIG HOSTS), on payload A
 (core 0), which serves tracks 5–8 (measured; test it on track 5). Source
 `reverb_server.asm`, manifest `manifest.py` (the MODE rows), built by
 `tools/build/build_bus.py`. The development record (the four-line engine,

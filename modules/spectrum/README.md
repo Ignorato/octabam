@@ -94,7 +94,7 @@ back as SEM at whatever SHPE it held. Once per project, before play:
   bit-identical across the pass; hardware cycles unmeasured (a station's
   timer window is pre-empted by whole frames, CHIP.md section 2). Program words:
   payload A FREE 848 → 621 (four loops carry their own width block).
-- `verify_menu`, `verify_replaces`, `verify_labels` pass on the rig.
+- `verify_menu`, `verify_replaces`, `verify_labels` pass on the `rig` test remix.
 
 ## On the unit
 
