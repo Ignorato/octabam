@@ -28,7 +28,7 @@ MODULE = Module(
     key="CF METER",
     kind=Kind.HYBRID,
     category=Category.REFERENCE, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.PORT, proof_note="the readout chain and the interrupt timing under the port; the numbers need the unit",
+    proof=Proof.HARDWARE, proof_note="image 92, Sam's MKII, 3 Oct 2026: interrupt 123.1 us stopped, 213.5 us playing, of 362.8 us",
     doc="Probe: frame-interrupt duration and (with CF METER IDLE) idle time, printed as audio on T8's FX2.",
     menu=MenuEntry(
         fx2_id=0x0e,

@@ -60,6 +60,23 @@ Docs
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
 
+## Image 92 — 3 Oct 2026 (`waveload` at `d99fa690`)
+
+On the unit (Sam's MKII), CF METER's first readings; T8 FX2 = CF Meter,
+read over USB channels 15/16, a fresh project with samples on tracks 1–4:
+
+| state | idle | frame interrupt mean | longest | period |
+|---|---|---|---|---|
+| stopped, BURN 0 | 49.6 % | 123.1 µs | 208.2 µs | 362.8 µs |
+| playing, BURN 0 | 28.0 % | 213.5 µs | 272.7 µs | 362.8 µs |
+| playing, BURN 1 (one 4-voice WAVE LOAD engine) | 10.9 % | 282.7 µs | 329.5 µs | 362.8 µs |
+
+One 4-voice engine: +69.2 µs a frame; tracks 1–4 played clean at
+BURN 1. BURN 2 not tried (predicted mean ~352 µs, longest ~400 µs).
+Sam's rig project squealed on PLAY on this image before CF Meter was
+selected; a fresh project did not (cause not measured).
+- The remix: stock effects + USB MIDI + USB AUDIO OUT TRACKS MAIN CUE + CF METER + CF METER IDLE + WAVE LOAD.
+
 ## Image 88 — 27 Sep 2026 (`bottleservice` at `d6867bd`)
 
 On the unit (Sam's MKII): load, play; a fourth MODULATION beside the

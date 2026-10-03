@@ -7,7 +7,7 @@ from remix.schema import Proof, Remix
 
 REMIX = Remix(
     name="waveload",
-    family="probes", proof=Proof.CHECK, proof_note="builds and boots under the port",
+    family="probes", proof=Proof.HARDWARE, proof_note="image 92, Sam's MKII, 3 Oct 2026",
     doc="CF METER + WAVE LOAD on stock: T8's FX2 BURN = K 4-voice wave engines per frame interrupt, read over USB.",
     modules=("USB MIDI", "USB AUDIO OUT TRACKS MAIN CUE", "CF METER", "CF METER IDLE", "WAVE LOAD",
              "FILTER", "EQUALIZER", "DJ EQ", "PHASER", "FLANGER", "CHORUS",

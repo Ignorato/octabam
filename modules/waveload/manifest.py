@@ -16,7 +16,7 @@ MODULE = Module(
     key="WAVE LOAD",
     kind=Kind.CF_PATCH,
     category=Category.REFERENCE, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.CHECK, proof_note="the engine bit-identical to its host build under Unicorn; the numbers need the unit",
+    proof=Proof.HARDWARE, proof_note="image 92, Sam's MKII, 3 Oct 2026: one 4-voice engine 69.2 us of the 362.8 us frame, clean beside four sample tracks",
     doc="Probe: K 4-voice wave engines per frame interrupt (CF METER's BURN), for CF METER's duration readout.",
     requires=("CF METER",),
     linked=(Linked("waveload", "modules/waveload/load.s", dram=True),

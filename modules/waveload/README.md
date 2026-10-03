@@ -77,13 +77,27 @@ the remix (CF METER's `remix.inc` sets `WAVE_LOAD`); above 12 it renders 12.
 
 ## On the unit
 
-Not flashed. The procedure is in
-[remixes/test/waveload](../../remixes/test/waveload/README.md).
+Image 92 (`waveload` at `d99fa690`, Sam's MKII, 3 Oct 2026), a fresh
+project with samples on tracks 1–4, playing:
+
+| K | idle | interrupt mean | longest |
+|---|---|---|---|
+| 0 | 28.0 % | 213.5 µs | 272.7 µs |
+| 1 | 10.9 % | 282.7 µs | 329.5 µs |
+
+One 4-voice engine costs 69.2 µs of the 362.8 µs frame; tracks 1–4 played
+clean at K = 1. At ~10,339 instructions a frame (the worst path, under
+Unicorn) that is ~1.77 cycles an instruction at 264 MHz (inferred from
+the two). K = 2 not tried: the linear prediction is a 352 µs mean and a
+~400 µs longest interrupt. With 28 % idle (~102 µs a frame) at K = 0, a
+second engine does not fit on the ColdFire beside this project wherever
+it runs.
 
 ## Open
 
-- The µs per 4-voice engine and the K at which the unit stops playing
-  clean.
+- A 4-voice voice on the DSP: its cycle cost, and where two 2,048-word
+  frames per track live (per-core free private memory is ~616 X words
+  and ~2,155 Y words).
 
 ## Gates
 
