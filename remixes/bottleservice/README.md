@@ -4,7 +4,8 @@ A remix of Octatrack OS 1.40C, built from your own copy of it, that adds:
 
 - a **delay and reverb bus** with a send from every track, and three new
   FX1 effects (a filter, a drive pedal and a modulation pedal);
-- **scene locks on page 2** and a TEMPO window that edits the bus engines;
+- **scene locks and parameter locks on page 2** and a TEMPO window that
+  edits the bus engines;
 - **USB MIDI** and **USB audio** (the master track into a computer, and the
   computer's stereo output onto inputs C/D) over the Octatrack's own USB port;
 - Em's **Octakit**: 256 Kits per project instead of 64 bank-tied Parts.
@@ -99,6 +100,13 @@ starting values, on the panel and over MIDI
   locked page-2 knobs as it does page 1 (a select snaps at the midpoint).
   Locks travel with the Part or Kit through copy, paste, clear and undo.
   ([`scenes-p2`](../../modules/scenes-p2/README.md))
+- **Parameter locks on page 2.** Open the FX1 or FX2 SETUP page, hold
+  trigs and turn a knob: each held step gets that page-2 knob's lock;
+  FUNC + turn removes it. The trig plays the lock and the next trig puts
+  the Part's value back, as page 1 does. Locks follow trig and pattern
+  copy, paste, clear and undo, save with the project beside the bank
+  files (`p2lkNN.work` / `.strd`) and survive a power-off as stock's do.
+  No slides on page 2. ([`plocks-p2`](../../modules/plocks-p2/README.md))
 - **The TEMPO window edits the bus.** [TEMPO] opens two boxes, DELAY and
   REVERB, listing each engine's knobs. UP / DOWN pick a row, A or B edit
   it, LEFT / RIGHT switch box. LEVEL still sets the BPM; FUNC + LEVEL in
@@ -189,7 +197,9 @@ leaves neutral. GRAIN's four grains per line are the largest lever:
   page-2 scene lock are the things to try on it; which of them have been
   tried is not written down yet.
 - **Not flashed in this form:** OUT MASTER polling every 250 µs (image 88
-  polled every 1 ms) and USB AUDIO IN CD with USB CROSSBAR. On the unit:
+  polled every 1 ms), USB AUDIO IN CD with USB CROSSBAR, and PLOCKS P2
+  (page-2 parameter locks; `verify_plocksp2` passes on this remix under
+  the emulator, power cycles included). On the unit:
   `tools/hw/usb_probe.py`, then the computer's output onto C/D through a
   THRU machine.
 - **Not checked by the build:** USB AUDIO IN's on-chip SRAM window

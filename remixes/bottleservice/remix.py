@@ -1,7 +1,8 @@
 """bottleservice -- the rig plus USB MIDI, USB audio out (the master track) and in (a stereo pair onto C/D), and Octakit.
 
 the rig's selection (the bus, three stations, hosts, TEMPO SYNC, CC MAP, CC FEEDBACK, MODE
-DEFAULTS, TEMPO BUS, SCENES P2; `bamsep26` until 27 Sep 2026) with USB MIDI and
+DEFAULTS, TEMPO BUS, SCENES P2; `bamsep26` until 27 Sep 2026) and PLOCKS P2
+(page-2 parameter locks, since 3 Oct 2026) with USB MIDI and
 USB AUDIO OUT MASTER (two channels: track 8, the master track, post-FX
 pre-fader), USB AUDIO IN CD (the computer's stereo pair onto inputs C/D in
 place of the jacks; A/B stay jacks) with USB CROSSBAR, on the DRAM platform,
@@ -21,7 +22,7 @@ REMIX = Remix(
              "TEMPO SYNC", "CC MAP", "CC FEEDBACK", "MODE DEFAULTS", "RIG HOSTS", "TEMPO BUS",
              "USB MIDI", "USB AUDIO OUT MASTER", "USB CROSSBAR", "USB AUDIO IN CD",
              "OCTAKIT", "SCENES KITS",
-             "SCENES P2", "SCENES P2 KITS"),
+             "SCENES P2", "SCENES P2 KITS", "PLOCKS P2"),
     fallback="SEND",
     hidden=("REVERB SERVER", "DELAY SERVER"),
     host_slots=(("DELAY SERVER", 2), ("REVERB SERVER", 2)),
