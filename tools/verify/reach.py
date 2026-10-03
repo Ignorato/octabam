@@ -655,6 +655,13 @@ def classify(paths, ctx):
                 # (verify_docs).
                 note = "removed remix: the selftest and the index"
                 gates = [CMD["selftest"], CMD["verify_docs"]]
+            elif parts[-1].endswith(".py") and \
+                    manifest_display_only(ctx.read_base(path), ctx.read(path)):
+                # Only the fields the index draws changed (doc, proof,
+                # proof_note, a docstring): the selection and the image are
+                # what they were.
+                gates = [CMD["verify_docs"]]
+                note = f"{name}: display fields only"
             elif name in ctx.test_remixes and not ctx.include_tests:
                 note = "a test remix: not checked (TESTS=1 runs it)"
                 gates = [CMD["selftest"], CMD["verify_docs"]]
