@@ -119,6 +119,33 @@
 .Ll16\@:
         .endm
 
+| A value limited to 24 bits. Uses d0.
+        .macro  LIM24 reg
+        move.l  \reg,%d0
+        addi.l  #0x800000,%d0
+        cmpi.l  #0xffffff,%d0
+        bls.s   .Ll24\@
+        tst.l   \reg
+        smi     \reg
+        extb.l  \reg
+        eori.l  #0x7fffff,\reg              | 0x7fffff above, -0x800000 below
+.Ll24\@:
+        .endm
+
+| Two 24-bit values (right-justified) as six bytes, big-endian, at (a1)+:
+| three word stores, so every store stays word-aligned. Uses d0; changes a.
+        .macro  PACK6 a, b
+        move.l  \a,%d0
+        asr.l   #8,%d0
+        move.w  %d0,(%a1)+                  | a's top 16
+        lsl.l   #8,\a
+        move.l  \b,%d0
+        swap    %d0                         | b's top byte, in the low byte
+        move.b  %d0,\a
+        move.w  \a,(%a1)+                   | a's low 8 : b's top 8
+        move.w  \b,(%a1)+                   | b's low 16
+        .endm
+
         .text
 
 | ---- state -----------------------------------------------------------------
@@ -946,22 +973,27 @@ stems_track16:
 | the page of channel 7's ring that IN_IDX names this frame, complete at
 | hook time (18.7). 16 samples of left-justified 24-bit longs, L then R (A
 | then B, C then D). Uses d0-d3, a0, a2.
-        .global stems_bus16
-stems_bus16:
+| ---- a2 = the first long of bus kind d5 this frame. Uses d0, d1, a0. -----
+stems_bus_src:
         move.l  %d5,%d0
         subq.l  #K_MAIN,%d0
         lsl.l   #2,%d0
         lea     bus_src,%a0
         movea.l (%a0,%d0.l),%a2             | MAIN, CUE: the long; an input: its offset in the page
         cmpi.l  #K_AB,%d5
-        bcs.s   .Lb_go
+        bcs.s   .Lbs_out
         move.l  IN_IDX,%d0                  | this frame's page
         moveq   #7,%d1
         and.l   %d1,%d0
         lsl.l   #8,%d0
         adda.l  %d0,%a2
         adda.l  #IN_RING,%a2
-.Lb_go:
+.Lbs_out:
+        rts
+
+        .global stems_bus16
+stems_bus16:
+        bsr.w   stems_bus_src
         moveq   #16,%d3
         cmpi.l  #K_A,%d5
         bcc.s   .Lb_mono
@@ -983,6 +1015,63 @@ stems_bus16:
         bne.s   .Lb_mono
         rts
 
+| ---- one track's ring frame after the fader, 24-bit: as stems_track16, but
+| the whole 24-bit share, floor(g*x / 2^21), limited as MAIN is.
+        .global stems_track24
+stems_track24:
+        bsr.w   stems_track_src
+        bsr.w   stems_track_gains
+        moveq   #16,%d3
+.Lq_s:
+        move.l  (%a3)+,%d0
+        lsl.l   #8,%d0
+        move.l  (%a2)+,%d1
+        move.l  (%a2)+,%d2
+        clr.b   %d1                         | the top 24 bits, as the DSP takes them (18.5)
+        clr.b   %d2
+        mac.l   %d0,%d1,%acc0
+        mac.l   %d0,%d2,%acc1
+        movclr.l %acc0,%d1
+        movclr.l %acc1,%d2
+        asr.l   #6,%d1                      | floor(g*x / 2^21)
+        asr.l   #6,%d2
+        LIM24   %d1
+        LIM24   %d2
+        PACK6   %d1,%d2
+        subq.l  #1,%d3
+        bne.s   .Lq_s
+        rts
+
+| ---- MAIN, CUE or an input, 24-bit (d5 = the kind, a1 = the ring) ------
+| Uses d0-d3, a0, a2.
+        .global stems_bus24
+stems_bus24:
+        bsr.w   stems_bus_src
+        cmpi.l  #K_A,%d5
+        bcc.s   .Lu_mono
+        moveq   #16,%d3
+.Lu_st:
+        move.l  (%a2)+,%d1
+        move.l  (%a2)+,%d2
+        asr.l   #8,%d1                      | 24 bits, right-justified
+        asr.l   #8,%d2
+        PACK6   %d1,%d2
+        subq.l  #1,%d3
+        bne.s   .Lu_st
+        rts
+.Lu_mono:
+        moveq   #8,%d3                      | two samples to six bytes
+.Lu_mo:
+        move.l  (%a2),%d1
+        move.l  8(%a2),%d2
+        asr.l   #8,%d1
+        asr.l   #8,%d2
+        PACK6   %d1,%d2
+        lea     16(%a2),%a2
+        subq.l  #1,%d3
+        bne.s   .Lu_mo
+        rts
+
 | ---- one ring frame: every file of the table, in order ------------------
 | a1 = the ring frame. The caller set the EMAC. Uses d0-d7, a0, a2, a3.
 stems_copy_frame:
@@ -998,6 +1087,9 @@ stems_copy_frame:
         move.l  %d7,%d5
         moveq   #24,%d0
         lsr.l   %d0,%d5                     | the kind
+        move.l  stems_lfmt,%d0
+        btst    #0,%d0
+        bne.s   .Lc_24                      | 24 BIT
         cmpi.l  #K_MAIN,%d5
         bcc.s   .Lc_bus
         lsl.l   #7,%d5                      | k * 0x80
@@ -1005,6 +1097,15 @@ stems_copy_frame:
         bra.s   .Lc_next
 .Lc_bus:
         bsr.w   stems_bus16
+        bra.s   .Lc_next
+.Lc_24:
+        cmpi.l  #K_MAIN,%d5
+        bcc.s   .Lc_bus24
+        lsl.l   #7,%d5
+        bsr.w   stems_track24
+        bra.s   .Lc_next
+.Lc_bus24:
+        bsr.w   stems_bus24
 .Lc_next:
         addq.l  #1,%d6
         bra.s   .Lc_file
@@ -1598,6 +1699,23 @@ stems_drain:
         andi.l  #0xffff,%d1         | this file's bytes in the frame
         add.l   %d1,%d0
         move.l  %d0,(%a0,%d4.l*4)
+        move.l  stems_lfmt,%d0
+        btst    #0,%d0
+        beq.s   .Ld_16
+        moveq   #6,%d0
+        divu.l  %d0,%d1             | groups of two 24-bit samples
+.Ld_g:                              | [a2 a1 a0 b2 b1 b0] -> [a0 a1 a2 b0 b1 b2]
+        move.b  2(%a3),(%a2)+
+        move.b  1(%a3),(%a2)+
+        move.b  (%a3),(%a2)+
+        move.b  5(%a3),(%a2)+
+        move.b  4(%a3),(%a2)+
+        move.b  3(%a3),(%a2)+
+        addq.l  #6,%a3
+        subq.l  #1,%d1
+        bne.s   .Ld_g
+        bra.s   .Ld_fnext
+.Ld_16:
         lsr.l   #2,%d1              | longs: two 16-bit samples each
 .Ld_s:                              | [L1 L0 R1 R0] -> [L0 L1 R0 R1]
         move.l  (%a3)+,%d0
@@ -1606,6 +1724,7 @@ stems_drain:
         move.l  %d0,(%a2)+
         subq.l  #1,%d1
         bne.s   .Ld_s
+.Ld_fnext:
         addq.l  #1,%d4
         cmp.l   stems_nf,%d4
         bcs.s   .Ld_file
@@ -1618,7 +1737,7 @@ stems_drain:
         move.l  %d0,stems_rd_off
         addq.l  #1,%d3
         cmp.l   %d2,%d3
-        bcs.s   .Ld_frame
+        bcs.w   .Ld_frame
         add.l   %d2,stems_rd        | the hook may reuse these frames now
         moveq   #0,%d4
 .Ld_flush:

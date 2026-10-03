@@ -76,6 +76,8 @@ LAYOUT_CASES = [  # (sources, format, files, ring frame bytes)
     (0x701, 0b110, ["T1", "MAIN", "CUE", "AB"], 256),
     (0x401, 0b100, ["T1", "A", "B"], 128),
     (0xfff, 0b000, [f"T{k}" for k in range(1, 9)] + ["MAIN", "CUE", "A", "B", "C", "D"], 768),
+    (0x001, 0b111, ["T1"], 96),
+    (0xfff, 0b001, [f"T{k}" for k in range(1, 9)] + ["MAIN", "CUE", "A", "B", "C", "D"], 1152),
 ]
 CUE_T1 = 0x80000c51                # T1's cue level byte (docs/firmware/MIDI.md: CC 47)
 CUE_ON = 0x80000009                # bits 16-23 of 0x80000008: a track's CUE (MIDI.md: CC 51); bit 0 = T1
@@ -91,6 +93,7 @@ SRC_FRAMES = 600
 # latency (frame 1,024 of 1,731 written at the stop) and needs 1,516 frames
 # from FINISHING to IDLE (3 Oct 2026, watch log), so 1,900 follow the stop.
 A14_FRAMES = 3600                  # THRU_STOP (1,700) + 1,900
+A14W_FRAMES = 5000                 # 24 bits: 1.5 times the data, so 3,300 follow the stop
 MAX_FRAMES = 9922500               # 60 minutes
 CHUNK_FRAMES = 512
 
@@ -327,6 +330,87 @@ def layout(s):
         check(f"{tag}: the ring frame", fbytes == fb == sum(d & 0xffff for d in ftab), f"{fbytes}")
         check(f"{tag}: the capacity", rframes == RING_SIZE // fb and rlimit == rframes * fb,
               f"{rframes} frames, wrap at {rlimit}")
+
+
+def wav24(data):
+    n = (len(data) - 44) // 3
+    return [int.from_bytes(data[44 + 3 * i:47 + 3 * i], "little", signed=True) for i in range(n)]
+
+
+def w24(s):
+    """Gate 5: a 24-bit take on the one-THRU fixture with T1's LEVEL stepped:
+    T1.wav is 24-bit stereo and equals MAIN's 24 bits at every sample."""
+    steps, midi = level_steps(LEVEL_STEPS)
+    aud = run_path("w24", "aud")
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="w24", fixture=FIXTURE_THRU1,
+                                     pokes_before=[(s["stems_fmt"] + 3, 0b111)], steps=steps, midi_lines=midi,
+                                     extra=("--audio-out", str(aud)))
+    st, status, _, wr, rd, nfr = words
+    f = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU1)}
+    d = f.get("T1.WAV")
+    check("w24: T1.wav is 24-bit stereo, its length its frames",
+          d is not None and len(d) >= 44 and wav_fmt(d) == (2, 264600, 6, 24, 96 * nfr),
+          f"{wav_fmt(d) if d and len(d) >= 44 else None}, {nfr} frames")
+    if d and len(d) >= 44:
+        off = find_at(wav24(d), capture(aud, (2, 3)))
+        check("w24: every sample of T1.wav equals MAIN's 24 bits", off is not None, f"offset {off}")
+
+
+def w16v24(s):
+    """The same deterministic run at 16 bits: every sample is the 24-bit
+    take's top 16 bits."""
+    steps, midi = level_steps(LEVEL_STEPS)
+    log, dump, card, words, _ = port(s, 300, stop_at=180, tag="w16", fixture=FIXTURE_THRU1,
+                                     steps=steps, midi_lines=midi)
+    a = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU1)}.get("T1.WAV")
+    b = {n.upper(): d for n, d in take_files(run_path("w24", "img"), FIXTURE_THRU1)}.get("T1.WAV")
+    check("w16v24: the 16-bit take is the 24-bit take's top 16 bits, every sample",
+          a is not None and b is not None and len(a) > 44 and wav16(a) == [v >> 8 for v in wav24(b)])
+
+
+def all14w(s):
+    """Review Focus 4 at 24 bits, and gate 2 at full precision: fourteen
+    24-bit files; off MAIN's rails MAIN minus the sum of the eight stems is 0
+    to 7 at every sample (each stem's floor against the mix's one floor), on
+    them the sum lies beyond the rail."""
+    log, dump, card, words, _ = port(s, A14W_FRAMES, stop_at=THRU_STOP, tag="all14w", fixture=FIXTURE_THRU,
+                                     mask=None, pokes_before=[(s["stems_tracks"] + 2, 0x0f),
+                                                              (s["stems_tracks"] + 3, 0xff),
+                                                              (s["stems_fmt"] + 3, 0b001)])
+    st, status, _, wr, rd, nfr = words
+    f = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU)}
+    check("all14w: fourteen files, IDLE, no error", len(f) == 14 and st == ST_IDLE and status == 0,
+          f"{sorted(f)}, state {st}, status {status}")
+    for n, d in f.items():
+        ch = 1 if n in ("A.WAV", "B.WAV", "C.WAV", "D.WAV") else 2
+        check(f"all14w: {n}'s header and length", len(d) >= 44 and wav_fmt(d) == (ch, 132300 * ch, 3 * ch, 24, 48 * ch * nfr)
+              and len(d) == 44 + 48 * ch * nfr, f"{wav_fmt(d) if len(d) >= 44 else None}, {len(d)} bytes")
+    if len(f) == 14 and all(len(d) > 44 for d in f.values()):
+        stems = [wav24(f[f"T{k}.WAV"]) for k in range(1, 9)]
+        main = wav24(f["MAIN.WAV"])
+        sums = [sum(t[i] for t in stems) for i in range(len(main))]
+        off = [m - x for m, x in zip(main, sums) if m not in (0x7fffff, -0x800000)]
+        rail = [(m, x) for m, x in zip(main, sums) if m in (0x7fffff, -0x800000)]
+        check("all14w: off MAIN's rails, MAIN minus the eight stems is 0 to 7",
+              off and min(off) >= 0 and max(off) <= 7, f"{min(off) if off else None}..{max(off) if off else None}")
+        check("all14w: on MAIN's rails, the stems' sum lies beyond the rail",
+              all((m > 0 and x >= m - 7) or (m < 0 and x <= m + 7) for m, x in rail), f"{len(rail)} rail samples")
+
+
+def overflow24(s):
+    """Everything on at 24 bits on a slow emulated card: the ring fills, the
+    take stops with RING FULL, and every file holds a whole number of frames
+    under a header that says so."""
+    log, dump, card, words, _ = port(s, 6000, tag="overflow24", fixture=FIXTURE_THRU, mask=None, dump_blocks=False,
+                                     pokes_before=[(s["stems_tracks"] + 2, 0x0f), (s["stems_tracks"] + 3, 0xff),
+                                                   (s["stems_fmt"] + 3, 0b111)],
+                                     extra=("--ata-latency", str(SLOW_LATENCY)), load_ms=60000)
+    st, status, _, wr, rd, nfr = words
+    check("overflow24: RING FULL", status == ERR_OVERFLOW, f"status {status}")
+    f = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU)}
+    check("overflow24: every file whole, its header its length",
+          len(f) == 12 and all(len(d) >= 44 and wav_fmt(d)[4] == len(d) - 44 and (len(d) - 44) % wav_fmt(d)[2] == 0
+                               for d in f.values()), f"{len(f)} files")
 
 
 def capture(prefix, chans):
@@ -1539,6 +1623,7 @@ def main():
     runs = [("probe", probe), ("thru", thru), ("tap", tap), ("full", full), ("gains", gains),
             ("postfader", postfader), ("postmove", postmove), ("clip", clip), ("master", master),
             ("layout", layout), ("sources", sources), ("mono", mono), ("all14", all14),
+            ("w24", w24), ("w16v24", w16v24), ("all14w", all14w),
             ("rowstop", rowstop),
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
@@ -1549,7 +1634,8 @@ def main():
         runs += [("limit", limit)]
         runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
                  for m in (0x07, 0x1F, 0x3F, 0x7F, 0x80)]
-        runs += [("latch", latch), ("wrap8", wrap8), ("overflow8", overflow8), ("slow8", slow8)]
+        runs += [("latch", latch), ("wrap8", wrap8), ("overflow8", overflow8), ("slow8", slow8),
+                 ("overflow24", overflow24)]
     if "--fat32" in sys.argv:
         runs += [("fat32", fat32)]
     if not EMU.exists():

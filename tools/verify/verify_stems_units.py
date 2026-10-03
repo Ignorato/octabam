@@ -521,5 +521,49 @@ def bus16(rt, seed=8):
             check(f"bus16: index {idx:#04x}, kind {kind}", got == want, f"{got[:8].hex()} vs {want[:8].hex()}")
 
 
+def b24(v):
+    return (v & 0xffffff).to_bytes(3, "big")
+
+
+@unit
+def track24(rt):
+    """stems_track24 against stems_gain.stem24, six big-endian bytes a pair,
+    on longs whose low byte is not zero: only the top 24 bits are the sample."""
+    bad = _track(rt, "stems_track24", 96, lambda g, x: b24(sg.stem24(g, x)), seed=11, junk=True)
+    check("track24: 200 frames equal stem24 of each long's top 24 bits", bad is None,
+          f"first difference (frame, slot, where, got, want) {bad}" if bad else "")
+
+
+@unit
+def bus24(rt, seed=10):
+    """stems_bus24 for each kind 8-15: MAIN and CUE from channel 6's buffer,
+    the inputs from this frame's page of channel 7's ring; the 24 bits, big-
+    endian, stereo L R, mono the input's own channel. Two ring indexes."""
+    s = rt.s
+    rng = random.Random(seed)
+    bus = [rng.randrange(1 << 32) & 0xffffff00 for _ in range(64)]
+    ring = [rng.randrange(1 << 32) & 0xffffff00 for _ in range(8 * 64)]
+    rt.wmem(0x80005e60, b"".join(v.to_bytes(4, "big") for v in bus))
+    rt.wmem(IN_RING, b"".join(v.to_bytes(4, "big") for v in ring))
+    sx = lambda v: (v - (1 << 32) if v & 0x80000000 else v) >> 8    # noqa: E731
+    for idx in (0x13, 0x26):
+        rt.w32(IN_IDX, idx)
+        page = (idx & 7) * 64
+        for kind in range(8, 16):
+            rt.call("stems_bus24", d5=kind, a1=s["stems_ring"])
+            if kind in (8, 9):
+                base = (kind - 8) * 32
+                want = b"".join(b24(sx(bus[base + 2 * j + c])) for j in range(16) for c in (0, 1))
+            elif kind in (10, 11):
+                base = page + (IN_AB_OFF if kind == 10 else IN_CD_OFF) // 4
+                want = b"".join(b24(sx(ring[base + 2 * j + c])) for j in range(16) for c in (0, 1))
+            else:
+                pair = IN_AB_OFF if kind < 14 else IN_CD_OFF
+                ch = 0 if ((kind - 12) % 2 == 0) == bool(IN_A_IS_LEFT) else 1
+                want = b"".join(b24(sx(ring[page + pair // 4 + ch + 2 * j])) for j in range(16))
+            got = rt.rmem(s["stems_ring"], len(want))
+            check(f"bus24: index {idx:#04x}, kind {kind}", got == want, f"{got[:9].hex()} vs {want[:9].hex()}")
+
+
 if __name__ == "__main__":
     sys.exit(main())
