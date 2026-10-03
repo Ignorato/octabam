@@ -40,12 +40,35 @@ def inverse_filter(f1, f2, T):
     return s[::-1] * np.exp(-t / L)
 
 
-def white(n, seed=1):
-    return np.random.default_rng(seed).uniform(-1.0, 1.0, n)
+# ---- what the module generates, exactly (the DSP's integer laws) ----------------
+LCG_A, LCG_C, LCG_SEED = 1664525, 1013904223 % (1 << 24), 1     # x' = A x + C mod 2^24
+SWEEP_F2, SWEEP_GAP = 20000.0, 44100                            # end frequency, 1 s of silence
+SWEEP_INC0 = 7609                                               # 20.0007 Hz, the start increment
+IMPULSE_UNIT = 11025                                            # LEN step t: a period of (t+1)/4 s
 
 
-def pink(n, seed=1):
-    """Paul Kellet's economy pink filter on white noise (3 poles)."""
+def len_seconds(t):
+    """LEN step t = LEN >> 3, 0..15 -> the sweep length in seconds."""
+    return t + 1
+
+
+def white_q23(n, seed=LCG_SEED):
+    """The module's WHITE before LEVL: a 24-bit LCG, each new state read as a signed sample."""
+    out = np.empty(n, np.int64)
+    x = seed
+    for i in range(n):
+        x = (LCG_A * x + LCG_C) & 0xFFFFFF
+        out[i] = x - (1 << 24) if x & 0x800000 else x
+    return out
+
+
+def white(n, seed=LCG_SEED):
+    """Uniform in [-1, 1): the module's generator as a float."""
+    return white_q23(n, seed) / float(1 << 23)
+
+
+def pink(n, seed=LCG_SEED):
+    """Paul Kellet's economy pink filter (3 poles) on the module's white noise, scaled by 0.11."""
     w = white(n, seed)
     b0 = b1 = b2 = 0.0
     out = np.empty(n)
@@ -55,6 +78,49 @@ def pink(n, seed=1):
         b2 = 0.57000 * b2 + x * 1.0526913
         out[i] = b0 + b1 + b2 + x * 0.1848
     return out * 0.11
+
+
+def sweep_d(t):
+    """The sweep's per-sample growth (r - 1) * 2^35 for LEN step t, as the P table holds it."""
+    n = len_seconds(t) * int(FS)
+    ratio = SWEEP_F2 / (SWEEP_INC0 * FS / (1 << 24))
+    return round((ratio ** (1.0 / n) - 1.0) * (1 << 35))
+
+
+def sweep_phases(t, n_out):
+    """The module's SWEEP phase law for LEN step t, exactly: (phase, on) per sample.
+
+    inc is 48 bits (24 integer, 24 fraction); each sample the phase advances by
+    its integer part and inc grows by floor(2 * inc_hi * d / 2^12) in fraction
+    units (mpy, asr 12, add). Past the sweep's end, for SWEEP_GAP samples, the
+    output is off and the phase and increment sit at their start values.
+    """
+    n_sw = len_seconds(t) * int(FS)
+    d = sweep_d(t)
+    period = n_sw + SWEEP_GAP
+    ph = np.empty(n_out, np.int64)
+    on = np.empty(n_out, bool)
+    p, inc, k = 0, SWEEP_INC0 << 24, 0
+    for i in range(n_out):
+        ph[i], on[i] = p, k < n_sw
+        hi = inc >> 24
+        p = (p + hi) & 0xFFFFFF
+        inc += (2 * hi * d) >> 12
+        if k >= n_sw:
+            p, inc = 0, SWEEP_INC0 << 24
+        k = 0 if k + 1 == period else k + 1
+    return ph, on
+
+
+def sweep_dsp(t, n_out):
+    """The module's SWEEP at full scale as a float (its sine is exact to within 3 LSB)."""
+    ph, on = sweep_phases(t, n_out)
+    return np.where(on, np.sin(2 * math.pi * ph / (1 << 24)), 0.0)
+
+
+def impulse_positions(t, n_out):
+    """Where the module's IMPULSE puts its samples: every (t+1)/4 s from sample 0."""
+    return np.arange(0, n_out, (t + 1) * IMPULSE_UNIT)
 
 
 def thd_db(x, f, harmonics=9):
@@ -116,6 +182,14 @@ if __name__ == "__main__":
     sl, dev = octave_slope_db(pink(1 << 20))
     print(f"pink noise: slope {sl:+.2f} dB/octave, worst band deviation {dev:.2f} dB"); ok &= abs(sl + 3.0) < 0.3 and dev < 1.0
     sl, dev = octave_slope_db(white(1 << 20))
-    print(f"white noise: slope {sl:+.2f} dB/octave, worst band deviation {dev:.2f} dB"); ok &= abs(sl) < 0.3
+    print(f"white noise (the 24-bit LCG): slope {sl:+.2f} dB/octave, worst band deviation {dev:.2f} dB"); ok &= abs(sl) < 0.3
+    sd = sweep_dsp(0, 2 * int(FS) + SWEEP_GAP)
+    h = deconvolve(sd[:2 * int(FS) + SWEEP_GAP], f1=SWEEP_INC0 * FS / (1 << 24), T=1.0)
+    pk = int(np.argmax(np.abs(h)))
+    seg = h[pk - 4096:pk + 4096] * np.hanning(8192)
+    Hm = np.abs(np.fft.rfft(seg, 1 << 15))
+    db = 20 * np.log10(Hm[band] / np.median(Hm[band]))
+    flat = float(np.max(np.abs(db)))
+    print(f"the module's 1 s sweep law through an identity path: flat within {flat:.2f} dB, 40 Hz-16 kHz"); ok &= flat < 0.5
     print(f"LEVL 127 = {20 * math.log10(level_lin(127)):.1f} dBFS, LEVL 0 = {20 * math.log10(level_lin(0)):.1f} dBFS; FREQ 17 = {freq_hz(17)} Hz")
     print("SELF-CHECK", "OK" if ok else "FAILED")

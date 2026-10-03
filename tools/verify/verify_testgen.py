@@ -6,8 +6,9 @@ Renders the module straight through dsp_host (the render-gate shape: the id
 and the slots come from the manifest, and the entry points are checked
 against SEND's so an absent module cannot pass as a passthrough).
 
-Gates (SINE, 0.1):
+Gates:
   replaces       -> the output does not depend on the input (noise in, silence in)
+SINE
   the law        -> every FREQ index matches sin(2 pi n inc / 2^24) at LEVL 127
                     within 4 LSB, from sample 0 (the phase starts at 0)
   frequency      -> each tone's measured frequency is ISO_THIRDS[k] within 0.003 Hz
@@ -16,8 +17,17 @@ Gates (SINE, 0.1):
                     for every k; LEVL 127 peaks within 1 LSB of full scale
   CHAN           -> L+R equal; L only has R silent; R only has L silent;
                     L and inverted R has R = -L within 1 LSB
-  other MODEs    -> silent until they are written (0.1)
-  every knob     -> renders without dsp_host dying
+SWEEP          -> the reference's exact phase law (testgen_ref.sweep_phases) within
+                    4 LSB over two whole periods (1 s) and one (16 s); the P table's
+                    growth constants equal the reference's; deconvolved through an
+                    identity path it is flat within 0.5 dB, 40 Hz-16 kHz
+WHITE          -> the reference's 24-bit generator within 1 LSB; flat within 0.3 dB/octave
+PINK           -> -3 dB/octave within 0.3, no octave band more than 1 dB off the fit;
+                    the float filter on the same noise within -60 dB; RMS within 0.1 dB
+IMPULSE        -> full scale (within 1 LSB) at exactly the reference's positions, zero
+                    everywhere else
+an invalid MODE byte -> SINE
+every knob     -> renders without dsp_host dying
 
     python3 tools/verify/verify_testgen.py
 """
@@ -142,7 +152,7 @@ for k in range(len(MAN.ISO_THIRDS)):
     if e > worst:
         worst, worst_k = e, k
     if k in (0, 17, 30):
-        print(f"  [info] FREQ {k} ({MAN.ISO_THIRDS[k]} Hz): max error {e} LSB, first samples {list(L[:3])}")
+        print(f"  [info] FREQ {k} ({MAN.ISO_THIRDS[k]} Hz): max error {e} LSB, first samples {[int(v) for v in L[:3]]}")
 check(f"the law: every FREQ index within 4 LSB of the exact phase-accumulator sine, from sample 0",
       worst <= 4, f"(worst {worst} LSB at FREQ {worst_k})")
 L, _ = render(N, LEVL=127, FREQ=99)
@@ -185,10 +195,60 @@ check("CHAN R: L silent", np.any(R) and not np.any(L))
 L, R = render(N, CHAN=3)
 check("CHAN L and inverted R: R = -L within 1 LSB", np.any(L) and int(np.max(np.abs(L + R))) <= 1)
 
-# ---- other MODEs, silent in 0.1 -------------------------------------------------------------
-for m in range(1, 5):
-    L, R = render(N // 4, MODE=m)
-    check(f"MODE {MAN.MODE_LABELS[m]}: silent (not written yet)", not np.any(L) and not np.any(R))
+MODE = {name: i for i, name in enumerate(MAN.MODE_LABELS)}
+GAP = REF.SWEEP_GAP
+
+# ---- SWEEP --------------------------------------------------------------------------------------
+check("SWEEP: the P table's growth constants are the reference's",
+      MAN.SWD == tuple(REF.sweep_d(t) for t in range(16)) and MAN.SWN == tuple(REF.len_seconds(t) * int(FS) for t in range(16)))
+for t, periods in ((0, 2), (15, 1)):
+    n = periods * (REF.len_seconds(t) * int(FS) + GAP) + 3000
+    L, R = render(n, LEVL=127, MODE=MODE["SWEP"], LEN=8 * t)
+    ref = REF.sweep_dsp(t, len(L)) * FULL
+    e = int(np.max(np.abs(L - ref)))
+    check(f"SWEEP {REF.len_seconds(t)} s: within 4 LSB of the exact phase law over {periods} period(s) and the next start",
+          e <= 4 and np.array_equal(L, R), f"(worst {e} LSB)")
+L, _ = render(2 * int(FS) + GAP, LEVL=127, MODE=MODE["SWEP"], LEN=0)
+h = REF.deconvolve(np.asarray(L[:2 * int(FS) + GAP], float) / FULL, f1=REF.SWEEP_INC0 * FS / (1 << 24), T=1.0)
+pk = int(np.argmax(np.abs(h)))
+seg = h[pk - 4096:pk + 4096] * np.hanning(8192)
+Hm = np.abs(np.fft.rfft(seg, 1 << 15)); fr = np.fft.rfftfreq(1 << 15, 1 / FS)
+band = (fr >= 40) & (fr <= 16000)
+flat = float(np.max(np.abs(20 * np.log10(Hm[band] / np.median(Hm[band])))))
+check(f"SWEEP 1 s deconvolved through an identity path: flat within {flat:.2f} dB, 40 Hz-16 kHz", flat < 0.5)
+
+# ---- WHITE ----------------------------------------------------------------------------------------
+L, R = render(N, LEVL=127, MODE=MODE["WHIT"])
+w = REF.white_q23(len(L))
+e = int(np.max(np.abs(L - w)))
+check("WHITE: the reference's 24-bit generator within 1 LSB", e <= 1 and np.array_equal(L, R), f"(worst {e} LSB)")
+L, _ = render(1 << 20, LEVL=127, MODE=MODE["WHIT"])
+sl, dev = REF.octave_slope_db(np.asarray(L, float))
+check(f"WHITE: slope {sl:+.3f} dB/octave, worst octave band {dev:.2f} dB off", abs(sl) < 0.3 and dev < 1.0)
+
+# ---- PINK -----------------------------------------------------------------------------------------
+L, R = render(1 << 20, LEVL=127, MODE=MODE["PINK"])
+x = np.asarray(L, float) / (1 << 23)
+sl, dev = REF.octave_slope_db(x)
+check(f"PINK: slope {sl:+.3f} dB/octave, worst octave band {dev:.2f} dB off", abs(sl + 3.0) < 0.3 and dev < 1.0)
+ref = REF.pink(len(x))
+err = 20 * math.log10(np.sqrt(np.mean((x - ref) ** 2)) / np.sqrt(np.mean(ref ** 2)))
+lv = 20 * math.log10(np.sqrt(np.mean(x ** 2))) - 20 * math.log10(np.sqrt(np.mean(ref ** 2)))
+check(f"PINK: the float filter on the same noise within {err:.1f} dB; RMS {rms_db(L):.2f} dBFS ({lv:+.3f} dB)",
+      err < -60 and abs(lv) < 0.1 and np.array_equal(L, R))
+
+# ---- IMPULSE ---------------------------------------------------------------------------------------
+for t in (0, 3):
+    n = 3 * (t + 1) * REF.IMPULSE_UNIT + 100
+    L, R = render(n, LEVL=127, MODE=MODE["IMPL"], LEN=8 * t)
+    where = np.nonzero(L)[0]
+    want = REF.impulse_positions(t, len(L))
+    check(f"IMPULSE every {(t + 1) / 4:g} s: full scale at exactly the reference's positions, zero elsewhere",
+          np.array_equal(where, want) and int(np.min(L[want])) >= FULL - 1 and np.array_equal(L, R),
+          f"({len(where)} impulses, at {[int(i) for i in where]})")
+
+# ---- an invalid MODE byte ----------------------------------------------------------------------------
+check("an invalid MODE byte (7) plays SINE", np.array_equal(render(N // 4, MODE=7)[0], render(N // 4, MODE=0)[0]))
 
 # ---- every knob at both ends renders ----------------------------------------------------------
 for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("MODE", 4), ("CHAN", 3)):
