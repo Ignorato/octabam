@@ -32,7 +32,7 @@ import stems_gain as sg  # noqa: E402,F401
 # The constants of modules/stems/stems.s these tests depend on. Each task
 # that adds one to stems.s copies its value here.
 GQ_N = 4
-SRC_BITS = 0xff                                         # Task 8: 0xfff
+SRC_BITS = 0xfff                                        # stems.s: every source (Task 8)
 GAIN_LAG, TRACK_HALF, TRACK_DELAY = 2, 1, 1             # STEM_REC.md 18.5
 IN_RING, IN_IDX = 0x80005660, 0x46104d00                # STEM_REC.md 18.7: eight frame pages, the index
 IN_AB_OFF, IN_CD_OFF, IN_A_IS_LEFT = 0x80, 0x00, 1      # STEM_REC.md 18.7: within a page
@@ -488,6 +488,37 @@ def track16_emac(rt):
     bad = _track(rt, "stems_track16", 64, _post16_bytes, seed=8, dirty=True)
     check("track16_emac: 200 frames equal post16 after an interrupted task's EMAC", bad is None,
           f"first difference (frame, slot, where, got, want) {bad}" if bad else "")
+
+
+@unit
+def bus16(rt, seed=8):
+    """stems_bus16 for each kind 8-15: MAIN and CUE from channel 6's buffer,
+    the inputs from the page of channel 7's ring that the index names this
+    frame (STEM_REC.md 18.7), stereo the L and R top 16 bits, mono the
+    input's own channel. Two indexes, so a fixed or stale page fails."""
+    s = rt.s
+    rng = random.Random(seed)
+    bus = [rng.randrange(1 << 32) & 0xffffff00 for _ in range(64)]
+    ring = [rng.randrange(1 << 32) & 0xffffff00 for _ in range(8 * 64)]
+    rt.wmem(0x80005e60, b"".join(v.to_bytes(4, "big") for v in bus))
+    rt.wmem(IN_RING, b"".join(v.to_bytes(4, "big") for v in ring))
+    for idx in (0x13, 0x26):                       # pages 3 and 6 after the mod-8 mask
+        rt.w32(IN_IDX, idx)
+        page = (idx & 7) * 64                      # in longs
+        for kind in range(8, 16):
+            rt.call("stems_bus16", d5=kind, a1=s["stems_ring"])
+            if kind in (8, 9):
+                base = (kind - 8) * 32
+                want = b"".join((bus[base + 2 * j + c] >> 16).to_bytes(2, "big") for j in range(16) for c in (0, 1))
+            elif kind in (10, 11):
+                base = page + (IN_AB_OFF if kind == 10 else IN_CD_OFF) // 4
+                want = b"".join((ring[base + 2 * j + c] >> 16).to_bytes(2, "big") for j in range(16) for c in (0, 1))
+            else:
+                pair = IN_AB_OFF if kind < 14 else IN_CD_OFF
+                ch = 0 if ((kind - 12) % 2 == 0) == bool(IN_A_IS_LEFT) else 1
+                want = b"".join((ring[page + pair // 4 + ch + 2 * j] >> 16).to_bytes(2, "big") for j in range(16))
+            got = rt.rmem(s["stems_ring"], len(want))
+            check(f"bus16: index {idx:#04x}, kind {kind}", got == want, f"{got[:8].hex()} vs {want[:8].hex()}")
 
 
 if __name__ == "__main__":

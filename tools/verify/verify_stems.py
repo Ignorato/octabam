@@ -73,7 +73,24 @@ LAYOUT_CASES = [  # (sources, format, files, ring frame bytes)
     (0x001, 0b110, ["T1"], 64),
     (0x0ff, 0b110, [f"T{k}" for k in range(1, 9)], 512),
     (0x0a5, 0b110, ["T1", "T3", "T6", "T8"], 256),
+    (0x701, 0b110, ["T1", "MAIN", "CUE", "AB"], 256),
+    (0x401, 0b100, ["T1", "A", "B"], 128),
+    (0xfff, 0b000, [f"T{k}" for k in range(1, 9)] + ["MAIN", "CUE", "A", "B", "C", "D"], 768),
 ]
+CUE_T1 = 0x80000c51                # T1's cue level byte (docs/firmware/MIDI.md: CC 47)
+CUE_ON = 0x80000009                # bits 16-23 of 0x80000008: a track's CUE (MIDI.md: CC 51); bit 0 = T1
+# Both are stepped after the transport start, which re-applies the saved
+# part: T1 cued, at cue level 127 (its cue word 0x7ef8; cued alone 0x6c00;
+# the level byte alone moves nothing; measured 3 Oct 2026).
+CUE_STEPS = [f"1:poke:0x{CUE_ON:x}=1", f"1:poke:0x{CUE_T1:x}=127"]
+# The source takes stop at 180; four files need more than 120 frames from
+# FINISHING to IDLE under the port's card latency (3 Oct 2026: a 300-frame
+# run ended FINISHING with every file still 0 bytes), so 420 follow.
+SRC_FRAMES = 600
+# Fourteen files at 16 bits: the writer falls behind under the port's card
+# latency (frame 1,024 of 1,731 written at the stop) and needs 1,516 frames
+# from FINISHING to IDLE (3 Oct 2026, watch log), so 1,900 follow the stop.
+A14_FRAMES = 3600                  # THRU_STOP (1,700) + 1,900
 MAX_FRAMES = 9922500               # 60 minutes
 CHUNK_FRAMES = 512
 
@@ -310,6 +327,135 @@ def layout(s):
         check(f"{tag}: the ring frame", fbytes == fb == sum(d & 0xffff for d in ftab), f"{fbytes}")
         check(f"{tag}: the capacity", rframes == RING_SIZE // fb and rlimit == rframes * fb,
               f"{rframes} frames, wrap at {rlimit}")
+
+
+def capture(prefix, chans):
+    """TX0 ring words `chans` of core 0's 24-bit --audio-out WAV, interleaved."""
+    import wave
+    with wave.open(f"{prefix}_core0.wav") as w:
+        n, c = w.getnframes(), w.getnchannels()
+        raw = w.readframes(n)
+    return [int.from_bytes(raw[(i * c + ch) * 3:(i * c + ch) * 3 + 3], "little", signed=True)
+            for i in range(n) for ch in chans]
+
+
+def wav_fmt(data):
+    """(channels, bytes a second, block align, bits, data bytes) of a WAV header."""
+    ch, rate, brate, align, bits = struct.unpack_from("<HIIHH", data, 22)
+    return ch, brate, align, bits, struct.unpack_from("<I", data, 40)[0]
+
+
+def wav16(data):
+    return list(struct.unpack_from(f"<{(len(data) - 44) // 2}h", data, 44))
+
+
+def find_at(got, ref, width=64):
+    """The offset of `got` inside `ref`, found from got's first sound and then
+    required at every sample; None when either fails."""
+    loud = next((i for i, v in enumerate(got) if v), None)
+    if loud is None:
+        return None
+    key = got[loud:loud + width]
+    pos = next((i for i in range(len(ref) - width) if ref[i:i + width] == key), None)
+    if pos is None or pos < loud or ref[pos - loud:pos - loud + len(got)] != got:
+        return None
+    return pos - loud
+
+
+def sources(s):
+    """Gate 4: on the one-THRU fixture with T1 sent to CUE, a take of T1,
+    MAIN, CUE and AB: four files in that order; MAIN.wav equals T1.wav sample
+    for sample (only T1 reaches MAIN), and both are aligned in time by
+    construction; CUE.wav is the cue bus (TX0 words 0 and 1) at one offset;
+    AB.wav carries inputs A and B (the input WAV's channels 2 and 3), each a
+    fixed gain of its own input at one lag."""
+    aud = run_path("sources", "aud")
+    log, dump, card, words, _ = port(s, SRC_FRAMES, stop_at=180, tag="sources", fixture=FIXTURE_THRU1, mask=None,
+                                     pokes_before=[(s["stems_tracks"] + 2, 0x07), (s["stems_tracks"] + 3, 0x01)],
+                                     steps=CUE_STEPS, extra=("--audio-out", str(aud)))
+    st, status = words[0], words[1]
+    check("sources: the take finished (IDLE, no error)", st == ST_IDLE and status == 0,
+          f"state {st}, status {status}")
+    files = take_files(card, FIXTURE_THRU1)
+    names = [n.upper() for n, _ in files]
+    check("sources: T1, MAIN, CUE and AB, nothing else", sorted(names) == ["AB.WAV", "CUE.WAV", "MAIN.WAV", "T1.WAV"],
+          f"{names}")
+    f = {n.upper(): d for n, d in files}
+    if len(f) != 4 or any(len(d) < 44 for d in f.values()):
+        return
+    check("sources: every header is 16-bit stereo",
+          all(wav_fmt(d)[:4] == (2, 176400, 4, 16) for d in f.values()), f"{[wav_fmt(d)[:4] for d in f.values()]}")
+    check("sources: MAIN.wav equals T1.wav, every sample (only T1 reaches MAIN)",
+          wav16(f["MAIN.WAV"]) == wav16(f["T1.WAV"]) and any(wav16(f["T1.WAV"])))
+    cue = [v >> 8 for v in capture(aud, (0, 1))]
+    off = find_at(wav16(f["CUE.WAV"]), cue)
+    check("sources: CUE.wav equals the cue bus at one offset, and holds sound",
+          off is not None and any(wav16(f["CUE.WAV"])), f"offset {off}")
+    ab = wav16(f["AB.WAV"])
+    import wave
+    with wave.open(json.loads(FIXTURE_THRU1.read_text())["audio_in"]) as w:
+        raw = w.readframes(w.getnframes())
+    ins = list(struct.unpack(f"<{len(raw) // 2}h", raw))
+    offs = []
+    for side, ch in (("A", 2), ("B", 3)):
+        got = ab[0 if side == "A" else 1::2]
+        off = find_at(got, ins[ch::4])      # the ring holds the input's samples exactly (STEM_REC.md 18.7)
+        offs.append(off)
+        check(f"sources: AB.wav's {'left' if side == 'A' else 'right'} channel is input {side}, every sample",
+              off is not None, f"offset {off}")
+    check("sources: A and B at the same offset", None not in offs and offs[0] == offs[1], f"{offs}")
+
+
+def mono(s):
+    """AB STEREO off: A.wav and B.wav, mono, equal to the stereo take's left
+    and right channels of the same deterministic run."""
+    log, dump, card, words, _ = port(s, SRC_FRAMES, stop_at=180, tag="mono", fixture=FIXTURE_THRU1, mask=None,
+                                     pokes_before=[(s["stems_tracks"] + 2, 0x04), (s["stems_tracks"] + 3, 0x01),
+                                                   (s["stems_fmt"] + 3, 0b100)])
+    check("mono: the take finished (IDLE, no error)", words[0] == ST_IDLE and words[1] == 0,
+          f"state {words[0]}, status {words[1]}")
+    f = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU1)}
+    check("mono: T1, A and B", sorted(f) == ["A.WAV", "B.WAV", "T1.WAV"], f"{sorted(f)}")
+    sf = {n.upper(): d for n, d in take_files(run_path("sources", "img"), FIXTURE_THRU1)}
+    if len(f) != 3 or "AB.WAV" not in sf or any(len(d) < 44 for d in list(f.values()) + [sf["AB.WAV"]]):
+        return
+    ab = wav16(sf["AB.WAV"])
+    check("mono: A.wav and B.wav are one channel, 16 bits",
+          wav_fmt(f["A.WAV"])[:4] == wav_fmt(f["B.WAV"])[:4] == (1, 88200, 2, 16))
+    check("mono: A.wav is AB.wav's left, B.wav its right, every sample",
+          wav16(f["A.WAV"]) == ab[0::2] and wav16(f["B.WAV"]) == ab[1::2])
+
+
+def all14(s):
+    """Review Focus 4: every source on, both pairs mono, on the eight-track
+    THRU fixture: 14 files in order, each header its own, each length its
+    frames; and the eight stems sum to MAIN within one step per track."""
+    log, dump, card, words, _ = port(s, A14_FRAMES, stop_at=THRU_STOP, tag="all14", fixture=FIXTURE_THRU,
+                                     mask=None, pokes_before=[(s["stems_tracks"] + 2, 0x0f),
+                                                              (s["stems_tracks"] + 3, 0xff),
+                                                              (s["stems_fmt"] + 3, 0b000)])
+    st, status, _, wr, rd, nfr = words
+    f = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU)}
+    want = [f"T{k}.WAV" for k in range(1, 9)] + ["MAIN.WAV", "CUE.WAV", "A.WAV", "B.WAV", "C.WAV", "D.WAV"]
+    check("all14: fourteen files", sorted(f) == sorted(want), f"{sorted(f)}")
+    check("all14: IDLE, no error", st == ST_IDLE and status == 0, f"state {st}, status {status}")
+    for n, d in f.items():
+        ch = 1 if n in ("A.WAV", "B.WAV", "C.WAV", "D.WAV") else 2
+        check(f"all14: {n}'s header and length", wav_fmt(d) == (ch, 88200 * ch, 2 * ch, 16, 32 * ch * nfr)
+              and len(d) == 44 + 32 * ch * nfr, f"{wav_fmt(d)}, {len(d)} bytes, {nfr} frames")
+    if len(f) == 14:
+        stems = [wav16(f[f"T{k}.WAV"]) for k in range(1, 9)]
+        main = wav16(f["MAIN.WAV"])
+        sums = [sum(t[i] for t in stems) for i in range(len(main))]
+        # Eight floors against the mix's one: MAIN minus the sum is 0 to 7.
+        # Eight THRU tracks of noise clip MAIN; on its rails the sum lies
+        # beyond the rail instead (measured 3 Oct 2026: 600 rail samples).
+        off = [m - x for m, x in zip(main, sums) if m not in (32767, -32768)]
+        rail = [(m, x) for m, x in zip(main, sums) if m in (32767, -32768)]
+        check("all14: off MAIN's rails, MAIN minus the eight stems is 0 to 7 at 16 bits",
+              off and min(off) >= 0 and max(off) <= 7, f"{min(off) if off else None}..{max(off) if off else None}")
+        check("all14: on MAIN's rails, the stems' sum lies beyond the rail",
+              all((m > 0 and x >= m - 7) or (m < 0 and x <= m + 7) for m, x in rail), f"{len(rail)} rail samples")
 
 
 def against_main(tag, card, fixture, aud):
@@ -1392,7 +1538,7 @@ def main():
     only = next((a.split("=", 1)[1].split(",") for a in sys.argv if a.startswith("--only=")), None)
     runs = [("probe", probe), ("thru", thru), ("tap", tap), ("full", full), ("gains", gains),
             ("postfader", postfader), ("postmove", postmove), ("clip", clip), ("master", master),
-            ("layout", layout),
+            ("layout", layout), ("sources", sources), ("mono", mono), ("all14", all14),
             ("rowstop", rowstop),
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))

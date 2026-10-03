@@ -27,6 +27,12 @@
         .equ    LV_SENT,       0x80004804   | long: the page channel 0 sends this frame (18.1)
         .equ    IN_RING,       0x80005660   | the inputs, eight 0x100-byte pages: C D longs, then A B at +0x80 (18.7)
         .equ    IN_IDX,        0x46104d00   | long: the page eDMA channel 7 was last pointed at (18.7)
+        .equ    BUS,           0x80005e60   | channel 6's buffer: MAIN +0x00, CUE +0x80 (18.6)
+        .equ    IN_AB_OFF,     0x80         | inputs A and B within a ring page (18.7)
+        .equ    IN_CD_OFF,     0x00         | inputs C and D within a ring page (18.7)
+        .equ    IN_A_IS_LEFT,  1            | A (and C) in the pair's first long (18.7)
+        .equ    IN_A_OFF,      4-4*IN_A_IS_LEFT
+        .equ    IN_B_OFF,      4*IN_A_IS_LEFT
         .equ    K_CREATE,      0x400005fc   | (tcb, entry, prio, stack, size) -> 1   (Task 4)
         .equ    K_START,       0x4000063c   | (tcb)                                  (Task 4)
         .equ    TCB_SIZE,      84           |                                        (Task 4)
@@ -62,7 +68,7 @@
         .equ    K_MAIN,        8            | the kinds after the tracks: MAIN, CUE, AB, CD, then A B C D
         .equ    K_AB,          10
         .equ    K_A,           12
-        .equ    SRC_BITS,      0xff         | the sources a take may latch (Task 8: 0xfff)
+        .equ    SRC_BITS,      0xfff        | the sources a take may latch: T1-T8, MAIN, CUE, AB, CD
         .equ    MAX_FRAMES,    9922500      | 60 minutes
         .equ    CHUNK_FRAMES,  512          | frames per write while recording
         .equ    SBUF_SIZE,     CHUNK_FRAMES*FB_MAX+512  | one file's stream buffer: a chunk plus a carry
@@ -205,6 +211,11 @@ nm_a:       .asciz  "/A.wav"
 nm_b:       .asciz  "/B.wav"
 nm_c:       .asciz  "/C.wav"
 nm_d:       .asciz  "/D.wav"
+        .balign 4
+| Where each bus kind's first long is: MAIN and CUE absolute; an input, its
+| offset within the ring page channel 7 filled this frame.
+bus_src:    .long   BUS, BUS+0x80, IN_AB_OFF, IN_CD_OFF
+            .long   IN_AB_OFF+IN_A_OFF, IN_AB_OFF+IN_B_OFF, IN_CD_OFF+IN_A_OFF, IN_CD_OFF+IN_B_OFF
         .balign 2
 
 | ---- the STEMS category (docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md)
@@ -930,6 +941,48 @@ stems_track16:
         bne.s   .Lp_s
         rts
 
+| ---- MAIN, CUE or an input, 16-bit: d5 = the kind (8-15), a1 = the ring.
+| MAIN and CUE from channel 6's buffer (STEM_REC.md 18.6); the inputs from
+| the page of channel 7's ring that IN_IDX names this frame, complete at
+| hook time (18.7). 16 samples of left-justified 24-bit longs, L then R (A
+| then B, C then D). Uses d0-d3, a0, a2.
+        .global stems_bus16
+stems_bus16:
+        move.l  %d5,%d0
+        subq.l  #K_MAIN,%d0
+        lsl.l   #2,%d0
+        lea     bus_src,%a0
+        movea.l (%a0,%d0.l),%a2             | MAIN, CUE: the long; an input: its offset in the page
+        cmpi.l  #K_AB,%d5
+        bcs.s   .Lb_go
+        move.l  IN_IDX,%d0                  | this frame's page
+        moveq   #7,%d1
+        and.l   %d1,%d0
+        lsl.l   #8,%d0
+        adda.l  %d0,%a2
+        adda.l  #IN_RING,%a2
+.Lb_go:
+        moveq   #16,%d3
+        cmpi.l  #K_A,%d5
+        bcc.s   .Lb_mono
+.Lb_st:
+        move.l  (%a2)+,%d1                  | L
+        move.l  (%a2)+,%d2                  | R
+        swap    %d2
+        move.w  %d2,%d1                     | L's top 16 : R's top 16
+        move.l  %d1,(%a1)+
+        subq.l  #1,%d3
+        bne.s   .Lb_st
+        rts
+.Lb_mono:
+        move.l  (%a2),%d1
+        swap    %d1
+        move.w  %d1,(%a1)+                  | the channel's top 16
+        addq.l  #8,%a2
+        subq.l  #1,%d3
+        bne.s   .Lb_mono
+        rts
+
 | ---- one ring frame: every file of the table, in order ------------------
 | a1 = the ring frame. The caller set the EMAC. Uses d0-d7, a0, a2, a3.
 stems_copy_frame:
@@ -944,9 +997,15 @@ stems_copy_frame:
         move.l  (%a0,%d0.l),%d7
         move.l  %d7,%d5
         moveq   #24,%d0
-        lsr.l   %d0,%d5                     | the kind: a track in this task
+        lsr.l   %d0,%d5                     | the kind
+        cmpi.l  #K_MAIN,%d5
+        bcc.s   .Lc_bus
         lsl.l   #7,%d5                      | k * 0x80
         bsr.w   stems_track16
+        bra.s   .Lc_next
+.Lc_bus:
+        bsr.w   stems_bus16
+.Lc_next:
         addq.l  #1,%d6
         bra.s   .Lc_file
 .Lc_done:
