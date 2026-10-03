@@ -7354,8 +7354,14 @@ Payload A's upload writes 50 zero words at `X:0x3dd`, so the state starts
 at zero after a boot. The banks the pages land in, `X:0x4800` and
 `X:0x2800`, aren't in the upload: on a unit they hold whatever RAM held
 until the first page arrives. 🟡 Inferred: if core 0 runs frames on those
-words first, its ramp starts from them. Falsifier: `verify_stems`'
-`gainsdirty` under `--dsp-dirty` (plan Task 5).
+words first, its ramp starts from them. Measured 3 Oct 2026 under the
+port: with DSP RAM filled with garbage at boot (`--dsp-dirty 7`), the
+hook's mirror, which starts from zero and sees only the pages channel 0
+sent, still equals `X:0x3dd` in all eight slots at the run's end, and so
+does the clean run (`verify_stems`' `gains` and `gainsdirty`,
+`v5-p5-gains-green.log`). Because the leftover carries every earlier
+change, a frame run on stale words would still show there. The port's
+boot order isn't the unit's, so a take on the unit remains the test.
 
 `Y:0`-`0x13` hold the targets only until later code reuses them as
 scratch: a peek at a run's end read the targets on the THRU fixture and
