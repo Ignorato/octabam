@@ -21,8 +21,8 @@ MODULE = Module(
     key="WAVE",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.RENDER, proof_note="`tools/verify/verify_wave.py` under dsp_host; not flashed",
-    doc="4-voice wavetable synth on FX2 (CHOMPI WAVE's voice): a sine on the track sets pitch and level.",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII, image 93, 3 Oct 2026: plays, PTCH and the CHROMATIC keys move the pitch",
+    doc="Experiment: a 4-voice wavetable synth on FX2 (CHOMPI WAVE's voice); a sine on the track sets pitch and level.",
     menu=MenuEntry(fx2_id=0x0b, donor_desc=0x400d58b8,     # DARK REV's descriptor
                    abbr=b"WAVE", fullname=b"Wave Synth", build_tag=False),
     params=(
