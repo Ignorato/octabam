@@ -14,7 +14,8 @@ SINE
   frequency      -> each tone's measured frequency is ISO_THIRDS[k] within 0.003 Hz
   THD            -> 1 kHz and 100 Hz at 0 dBFS below -120 dB
   level          -> LEVL k is (127 - k) * 0.5 dB below full scale within 0.01 dB,
-                    for every k; LEVL 127 peaks within 1 LSB of full scale
+                    for k = 1..127; LEVL 127 peaks within 1 LSB of full scale;
+                    LEVL 0, the default, is silent in every MODE
   CHAN           -> L+R equal; L only has R silent; R only has L silent;
                     L and inverted R has R = -L within 1 LSB
 SWEEP          -> the reference's exact phase law (testgen_ref.sweep_phases) within
@@ -179,20 +180,23 @@ r127 = rms_db(L127)
 check(f"LEVL 127 peaks within 1 LSB of full scale", abs(int(np.max(np.abs(L127))) - FULL) <= 1,
       f"(peak {int(np.max(np.abs(L127)))}, RMS {r127:.3f} dBFS)")
 lworst = 0.0
-for k in range(128):
+for k in range(1, 128):
     L, _ = render(N // 4, LEVL=k)
     lworst = max(lworst, abs((rms_db(L) - rms_db(L127[:len(L)])) + (127 - k) * 0.5))
-check("level: every LEVL step is 0.5 dB exactly within 0.01 dB (0 = -63.5 dB)", lworst < 0.01,
+check("level: every LEVL step is 0.5 dB exactly within 0.01 dB (1 = -63 dB)", lworst < 0.01,
       f"(worst {lworst:.4f} dB)")
+silent = all(not np.any(np.concatenate(render(N // 8, MODE=m, LEN=0))) for m in range(5))
+check("LEVL 0, the default: every MODE is silent (no sound until LEVL is turned up)",
+      silent and DEFAULTS[K["LEVL"]] == 0)
 
 # ---- CHAN ---------------------------------------------------------------------------------
-L, R = render(N, CHAN=0)
+L, R = render(N, LEVL=127, CHAN=0)
 check("CHAN L+R: both channels equal", np.array_equal(L, R) and np.any(L))
-L, R = render(N, CHAN=1)
+L, R = render(N, LEVL=127, CHAN=1)
 check("CHAN L: R silent", np.any(L) and not np.any(R))
-L, R = render(N, CHAN=2)
+L, R = render(N, LEVL=127, CHAN=2)
 check("CHAN R: L silent", np.any(R) and not np.any(L))
-L, R = render(N, CHAN=3)
+L, R = render(N, LEVL=127, CHAN=3)
 check("CHAN L and inverted R: R = -L within 1 LSB", np.any(L) and int(np.max(np.abs(L + R))) <= 1)
 
 MODE = {name: i for i, name in enumerate(MAN.MODE_LABELS)}
@@ -248,7 +252,7 @@ for t in (0, 3):
           f"({len(where)} impulses, at {[int(i) for i in where]})")
 
 # ---- an invalid MODE byte ----------------------------------------------------------------------------
-check("an invalid MODE byte (7) plays SINE", np.array_equal(render(N // 4, MODE=7)[0], render(N // 4, MODE=0)[0]))
+check("an invalid MODE byte (7) plays SINE", np.array_equal(render(N // 4, LEVL=127, MODE=7)[0], render(N // 4, LEVL=127, MODE=0)[0]))
 
 # ---- every knob at both ends renders ----------------------------------------------------------
 for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("MODE", 4), ("CHAN", 3)):

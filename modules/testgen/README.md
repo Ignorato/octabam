@@ -22,13 +22,15 @@ A change of MODE, FREQ or LEN restarts the signal from its first sample: a sine 
 
 | page | slot | name | range | what it does |
 |---|---|---|---|---|
-| 1 | 0 | LEVL | 0-127 | output level: 127 = 0 dBFS, 0.5 dB a step (115 = -6 dBFS, the default; 0 = -63.5 dBFS) |
-| 1 | 1 | FREQ | 0-127 | SINE frequency, ISO third-octave centres: 0 = 20 Hz, 7 = 100 Hz, 17 = 1 kHz (the default), 30 = 20 kHz; above 30 holds at 20 kHz |
+| 1 | 0 | LEVL | 0-127 | output level: 0 = silent (the default), 1 = -63 dBFS, 127 = 0 dBFS, 0.5 dB a step (115 = -6 dBFS) |
+| 1 | 1 | FREQ | select, shown in Hz | SINE frequency: the 31 ISO third-octave centres, 20 Hz to 20 kHz, across the knob's whole turn; 1k is the default |
 | 1 | 2 | LEN | 0-127 | SWEEP length in whole seconds, LEN/8 + 1 (0 = 1 s, 32 = 5 s, the default, 120 = 16 s); the IMPULSE period is a quarter of it (0.25 s to 4 s) |
 | 2 | 6 | MODE | select | SINE, SWEP, PINK, WHIT, IMPL |
 | 2 | 8 | CHAN | select | L+R, L only, R only, L and inverted R (a polarity check) |
 
-The FREQ table:
+LEVL starts at 0, so choosing TESTGEN makes no sound until you turn it up: a full-level tone on insert is hard on ears and speakers (reported on the unit with the first image, which defaulted to -6 dBFS). FREQ was a plain 0-127 knob in that image, with the 31 frequencies packed into its first quarter; it is now a select that shows the frequency.
+
+The FREQ steps:
 
 | FREQ | Hz | FREQ | Hz | FREQ | Hz | FREQ | Hz |
 |---|---|---|---|---|---|---|---|
@@ -50,7 +52,7 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 - ✅ Every FREQ index matches the sine the phase accumulator defines, sin(2 pi n inc / 2^24), within 3 LSB at 0 dBFS, from sample 0.
 - ✅ Every frequency is within 0.0013 Hz of its ISO nominal value (1 kHz measures 1000.0007 Hz; the accumulator's resolution is 0.0026 Hz).
 - ✅ THD at 0 dBFS: -149.5 dB at 1 kHz, -140.5 dB at 100 Hz (nine harmonics, Blackman window, 65,536 samples).
-- ✅ Every LEVL step is 0.5 dB within 0.0007 dB; LEVL 127 peaks within 1 LSB of full scale (RMS -3.010 dBFS).
+- ✅ Every LEVL step from 1 to 127 is 0.5 dB within 0.0006 dB; LEVL 127 peaks within 1 LSB of full scale (RMS -3.010 dBFS); LEVL 0, the default, is silent in every MODE.
 - ✅ CHAN: L+R gives equal channels, L only and R only silence the other side, and L with inverted R gives R = -L within 1 LSB.
 - ✅ SWEEP follows the reference's exact phase law (`sweep_phases`: a 48-bit increment growing by a constant ratio each sample) within 4 LSB, over two whole periods at 1 s and one at 16 s, into the next period's start. Deconvolved through an identity path with the ideal inverse filter it is flat within 0.12 dB from 40 Hz to 16 kHz.
 - ✅ WHITE is the reference's 24-bit generator within 1 LSB; its octave bands are flat within 0.16 dB (slope -0.016 dB/octave over 2^20 samples).
