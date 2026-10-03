@@ -85,7 +85,7 @@ read over USB channels 15/16, a fresh project with samples on tracks 1–4:
 
 One 4-voice engine: +69.2 µs a frame; tracks 1–4 played clean at
 BURN 1. BURN 2 not tried (predicted mean ~352 µs, longest ~400 µs).
-Sam's rig project squealed on PLAY on this image before CF Meter was
+Sam's bottleservice project squealed on PLAY on this image before CF Meter was
 selected; a fresh project did not (cause not measured).
 - The remix: stock effects + USB MIDI + USB AUDIO OUT TRACKS MAIN CUE + CF METER + CF METER IDLE + WAVE LOAD.
 
@@ -95,7 +95,7 @@ On the unit (Sam's MKII): load, play; a fourth MODULATION beside the
 reverb overran the DSP, three fit. Which of TEMPO BUS, SCENES P2, CC MAP,
 RIG HOSTS, the tokened Octakit writer and USB AUDIO were exercised is not
 recorded.
-- The remix: the rig + USB MIDI + USB AUDIO OUT MASTER (1 ms poll) + Octakit; TEMPO BUS and MODE DEFAULTS push Octakit's page-1 writer token.
+- The remix: the delay and reverb bus (BusDelay on T1's FX2, BusVerb on T5's FX2, SEND on every other track's FX2, the stock DELAY on T8) + SPECTRUM, CHARACTER and MODULATION on FX1 + USB MIDI + USB AUDIO OUT MASTER (1 ms poll) + Octakit; TEMPO BUS and MODE DEFAULTS push Octakit's page-1 writer token.
 - SEND is two knobs, DEL (slot 0) and REV (slot 1); BusVerb's DLY (page-2 slot 10) sets the delay→reverb chain.
 - The host pages draw DEL / REV only (T1 BusDelay, T5 BusVerb); TIME on page-2 slot 11; every other engine knob is on the TEMPO window. Older projects: `ot_project.py migrate-hosts`, then stamp.
 - Per-sample ramps on every continuous DSP knob (`make verify-knobs`: 55 of 134 cases stepped per block, 0 after); BusVerb SHFT six intervals (−12, +5, +7, +12, +19, +24).

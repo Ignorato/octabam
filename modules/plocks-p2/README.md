@@ -13,8 +13,8 @@ value back, as page 1 does.
 ## Measured
 
 Under the port, 2 Oct 2026, `tools/verify/verify_plocksp2.py` on
-`plocks-p2` and on bottleservice with PLOCKS P2 added (Octakit, the rig,
-SCENES P2 KITS), project OCTABAM89_setgate:
+`plocks-p2` and on bottleservice with PLOCKS P2 added (Octakit, the bus, the FX1
+stations, SCENES P2 KITS), project OCTABAM89_setgate:
 
 - A held trig and knob A on the FX2 SETUP page lock step 1's page-2
   slot 0; stock's page-1 locks of step 1 stay 0xff.

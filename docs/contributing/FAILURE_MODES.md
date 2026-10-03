@@ -8,7 +8,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 ## Pops and clicks from T1 with BusDelay when T1 plays its own trigs 🔴 open
 
 - **Seen:** Discord, Arcdmd_, 29 Sep 2026. Image, unit model, T1's machine and trig pattern not stated.
-- **Cause:** open. The rig is tested with T1 and T5 as THRU tracks without trigs. The one earlier test with a trig on every T1 step (21 Sep 2026) gave clicks and no wash. A trig splits the host's block into two dispatcher calls; the delay's glides run on the first call only since 21 Sep 2026 (`modules/busdelay/README.md`).
+- **Cause:** open. The bus (BusDelay on T1, BusVerb on T5) is tested with T1 and T5 as THRU tracks without trigs. The one earlier test with a trig on every T1 step (21 Sep 2026) gave clicks and no wash. A trig splits the host's block into two dispatcher calls; the delay's glides run on the first call only since 21 Sep 2026 (`modules/busdelay/README.md`).
 - **Fix:** open. To find out: the reporter's image, machine and trig pattern; whether the clicks land on T1's trigs; whether they follow the delay (FX2 = SEND on T1, same trigs) or the machine (a THRU host with a trig every step clicks from the THRU's re-open); the same test on T5 with BusVerb.
 
 ## Every FX1/FX2 page-2 knob turn halts under Octakit with SCENES P2 (bottleservice) ✅ measured under the port
@@ -48,7 +48,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 ## Audio engine wedged, sequencer alive: the master loop ✅ measured
 
-- **Seen:** 5-6 Sep 2026 (tag-93 rig). Sequencer runs, no audio, sample preview silent, record meters B/C/D lit. Distinct from the DSP hang (sequencer frozen).
+- **Seen:** 5-6 Sep 2026 (tag 93, the bus image of that date). Sequencer runs, no audio, sample preview silent, record meters B/C/D lit. Distinct from the DSP hang (sequencer frozen).
 - **Cause (measured 6 Sep 2026):** T8's station (Character, return role) sent into the reverb bus it returns: T8 FX1 -VRB at 71 in bank02's parts; turning it to 0 brought audio back. Why the loop reads as silence is not established.
 - **Fix:** stations have no sends; SEND is refused at track 8's dispatch position on payload A whatever its knob. The refusal outlived the T8 return (20 Sep 2026): with MASTER TRACK on, T8's input includes the hosts' wet.
 - **Check:** `tools/verify/verify_onebus.py`.
@@ -88,7 +88,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 ## Re-selecting an effect zeroes the bus ⚠️
 
-- **Seen:** a rig that measures dead after panel work.
+- **Seen:** the bus measures dead (no wet on T1 or T5) after panel work.
 - **Cause (measured):** a re-select loads manifest defaults, and BusVerb's SEND defaults to 0 (a non-zero default registers every idle host as a client); Character's RET also defaulted to 0.
 - **Fix:** assert SEND `CC 40` per track over MIDI immediately before every measurement (and, until 20 Sep 2026, RET `CC 38` on the master's channel).
 
@@ -107,7 +107,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 ## The set went silent after a test flash: the firmware reset the project 🟡
 
-- **Seen:** after flashing a test image whose remix omitted Character; silent back on the rig image.
+- **Seen:** after flashing a test image whose remix omitted Character; silent back on the bottleservice image.
 - **Cause:** ✅ the card's bank records had every part reset (FX1 id 4 with FILTER's page-2 bytes, FX2 = stock delay, T1/T2 no longer THRU, T8 = FX1 NONE / FX2 COMPRESSOR 0x18). 🟡 Inferred: the firmware sanitises part records whose FX ids are not in the running image and writes the .work files back. Not reproduced by LOAD PROJECT under the port (15 Sep 2026, OCTABAM88 bank B under `bus`), so the rewrite happens on another action.
 - **Fix:** never load the set under a test image. Recovery: save a copy of the card's project; regenerate (`ot_project.py rigproj … + lfo-clear … all`), copy the banks over in place, keep the project's own `project.work` (a foreign `OS_VERSION` tag gave PARSE ERROR, inferred from the diff).
 
@@ -183,12 +183,12 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 ## A one-sample tick on an exact 2048-sample grid at idle 🔴 open
 
 - **Seen:** image 93, sequencer stopped: a common-mode one-sample downward spike, −45 dBFS, every few hundred ms; present with the reverb's track muted.
-- **Cause:** open. Measured: 23 / 24 ticks per 30 s on a 2048.050 / 2048.049-sample grid (residual 0.29 / 0.25 samples over 631 periods); +24 ppm says the unit generates it; 4 % of wraps spike. Ruled out: the capture rig, Character, the stored project (a reload gave zero ticks), the input path, BusVerb page 1. Page 2 untested (the CC MAP fault). Candidates for 2048: BusVerb's 2048-word modulo buffers (`m5 = $7ff`), Modulation's `buffer_words=2048`, the PCM-pool block (`0x800` in the recorder's table at `0x80003c20`).
+- **Cause:** open. Measured: 23 / 24 ticks per 30 s on a 2048.050 / 2048.049-sample grid (residual 0.29 / 0.25 samples over 631 periods); +24 ppm says the unit generates it; 4 % of wraps spike. Ruled out: the capture setup, Character, the stored project (a reload gave zero ticks), the input path, BusVerb page 1. Page 2 untested (the CC MAP fault). Candidates for 2048: BusVerb's 2048-word modulo buffers (`m5 = $7ff`), Modulation's `buffer_words=2048`, the PCM-pool block (`0x800` in the recorder's table at `0x80003c20`).
 - **Fix:** open. When bisecting by hand, take slots to a stock effect, not NONE (id 0 is SEND). `tools/rec` (built from `tools/hw/rec.swift`) must be the HAL recorder.
 
 ## Sequencer stuck on step 1 with every effect turned off: id 0 is SEND
 
-- **Seen:** image 85B (the first rig-burn image): every FX1 NONE and every FX2 SEND. Second instance, image 32B, 16 Sep 2026: two projects with every stored page byte zero.
+- **Seen:** image 85B (the first RIG BURN probe image): every FX1 NONE and every FX2 SEND. Second instance, image 32B, 16 Sep 2026: two projects with every stored page byte zero.
 - **Cause:** ✅ id 0 is aliased to SEND and FX1 NONE is id 0, so SEND's proc runs on every FX1 NONE slot with r6 on a page whose bytes the last effect left; the burn read a stale slot-1 byte on four extra slots per core. The emulator never instantiates an FX1-NONE slot. Second instance: 🔴 7,111 burn loop iterations at "0" and the frame never finished; the loop count's cause is open. ❌ Retracted (22 Sep 2026): "the firmware computes page-1 slot 1's word" (`0x378f00` was the previous instruction's `a`; a port page dump shows every slot raw, knob << 16).
 - **Fix:** anything in SEND that reads a knob and can cost cycles or write the bus gates on the slot being FX2. Since image 48 SEND keys the refusal on r7 (0x6100/0x6400/0x6700/0x6a00, measured under the port; X:$213 is stale at proc time) and returns before touching state. The burn reads page-2 slot 6 (`$c`, CC 62), unflashed. The stamper writes SEND's defaults into every id-0 slot, FX1 and FX2.
 - **Check:** `verify_burn.py` check 5 (`dsp/burn_send.inc`).
