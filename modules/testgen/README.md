@@ -57,6 +57,7 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 - ✅ PINK slopes at -3.009 dB/octave, no octave band more than 0.32 dB off the fit; it matches the float filter on the same noise within -107.9 dB, and its RMS is -14.44 dBFS.
 - ✅ IMPULSE puts a full-scale sample at exactly the reference's positions (every 0.25 s at LEN 0, every 1 s at LEN 24) and zero everywhere else.
 - ✅ An invalid saved MODE byte plays SINE; every knob at both ends renders.
+- ✅ Under the ColdFire port in a real project (`verify_set`, `OT_PROJECT`, 3 Oct 2026): a project made on a MKII on stock 1.40C (T1 THRU, T2 STATIC with trigs), TESTGEN put on T2's FX2 in every part of every bank with `ot_project.py set-fx` (LEVL 115, FREQ 17, LEN 32). LOAD PROJECT completed and 900 frames ran; the live FX2 id on T2 read 0x17; T2's chain output was -16.5 dB against -41.7 dB in (the sine replaces the track's quiet audio); the load rewrote no project file; every shared-window DSP write lay in a permitted range. This proves the module loads and its signal reaches the chain on the emulated firmware, not the signal's accuracy there.
 
 ## Using it
 
@@ -67,10 +68,10 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 
 ## Open
 
-- Not yet run on hardware. Under the ColdFire port it builds and passes `make check REMIX=testgen`.
+- Not yet run on hardware.
 - What the Octatrack's own path does to the signal after FX2 (track level, the mixer, the converters) is what TESTGEN is for; it is not measured yet.
 
 ## Gates
 
 - `tools/verify/verify_testgen.py` (the manifest's `Gate`). It refuses to run if the id resolves to SEND's entry points.
-- `make check REMIX=testgen`.
+- `make check REMIX=testgen`; with `OT_PROJECT=<a project>` it adds `verify_set` under the ColdFire port.
