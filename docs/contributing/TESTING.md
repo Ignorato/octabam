@@ -238,7 +238,7 @@ than the binary.
 |---|---|
 | `modules/<name>/` | `make check` and `make accept` for every remix that carries the module |
 | `modules/<name>/README.md`, or a manifest edit to display fields only (`doc`, `proof`, `proof_note`, `author`, `author_url`, `category`, docstrings) | `verify_docs` |
-| `remixes/<name>/remix.py` (or `remixes/test/...`) | `make check` and `make accept` for that remix; a README alone reaches `verify_docs`; a removed remix the selftest and `verify_docs` |
+| `remixes/<name>/remix.py` (or `remixes/test/...`) | `make check` and `make accept` for that remix; an edit to `doc`, `proof`, `proof_note` or a docstring only, or a README alone, reaches `verify_docs`; a removed remix the selftest and `verify_docs` |
 | the build (`build_bus.py`, `cycle_count.py`, `dsp/`) or anything it imports | `scripts/refhash.sh check`, `make identity`, `make test-acceptance`, `make check-shared` for the cover |
 | a gate of the shared half | `make check-shared` for the cover |
 | a gate of the per-remix half | `make check-remix` for the cover |
@@ -489,7 +489,7 @@ Typical changes (with `JOBS=4`, kept shards):
 
 | change | remixes | wall |
 |---|---|---|
-| a module README or a manifest's display fields | none | seconds (`verify_docs`) |
+| a module or remix README, or a manifest's or `remix.py`'s display fields | none | seconds (`verify_docs`) |
 | one USB IN or OUT module | its few `usb-io-*` remixes (+ bottleservice if it carries it) | 5-15 min |
 | USB MIDI (every USB remix) | ~24 | 15-20 min, floored by bottleservice |
 | the build | the cover + identity's moved remixes | 25-40 min |
