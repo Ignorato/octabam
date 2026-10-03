@@ -21,7 +21,7 @@ the same selection without the loop, is the variant that passed before.
    audio pool and load it into FLEX slot 1.
 3. T8: FX2 = **CF Meter** (T8's audio is replaced by the readout; its
    machine still runs). BURN (FX2 page 1, first knob) at 0.
-4. USB to the Mac. Each state below: `tools/rec 12 <name>.wav Octatrack`,
+4. USB to the Mac. Each state below: `tools/hw/rec 12 <name>.wav Octatrack`,
    then `python3 tools/harness/cfmeter.py <name>.wav`.
 
 | take | state |

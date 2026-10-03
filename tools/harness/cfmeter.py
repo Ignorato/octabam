@@ -68,7 +68,10 @@ def cycles(nb):
     ok = ~np.isnan(nb)
     ref = ok & (np.abs(nb - REF) < 0.01 * REF)
     sync = ok & (np.abs(nb) < 20)
-    edges = [i for i in range(1, len(nb)) if ref[i] and sync[i - 1]]
+    # On the unit's USB stream one block can straddle the slot change, so
+    # the sync may sit two blocks back.
+    edges = [i for i in range(2, len(nb))
+             if ref[i] and not ref[i - 1] and (sync[i - 1] or sync[i - 2])]
     rows = []
     for e0, e1 in zip(edges, edges[1:]):
         seg = (e1 - e0) / 8

@@ -11,8 +11,10 @@ AUDIO, T8 on channels 15/16.
 
 ## Status
 
-Not flashed. `waveload-port` (the same selection without CF METER IDLE) is
-the emulator variant.
+Image 92 on Sam's MKII, 3 Oct 2026: one 4-voice engine (BURN 1) took
+69.2 µs of the 362.8 µs frame and played clean beside four sample tracks
+([WAVE LOAD](../../../modules/waveload/README.md), CHANGELOG). `waveload-port`
+(the same selection without CF METER IDLE) is the emulator variant.
 
 ## Procedure
 
@@ -20,7 +22,7 @@ the emulator variant.
 2. Load a project that plays the way you play (trigs on the tracks you
    use). T8 is the readout: its FX2 = **CF Meter**, which replaces T8's
    audio. BURN (FX2 page 1, first knob) at 0.
-3. USB to the Mac. Each take: `tools/rec 12 <name>.wav Octatrack`, then
+3. USB to the Mac. Each take: `tools/hw/rec 12 <name>.wav Octatrack`, then
    `python3 tools/harness/cfmeter.py <name>.wav`.
 
 | take | state |

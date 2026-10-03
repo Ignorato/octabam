@@ -32,7 +32,19 @@ unit's; the run proves the chain (lane → DSP record → insert → read-back
 
 ## On the unit
 
-Not measured on the unit: every number.
+Image 92 (`waveload`, Sam's MKII, 3 Oct 2026), a fresh project with
+samples on tracks 1–4, T8 FX2 = CF Meter, USB channels 15/16:
+
+| state | idle | interrupt mean | longest | period |
+|---|---|---|---|---|
+| stopped | 49.6 % | 123.1 µs | 208.2 µs | 362.8 µs |
+| playing | 28.0 % | 213.5 µs | 272.7 µs | 362.8 µs |
+
+The period reads 362.8 µs, so DTIM3 runs at 132 MHz. On the unit's USB
+stream one 16-sample block straddles each slot change (the sync's ~0,
+then 7,932, then the reference's 8,192); `cfmeter.py` takes the edge
+across that one block. BURN itself (the busy-wait) was not run: in this
+remix BURN is WAVE LOAD's K.
 
 ## Open
 
