@@ -37,6 +37,7 @@ All by `tools/verify/verify_transient.py` through `dsp_host` on the audition's s
 ## On the unit
 
 - ✅ Image OCTABAM2 (`make image REMIX=transient BUILD=2` at `f6ce41d6`, TRANSIENT beside 13 stock effects) on Ignorato's MKII, 3 Oct 2026, from the card: boots, OS VERSION reads OCTABAM2; TRANSIENT is listed on FX2 (then as `Transient2`; now `TRANSIENT`, no build tag) and runs on T2 of a project made on the unit on stock 1.40C. ATCK works as expected across its range on a kick (PML_MHE_Kick_001) and a clap (PML_MHE_Clap_004). SUST works as expected on the clap, with no added noise.
+- ✅ The LFO page lists TRANSIENT's destinations under TRNS as ATCK, SUST, TIME, OUT, MIX and `<F>`: page-1 slot 5 is unnamed (six zero bytes in the descriptor) and the firmware labels an unnamed slot by its letter, as it does stock DJ EQ's empty slot 2 (`<B>`, seen on the same unit). Modulating `<F>` does nothing: the DSP reads knob words 0 to 4 only.
 - 🟡 With the kick at SUST about +20, a slight white noise was heard. Not reproduced by `dsp_host` (the sample fades to digital zero; the gaps between hits render as silence at every SUST setting). Judged by the tester to be an artefact of that sample; cause not measured. An output capture would tell whether the unit feeds FX2 a low residual between hits, which SUST lifts most there.
 - Listened to before flashing (3 Oct 2026): level-matched renders of a 110 BPM drum loop through this DSP code in `dsp_host`; SUST +63 clean after law v3 (v1 spiked, v2 clicked).
 
