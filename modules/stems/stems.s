@@ -22,6 +22,9 @@
         .equ    PING,          0x800000e0   | the read-back half selector  (Task 3)
         .equ    PING_XOR,      0            | half = (PING ^ PING_XOR) & 1  (Task 3)
         .equ    READBACK,      0x80003190   | track k's block at READBACK + half*0x400 + k*0x80 (9.2)
+        .equ    LV_PAGES,      0x80005460   | the level pages, 0x80 bytes each (STEM_REC.md 18.1)
+        .equ    LV_NPAGES,     4            | four of them; the sent index passes 4 inside one routine (18.1)
+        .equ    LV_SENT,       0x80004804   | long: the page channel 0 sends this frame (18.1)
         .equ    IN_RING,       0x80005660   | the inputs, eight 0x100-byte pages: C D longs, then A B at +0x80 (18.7)
         .equ    IN_IDX,        0x46104d00   | long: the page eDMA channel 7 was last pointed at (18.7)
         .equ    K_CREATE,      0x400005fc   | (tcb, entry, prio, stack, size) -> 1   (Task 4)
@@ -72,6 +75,11 @@
         .equ    ERR_TASK,      8
         .equ    STACK_FILL,    0x5354454d   | "STEM": the untouched stack
         .equ    HDR_SIZE,      44
+        .equ    GAIN_LAG,      2            | frames before the newest mirrored page: the MAIN in 0x80005e60 (18.5)
+        .equ    GQ_N,          4            | frames of per-sample gains kept; GAIN_LAG < GQ_N
+        .equ    GQ_FRAME,      8*16*4       | one frame of gains: 8 slots x 16 longs
+        .equ    GQ_ALWAYS,     GAIN_LAG >= 2 | gains in IDLE too, so a take started while playing has them
+        .equ    MACSR_FRAC,    0x20         | fractional, truncating: the frame interrupt's own mode
         .equ    TRACE_N,       64           | test seam: frames stems_trace records
         .equ    TRACE_B,       64           | bytes a traced frame
 
@@ -104,6 +112,19 @@ stems_hold:      .long   0          | test seam: non-zero pauses the writer whil
         .global stems_trace, stems_trace_buf
 stems_trace:     .long   0          | test seam: 1..TRACE_N records that frame into stems_trace_buf, then counts on
 stems_trace_buf: .space  TRACE_N*TRACE_B
+        .global stems_gstate, stems_gstate_prev, stems_gq, stems_gqn, stems_lvskip
+stems_lvlast:    .long   -1         | the last page index mirrored
+stems_lvskip:    .long   0          | test seam: page-index steps other than +1 or a wrap to 0
+stems_gw29:      .long   -1         | the MAIN level the cached targets were computed with
+stems_gm2:       .long   0          | its square
+stems_gcache:    .space  8*8        | per slot: w1 << 16 | w2, then its target
+stems_gstate:    .space  8*12       | per slot: split, increment, gain (core 0's X:0x3dd+5k words 0, 2, 4)
+stems_gstate_prev: .space 8*12      | the same, one frame earlier
+stems_gqn:       .long   0          | frames written to stems_gq
+stems_gq:        .space  GQ_N*GQ_FRAME
+stems_emac_save: .space  16         | the caller's MACSR, ACC0, ACC1, ACCEXT01
+        .include "remix.inc"        | stems_gtab: core 0's gain table, from the user's image (18.4)
+        .balign 4
 stems_mask:      .long   0          | the latched mask
 stems_nt:        .long   0          | its bit count
 stems_fbytes:    .long   0          | a ring frame: 64 x stems_nt
@@ -386,11 +407,13 @@ stems_track_action:
 
 | ---- the frame hook: in the audio interrupt, IPL 5 ---------------------
 | Reached by `jsr` from 0x40004b12. Calls nothing but the routine it
-| displaced; uses no RTOS service; loops are bounded (8 tracks). In IDLE its
-| whole cost is two tests and two branches, one of them the trace seam's.
-| The copy runs BEFORE the stock routine, which reads the same block.
+| displaced; uses no RTOS service; loops are bounded (8 tracks). Every
+| frame it mirrors core 0's gains (stems_mirror); in IDLE that and two
+| tests are its whole cost. The copy runs BEFORE the stock routine, which
+| reads the same block.
         .global stems_frame_hook
 stems_frame_hook:
+        bsr.w   stems_mirror
         tst.l   stems_trace
         beq.s   .Lh_notrace
         bsr.w   stems_trace_frame
@@ -523,6 +546,261 @@ stems_layout:
         bhi.s   .Ll_rd
         clr.l   stems_rd_off
 .Ll_rd:
+        rts
+
+| ---- the caller's EMAC state, saved and put back ---------------------------
+| The moves run in integer mode, as the frame interrupt's own save does
+| (0x4000ac96, 0x4000d968); the work runs in MACSR_FRAC. The hook runs
+| before that save, inside whatever code the interrupt stopped, so ACC0
+| holds that code's sum: it is cleared after the save, or the first
+| mac.l adds into it. MACSR is read into an address register: stock never
+| reads it into a data register (0x400031ac, 0x4000ac98). d0 and a0 are
+| preserved.
+stems_emac_in:
+        move.l  %d0,-(%sp)
+        move.l  %a0,-(%sp)
+        move.l  %macsr,%a0
+        move.l  %a0,stems_emac_save
+        movea.l (%sp)+,%a0
+        moveq   #0,%d0
+        move.l  %d0,%macsr
+        move.l  %acc0,%d0
+        move.l  %d0,stems_emac_save+4
+        move.l  %acc1,%d0
+        move.l  %d0,stems_emac_save+8
+        move.l  %accext01,%d0
+        move.l  %d0,stems_emac_save+12
+        moveq   #0,%d0
+        move.l  %d0,%acc0
+        move.l  %d0,%accext01
+        moveq   #MACSR_FRAC,%d0
+        move.l  %d0,%macsr
+        move.l  (%sp)+,%d0
+        rts
+stems_emac_out:
+        move.l  %d0,-(%sp)
+        moveq   #0,%d0
+        move.l  %d0,%macsr
+        move.l  stems_emac_save+4,%d0
+        move.l  %d0,%acc0
+        move.l  stems_emac_save+8,%d0
+        move.l  %d0,%acc1
+        move.l  stems_emac_save+12,%d0
+        move.l  %d0,%accext01
+        move.l  stems_emac_save,%d0
+        move.l  %d0,%macsr
+        move.l  (%sp)+,%d0
+        rts
+
+| ---- the gain mirror: core 0's MAIN gains from the level pages -----------
+| Every frame: the page channel 0 sends (LV_SENT), through core 0's
+| arithmetic (docs/firmware/STEM_REC.md 18.2-18.3), so stems_gstate equals
+| core 0's MAIN ramp state. While a take is armed or recording (always with
+| GQ_ALWAYS), also each track slot's 16 gains into stems_gq. An index above
+| 3 is the increment before its wrap (18.1), not a page. In the audio
+| interrupt; every register is preserved.
+stems_mirror:
+        move.l  %d0,-(%sp)
+        move.l  LV_SENT,%d0
+        cmpi.l  #LV_NPAGES-1,%d0
+        bhi.s   .Lg_none                    | 4: the wrap's transient
+        cmp.l   stems_lvlast,%d0
+        bne.s   .Lg_new
+.Lg_none:
+        move.l  (%sp)+,%d0
+        rts                                 | no new page this frame
+.Lg_new:
+        lea     -56(%sp),%sp
+        movem.l %d1-%d7/%a0-%a6,(%sp)
+        move.l  stems_lvlast,%d1
+        move.l  %d0,stems_lvlast
+        tst.l   %d1
+        bmi.s   .Lg_seq                     | the first page
+        addq.l  #1,%d1
+        cmp.l   %d1,%d0
+        beq.s   .Lg_seq
+        tst.l   %d0
+        beq.s   .Lg_seq                     | the ring wrapped to page 0
+        addq.l  #1,stems_lvskip
+.Lg_seq:
+        bsr.w   stems_emac_in
+        lea     stems_gstate,%a0            | this frame's state becomes the previous one
+        lea     stems_gstate_prev,%a1
+        moveq   #24,%d1
+.Lg_prev:
+        move.l  (%a0)+,(%a1)+
+        subq.l  #1,%d1
+        bne.s   .Lg_prev
+        lsl.l   #7,%d0
+        movea.l %d0,%a0
+        adda.l  #LV_PAGES,%a0               | a0: the page
+        moveq   #0,%d0
+        move.w  0x52(%a0),%d0               | the MAIN level, halfword 0x29
+        cmp.l   stems_gw29,%d0
+        beq.s   .Lg_m2
+        move.l  %d0,stems_gw29
+        andi.l  #0xff,%d0
+        moveq   #24,%d1
+        lsl.l   %d1,%d0                     | m << 8: (W29 & 0xff) << 24
+        cmpi.l  #0x80000000,%d0
+        beq.s   .Lg_m2one                   | -1.0: its square overflows the EMAC's read-out
+        mac.l   %d0,%d0,%acc0
+        movclr.l %acc0,%d0
+        asr.l   #8,%d0                      | M2 = floor(m*m / 2^23)
+        bra.s   .Lg_m2ok
+.Lg_m2one:
+        move.l  #0x7fffff,%d0               | core 0's limited 1.0
+.Lg_m2ok:
+        move.l  %d0,stems_gm2
+        lea     stems_gcache,%a1            | every target is stale
+        moveq   #-1,%d2
+        moveq   #8,%d1
+.Lg_inval:
+        move.l  %d2,(%a1)
+        addq.l  #8,%a1
+        subq.l  #1,%d1
+        bne.s   .Lg_inval
+.Lg_m2:
+        suba.l  %a4,%a4                     | a4: where the gains go, 0 = nowhere
+        .if     GQ_ALWAYS == 0
+        tst.l   stems_state
+        beq.s   .Lg_noq                     | IDLE: the state only
+        .endif
+        move.l  stems_gqn,%d0
+        moveq   #GQ_N-1,%d1
+        and.l   %d1,%d0
+        move.l  #GQ_FRAME,%d1
+        mulu.l  %d1,%d0
+        movea.l %d0,%a4
+        adda.l  #stems_gq,%a4
+.Lg_noq:
+        lea     stems_gstate,%a2
+        lea     stems_gcache,%a3
+        lea     2(%a0),%a5                  | slot 0's w1
+        moveq   #0,%d6                      | slot k
+.Lg_slot:
+        moveq   #0,%d1
+        move.w  (%a5),%d1                   | w1: the track level
+        moveq   #0,%d2
+        move.w  2(%a5),%d2                  | w2: the MAIN table index
+        moveq   #0,%d3
+        move.w  4(%a5),%d3
+        moveq   #15,%d7
+        and.l   %d7,%d3                     | s: the split sample
+        move.l  %d1,%d4
+        swap    %d4
+        or.l    %d2,%d4                     | the cache key: w1 << 16 | w2
+        cmp.l   (%a3),%d4
+        bne.s   .Lg_miss
+        moveq   #-1,%d7
+        cmp.l   %d7,%d4
+        bne.w   .Lg_cached                  | a hit, unless the key is the stale mark itself
+.Lg_miss:
+        move.l  %d4,(%a3)
+        move.l  %d1,%d0
+        swap    %d0                         | x << 8 = w1 << 16, signed
+        cmpi.l  #0x80000000,%d0
+        beq.s   .Lg_sqone                   | -1.0: its square overflows the EMAC's read-out
+        mac.l   %d0,%d0,%acc0
+        movclr.l %acc0,%d0
+        asr.l   #8,%d0                      | w1sq = floor(x*x / 2^23)
+        bra.s   .Lg_sqok
+.Lg_sqone:
+        move.l  #0x7fffff,%d0               | core 0's limited 1.0
+.Lg_sqok:
+        move.l  %d2,%d5
+        swap    %d5
+        moveq   #23,%d4
+        asr.l   %d4,%d5                     | idx = sext24(w2 << 8) >> 15
+        moveq   #0,%d4                      | T = 0 below the table (a w2 of 0x8000 or more)
+        tst.l   %d5
+        bmi.s   .Lg_t
+        movea.l %d5,%a6
+        adda.l  %d5,%a6
+        adda.l  %d5,%a6                     | 3 * idx
+        adda.l  #stems_gtab,%a6
+        move.b  2(%a6),%d4
+        lsl.l   #8,%d4
+        move.b  1(%a6),%d4
+        lsl.l   #8,%d4
+        move.b  (%a6),%d4                   | T: 24 bits, little-endian as in the image
+.Lg_t:
+        move.l  stems_gm2,%d5
+        lsl.l   #8,%d5
+        lsl.l   #8,%d4
+        mac.l   %d5,%d4,%acc0
+        movclr.l %acc0,%d4
+        asr.l   #8,%d4                      | tM = floor(M2 * T / 2^23)
+        lsl.l   #8,%d0
+        lsl.l   #8,%d4
+        mac.l   %d0,%d4,%acc0
+        movclr.l %acc0,%d0
+        asr.l   #8,%d0                      | the target = floor(w1sq * tM / 2^23)
+        move.l  %d0,4(%a3)
+.Lg_cached:
+        move.l  4(%a3),%d0                  | d0: the target
+        movem.l (%a2),%d1/%d4-%d5           | d1: last split, d4: increment, d5: gain
+        cmp.l   %d1,%d3
+        bcc.s   .Lg_m                       | s >= last split: m = last split
+        move.l  %d3,%d1                     | m = s
+.Lg_m:
+        move.l  %a4,%d2
+        beq.s   .Lg_fast
+        move.l  %d1,%d2                     | the old ramp: m samples
+        beq.s   .Lg_h0
+.Lg_old:
+        move.l  %d5,(%a4)+
+        add.l   %d4,%d5
+        subq.l  #1,%d2
+        bne.s   .Lg_old
+.Lg_h0:
+        move.l  %d3,%d2
+        sub.l   %d1,%d2                     | the hold: s - m samples
+        beq.s   .Lg_new2
+.Lg_hold:
+        move.l  %d5,(%a4)+
+        subq.l  #1,%d2
+        bne.s   .Lg_hold
+.Lg_new2:
+        move.l  %d0,%d4
+        sub.l   %d5,%d4
+        asr.l   #4,%d4                      | the new increment
+        moveq   #16,%d2
+        sub.l   %d3,%d2                     | the new ramp: 16 - s samples, 1..16
+.Lg_ramp:
+        move.l  %d5,(%a4)+
+        add.l   %d4,%d5
+        subq.l  #1,%d2
+        bne.s   .Lg_ramp
+        bra.s   .Lg_store
+.Lg_fast:                                   | the state only: the same sums, multiplied
+        move.l  %d4,%d2
+        muls.l  %d1,%d2
+        add.l   %d2,%d5                     | gain += m * increment
+        move.l  %d0,%d4
+        sub.l   %d5,%d4
+        asr.l   #4,%d4
+        moveq   #16,%d2
+        sub.l   %d3,%d2
+        muls.l  %d4,%d2
+        add.l   %d2,%d5                     | gain += (16 - s) * the new increment
+.Lg_store:
+        movem.l %d3-%d5,(%a2)               | split, increment, gain
+        lea     12(%a2),%a2
+        addq.l  #8,%a3
+        addq.l  #8,%a5
+        addq.l  #1,%d6
+        moveq   #8,%d0
+        cmp.l   %d0,%d6
+        bne.w   .Lg_slot
+        move.l  %a4,%d0
+        beq.s   .Lg_done
+        addq.l  #1,stems_gqn
+.Lg_done:
+        bsr.w   stems_emac_out
+        movem.l (%sp),%d1-%d7/%a0-%a6
+        lea     56(%sp),%sp
+        move.l  (%sp)+,%d0
         rts
 
 | ---- test seam: one frame of what the hook sees (STEM_REC.md 18.5) -----

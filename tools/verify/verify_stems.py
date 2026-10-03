@@ -204,9 +204,71 @@ def core1_slot_peaks(dump_path):
     return peaks
 
 
+def dsp_state(log):
+    """Core 0's MAIN ramp state at the run's end, from --dsp-peek
+    "0:X:0x3dd,50": per track slot [split, increment, gain] (words 0, 2, 4
+    of each five; STEM_REC.md 18.3)."""
+    m = re.search(r"core 0 X:0x003dd:((?: [0-9a-f]{6})+)", log)
+    if not m:
+        return []
+    w = [int(x, 16) for x in m.group(1).split()]
+    sx = lambda v: v - 0x1000000 if v & 0x800000 else v  # noqa: E731
+    return [[sx(w[5 * k]), sx(w[5 * k + 2]), sx(w[5 * k + 4])] for k in range(8)]
+
+
+def gain_of(log, k):
+    """Track k's settled MAIN gain at the run's end (a run that holds its levels)."""
+    st = dsp_state(log)
+    return st[k][2] if st else None
+
+
+def level_steps(pairs, addr=0x80000c50):
+    """(steps, midi_lines) that move a level at the given frames: pokes of the
+    level byte, or CC 46 on channel 1 when the poke doesn't move the page
+    (lv_mover.txt, STEM_REC.md 18.1)."""
+    mover = MOVER.read_text().split() if MOVER.exists() else ["poke", hex(addr)]
+    if mover[0] == "poke":
+        return [f"{f}:poke:0x{addr:x}={v}" for f, v in pairs], ()
+    return [], tuple(f"{f} B0 2E {v:02X}" for f, v in pairs)
+
+
+def gains(s):
+    """Gate 1: the hook's mirror of core 0's MAIN ramp equals the DSP's own
+    at the run's end, on the one-THRU fixture with T1's LEVEL stepped four
+    times and the MAIN level once; from a clean boot and from dirty DSP RAM.
+    The run may end inside core 0's frame, so each slot matches the hook's
+    last mirrored frame or the one before. The crossfader and the scenes
+    reach core 0 only through the same level words (STEM_REC.md 18.1); the
+    fixture's scenes move none of them, so the LEVEL steps stand in."""
+    steps, midi = level_steps(LEVEL_STEPS)
+    steps.append(f"140:poke:0x{MAIN_LEVEL_SRC:x}=100")
+    for tag, extra in (("gains", ()), ("gainsdirty", ("--dsp-dirty", "7"))):
+        log, *_ = port(s, 260, tag=tag, calls_before=(), fixture=FIXTURE_THRU1, mask=None,
+                       dump_blocks=False, extra=extra, steps=steps, midi_lines=midi,
+                       mems=((s["stems_gstate"], 96, "gs"), (s["stems_gstate_prev"], 96, "gp"),
+                             (s["stems_lvskip"], 4, "skip")))
+        dsp = dsp_state(log)
+
+        def longs(name):
+            p = run_path(tag, name)
+            raw = p.read_bytes() if p.exists() else b""
+            return [int.from_bytes(raw[i:i + 4], "big", signed=True) for i in range(0, len(raw), 4)]
+        now, prev = longs("gs"), longs("gp")
+        mine = [now[3 * k:3 * k + 3] for k in range(8)]
+        before = [prev[3 * k:3 * k + 3] for k in range(8)]
+        check(f"{tag}: core 0's state was read", len(dsp) == 8, f"{len(dsp)} slots")
+        check(f"{tag}: the mirror equals core 0's MAIN ramp in every track slot",
+              len(dsp) == 8 and all(d in (m, b) for d, m, b in zip(dsp, mine, before)),
+              f"core 0 T1 {dsp[0] if dsp else None}, mirror {mine[0] if mine else None}, "
+              f"the frame before {before[0] if before else None}")
+        check(f"{tag}: T1's gain moved off its start", len(dsp) == 8 and dsp[0][2] not in (0, 0x1f7fe0),
+              f"{dsp[0] if dsp else None}")
+        check(f"{tag}: the sent page index never jumped", longs("skip") == [0], f"{longs('skip')}")
+
+
 def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
          card_in=None, dump_blocks=True, stack=False, mems=(), calls_before=None, fixture=None,
-         pokes_before=(), mask=0x01, load_ms=20000, steps=()):
+         pokes_before=(), mask=0x01, load_ms=20000, steps=(), midi_lines=()):
     """One fixture run under the port: the module's action called before
     play (`--call-before-play`: the action arms, and the hook takes the
     ARMED-to-RECORDING edge on the first playing frame), STOP at `stop_at`
@@ -238,7 +300,9 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     is quicker, and a slow emulated card needs one (stems_sweep.py).
 
     `steps` are upstream's `--step FRAME:call|poke|dump:SPEC` scripts,
-    frames counted from the transport start like `calls`.
+    frames counted from the transport start like `calls`. `midi_lines`
+    (`<frame> <hex bytes>`) go to the port's MIDI IN, and every run peeks
+    core 0's MAIN ramp state at its end (dsp_state).
     `calls_before=()` arms nothing (None: the action, the default)."""
     tag = f"{tag}{SUFFIX}"
     before = (s["stems_action"],) if calls_before is None else tuple(calls_before)
@@ -278,6 +342,12 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
         args += ["--poke-before-play", ";".join(f"0x{a:x}={b}" for a, b in pokes_before)]
     for st in steps:
         args += ["--step", st]
+    if "--dsp-peek" not in extra:
+        args += ["--dsp-peek", "0:X:0x3dd,50"]          # the gains the stems used (dsp_state)
+    if midi_lines:
+        mid = work / f"{tag}.midi.txt"
+        mid.write_text("".join(line + "\n" for line in midi_lines))
+        args += ["--midi", str(mid)]
     r = subprocess.run(args, capture_output=True, text=True)
     (work / f"{tag}.log").write_text(r.stdout + r.stderr)   # the port's report, for the call timing
     m = mem.read_bytes() if mem.exists() else b"\0" * 24
@@ -569,6 +639,11 @@ FIXTURE8 = pathlib.Path("out/stems_fixture8.json")   # tools/verify/stems_fixtur
 FIXTURE32 = pathlib.Path("out/stems_fixture32.json")   # tools/verify/stems_fixture.py --fat32
 FIXTURE_THRU = pathlib.Path("out/stems_fixture_thru.json")   # stems_fixture.py --thru
 FIXTURE_THRU1 = pathlib.Path("out/stems_fixture_thru1.json")   # stems_fixture.py --thru1
+GQ_N = 4                                   # stems.s: frames of per-sample gains kept
+MOVER = pathlib.Path("out/stems_runs/lv_mover.txt")     # STEM_REC.md 18.1: "poke 0x80000c50"
+MAIN_LEVEL_SRC = 0x80000035                # STEM_REC.md 18.1: the byte the page builder reads for MAIN
+LEVEL_STEPS = ((60, 64), (61, 100), (90, 20), (120, 127))   # two steps a frame apart cut a ramp
+GTAB_OFF, GTAB_LEN = 0xe9d8a, 258 * 3      # STEM_REC.md 18.4: X:0x6c00's words in the stock slice
 FIXTURE_MODES = [("", FIXTURE), ("--eight", FIXTURE8), ("--fat32", FIXTURE32),
                  ("--thru1", FIXTURE_THRU1), ("--thru", FIXTURE_THRU)]   # --thru1 passes through the THRU card: before --thru
 CARD_READY = 0x460d1cb8     # emu_card.FW_CARD_READY: := 1 after the firmware's card init and mount
@@ -1161,12 +1236,15 @@ def main():
     check("the build records all eight tracks by default", runtime_long(s, "stems_tracks") == 0xFF,
           f"0x{runtime_long(s, 'stems_tracks'):02x}")
     check("stems_peak is in the runtime, 0 at boot", "stems_peak" in s and runtime_long(s, "stems_peak") == 0)
+    check("stems_gtab is the stock slice's gain table, word for word (STEM_REC.md 18.4)",
+          "stems_gtab" in s and runtime_at(s, s["stems_gtab"], GTAB_LEN) == stock[GTAB_OFF:GTAB_OFF + GTAB_LEN])
     check("the menu's words are in the runtime: stems_took 0, the buffers",
           "stems_took" in s and runtime_long(s, "stems_took") == 0 and "stems_ui_bufs" in s)
     if "--static" in sys.argv:
         return 1 if fails else 0
     only = next((a.split("=", 1)[1].split(",") for a in sys.argv if a.startswith("--only=")), None)
-    runs = [("probe", probe), ("thru", thru), ("tap", tap), ("full", full), ("rowstop", rowstop),
+    runs = [("probe", probe), ("thru", thru), ("tap", tap), ("full", full), ("gains", gains),
+            ("rowstop", rowstop),
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
              for m in (0x01, 0x03, 0x0F, 0xFF, 0xA5)]

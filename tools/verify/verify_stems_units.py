@@ -57,6 +57,28 @@ def unit(f):
     return f
 
 
+_asm_cache = {}
+
+
+def assemble(src):
+    """ColdFire text -> bytes, assembled as the platform assembles a DRAM
+    unit (-mcpu=54455), in a private scratch directory (AGENTS.md: never a
+    fixed /tmp name)."""
+    if src not in _asm_cache:
+        import shutil
+        import tempfile
+        d = pathlib.Path(tempfile.mkdtemp(prefix="stems_units_"))
+        try:
+            (d / "s.s").write_text(src)
+            subprocess.run(["m68k-elf-as", "-mcpu=54455", "-o", str(d / "s.o"), str(d / "s.s")], check=True)
+            subprocess.run(["m68k-elf-objcopy", "-O", "binary", "-j", ".text", str(d / "s.o"), str(d / "s.bin")],
+                           check=True)
+            _asm_cache[src] = (d / "s.bin").read_bytes()
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+    return _asm_cache[src]
+
+
 class Rt:
     REGS = {**{f"d{i}": getattr(K, f"UC_M68K_REG_D{i}") for i in range(8)},
             **{f"a{i}": getattr(K, f"UC_M68K_REG_A{i}") for i in range(7)}}
@@ -110,6 +132,41 @@ class Rt:
     def r32s(self, a):
         return int.from_bytes(self.rmem(a, 4), "big", signed=True)
 
+    CODE, SAVE = 0x00020000, 0x00021000     # scratch code and its results, inside the stack's mapping
+
+    def run(self, code):
+        self.uc.mem_write(self.CODE, code)
+        self.uc.emu_start(self.CODE, self.CODE + len(code))
+
+    def set_emac(self, macsr, acc0, accext01):
+        """The interrupted code's EMAC state, as the hook finds it: written in
+        integer mode, then its MACSR."""
+        self.run(assemble(f"""
+        moveq   #0,%d0
+        move.l  %d0,%macsr
+        move.l  #{acc0:#x},%d0
+        move.l  %d0,%acc0
+        move.l  #{accext01:#x},%d0
+        move.l  %d0,%accext01
+        move.l  #{macsr:#x},%d0
+        move.l  %d0,%macsr
+"""))
+
+    def get_emac(self):
+        """(MACSR, ACC0, ACCEXT01), ACC0 and ACCEXT01 read in integer mode."""
+        self.run(assemble(f"""
+        move.l  %macsr,%d0
+        move.l  %d0,{self.SAVE:#x}
+        moveq   #0,%d1
+        move.l  %d1,%macsr
+        move.l  %acc0,%d1
+        move.l  %d1,{self.SAVE + 4:#x}
+        move.l  %accext01,%d1
+        move.l  %d1,{self.SAVE + 8:#x}
+        move.l  %d0,%macsr
+"""))
+        return tuple(self.r32(self.SAVE + 4 * i) for i in range(3))
+
 
 def main():
     names = sys.argv[1:]
@@ -133,6 +190,133 @@ def layout_now(rt):
         got = tuple(rt.r32(s[n]) for n in ("stems_nt", "stems_fbytes", "stems_rframes", "stems_rlimit"))
         want = (nt, 64 * nt, 0x400000 // (64 * nt), 0x400000 // (64 * nt) * 64 * nt)
         check(f"layout_now: mask {mask:#04x}", got == want, f"{got} vs {want}")
+
+
+LV_PAGES, LV_SENT = 0x80005460, 0x80004804      # STEM_REC.md 18.1: four pages, the index sent
+DIRTY_EMAC = (0x40, 0x5a5a5a5a, 0x00a5005a)     # an interrupted task's EMAC: MACSR, ACC0, ACCEXT01
+
+
+def random_page(rng):
+    page = [0] * 64
+    for k in range(8):
+        page[4 * k + 1] = rng.choice((0, 0x4000, 0x7f00, 0x8000, rng.randrange(0x10000)))
+        page[4 * k + 2] = rng.choice((0x7f00, 0, rng.randrange(0x8000)))
+        page[4 * k + 3] = rng.randrange(16) if rng.random() < 0.4 else 0
+    page[0x29] = rng.choice((0x40, 0x7f, 0x80, rng.randrange(0x100)))
+    return page
+
+
+def send_page(rt, idx, page):
+    rt.wmem(LV_PAGES + 0x80 * idx, b"".join(w.to_bytes(2, "big") for w in page))
+    rt.w32(LV_SENT, idx)
+
+
+def mirror_reset(rt):
+    s = rt.s
+    rt.w32(s["stems_state"], 1)                     # ARMED: the gains are written
+    rt.w32(s["stems_lvlast"], 0xffffffff)
+    rt.w32(s["stems_gqn"], 0)
+    rt.w32(s["stems_lvskip"], 0)
+    rt.wmem(s["stems_gstate"], bytes(96))
+    rt.wmem(s["stems_gcache"], b"\xff" * 64)
+    rt.w32(s["stems_gw29"], 0xffffffff)
+
+
+def mirror_read(rt):
+    s = rt.s
+    state = [[rt.r32s(s["stems_gstate"] + 12 * k + 4 * f) for f in range(3)] for k in range(8)]
+    q = s["stems_gq"] + ((rt.r32(s["stems_gqn"]) - 1) % GQ_N) * 512
+    gq = [[rt.r32s(q + 64 * k + 4 * j) for j in range(16)] for k in range(8)]
+    return state, gq
+
+
+@unit
+def mirror(rt, n=4000, seed=5):
+    """stems_mirror against stems_gain.Mirror: n random pages through the
+    four-page ring, a third of them repeated (the target cache), with the
+    edges of the arithmetic (levels 0, 0x4000, 0x7f00, 0x8000 = -1.0, any;
+    the MAIN level 0x40, 0x7f, 0x80 = -1.0, any; splits 0-15). Before every
+    call the EMAC holds an interrupted task's state, ACC0 not zero. After
+    every page: the state of all eight slots and their 16 gains equal the
+    model's, the caller's EMAC state reads back as it went in, and every
+    register is as it was."""
+    s = rt.s
+    model = sg.Mirror(rt.table)
+    mirror_reset(rt)
+    rt.set_emac(*DIRTY_EMAC)
+    caller = rt.get_emac()
+    regs = {r: (0x10203040 + 0x01010101 * i) & 0xffffffff for i, r in enumerate(rt.REGS)}
+    rng = random.Random(seed)
+    page, first, emac, kept = [0] * 64, None, None, None
+    for i in range(n):
+        if i == 0 or rng.random() > 0.33:
+            page = random_page(rng)
+        send_page(rt, i % 4, page)
+        rt.set_emac(*DIRTY_EMAC)
+        out = rt.call("stems_mirror", **regs)
+        if emac is None and rt.get_emac() != caller:
+            emac = (i, rt.get_emac(), caller)
+        if kept is None and any(out[r] != v for r, v in regs.items()):
+            kept = (i, {r: hex(out[r]) for r, v in regs.items() if out[r] != v})
+        want = model.step(page)
+        state, gq = mirror_read(rt)
+        if state != model.state or gq != want:
+            first = (i, state[0], model.state[0], gq[0][:4], want[0][:4])
+            break
+    check(f"mirror: {n} pages, every slot's state and gains equal the model", first is None,
+          f"first difference (page, mirror, model, gains, model's): {first}" if first else "")
+    check("mirror: the caller's MACSR, ACC0 and ACCEXT01 come back", emac is None,
+          f"page, after, before: {emac}" if emac else f"{tuple(hex(v) for v in caller)}")
+    check("mirror: every register comes back", kept is None, f"page, changed: {kept}" if kept else "")
+    check("mirror: no page index jump counted", rt.r32(s["stems_lvskip"]) == 0)
+
+
+@unit
+def mirror_cache_mark(rt):
+    """The target cache marks every entry stale with the key 0xffffffff when
+    the MAIN level changes. A slot whose level and index words are both
+    0xffff has that key for real: it must still get its own target (0: the
+    index is below the table), not the stale one."""
+    model = sg.Mirror(rt.table)
+    mirror_reset(rt)
+    page = [0] * 64
+    for k in range(8):
+        page[4 * k + 1], page[4 * k + 2] = 0x7f00, 0x7f00
+    page[0x29] = 0x40
+    send_page(rt, 0, page)
+    rt.call("stems_mirror")
+    model.step(page)
+    page = list(page)
+    page[1], page[2], page[0x29] = 0xffff, 0xffff, 0x7f      # slot 0's key is the stale mark
+    send_page(rt, 1, page)
+    rt.call("stems_mirror")
+    model.step(page)
+    state, _ = mirror_read(rt)
+    check("mirror_cache_mark: a real key of 0xffffffff gets its own target", state[0] == model.state[0],
+          f"mirror {state[0]}, model {model.state[0]}")
+
+
+@unit
+def mirror_idx4(rt):
+    """The fourth frame writes the sent index 4, then 0 (STEM_REC.md 18.1).
+    A 4 seen between the two is not a page: nothing changes, nothing is
+    counted, and the 0 that follows is mirrored as the wrap it is."""
+    s = rt.s
+    mirror_reset(rt)
+    rng = random.Random(7)
+    for i in range(4):
+        send_page(rt, i, random_page(rng))
+        rt.call("stems_mirror")
+    before = (mirror_read(rt), rt.r32(s["stems_gqn"]), rt.r32(s["stems_lvlast"]))
+    rt.w32(LV_SENT, 4)
+    rt.call("stems_mirror")
+    after = (mirror_read(rt), rt.r32(s["stems_gqn"]), rt.r32(s["stems_lvlast"]))
+    check("mirror_idx4: an index of 4 changes nothing", after == before,
+          f"gqn {before[1]} -> {after[1]}, lvlast {before[2]} -> {after[2]}")
+    send_page(rt, 0, random_page(rng))
+    rt.call("stems_mirror")
+    check("mirror_idx4: the 0 after it is a page, and no jump", rt.r32(s["stems_gqn"]) == before[1] + 1
+          and rt.r32(s["stems_lvskip"]) == 0, f"gqn {rt.r32(s['stems_gqn'])}, skip {rt.r32(s['stems_lvskip'])}")
 
 
 if __name__ == "__main__":

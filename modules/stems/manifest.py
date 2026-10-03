@@ -26,6 +26,8 @@ sector-0 copies.
 MENU's root (29 Sep 2026); the ledger refuses one that does, by name.
 """
 
+import pathlib
+
 from remix.schema import Category, Detour, DramRegion, Gate, Kind, Linked, Module, Poke, Proof, TableGrow
 
 # The per-frame routine's only call site, inside the audio interrupt at
@@ -50,6 +52,21 @@ ROOT_DESC = 0x400CBD8C
 ROOT_ROWS = 0x400CC698
 ROOT_N, ROW_WORDS = 4, 6
 
+# Core 0's gain table (X:0x6c00, 258 words, 3 bytes each, little-endian)
+# from the USER'S stock slice at build time: the OS reuses the RAM the
+# image holds it in after the DSP upload (docs/firmware/STEM_REC.md 18.4),
+# and the repository carries no Elektron byte.
+STOCK_SLICE = pathlib.Path(__file__).resolve().parents[2] / "out/raw/section_3_MAIN_OS.bin"
+GTAB_OFF, GTAB_LEN = 0x400EA18A - 0x40000400, 258 * 3
+
+
+def gtab_inc(modules):
+    """remix.inc for stems.s: the label stems_gtab and the table's bytes."""
+    return ("| remix.inc -- STEM REC's copy of core 0's gain table\n"
+            "        .global stems_gtab\n"
+            "stems_gtab:\n"
+            f"        .incbin \"{STOCK_SLICE}\", {GTAB_OFF:#x}, {GTAB_LEN}\n")
+
 MODULE = Module(
     name="stems",
     key="STEM REC",
@@ -58,7 +75,7 @@ MODULE = Module(
     proof=Proof.HARDWARE, proof_note="Yves's MKII, 30 Sep 2026 (STEMS1): T1-T8, about two minutes",
     doc="MAIN MENU > STEMS: every track to the card while the sequencer plays "
         "(streamed: 16-bit, up to 60 min).",
-    linked=(Linked("stems", "modules/stems/stems.s", dram=True),),
+    linked=(Linked("stems", "modules/stems/stems.s", dram=True, include=gtab_inc),),
     detours=(Detour(FRAME_SITE, FRAME_STOCK, "stems", "stems_frame_hook",
                     "per-frame tap: the enabled tracks into the ring, then the stock routine",
                     kind="jsr", pad_to=8),
