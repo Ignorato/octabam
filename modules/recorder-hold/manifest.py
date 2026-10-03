@@ -18,6 +18,14 @@ repeated once. It acts only on a recorder-buffer voice (+0x15 negative)
 reading forward at exactly END; every other fetch, and any index beyond END,
 is stock.
 
+After a second transport start the recording stays one sample shorter than
+the window and the recorder is past END when the voice reaches it, so the
+copies' cap on a buffer being recorded into (0x4000871e plain, 0x400085e0
+crossfade) comes out at 0 at index END and stock stops the voice and
+zero-fills the frame; the fetch never sees END. Two more caves sit on the
+caps (hold_guard.s, hold_xguard.s): at exactly END they copy one sample
+from END - 1 instead.
+
 Measured in the port: README.md.
 
 Assemble (from the repo root, for the .include): `m68k-elf-as -mcpu=5475
@@ -65,6 +73,26 @@ MODULE = Module(
             hook_addr=0x4000854e,
             hook_stock=bytes.fromhex("2e00" "4fef0010" "4a84"),    # move.l d0,d7 / lea (16,sp),sp / tst.l d4
             report_note=" (as above, the crossfade copy's second read)",
+        ),
+        CavePatch(
+            label="hold cave (copy guard)",
+            cave_addr=None,
+            pinned=bytes.fromhex("588f93c0b3c26c00000424094a826e000040b3fc00000000660000364a816f000030202a006453806b0000262f012f002f0a206effbc4e90508f0c8040a955e06700000c4a816f00000626007401221f4ef94000871e"),
+            source="modules/recorder-hold/hold_guard.s",
+            pool_base_literals=1,
+            hook_addr=0x40008716,
+            hook_stock=bytes.fromhex("93c0" "b3c2" "6c02"),        # suba.l d0,a1 / cmpa.l d2,a1 / bge.s
+            report_note=" (the copy's cap at END while the recorder writes the buffer: END - 1 once, not a stop)",
+        ),
+        CavePatch(
+            label="hold cave (crossfade guard)",
+            cave_addr=None,
+            pinned=bytes.fromhex("588f9a80ba826c00000424054a826e0000604a856600005a4a846f0000544a816f00004e4a2a001766000046202a006453806b00003c2f012f002f0a206effbc4e90508f0c8040a955e0670000224a816f00001c2a2a0064baaa0048660000042640baaa004c660000042e007401221f4ef9400085e0"),
+            source="modules/recorder-hold/hold_xguard.s",
+            pool_base_literals=1,
+            hook_addr=0x400085d8,
+            hook_stock=bytes.fromhex("9a80" "ba82" "6c02"),        # sub.l d0,d5 / cmp.l d2,d5 / bge.s
+            report_note=" (the crossfade copy's cap at END, as above)",
         ),
     ),
 )
