@@ -44,5 +44,6 @@ Each carries one module, or one combination, for that module's gates: `make chec
 | [`usb-out-master`](usb-out-master/README.md) | stock + USB MIDI + USB AUDIO OUT MASTER (2 ch: track 8). | port-gated |
 | [`usb-out-tracks`](usb-out-tracks/README.md) | stock + USB MIDI + USB AUDIO OUT TRACKS (16 ch: the tracks). | port-gated |
 | [`usb-out-tracks-main-cue`](usb-out-tracks-main-cue/README.md) | stock + USB MIDI + USB AUDIO (20 ch: tracks, MAIN, CUE). | port-gated |
+| [`wave`](wave/README.md) | WAVE + SCALE QUANTIZER + CC MAP / SCENES P2 / PLOCKS P2 + USB out, on stock. | local render: `tools/verify/verify_wave.py`; not flashed |
 | [`waveload`](waveload/README.md) | CF METER + WAVE LOAD on stock: T8's FX2 BURN = K 4-voice wave engines per frame interrupt, read over USB. | on hardware: image 92, Sam's MKII, 3 Oct 2026 |
 | [`waveload-port`](waveload-port/README.md) | waveload without the idle loop: the port gate for the wave engines in the frame interrupt. | port-gated: the load path under the port |
