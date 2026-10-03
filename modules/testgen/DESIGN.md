@@ -17,7 +17,7 @@ An Octabam FX2 insert that **replaces** its track's audio with an exact, reprodu
 | SINE | A sine at FREQ | Phase accumulator plus a polynomial sine; THD target below -100 dB |
 | SWEEP | An exponential (Farina) sine sweep, 20 Hz to 20 kHz over LEN seconds, then 1 s of silence, repeating | The phase law is exact (a 48-bit increment grown by a constant ratio each sample, modelled bit for bit in the reference); deconvolution separates the linear response from the harmonics. The silence lets a path's tail ring out and marks where each period starts |
 | PINK | Pink noise (WHITE through Kellet's 3-pole filter) | Seeded; -3 dB/octave within 0.3 dB/octave, every octave band within 1 dB of the fit, 40 Hz to 16 kHz |
-| WHITE | White noise from a 24-bit linear congruential generator | Seeded and exact: the reference reproduces it within 1 LSB |
+| WHITE | White noise from a 46-bit linear congruential generator, one per channel | Seeded and exact: the reference reproduces each channel within 1 LSB; L and R independent |
 | IMPULSE | A one-sample impulse every LEN/4 seconds | Exact |
 
 Every MODE restarts from the same state when the module initialises (on load or a mode change), so a capture can be compared sample-accurately against the reference.
@@ -36,7 +36,7 @@ Every MODE restarts from the same state when the module initialises (on load or 
 
 - No per-sample division, log or exp: the sweep's increment is multiplied by a constant ratio each sample (exponential law), in 48-bit precision; the sine is a short odd polynomial on a quarter wave (five rounded MACs); levels come from a table per block.
 - No buffers, no lookahead: an insert on any track, cheap: 80 cycles a sample at most (SWEEP).
-- Size: it runs in PLATE REV's 594 words. The first full build was one word over; the impulse period is now computed from the sweep length instead of read from a table (581 words: 390 of code, 191 of table); with FINE and A440, 584 (392 and 192: the sine core became a shared subroutine to make room).
+- Size: it runs in PLATE REV's 594 words. The first full build was one word over; the impulse period is now computed from the sweep length instead of read from a table (581 words: 390 of code, 191 of table); with FINE and A440, 584 (392 and 192: the sine core became a shared subroutine to make room); with the 46-bit stereo noise, 588 (396 and 192: short-form compares, one restart routine for init and proc, one noise routine for both channels).
 - Output replaces the input: a THRU track becomes a signal source.
 
 ## The reference (testgen_ref.py)

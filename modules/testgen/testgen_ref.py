@@ -42,7 +42,9 @@ def inverse_filter(f1, f2, T):
 
 
 # ---- what the module generates, exactly (the DSP's integer laws) ----------------
-LCG_A, LCG_C, LCG_SEED = 1664525, 1013904223 % (1 << 24), 1     # x' = A x + C mod 2^24
+NOISE_A, NOISE_C, NOISE_M = 0x5DEECE66D, 11, 1 << 46         # x' = A x + C mod 2^46 (drand48's A)
+NOISE_SEED_L = 0x2A5F31 << 23
+NOISE_JUMP = 0x3243F6A8885                                      # R starts this many steps ahead of L
 SWEEP_F2, SWEEP_GAP = 20000.0, 44100                            # end frequency, 1 s of silence
 SWEEP_INC0 = 7609                                               # 20.0007 Hz, the start increment
 IMPULSE_UNIT = 11025                                            # LEN step t: a period of (t+1)/4 s
@@ -53,24 +55,43 @@ def len_seconds(t):
     return t + 1
 
 
-def white_q23(n, seed=LCG_SEED):
-    """The module's WHITE before LEVL: a 24-bit LCG, each new state read as a signed sample."""
+def _jump(k):
+    """The generator's map advanced k steps, as (multiplier, increment)."""
+    a, c, ba, bc = 1, 0, NOISE_A, NOISE_C
+    while k:
+        if k & 1:
+            a, c = (ba * a) % NOISE_M, (ba * c + bc) % NOISE_M
+        ba, bc = (ba * ba) % NOISE_M, (ba * bc + bc) % NOISE_M
+        k >>= 1
+    return a, c
+
+
+def noise_seed(channel):
+    """The state each channel's generator restarts from: L's seed, and R's 0x3243f6a8885 steps on."""
+    if channel == "L":
+        return NOISE_SEED_L
+    a, c = _jump(NOISE_JUMP)
+    return (a * NOISE_SEED_L + c) % NOISE_M
+
+
+def white_q23(n, channel="L"):
+    """The module's WHITE before LEVL, exactly: each new state's top 23 bits, 2 x_hi - 2^23."""
     out = np.empty(n, np.int64)
-    x = seed
+    x = noise_seed(channel)
     for i in range(n):
-        x = (LCG_A * x + LCG_C) & 0xFFFFFF
-        out[i] = x - (1 << 24) if x & 0x800000 else x
+        x = (NOISE_A * x + NOISE_C) % NOISE_M
+        out[i] = 2 * (x >> 23) - (1 << 23)
     return out
 
 
-def white(n, seed=LCG_SEED):
+def white(n, channel="L"):
     """Uniform in [-1, 1): the module's generator as a float."""
-    return white_q23(n, seed) / float(1 << 23)
+    return white_q23(n, channel) / float(1 << 23)
 
 
-def pink(n, seed=LCG_SEED):
+def pink(n, channel="L"):
     """Paul Kellet's economy pink filter (3 poles) on the module's white noise, scaled by 0.11."""
-    w = white(n, seed)
+    w = white(n, channel)
     b0 = b1 = b2 = 0.0
     out = np.empty(n)
     for i, x in enumerate(w):
@@ -183,7 +204,7 @@ if __name__ == "__main__":
     sl, dev = octave_slope_db(pink(1 << 20))
     print(f"pink noise: slope {sl:+.2f} dB/octave, worst band deviation {dev:.2f} dB"); ok &= abs(sl + 3.0) < 0.3 and dev < 1.0
     sl, dev = octave_slope_db(white(1 << 20))
-    print(f"white noise (the 24-bit LCG): slope {sl:+.2f} dB/octave, worst band deviation {dev:.2f} dB"); ok &= abs(sl) < 0.3
+    print(f"white noise (the 46-bit generator): slope {sl:+.2f} dB/octave, worst band deviation {dev:.2f} dB"); ok &= abs(sl) < 0.3
     sd = sweep_dsp(0, 2 * int(FS) + SWEEP_GAP)
     h = deconvolve(sd[:2 * int(FS) + SWEEP_GAP], f1=SWEEP_INC0 * FS / (1 << 24), T=1.0)
     pk = int(np.argmax(np.abs(h)))

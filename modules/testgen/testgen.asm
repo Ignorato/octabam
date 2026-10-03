@@ -19,9 +19,14 @@
 ;   inc += (inc_hi * d) >> 12, d = (r - 1) * 2^35 from SWD: 20.0007 Hz to
 ;   20 kHz in N = (t + 1) s, then 1 s of silence with p and inc held at
 ;   their start, repeating.
-; ---- WHITE: x' = 1664525 x + 1013904223 mod 2^24, each state a sample -----------
-;   (the low word of the product: mpy, then asr 1 undoes the fractional doubling)
+; ---- WHITE: x' = 0x5DEECE66D x + 11 mod 2^46, the sample its top 23 bits -------
+;   (drand48's multiplier; a period of 2^46 samples, 50 years). x is held as two
+;   23-bit halves, so every product is of non-negative operands. L and R each
+;   have their own generator, R's started 0x3243f6a8885 steps ahead of L's.
 ; ---- PINK: Kellet's three poles on WHITE, scaled by 0.11 (-14.4 dBFS RMS) ------
+;   one filter per channel.
+; With CHAN L+R the noise channels are independent; with MONO, L-R, L or R
+; both channels take L's generator (R = L, R = -L, or one side).
 ; ---- IMPULSE: one full-scale sample every (t + 1) / 4 s, from sample 0 ---------
 ;
 ; Every signal is full scale, then L = s * gL, R = s * gR, from LEVL and CHAN
@@ -34,18 +39,21 @@
 ;               third-octave centres, and A 440 between 400 and 500)
 ;   +160 SWN    the sweep's length in samples, LEN step t = LEN >> 3
 ;   +176 SWD    the sweep's growth, (r - 1) * 2^35
-; The module (392 words) and its table fill PLATE REV's 594 words but for 10.
+; The module (396 words) and its table fill PLATE REV's 594 words but for 6.
 ;
 ; ---- r7 slots ---------------------------------------------------------------
 ; persistent, set at init and on a restart:
 ;   $00 phase   $03 sweep inc (integer)   $04 sweep inc (fraction)
-;   $05 sweep sample count   $06 the noise state   $07 $08 $09 pink's poles
-;   $0a impulse countdown
-; persistent, the knobs last block (init sets -1, so the first block restarts):
+;   $05 sweep sample count   $0a impulse countdown
+;   $20.. L's noise: $20 x high, $21 x low, $22 $23 $24 pink's poles
+;   $28.. R's noise, the same
+; (a restart zeroes $00..$2f, then sets the sweep's start and the seeds)
+; persistent, the knobs last block (0 after a restart):
 ;   $01 FREQ index   $02 MODE   $0b LEN step
 ; per block (FINE is applied here, without a restart, so tuning by ear is smooth):
 ;   $10 gL   $11 gR   $12 the sine's inc   $13 the sweep's N   $14 d
 ;   $15 the impulse period less one   $16 N + the gap
+;   $17 non-zero: independent noise channels (CHAN L+R)   $18 non-zero: PINK
 ;
 ; Every multiply is x0,x0, x1,x0 or x0,y1 (the signed encodings). The sine
 ; rounds (mpyr, macr, rnd): truncation left the peak 5 LSB short of full
@@ -55,24 +63,13 @@
 ; ---------------------------------------------------------------------------
 
 init:
-        move    #>$ffffff,x0            ; no knob has this index: the first
-        move    x0,x:(r7+$01)           ; block restarts every generator
-        move    x0,x:(r7+$02)
-        move    x0,x:(r7+$0b)
-        clr     a
-        move    a,x:(r7+$00)            ; every slot a loop reads before it
-        move    a,x:(r7+$03)            ; writes (verify_dirtystate)
-        move    a,x:(r7+$04)
-        move    a,x:(r7+$05)
-        move    a,x:(r7+$06)
-        move    a,x:(r7+$07)
-        move    a,x:(r7+$08)
-        move    a,x:(r7+$09)
-        move    a,x:(r7+$0a)
-        rts
+        move    #>$ffffff,m5
+        bsr     tg_rst                  ; every slot, so the first block need
+        rts                             ; not restart (its knob memories read 0)
 
 proc:
 ; ---- per block: MODE (slot 6), FREQ, LEN; any change restarts -----------------
+        move    #>$ffffff,m5
         move    #0,y0
         clr     b                       ; the change flag
         move    x:(r6+$c),a             ; MODE, slot 6: the value in bits 22..16
@@ -85,43 +82,37 @@ proc:
         move    x:(r7+$02),a
         cmp     x1,a
         tne     x0,b                    ; changed (x0 is non-zero)
-        move    x1,x:(r7+$02)
-        move    x:(r6+$1),a             ; FREQ: value/128 in bits 22..16
+        move    x:(r6+$1),a             ; FREQ: the step in bits 22..16
         and     #>$7f0000,a
         asr     #$10,a,a
         move    #>$00001f,x0            ; 31, the last step (20 kHz)
         cmp     x0,a
         tgt     x0,a
-        move    a1,y1
+        move    a1,y1                   ; FREQ
         move    x:(r7+$01),a
         cmp     y1,a
         tne     x0,b
-        move    y1,x:(r7+$01)
         move    x:(r6+$2),a             ; LEN: the step t in bits 22..19
         and     #>$780000,a
         asr     #$13,a,a
-        move    a1,y1
+        move    a1,y0                   ; LEN
         move    x:(r7+$0b),a
-        cmp     y1,a
+        cmp     y0,a
         tne     x0,b
-        move    y1,x:(r7+$0b)
         tst     b
         beq     tg_keep
-        clr     a                       ; restart every generator
-        move    a,x:(r7+$00)
-        move    a,x:(r7+$04)
-        move    a,x:(r7+$05)
-        move    a,x:(r7+$07)
-        move    a,x:(r7+$08)
-        move    a,x:(r7+$09)
-        move    a,x:(r7+$0a)
-        move    #>$001db9,x0            ; 7609: the sweep starts at 20.0007 Hz
-        move    x0,x:(r7+$03)
-        move    #>$000001,x0            ; the noise seed
-        move    x0,x:(r7+$06)
+        bsr     tg_rst                  ; keeps x1, y1, y0
 tg_keep:
+        move    x1,x:(r7+$02)
+        move    y1,x:(r7+$01)
+        move    y0,x:(r7+$0b)
+        clr     b                       ; PINK?
+        move    #>$000002,x0
+        move    x1,a
+        cmp     x0,a
+        teq     x0,b
+        move    b,x:(r7+$18)
 ; ---- the tables -------------------------------------------------------------------
-        move    #>$ffffff,m5
         move    #>$fab1e0,r4            ; the table base
         move    r4,r5
         move    x:(r7+$01),a
@@ -168,7 +159,7 @@ tg_keep:
         move    a,x:(r7+$16)
         move    x:(r7+$13),a            ; the impulse period, N/4 = (t + 1) 11025,
         asr     #$2,a,a                 ; less one
-        sub     #>$000001,a
+        sub     #1,a
         move    a,x:(r7+$15)
         move    #>$000010,n5            ; + 16, SWD
         move    (r5)+n5
@@ -182,7 +173,8 @@ tg_keep:
         move    (r5)+n5
         move    p:(r5),b                ; g
         move    b,y1
-; ---- CHAN (slot 8): L+R, L, R, L and inverted R -------------------------------
+; ---- CHAN (slot 8): L+R, L, R, L and inverted R, MONO -------------------------
+        move    #0,y0
         neg     b
         move    b,x0
         move    x0,x:(r7+$11)           ; -g, for a moment
@@ -190,34 +182,57 @@ tg_keep:
         and     #>$7f0000,a
         asr     #$10,a,a                ; chan
         move    y1,b                    ; gL = g
-        move    #>$000002,x0
-        cmp     x0,a
+        cmp     #2,a
         teq     y0,b                    ; R only -> 0
         move    b,x:(r7+$10)
         move    x:(r7+$11),x0           ; -g
         move    y1,b                    ; gR = g
-        move    #>$000001,y1
-        cmp     y1,a
+        cmp     #1,a
         teq     y0,b                    ; L only -> 0
-        move    #>$000003,y1
-        cmp     y1,a
+        cmp     #3,a
         teq     x0,b                    ; L and inverted R -> -g
         move    b,x:(r7+$11)
+        clr     b                       ; independent noise channels: L+R only
+        move    #>$000001,x0
+        tst     a
+        teq     x0,b
+        move    b,x:(r7+$17)
         move    #$1,n0
 ; ---- the mode's loop ---------------------------------------------------------------
         move    x:(r7+$02),a            ; mode
         tst     a
         beq     tg_sin
-        move    #>$000001,x0
-        cmp     x0,a
+        cmp     #1,a
         beq     tg_swp
-        move    #>$000002,x0
-        cmp     x0,a
-        beq     tg_pnk
-        move    #>$000003,x0
-        cmp     x0,a
-        beq     tg_wht
-        bra     tg_imp
+        cmp     #4,a
+        beq     tg_imp
+; ---- PINK and WHITE: one generator per channel ---------------------------------
+        move    r7,b
+        add     #32,b
+        move    b1,r5                   ; L's block; R's is 8 on
+        move    #>$000008,n5
+        do      n7,>tg_xnse
+        bsr     tg_gen
+        move    x0,y0                   ; L
+        move    (r5)+n5
+        bsr     tg_gen
+        move    (r5)-n5
+        move    x0,b                    ; R, its own
+        move    x:(r7+$17),a
+        tst     a
+        teq     y0,b                    ; not L+R: R takes L's sample
+        move    y0,x0
+        move    b,y0
+        move    x:(r7+$10),y1           ; gL
+        mpyr    x0,y1,a
+        move    a,x:(r0)+
+        move    y0,x0
+        move    x:(r7+$11),y1           ; gR
+        mpyr    x0,y1,a
+        move    a,x:(r0)+
+tg_xnse:
+        nop
+        rts
 
 ; ---- SINE ---------------------------------------------------------------------------
 tg_sin:
@@ -276,7 +291,7 @@ tg_swp:
         tge     x1,b                    ; inc -> 7609.0 (b0 cleared)
         move    b1,x:(r7+$03)
         move    b0,x:(r7+$04)
-        add     #>$000001,a             ; count + 1, back to 0 after the gap
+        add     #1,a                    ; count + 1, back to 0 after the gap
         move    x:(r7+$16),y1
         cmp     y1,a
         teq     x0,a
@@ -292,76 +307,6 @@ tg_xswp:
         nop
         rts
 
-; ---- PINK ---------------------------------------------------------------------------
-tg_pnk:
-        do      n7,>tg_xpnk
-        move    x:(r7+$06),x0           ; white, as WHITE
-        move    #>$19660d,y1            ; 1664525
-        mpy     x0,y1,a
-        asr     #$1,a,a
-        move    a0,x0
-        move    x0,a
-        add     #>$6ef35f,a             ; 1013904223 mod 2^24
-        move    a1,x:(r7+$06)
-        move    a1,x1                   ; w
-        move    #>$7fb2ff,x0            ; 0.99765
-        move    x:(r7+$07),y1
-        mpy     x0,y1,a
-        move    #>$016502,x0            ; 0.0990460 * 0.11
-        macr    x1,x0,a
-        move    a,x:(r7+$07)
-        move    #>$7b4396,x0            ; 0.963
-        move    x:(r7+$08),y1
-        mpy     x0,y1,a
-        move    #>$042cca,x0            ; 0.2965164 * 0.11
-        macr    x1,x0,a
-        move    a,x:(r7+$08)
-        move    #>$48f5c3,x0            ; 0.57
-        move    x:(r7+$09),y1
-        mpy     x0,y1,a
-        move    #>$0ed268,x0            ; 1.0526913 * 0.11
-        macr    x1,x0,a
-        move    a,x:(r7+$09)
-        move    x:(r7+$07),a
-        move    x:(r7+$08),x0
-        add     x0,a
-        move    x:(r7+$09),x0
-        add     x0,a
-        move    #>$029a1c,x0            ; 0.1848 * 0.11
-        macr    x1,x0,a
-        move    a,x0                    ; s (limited)
-        move    x:(r7+$10),y1           ; gL
-        mpyr    x0,y1,a
-        move    a,x:(r0)+
-        move    x:(r7+$11),y1           ; gR
-        mpyr    x0,y1,a
-        move    a,x:(r0)+
-tg_xpnk:
-        nop
-        rts
-
-; ---- WHITE --------------------------------------------------------------------------
-tg_wht:
-        do      n7,>tg_xwht
-        move    x:(r7+$06),x0
-        move    #>$19660d,y1            ; 1664525
-        mpy     x0,y1,a                 ; 2 A x
-        asr     #$1,a,a                 ; A x: its low word is A x mod 2^24
-        move    a0,x0
-        move    x0,a
-        add     #>$6ef35f,a             ; 1013904223 mod 2^24
-        move    a1,x:(r7+$06)           ; (a1 is not limited: mod 2^24)
-        move    a1,x0                   ; s
-        move    x:(r7+$10),y1           ; gL
-        mpyr    x0,y1,a
-        move    a,x:(r0)+
-        move    x:(r7+$11),y1           ; gR
-        mpyr    x0,y1,a
-        move    a,x:(r0)+
-tg_xwht:
-        nop
-        rts
-
 ; ---- IMPULSE ------------------------------------------------------------------------
 tg_imp:
         do      n7,>tg_ximp
@@ -371,7 +316,7 @@ tg_imp:
         tst     a
         teq     x0,b                    ; 0 -> full scale
         move    b,y0                    ; s
-        sub     #>$000001,a
+        sub     #1,a
         move    x:(r7+$15),x0           ; the period less one
         tmi     x0,a
         move    a1,x:(r7+$0a)
@@ -417,4 +362,80 @@ tg_core:
         asl     #$1,a,a                 ; s
         rnd     a
         move    a,x0                    ; (limited)
+        rts
+
+; ---- one noise sample from the block at r5: x0 = WHITE, or PINK if $18 -------------
+; Straight-line: the pink filter runs in WHITE too, and a Tcc picks the sample.
+; x' = a x + c mod 2^46, x = xh 2^23 + xl, a = ah 2^23 + al:
+;   a x + c = (al xl + c) + 2^23 (ah xl + al xh)  mod 2^46
+; Fractional products are doubled: a1:a0 = 2 (al xl + c) leaves its top part
+; (>> 23) in a1 and twice its low 23 bits in a0.
+; Uses a, b, x0, x1, y1.
+tg_gen:
+        move    x:(r5+$1),x0            ; xl
+        move    #>$000bbd,y1            ; ah
+        mpy     x0,y1,b                 ; 2 ah xl
+        move    #>$6ce66d,y1            ; al
+        clr     a
+        move    #>$000016,a0            ; 2c
+        mac     x0,y1,a                 ; 2 (al xl + c)
+        move    x:(r5),x0               ; xh
+        mac     x0,y1,b                 ; 2 (ah xl + al xh)
+        asr     #$1,b,b                 ; its low word, mod 2^24
+        move    b0,x0
+        add     x0,a                    ; the high half, before mod 2^23
+        move    a0,b
+        lsr     #$1,b                   ; xl'
+        move    b1,x:(r5+$1)
+        and     #>$7fffff,a             ; xh'
+        move    a1,x:(r5)
+        lsl     #$1,a                   ; the sample: 2 xh' - 2^23
+        eor     #>$800000,a
+        move    a1,x1                   ; w (a1 is not limited)
+        move    #>$7fb2ff,x0            ; 0.99765
+        move    x:(r5+$2),y1
+        mpy     x0,y1,a
+        move    #>$016502,x0            ; 0.0990460 * 0.11
+        macr    x1,x0,a
+        move    a,x:(r5+$2)
+        move    a,b                     ; the sum of the poles
+        move    #>$7b4396,x0            ; 0.963
+        move    x:(r5+$3),y1
+        mpy     x0,y1,a
+        move    #>$042cca,x0            ; 0.2965164 * 0.11
+        macr    x1,x0,a
+        move    a,x:(r5+$3)
+        add     a,b
+        move    #>$48f5c3,x0            ; 0.57
+        move    x:(r5+$4),y1
+        mpy     x0,y1,a
+        move    #>$0ed268,x0            ; 1.0526913 * 0.11
+        macr    x1,x0,a
+        move    a,x:(r5+$4)
+        add     b,a
+        move    #>$029a1c,x0            ; 0.1848 * 0.11
+        macr    x1,x0,a
+        move    a,x0                    ; pink (limited)
+        move    x1,b                    ; white
+        move    x:(r7+$18),a
+        tst     a
+        tne     x0,b                    ; PINK -> the filtered sample
+        move    b,x0
+        rts
+
+; ---- restart every generator: zero $00..$2f, then the sweep's start and the seeds --
+; Uses a, x0, r5.
+tg_rst:
+        move    r7,r5
+        clr     a
+        rep     #$30
+        move    a,x:(r5)+
+        move    #>$001db9,x0            ; 7609: the sweep starts at 20.0007 Hz
+        move    x0,x:(r7+$03)
+        move    #>$2a5f31,x0            ; L's seed, x = $2a5f31 2^23
+        move    x0,x:(r7+$20)
+        move    #>$343f62,x0            ; R's: L's advanced 0x3243f6a8885 steps
+        move    x0,x:(r7+$28)
+        move    #>$66953f,x0
+        move    x0,x:(r7+$29)
         rts

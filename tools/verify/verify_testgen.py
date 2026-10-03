@@ -24,9 +24,12 @@ SWEEP          -> the reference's exact phase law (testgen_ref.sweep_phases) wit
                     4 LSB over two whole periods (1 s) and one (16 s); the P table's
                     growth constants equal the reference's; deconvolved through an
                     identity path it is flat within 0.5 dB, 40 Hz-16 kHz
-WHITE          -> the reference's 24-bit generator within 1 LSB; flat within 0.3 dB/octave
-PINK           -> -3 dB/octave within 0.3, no octave band more than 1 dB off the fit;
-                    the float filter on the same noise within -60 dB; RMS within 0.1 dB
+WHITE          -> each channel the reference's 46-bit generator within 1 LSB; flat;
+                    with CHAN L+R, L and R independent (cross-correlation, the pairs'
+                    2-D histogram); no short cycles in the low bits; MONO, L-R, L
+PINK           -> per channel: -3 dB/octave within 0.3, no octave band more than 1 dB off
+                    the fit, the float filter on the same noise within -60 dB, RMS within
+                    0.1 dB; L and R independent; MONO
 IMPULSE        -> full scale (within 1 LSB) at exactly the reference's positions, zero
                     everywhere else
 an invalid MODE byte -> SINE
@@ -221,6 +224,8 @@ L, R = render(N, LEVL=127, CHAN=2)
 check("CHAN R: L silent", np.any(R) and not np.any(L))
 L, R = render(N, LEVL=127, CHAN=3)
 check("CHAN L and inverted R: R = -L within 1 LSB", np.any(L) and int(np.max(np.abs(L + R))) <= 1)
+L, R = render(N, LEVL=127, CHAN=4)
+check("CHAN MONO: both channels equal", np.array_equal(L, R) and np.any(L))
 
 MODE = {name: i for i, name in enumerate(MAN.MODE_LABELS)}
 GAP = REF.SWEEP_GAP
@@ -244,25 +249,59 @@ band = (fr >= 40) & (fr <= 16000)
 flat = float(np.max(np.abs(20 * np.log10(Hm[band] / np.median(Hm[band])))))
 check(f"SWEEP 1 s deconvolved through an identity path: flat within {flat:.2f} dB, 40 Hz-16 kHz", flat < 0.5)
 
-# ---- WHITE ----------------------------------------------------------------------------------------
+# ---- WHITE --------------------------------------------------------------------------------------
+def xcorr_max(x, y, lags=64):
+    x = (x - x.mean()) / x.std(); y = (y - y.mean()) / y.std(); n = len(x)
+    return max(abs(float(np.mean(x[max(0, -g):n - max(0, g)] * y[max(0, g):n - max(0, -g)])))
+               for g in range(-lags, lags + 1))
+
+
 L, R = render(N, LEVL=127, MODE=MODE["WHIT"])
-w = REF.white_q23(len(L))
-e = int(np.max(np.abs(L - w)))
-check("WHITE: the reference's 24-bit generator within 1 LSB", e <= 1 and np.array_equal(L, R), f"(worst {e} LSB)")
-L, _ = render(1 << 20, LEVL=127, MODE=MODE["WHIT"])
-sl, dev = REF.octave_slope_db(np.asarray(L, float))
+eL = int(np.max(np.abs(L - REF.white_q23(len(L), "L"))))
+eR = int(np.max(np.abs(R - REF.white_q23(len(R), "R"))))
+check("WHITE: each channel is the reference's 46-bit generator within 1 LSB", eL <= 1 and eR <= 1,
+      f"(L {eL}, R {eR} LSB)")
+L, R = render(1 << 20, LEVL=127, MODE=MODE["WHIT"])
+xl, xr = np.asarray(L, float), np.asarray(R, float)
+sl, dev = REF.octave_slope_db(xl)
 check(f"WHITE: slope {sl:+.3f} dB/octave, worst octave band {dev:.2f} dB off", abs(sl) < 0.3 and dev < 1.0)
+floor = 1 / math.sqrt(len(xl))
+cx = xcorr_max(xl, xr)
+check(f"WHITE L+R: L and R independent, |cross-correlation| at most {cx:.4f} over lags -64..64 (1/sqrt(n) = {floor:.4f})",
+      cx < 5 * floor)
+z = (xl - xl.mean()) / xl.std()
+ca = max(abs(float(np.mean(z[:-g] * z[g:]))) for g in range(1, 65))
+check(f"WHITE: |autocorrelation| at lags 1..64 at most {ca:.4f}", ca < 5 * floor)
+H, _, _ = np.histogram2d(xl[:1 << 19], xr[:1 << 19], bins=64)
+e = (1 << 19) / 4096
+chi = float(((H - e) ** 2 / e).sum())
+check(f"WHITE L+R: (L, R) pairs fill the square evenly, chi-square {chi:.0f} (4095 degrees of freedom)",
+      abs(chi - 4095) < 5 * math.sqrt(2 * 4095))
+lo = np.asarray(L, np.int64) & 0xFFFF
+check("WHITE: the low 16 bits do not repeat every 65,536 samples (the old 24-bit generator's did)",
+      not np.array_equal(lo[:65536], lo[65536:131072]))
+for c, label, want in ((4, "MONO", "R = L"), (3, "L-R", "R = -L")):
+    L, R = render(N // 4, LEVL=127, MODE=MODE["WHIT"], CHAN=c)
+    ok = np.array_equal(R, L) if c == 4 else int(np.max(np.abs(L + R))) <= 1
+    check(f"WHITE CHAN {label}: {want}, L its own generator", ok and int(np.max(np.abs(L - REF.white_q23(len(L))))) <= 1)
+L, R = render(N // 4, LEVL=127, MODE=MODE["WHIT"], CHAN=1)
+check("WHITE CHAN L: R silent", np.any(L) and not np.any(R))
 
 # ---- PINK -----------------------------------------------------------------------------------------
 L, R = render(1 << 20, LEVL=127, MODE=MODE["PINK"])
-x = np.asarray(L, float) / (1 << 23)
-sl, dev = REF.octave_slope_db(x)
-check(f"PINK: slope {sl:+.3f} dB/octave, worst octave band {dev:.2f} dB off", abs(sl + 3.0) < 0.3 and dev < 1.0)
-ref = REF.pink(len(x))
-err = 20 * math.log10(np.sqrt(np.mean((x - ref) ** 2)) / np.sqrt(np.mean(ref ** 2)))
-lv = 20 * math.log10(np.sqrt(np.mean(x ** 2))) - 20 * math.log10(np.sqrt(np.mean(ref ** 2)))
-check(f"PINK: the float filter on the same noise within {err:.1f} dB; RMS {rms_db(L):.2f} dBFS ({lv:+.3f} dB)",
-      err < -60 and abs(lv) < 0.1 and np.array_equal(L, R))
+for ch, out in (("L", L), ("R", R)):
+    x = np.asarray(out, float) / (1 << 23)
+    sl, dev = REF.octave_slope_db(x)
+    ref = REF.pink(len(x), ch)
+    err = 20 * math.log10(np.sqrt(np.mean((x - ref) ** 2)) / np.sqrt(np.mean(ref ** 2)))
+    lv = 20 * math.log10(np.sqrt(np.mean(x ** 2))) - 20 * math.log10(np.sqrt(np.mean(ref ** 2)))
+    check(f"PINK {ch}: slope {sl:+.3f} dB/octave (worst band {dev:.2f} dB off); the float filter within {err:.1f} dB; "
+          f"RMS {rms_db(out):.2f} dBFS ({lv:+.3f} dB)", abs(sl + 3.0) < 0.3 and dev < 1.0 and err < -60 and abs(lv) < 0.1)
+w = np.diff(np.asarray(L, float)), np.diff(np.asarray(R, float))   # whitened, so the lags are independent
+cx = xcorr_max(*w)
+check(f"PINK L+R: independent, |cross-correlation| of the differenced channels at most {cx:.4f}", cx < 5 * floor)
+L, R = render(N // 4, LEVL=127, MODE=MODE["PINK"], CHAN=4)
+check("PINK CHAN MONO: R = L", np.array_equal(L, R) and np.any(L))
 
 # ---- IMPULSE ---------------------------------------------------------------------------------------
 for t in (0, 3):
@@ -278,7 +317,7 @@ for t in (0, 3):
 check("an invalid MODE byte (7) plays SINE", np.array_equal(render(N // 4, LEVL=127, MODE=7)[0], render(N // 4, LEVL=127, MODE=0)[0]))
 
 # ---- every knob at both ends renders ----------------------------------------------------------
-for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("FINE", 127), ("MODE", 4), ("CHAN", 3)):
+for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("FINE", 127), ("MODE", 4), ("CHAN", 4)):
     for v in (0, hi):
         render(N // 8, noise, **{name: v})
 check("every knob at both ends renders", True)

@@ -48,7 +48,7 @@ _W = Formatter.WIDE_STEPPED
 _BLANK = Param(b"", 0)
 
 MODE_LABELS = ("SINE", "SWEP", "PINK", "WHIT", "IMPL")
-CHAN_LABELS = ("L+R", "L", "R", "L-R")
+CHAN_LABELS = ("L+R", "L", "R", "L-R", "MONO")
 FREQ_LABELS = ("20", "25", "31.5", "40", "50", "63", "80", "100", "125", "160", "200", "250", "315",
                "400", "A440", "500", "630", "800", "1k", "1k25", "1k6", "2k", "2k5", "3k15", "4k", "5k",
                "6k3", "8k", "10k", "12k5", "16k", "20k")
@@ -80,8 +80,8 @@ MODULE = Module(
         Param(b"MODE", 0, 5, active=True, formatter=_S, labels=MODE_LABELS,
               doc="the signal: SINE, SWEEP (20 Hz-20 kHz), PINK, WHITE, IMPULSE"),
         _BLANK,
-        Param(b"CHAN", 0, 4, active=True, formatter=_S, labels=CHAN_LABELS,
-              doc="where it goes: both, L only, R only, or L and inverted R (polarity)"),
+        Param(b"CHAN", 0, 5, active=True, formatter=_S, labels=CHAN_LABELS,
+              doc="L+R (noise independent per side), L, R, L and inverted R, MONO (same both sides)"),
         _BLANK, _BLANK, _BLANK,
     ),
     mode_slot=6,
