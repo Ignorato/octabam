@@ -1,6 +1,6 @@
 # TRANSIENT: design note
 
-2026-10-03. Status: DSP56300 implementation in `transient.asm`, render-gated against `transient_ref.py` (`tools/verify/verify_transient.py`); not flashed.
+2026-10-03. Status: DSP56300 implementation in `transient.asm`, render-gated against `transient_ref.py` (`tools/verify/verify_transient.py`), port-gated by `verify_set`, and run on a MKII (image OCTABAM2, 3 Oct 2026; README "On the unit").
 
 ## What it does
 

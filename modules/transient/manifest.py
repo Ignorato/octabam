@@ -50,14 +50,14 @@ MODULE = Module(
     key="TRANSIENT",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.PORT, proof_note="`verify_set` on a project made on a MKII (T2 FX2, 3 Oct 2026); its own render gate; not on hardware",
+    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, image OCTABAM2 (remix transient), 3 Oct 2026",
     doc="Transient shaper: ATCK and SUST reshape onsets and tails, level-independent.",
     menu=MenuEntry(
         fx2_id=0x0f,
         donor_desc=0x400d58b8,        # DARK REV
         abbr=b"TRNS",
-        fullname=b"Transient",
-        build_tag=True,
+        fullname=b"TRANSIENT",      # all caps, as the stock names
+        build_tag=False,              # OS VERSION (OCTABAM<N>) traces the image
     ),
     params=(
         Param(b"ATCK", 64, 128, active=True, formatter=_B,
