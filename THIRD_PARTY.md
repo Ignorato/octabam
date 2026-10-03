@@ -47,7 +47,7 @@ the laws (`modules/modulation/README.md` "Sources"):
 | `modules/octakit` (Octakit) | https://github.com/emuyia/ems-octakit | MIT, Copyright (c) 2026 June Kiff |
 | `tools/remix/loader.S` (the DRAM loader) | derived from Octakit's `runtime/loader.S` | MIT, Copyright (c) 2026 June Kiff |
 | `modules/synth`, `modules/quantizer`, `modules/direct-jump`, `modules/tuner` (SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP, TUNER) | https://github.com/timhastie/octatrick-modules (one submodule, four wrappers; pinned to `v2.9` = `525f4b1`) | MIT, Tim Hastie 2026 |
-| `modules/direct-jump-kyoti`, `modules/batch-bugfixes`, `modules/reload-from-project`, `modules/quantize-live-rec-toggle`, `modules/erase-empty-trigless-locks`, `modules/mute-modes` (DIRECT_JUMP_KYOTI, BATCH_BUGFIXES, RELOAD_FROM_PROJECT, QUANTIZE_LIVE_REC_TOGGLE, ERASE_EMPTY_TRIGLESS_LOCKS, MUTE_MODES) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (one repository, six submodules and wrappers; pinned to `7f80b85`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
+| `modules/direct-jump-kyoti`, `modules/batch-bugfixes`, `modules/reload-from-project`, `modules/quantize-live-rec-toggle`, `modules/erase-empty-trigless-locks`, `modules/mute-modes` (DIRECT_JUMP_KYOTI, BATCH_BUGFIXES, RELOAD_FROM_PROJECT, QUANTIZE_LIVE_REC_TOGGLE, ERASE_EMPTY_TRIGLESS_LOCKS, MUTE_MODES) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (one repository, six submodules and wrappers; pinned to `77f132f`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
 
 `modules/kits-reload`, `modules/scenes-kits`, `modules/cc-map`,
 `modules/tempo-sync`, `modules/mode-defaults`, `modules/flex-seekbind*`,
