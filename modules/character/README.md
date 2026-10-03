@@ -52,6 +52,15 @@ Page layout history: 16 Sep 2026 put MIX bottom right and SAT top left.
   `make verify-ident MOD=character` against the build before it: 9 of 9
   settings bit-identical with KEY = SELF (the matrix's `max` case sets
   KEY = T1 and differs by design).
+- KEY latency under the port (3 Oct 2026, `ot_emu` with a project on the
+  bottleservice image, Characters on T3 and T6 FX1, `--dsp-lazy 0`): the
+  counter T3 reads (core 1, after the host) and the one T6 reads (core 0)
+  are the value the host wrote in the SAME block, every frame of the last
+  12. On core 0 the read lands 21,828 port instructions after the host's
+  write, of 66,560 per frame (about a third of a block). Same block on both
+  cores in the port; the chip's cross-core timing is not the port's, so a
+  core 0 running ahead of core 1 reads the previous block's level (one
+  block, 16 samples) -- not measured on hardware.
 - Cost with KEY: 938 words on each payload (881 before), 244 cycles per
   sample by the pricer (241 before).
 - `tools/verify/verify_character.py`: defaults bit-exact; MIX=0 bit-exact
