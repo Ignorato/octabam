@@ -58,8 +58,10 @@ writes its tables.
   16-sample block, `verify_wave`); four on one core 2,301 a sample. A core
   has about 3,120 cycles a sample usable and stock's own work is about
   1,410 (`docs/firmware/CHIP.md`), so two or three WAVE tracks a core fit
-  beside light FX; four do not. Instructions are not cycles; not measured
-  on the unit.
+  beside light FX; four do not. `cycle_count` prices one instance at
+  1,082 cycles a sample, a ceiling that charges a pitch measurement (two
+  23-step normalisations) on every sample where the carrier crosses zero
+  once a period. Instructions are not cycles; not measured on the unit.
 - **The carrier track:** its audio is the synth's input and is replaced.
 
 ## How it differs from CHOMPI WAVE
@@ -92,8 +94,8 @@ writes its tables.
 | eight instances (both cores) | each bit-identical to its solo render |
 | instructions | peak 9,213 a block, one instance |
 
-Every instruction form in `wave.asm` has a site in a stock payload
-(`out/dsp/payload_*.asm`); `cmp b,a` has two, with a parallel move.
+Every instruction form in `wave.asm` (97) has a site in a stock payload
+(`out/dsp/payload_*.asm`).
 
 ## Design
 
@@ -105,9 +107,11 @@ Every instruction form in `wave.asm` has a site in a stock payload
 - **Silence:** an envelope at zero clears the filters and writes zero.
   `mpy` truncates toward −∞, so a filter with no input settles on a small
   offset (736 LSB of DC at the output before this, measured).
-- **dsp_asm:** it encodes no backward branch and no long `jmp`/`jsr`, so
-  every loop is a DO and every call a forward `bsr`; labels are `wv` plus
-  two digits so none is another's prefix. `generate.py` writes
+- **dsp_asm:** it encodes no backward branch and no long `jmp`/`jsr`, and
+  `cycle_count` prices only straight-line code, counted DOs and forward
+  skips (`; CYCLES_FORWARD_BRANCHES`), so the pitch measurement is inline
+  behind a forward skip and every loop is a counted DO; labels are `wv`
+  plus two digits so none is another's prefix. `generate.py` writes
   `wave.asm`; `verify_wave` refuses a stale one.
 
 ## Open

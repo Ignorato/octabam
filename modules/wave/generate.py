@@ -201,23 +201,25 @@ def generate():
          "        rts", "")
 
 
-# ---- reciprocal: b = x in [2^-23, 1), r3 = 0 on entry -----------------------
-# Out: y1 = (1/xn) / 2 with xn = x 2^s in [.5, 1), s in r3. dsp_asm encodes
-# no backward branch and no long jmp/jsr, so every loop is a DO and every
-# call a forward bsr.
-def recip():
-    skip, end = "wv03", "wv04"
-    emit("wv05:",
-         "        move    #>$400000,x0",
+# ---- reciprocal, inline: b = x in [2^-23, 1), a = the value shifted with it
+# Normalises b to [.5, 1) in a counted DO (at most 23 doublings) and doubles
+# a alongside; then y1 = (1/xn) / 2 by a seed and three Newton steps. a comes
+# out in the slot `keep`. dsp_asm encodes no backward branch and no long
+# jmp/jsr, and cycle_count prices a counted DO and a forward skip, so it is
+# written inline with those alone.
+def recip(keep):
+    skip, end = L(), L()
+    emit("        move    #>$400000,x0",
          f"        do      #$17,>{end}                 ; normalise: at most 23 doublings",
          "        cmp     x0,b",
          f"        bge     {skip}",
          "        asl     #$1,b,b",
-         "        move    (r3)+",
+         "        asl     #$1,a,a",
          f"{skip}:",
          "        nop",
          "        nop",
          f"{end}:",
+         f"        move    a,{x(keep)}",
          f"        move    b,{x(XN)}                  ; xn",
          "        move    b,x1",
          f"        move    #>{q(1.4571 / 2)},a",
@@ -234,42 +236,21 @@ def recip():
              "        mpy     x0,y1,a",
              "        asl     #$1,a,a",
              "        move    a,y1")
-    emit("        rts", "")
 
 
-# ---- a zero crossing: x1 = this sample (halved), prev in PREV ----------------
+# ---- a rising zero crossing, inline: x1 = this sample (halved) ---------------
 def crossing():
-    f1, fset, reject, sh, shd = "wv06", "wv07", "wv08", "wv09", "wv00"
-    shn = "wv97"
-    emit("wv99:",
-         f"        move    x1,{x(SUM)}                  ; this sample, while x1 is in use",
+    reject = L()
+    emit(f"        move    x1,{x(SUM)}                  ; this sample, while x1 is in use",
          f"        move    {x(PREV)},a",
-         "        neg     a",
-         "        move    a,y1                        ; num = -prev",
+         "        neg     a                           ; num = -prev",
          f"        move    {x(SUM)},b",
          f"        move    {x(PREV)},x0",
-         "        sub     x0,b                        ; den = cur - prev",
-         "        move    y1,a",
-         "        cmp     b,a",
-         f"        blt     {f1}",
-         "        move    #>$7fffff,a                 ; cur = 0: f = 1",
-         f"        bra     {fset}",
-         f"{f1}:",
-         "        move    #>$0,r3",
-         f"        move    y1,{x(GAIN)}                 ; num, across the call",
-         "        bsr     >wv05",
-         f"        move    {x(GAIN)},a",
-         "        move    r3,n3",
-         "        move    n3,b",
-         "        tst     b",
-         f"        beq     {shn}",
-         f"        do      n3,>{shn}",
-         "        asl     #$1,a,a                     ; num 2^s",
-         f"{shn}:",
-         "        move    a,x0",
+         "        sub     x0,b                        ; den = cur - prev >= num")
+    recip(GAIN)                                       # num 2^s parked in GAIN
+    emit(f"        move    {x(GAIN)},x0",
          "        mpy     x0,y1,a",
-         "        asl     #$1,a,a                     ; f = num / den",
-         f"{fset}:",
+         "        asl     #$1,a,a                     ; f = num / den (1.0 saturates)",
          "        move    a,x0",
          f"        move    {x(CNT)},a",
          "        asl     #$8,a,a                     ; CNT x 256",
@@ -288,25 +269,16 @@ def crossing():
          "        cmp     x0,a",
          f"        ble     {reject}",
          "        move    a,b",
-         "        move    #>$0,r3",
-         "        bsr     >wv05",
-         "        move    y1,a                        ; inc = y/2 >> (13 - s)",
-         "        move    r3,b",
-         "        move    #>$00000d,x0",
-         "        sub     x0,b",
-         "        neg     b",
-         "        move    b1,n3",
-         "        tst     b",
-         f"        beq     {shd}",
-         f"        do      n3,>{shd}",
-         "        asr     #$1,a,a",
-         f"{shd}:",
+         "        move    #>$000001,a                 ; 2^-23, doubled with the normalisation")
+    recip(ROOT)                                       # 2^(s-23) parked (ROOT is per block, free here)
+    emit(f"        move    {x(ROOT)},x0",
+         "        mpy     x0,y1,a",
+         "        asl     #$a,a,a                     ; inc = 2^32 / (T x 256)",
          f"        move    a,{x(INCC)}",
          f"{reject}:",
          "        clr     a",
          f"        move    a,{x(CNT)}",
-         f"        move    {x(SUM)},x1",
-         "        rts", "")
+         f"        move    {x(SUM)},x1")
 
 
 # ---- one voice ---------------------------------------------------------------
@@ -571,9 +543,9 @@ def proc():
          f"        move    {x(E2)},a",
          "        move    #>$001000,x0",
          "        cmp     x0,a",
-         f"        blt     {nc}",
-         "        bsr     >wv99",
-         f"{nc}:",
+         f"        blt     {nc}")
+    crossing()
+    emit(f"{nc}:",
          f"        move    x1,{x(PREV)}")
     # filter LFO, the control, the coefficients
     tri(LPH, FINC, FDEP)
@@ -684,7 +656,9 @@ def proc():
          "        asl     #$4,a,a                     ; x 8 at LEVL 64",
          "        move    a,x:(r0)+",
          "        move    a,x:(r0)+",
-         f"        bra     {end}",
+         f"        move    {x(E2)},a",
+         "        tst     a",
+         f"        bne     {end}                       ; sounding: past the silence path",
          f"{sil}:",
          "        clr     a")
     for k in range(4):
@@ -701,7 +675,8 @@ def proc():
          "        rts", "")
 
 
-HEADER = f"""; WAVE -- a 4-voice wavetable synth as an FX2 effect: a port of CHOMPI
+HEADER = f"""; CYCLES_FORWARD_BRANCHES
+; WAVE -- a 4-voice wavetable synth as an FX2 effect: a port of CHOMPI
 ; WAVE's voice (CHOMPI-Club/CHOMPI a73d732, MIT; LICENSE-CHOMPI) onto the DSP.
 ; Generated by generate.py; edit that.
 ;
@@ -727,8 +702,6 @@ def build():
     init()
     proc()
     generate()
-    crossing()     # after proc and before recip: every bsr and branch is forward
-    recip()
     return HEADER + "\n" + "\n".join(lines) + "\n"
 
 
