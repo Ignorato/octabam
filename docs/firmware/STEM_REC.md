@@ -7473,8 +7473,20 @@ the page `[0x46104d00]` or, on one path, that index less a count of
 frames.
 
 A THRU track trails its raw input. T1's mixed sample is input A from 80
-samples (five frames) earlier, at 65/256 of its level (−11.9 dB, AMP VOL's
-default): correlation 1.000 at that lag, under 0.42 at any other lag from −64 to 399.
+samples (five frames) earlier, at 65/256 of its level (−11.9 dB):
+correlation 1.000 at that lag, under 0.42 at any other lag from −64 to
+399. The factor is AMP VOL's default (64). With T1's AMP VOL byte (page
+1, `ot_project.P1_OFF − 3`; the template reads 64 there) at 127 in every
+part, MAIN rose by 3.94, which is 256/65 (3 Oct 2026, `verify_stems`
+`clip` with and without it, LEVEL and MAIN 127).
+
+Under the port, a THRU track stops growing at an input of about 0.254 of
+full scale: a full-scale noise input gave T1 a read-back peak of 0.0645,
+where the test WAV at −12 dBFS gives 0.0635. So one THRU track can't clip
+MAIN under the port: at AMP VOL, LEVEL and MAIN 127 it peaks at 0.984 of
+full scale. Whether the unit's inputs saturate the same way isn't
+measured. `verify_stems` `clip` checks the top of the range (0.95 of full
+scale and up), and `verify_stems_units` `track16_rails` checks the rails.
 
 No USB module reads the inputs on the ColdFire: USB AUDIO IN injects the
 host's channels on the DSP side, so this ring has no second measurement
