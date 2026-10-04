@@ -20,7 +20,7 @@ Each module's own page has the technical detail and the measurements.
 | | [KITS RELOAD](../../../modules/kits-reload/README.md) | the bridge that lets MIDI SCENES' Part Reload run beside Octakit's kit reload |
 | MIDI | [CC MAP](../../../modules/cc-map/README.md) | CC 62–67 reach the FX2 effect's page-2 knobs, CC 68–73 the FX1 effect's (stock reaches page 1 only) |
 | | [SCENES KITS](../../../modules/scenes-kits/README.md) | the bridge that lets CC MAP and Octakit share the CC dispatch |
-| Recorder | [RECORDER SPACING](../../../modules/recorder-spacing/README.md), [RECORDER HOLD](../../../modules/recorder-hold/README.md), [FLEX SEEK BIND](../../../modules/flex-seekbind/README.md), [FLEX SEEK BIND CTR](../../../modules/flex-seekbind-ctr/README.md) | the recorder loop click fixed: a fixed-RLEN take is exactly as long as the gap to the next arm, and a re-trig on the buffer seeks the voice instead of restarting it |
+| Recorder | [RECORDER LOOP FIX](../../../modules/recorder-loop-fix/README.md) | the recorder loop click fixed: a fixed-RLEN take is exactly as long as the gap to the next arm, a re-trig on the buffer seeks the voice instead of restarting it, and sound-on-sound repeats the last sample where it played a zero |
 | | [RLEN PLEN](../../../modules/rlen-plen/README.md) | RLEN value PLEN: one loop of the track's pattern, so TRIG ONE + QREC PLEN records the next pass and stops |
 | Machines | [REPITCH](../../../modules/repitch/README.md) (repeat98) | TSTR REPITCH: a track follows the project tempo by playback speed, like a turntable |
 | Fixes | [LOFI AMF FIX](../../../modules/lofi-amf-fix/README.md) (Bryan T) | stock LO-FI's AMF knob no longer jumps the pitch backwards |
@@ -34,9 +34,10 @@ The fourteen stock FX2 effects are listed, so the chooser is stock's.
   runs the chained dispatch; `make check REMIX=mods` green (REPITCH's
   playback checks skip while the port's output carries no audio).
 - **On hardware, in subsets:** Octakit + MIDI SCENES + KITS RELOAD as
-  `ok-ms` (midisc's author's unit, 14 Sep 2026); the recorder fixes as
-  OCTABAM83/84 (Sam's MKII, 12 Sep 2026; RECORDER HOLD and RLEN PLEN
-  port-gated only); REPITCH as OCTABAM81 (repeat98's MKII, 16 Sep 2026);
+  `ok-ms` (midisc's author's unit, 14 Sep 2026); RECORDER LOOP FIX's
+  self-loop caves as OCTABAM83/84 (Sam's MKII, 12 Sep 2026) and all of it
+  as Bryan T's sos-capture BUILD=95 (3 Oct 2026); RLEN PLEN port-gated
+  only; REPITCH as OCTABAM81 (repeat98's MKII, 16 Sep 2026);
   USB AUDIO as image 64 (Sam's MKII, 25 Sep 2026).
 - **Not flashed as a whole.** Not measured: MIDI CCs through the chained
   dispatch on hardware; midisc's Part save/reload menu hooks against

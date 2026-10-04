@@ -24,7 +24,7 @@ REMIX = Remix(
     doc="Every ColdFire mod in one image on the stock effects: MIDI SCENES, "
         "Octakit, the recorder fixes, REPITCH, USB MIDI + AUDIO (octatrick's three cannot join it).",
     modules=("MIDI SCENES", "OCTAKIT", "LOFI AMF FIX", "CC MAP", "SCENES KITS", "KITS RELOAD",
-             "FLEX SEEK BIND", "FLEX SEEK BIND CTR", "RECORDER SPACING", "RECORDER HOLD", "RLEN PLEN",
+             "RECORDER LOOP FIX", "RLEN PLEN",
              "REPITCH",
              "USB MIDI", "USB AUDIO OUT TRACKS MAIN CUE",
              "FILTER", "EQUALIZER", "DJ EQ", "PHASER", "FLANGER", "CHORUS",

@@ -1,4 +1,4 @@
-| RECORDER SPACING -- hooked at 0x40006e0c, the length converter's last three
+| RECORDER LOOP FIX spacing -- hooked at 0x40006e0c, the length converter's last three
 | instructions (replayed). Makes a fixed-RLEN recording exactly as long as
 | the gap to the next arm, from the current arm alone:
 |     q, r = divmod(RLEN x 15,876,000, tempo24)      RLEN recovered from L

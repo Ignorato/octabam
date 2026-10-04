@@ -50,8 +50,8 @@ the laws (`modules/modulation/README.md` "Sources"):
 | `modules/direct-jump-kyoti`, `modules/batch-bugfixes`, `modules/reload-from-project`, `modules/quantize-live-rec-toggle`, `modules/erase-empty-trigless-locks`, `modules/mute-modes` (DIRECT_JUMP_KYOTI, BATCH_BUGFIXES, RELOAD_FROM_PROJECT, QUANTIZE_LIVE_REC_TOGGLE, ERASE_EMPTY_TRIGLESS_LOCKS, MUTE_MODES) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (one repository, six submodules and wrappers; pinned to `77f132f`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
 
 `modules/kits-reload`, `modules/scenes-kits`, `modules/cc-map`,
-`modules/tempo-sync`, `modules/mode-defaults`, `modules/flex-seekbind*`,
-`modules/recorder-spacing` and `modules/lofi-amf-fix` are written here
+`modules/tempo-sync`, `modules/mode-defaults`, `modules/recorder-loop-fix`
+and `modules/lofi-amf-fix` are written here
 (sambanks; the LO-FI fix from Bryan T's finding) and carry `LICENSE`.
 
 ## Emulator and panel from a fork of this repository
