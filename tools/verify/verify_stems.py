@@ -1707,6 +1707,11 @@ def wrap8(s):
 RING_FRAMES_8 = RING_SIZE // 512     # 16,384
 
 
+# overflow8's run: the 4 MiB ring was written out by frame 9,000; the 8 MiB
+# ring takes twice the frames, as OVERFLOW_FRAMES did for T1.
+OVERFLOW8_FRAMES = 18400
+
+
 def overflow8(s):
     """The overflow check at eight tracks: the writer held, the ring made to
     look nearly full; the guard trips at 100 frames, eight complete files
@@ -1718,9 +1723,10 @@ def overflow8(s):
     pokes = [(s["stems_hold"] + 3, 1)]
     pokes += [(s["stems_rd"] + i, (rd >> (24 - 8 * i)) & 0xff) for i in range(4)]
     pokes += [(s["stems_rd_off"] + i, (rd_off >> (24 - 8 * i)) & 0xff) for i in range(4)]
-    log, _, card, words, _ = port(s, 9200, stop_at=OVERFLOW_STOP, tag="overflow8", mask=0xFF,
+    log, _, card, words, _ = port(s, OVERFLOW8_FRAMES, stop_at=OVERFLOW_STOP, tag="overflow8", mask=0xFF,
                                   fixture=FIXTURE_THRU, pokes=pokes, dump_blocks=False,
-                                  calls=((9000, s["stems_action"]),), extra=watched(s, span=28))
+                                  calls=((OVERFLOW8_FRAMES - 200, s["stems_action"]),),
+                                  extra=watched(s, span=28))
     st, status, _, wr, rd_end, _ = words
     ws = writes(s, log, span=28)
     statuses = [val for x, w, val in ws if w == 1]
