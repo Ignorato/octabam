@@ -1743,12 +1743,15 @@ def overflow8(s):
 
 
 # A card slower than eight tracks need: 22.58 MB/s / 32 = 0.71 MB/s against
-# 1.41 (STEM_REC.md 15.4). A 5-second take then fills the ring to about 92%
-# without overflowing (the sweep, 28 Sep 2026), and the writer needs about
-# 5.6 s more to drain its ~7,500 frames of 512 bytes.
+# 1.41 (STEM_REC.md 15.4). A 5-second take filled the 4 MiB ring to about
+# 92% without overflowing (the sweep, 28 Sep 2026), and the writer needed
+# about 5.6 s more to drain its ~7,500 frames of 512 bytes. The 8 MiB ring
+# (piece 5) peaked at 7,573 of 16,384 frames after the same 5 s
+# (v5-p5-big-long.log), so the take and the drain double. Latency 32 is
+# the quickest way to the fill: the card's rate equals the fill's.
 SLOW_LATENCY = 32
-SLOW_STOP = 13781                  # 5 s of frames
-SLOW_FRAMES = SLOW_STOP + 17000
+SLOW_STOP = 27562                  # 10 s of frames
+SLOW_FRAMES = SLOW_STOP + 34000
 
 
 def slow8(s):
