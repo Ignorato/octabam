@@ -172,6 +172,18 @@ The hook runs 743 instructions per frame at eight tracks today
 of a frame's 95,800 CPU cycles; memory waits make it more. Above it, the multiply moves into the writer task, and the plan
 says what that costs the ring.
 
+Amended 4 Oct 2026 (Yves): measured, the hook runs 5,579 instructions a
+frame at eight tracks and 16 bits, 6,219 at 24 bits, and 7,415 with
+everything on at 24 bits; 1,001 while nothing records (the gain
+mirror). The 5,000 was a margin chosen here, not a measured limit: how
+much of a frame the stock firmware leaves free on the unit isn't known.
+Yves chose to test the measured cost on the unit (flash C) rather than
+optimise first or move the multiply. The ceiling becomes 7,415, the
+measured worst case, so that any later growth is a failing check and a
+new decision. Flash C's tests look for the load: the menu's response,
+clicks in the audio, and the sequencer's and MIDI's timing during a full
+24-bit take.
+
 ## 5. Probes first
 
 Before any feature code, each measured under the port and written into
@@ -228,8 +240,9 @@ own declared in the manifest, all run by `make check REMIX=stems`:
 6. **The menu** (`verify_stems_menu.py`, MKII and MKI): the new rows, the
    last source kept, every row locked while recording, the boot defaults,
    every text inside the pane.
-7. **The cost.** At most 5,000 hook instructions per frame, everything on
-   at 24 bits (the coverage method of `STEM_REC.md` 10.0).
+7. **The cost.** At most 7,415 hook instructions per frame, everything on
+   at 24 bits (the coverage method of `STEM_REC.md` 10.0; 5,000 until 4
+   Oct 2026, section 4.6).
 8. **Nothing that passes today breaks:** the eight-track THRU takes,
    overflow, FAT32, the card-speed sweep, the static checks.
 
@@ -261,7 +274,9 @@ stereo.
 
 - **The gains may not replicate exactly.** Guarded by the probes and the
   stop condition.
-- **More work in the audio interrupt.** Guarded by gate 7's ceiling.
+- **More work in the audio interrupt.** Guarded by gate 7's ceiling
+  against growth; whether the unit has room for it is flash C's test
+  (section 4.6).
 - **MAIN and CUE are single-buffered.** Channel 6 rewrites them every
   frame; read at the wrong moment they give the previous or next frame.
   Probe 5.
