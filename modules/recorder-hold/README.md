@@ -98,14 +98,29 @@ sample of that frame), measured with a write watch on the slot.
   every long-pass wrap is an exact repeat (the caves fire). Right after a
   recorder reallocation every long-pass wrap is one sample of digital
   zero, for the whole take; reproduced twice. The port reproduces this
-  with a second transport start, with or without the reallocation (above);
-  the fourth and fifth caves are not yet on the unit.
+  with a second transport start, with or without the reallocation (above).
+- Bryan T, 3 Oct 2026, `sos-capture` BUILD=95 (`cd017851`, five caves):
+
+  | take | long-pass wraps |
+  |---|---|
+  | 16 → 24-bit reallocation, PLAY | repeat, no zero |
+  | 24-bit off and on, reload, PLAY | repeat, no zero |
+  | STOP / PLAY, nothing changed (three takes) | repeat, no zero |
+  | steady state | repeat, no zero |
+  | RLEN 4 trigs 1/5/9/13 after a reallocation | skip / repeat pair once in 8 passes, no zero |
+  | 120 BPM RLEN 16 | no event at any wrap |
+
+  At 128 / RLEN 16 the repeat is where the loop's lag goes 82,687 →
+  82,688 and the skip where it goes back. Real audio at 128 / RLEN 16 and
+  at 224 / RLEN 4: no audible loop point.
 
 ## Open
 
-- The fourth and fifth caves on the unit.
-- Whether the port's second start (the transport start called while the
-  pattern plays) is what PLAY does on the unit after STOP.
+- Whether STOP / PLAY alone gives the zero on BUILD=94 (not run), and so
+  whether the port's second start is the unit's trigger.
+- The repeated sample is recorded into the buffer and replays at the wrap
+  every pass until the next pair rewrites it (Bryan T, RLEN 4: 35.2 % of
+  tone rms at the stored seam, 18.8 % at the skip).
 - Why a second transport start leaves the recording 82,687 samples on
   every pass.
 - The crossfade cap's wrapping layout (`+0x17` set) and reverse reads stay
