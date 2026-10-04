@@ -7,7 +7,8 @@ response. modules/testgen/README.md says what each signal is proved to be.
 
 SINE at ISO third-octave frequencies and A 440, with a fine tune, an exponential SWEEP (20 Hz to 20 kHz
 over LEN, then 1 s of silence, repeating), PINK and WHITE noise, and an
-IMPULSE train; LEVL in 0.5 dB steps, CHAN routing.
+IMPULSE train, a NEEDLE pulse train at FREQ and a DC offset; LEVL in 0.5 dB steps,
+CHAN routing. Buffer-free, so a remix may list it on FX1 too.
 """
 import math as _m
 
@@ -32,8 +33,8 @@ FREQS = (20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 440, 5
 #                     until LEVL is turned up (a full-level tone on insert, Ignorato's MKII)
 #   +128  FINC[32]    FREQ k -> the phase increment f / FS * 2^24 for FREQS[k]
 #                     (a cycle is 2^24; 1 kHz is 380436, 1000.0007 Hz)
-#   +160  SWN[16]     LEN step t = LEN >> 3 -> the sweep's length, (t + 1) s in samples
-#   +176  SWD[16]     the sweep's growth per sample, (r - 1) * 2^35, r^N = 20 kHz / 20.0007 Hz
+#   +160  SWD[16]     LEN step t = LEN >> 3 -> the sweep's growth per sample, (r - 1) * 2^35,
+#                     r^N = 20 kHz / 20.0007 Hz, N = (t + 1) 44100 (computed, not tabled)
 # The sine's polynomial, the noise generator and the pink filter are
 # immediates in testgen.asm; testgen_ref.py holds the same laws.
 LEVEL = (0,) + tuple(_q23(10 ** (-(127 - k) * 0.5 / 20)) for k in range(1, 128))
@@ -47,7 +48,7 @@ _S = Formatter.STEPPED
 _W = Formatter.WIDE_STEPPED
 _BLANK = Param(b"", 0)
 
-MODE_LABELS = ("SINE", "SWEP", "PINK", "WHIT", "IMPL")
+MODE_LABELS = ("SINE", "SWEP", "PINK", "WHIT", "IMPL", "NEDL", "DC")
 CHAN_LABELS = ("L+R", "L", "R", "L-R", "MONO")
 FREQ_LABELS = ("20", "25", "31.5", "40", "50", "63", "80", "100", "125", "160", "200", "250", "315",
                "400", "A440", "500", "630", "800", "1k", "1k25", "1k6", "2k", "2k5", "3k15", "4k", "5k",
@@ -59,7 +60,7 @@ MODULE = Module(
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
     proof=Proof.HARDWARE, proof_note="Ignorato's MKII, images OCTABAM4-6 (remix testgen), 3-4 Oct 2026; measured at the main outs",
-    doc="Measurement source: a sine, sweep, pink or white noise or impulses replace the track's audio.",
+    doc="Measurement source: a sine, sweep, pink or white noise, impulses, a needle pulse train or DC replace the track's audio.",
     menu=MenuEntry(
         fx2_id=0x17,
         donor_desc=0x400d58b8,        # DARK REV
@@ -77,8 +78,9 @@ MODULE = Module(
         Param(b"FINE", 64, 128, active=True, formatter=Formatter.BIPOLAR,
               doc="SINE fine tune: -64..+63 is -200..+197 cents, 3.125 a step; 0 = the FREQ step exactly"),
         _BLANK, _BLANK,
-        Param(b"MODE", 0, 5, active=True, formatter=_S, labels=MODE_LABELS,
-              doc="the signal: SINE, SWEEP (20 Hz-20 kHz), PINK, WHITE, IMPULSE"),
+        Param(b"MODE", 0, 7, active=True, formatter=_W, labels=MODE_LABELS,
+              doc="the signal: SINE, SWEEP (20 Hz-20 kHz), PINK, WHITE, IMPULSE, NEEDLE (a one-sample "
+                  "pulse train at FREQ), DC (a constant at LEVL)"),
         _BLANK,
         Param(b"CHAN", 0, 5, active=True, formatter=_S, labels=CHAN_LABELS,
               doc="L+R (noise independent per side), L, R, L and inverted R, MONO (same both sides)"),
@@ -87,7 +89,7 @@ MODULE = Module(
     mode_slot=6,
     dsp=DspSection(
         asm="modules/testgen/testgen.asm",
-        ptable=LEVEL + FINC + SWN + SWD,
+        ptable=LEVEL + FINC + SWD,
         priority=18,
         bus_role=BusRole.NONE,        # an insert
         ybase=YBase.NEVER,            # no buffers, nothing in the shared window

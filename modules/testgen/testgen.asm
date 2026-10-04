@@ -28,6 +28,11 @@
 ; With CHAN L+R the noise channels are independent; with MONO, L-R, L or R
 ; both channels take L's generator (R = L, R = -L, or one side).
 ; ---- IMPULSE: one full-scale sample every (t + 1) / 4 s, from sample 0 ---------
+; ---- NEEDLE: one full-scale sample every P samples, from sample 0, ---------------
+;   P = round(2^24 / inc), the whole period nearest FREQ and FINE: a strictly
+;   periodic train at FS / P (1 kHz is P = 44, 1002.27 Hz), its spectrum lines
+;   at FS / P and its multiples
+; ---- DC: full scale on every sample (IMPULSE with a period of one) ---------------
 ;
 ; Every signal is full scale, then L = s * gL, R = s * gR, from LEVL and CHAN
 ; per block. A change of MODE, FREQ or LEN restarts every generator, so a
@@ -37,8 +42,8 @@
 ;   +0   LEVEL  10^(-(127 - k)/40), k = 0..127 (0.5 dB steps, 127 = $7fffff)
 ;   +128 FINC   the phase increment of FREQ step k, k = 0..31 (the ISO
 ;               third-octave centres, and A 440 between 400 and 500)
-;   +160 SWN    the sweep's length in samples, LEN step t = LEN >> 3
-;   +176 SWD    the sweep's growth, (r - 1) * 2^35
+;   +160 SWD    the sweep's growth, (r - 1) * 2^35, LEN step t = LEN >> 3
+; (the sweep's length, (t + 1) 44100 samples, is computed)
 ; The module (396 words) and its table fill PLATE REV's 594 words but for 6.
 ;
 ; ---- r7 slots ---------------------------------------------------------------
@@ -76,7 +81,7 @@ proc:
         move    x:(r6+$c),a             ; MODE, slot 6: the value in bits 22..16
         and     #>$7f0000,a
         asr     #$10,a,a
-        move    #>$000004,x0
+        move    #>$000006,x0
         cmp     x0,a
         tgt     y0,a                    ; an invalid saved byte -> SINE
         move    a1,x1                   ; mode
@@ -151,21 +156,45 @@ tg_keep:
         move    a,x:(r7+$12)            ; the sine's inc
         move    r4,r5
         move    x:(r7+$0b),a
-        add     #>$0000a0,a             ; + 160, SWN
+        add     #>$0000a0,a             ; + 160, SWD
         move    a1,n5
-        move    (r5)+n5
-        move    p:(r5),a
-        move    a,x:(r7+$13)            ; N
-        add     #>$00ac44,a             ; + 44100, the gap
-        move    a,x:(r7+$16)
-        move    x:(r7+$13),a            ; the impulse period, N/4 = (t + 1) 11025,
-        asr     #$2,a,a                 ; less one
-        sub     #1,a
-        move    a,x:(r7+$15)
-        move    #>$000010,n5            ; + 16, SWD
         move    (r5)+n5
         move    p:(r5),x0
         move    x0,x:(r7+$14)           ; d
+        move    x:(r7+$0b),a            ; N = (t + 1) 44100
+        add     #1,a
+        move    a1,x0
+        move    #>$00ac44,y1
+        mpy     x0,y1,a                 ; 2 N, an integer in a1:a0
+        asr     a
+        move    a0,a
+        move    a,x:(r7+$13)            ; N
+        add     #>$00ac44,a             ; + 44100, the gap
+        move    a,x:(r7+$16)
+        move    x:(r7+$13),a            ; IMPULSE's period, N/4 = (t + 1) 11025,
+        asr     #$2,a,a                 ; less one
+        sub     #1,a
+        move    a,y0
+; NEEDLE: a period of P = round(2^24 / inc) samples, the whole period nearest
+; FREQ and FINE: (2^24 + inc/2) / inc, a 48-by-24 integer division.
+        move    x:(r7+$12),x0           ; inc, 0 < inc < 2^23
+        move    x0,b
+        asr     b                       ; inc/2
+        clr     a
+        move    b1,a0
+        move    #$1,a1                  ; 2^24 + inc/2 (a short immediate to a1 is an integer; a2 stays 0)
+        asl     a                       ; doubled for an integer quotient; C = 0
+        rep     #24
+        div     x0,a
+        move    a0,b                    ; P
+        sub     #1,b
+        move    x:(r7+$02),a            ; mode
+        cmp     #5,a
+        tne     y0,b                    ; not NEEDLE: IMPULSE's
+        move    #0,y0
+        cmp     #6,a
+        teq     y0,b                    ; DC: a period of one, every sample
+        move    b,x:(r7+$15)            ; the period less one
         move    r4,r5
         move    x:(r6+$0),a             ; LEVL: value/128 in bits 22..16
         and     #>$7f0000,a
@@ -205,8 +234,8 @@ tg_keep:
         beq     tg_sin
         cmp     #1,a
         beq     tg_swp
-        cmp     #4,a
-        beq     tg_imp
+        cmp     #3,a
+        bgt     tg_imp                  ; IMPULSE, NEEDLE, DC
 ; ---- PINK and WHITE: one generator per channel ---------------------------------
         move    r7,b
         add     #32,b
@@ -308,7 +337,7 @@ tg_xswp:
         nop
         rts
 
-; ---- IMPULSE ------------------------------------------------------------------------
+; ---- IMPULSE, NEEDLE and DC: one full-scale sample every period ($15 + 1) ----------
 tg_imp:
         do      n7,>tg_ximp
         clr     b
