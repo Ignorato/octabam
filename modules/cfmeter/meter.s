@@ -18,10 +18,10 @@
 |          refreshed from the Part).
 | m_iacc   idle counts, added by CF METER IDLE's loop (idle.s); 0 without it.
 |
-| The lane's FX2 page-2 words carry N (slots 6/7 = word $c, big-endian)
-| and the reference 8192 (slots 8/9 = word $d); the CF METER insert prints
-| them as a square wave, so N = 8192 x rms(L) / rms(R)
-| (tools/harness/cfmeter.py). The displayed slot k advances per segment:
+| The lane's FX2 page-2 words carry N (slots 6/7 = word $c, big-endian),
+| the reference 8192 (slots 8/9 = word $d) and the slot k (slots 10/11 =
+| word $e); the CF METER insert prints N as a square wave, so N = 8192 x
+| rms(L) / rms(R) (tools/harness/cfmeter.py). k advances per segment, 0..15:
 |
 |   k  N
 |   0  0 (sync)
@@ -32,6 +32,7 @@
 |   5  frame period (segment / interrupts), counts / 4
 |   6  the idle loop's shortest step, counts
 |   7  BURN, counts / 4
+|   8..15  0 here: the insert prints its own DSP meter (meter_out.asm)
 |
 | With WAVE LOAD in the remix (remix.inc sets WAVE_LOAD), BURN is K
 | instead: m_isr renders K 4-voice wave engines (cl_load) where it would
@@ -100,7 +101,8 @@ m_tail:
         bne.s   3f                              | another effect's page 2: untouched
         lea     P2VAL,%a0
         move.w  m_out,(%a0)+
-        move.w  #REF,(%a0)
+        move.w  #REF,(%a0)+
+        move.w  m_kw,(%a0)                      | +0x3c/+0x3d = k
 3:
         movem.l (%sp),%d0-%d7/%a0-%a6           | displaced: moveml %sp@,%d0-%fp
         lea     252(%sp),%sp                    | displaced
@@ -151,11 +153,15 @@ m_close:
         move.l  %d0,4(%a0)                      | 1: reference
         move.l  m_k,%d3
         addq.l  #1,%d3
-        moveq   #7,%d0
+        moveq   #15,%d0
         and.l   %d0,%d3
         move.l  %d3,m_k
+        move.w  %d3,m_kw
+        moveq   #0,%d0
+        cmp.l   #8,%d3
+        bcc.s   4f                              | 8..15: the insert's own slots
         move.l  (%a0,%d3.l*4),%d0
-        move.w  %d0,m_out
+4:      move.w  %d0,m_out
         rts
 
 m_clamp:
@@ -175,4 +181,5 @@ m_istep: .long  0
 m_k:    .long   0
 m_val:  .zero   32
 m_out:  .word   0
+m_kw:   .word   0
         .balign 4
