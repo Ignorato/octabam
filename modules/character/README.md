@@ -1,15 +1,16 @@
 # `character` — CHARACTER
 
-The station that dirties or tightens a track: fold, saturate, tilt,
-compress, width, mix.
+The station that dirties or tightens a track: fold, texture, saturate,
+tilt, compress, width, mix.
 
 On stock LO-FI's id 0x1c, FX1 only: an FX2 instance runs as a dry pass
 (`Claims(fx1_only=True)`, `verify_character.py`); the FX2 chooser hides the
-row. The chain is fixed: fold → saturate → tilt → compress → width → mix,
+row. The chain is fixed: fold → texture → saturate → tilt → compress →
+width → mix,
 distortion before dynamics. The saturation and compressor laws are
 JClones' (MIT; TapeHead, DaTube, OInflator, AC1), re-derived here (Sources,
 below). Defaults are a bit-exact passthrough (DRV 0, FOLD 0, TONE 64, COMP
-0, MIX 127, WDTH 64; KEY SELF, KLVL 64): a part that stored LO-FI runs
+0, MIX 127, WDTH 64, TXTR 0; KEY SELF, KLVL 64): a part that stored LO-FI runs
 this. A part's stored bytes are stock LO-FI's until `ot_project.py
 stamp-defaults` writes ours.
 
@@ -26,6 +27,7 @@ stamp-defaults` writes ours.
 | 2 | 6 | SAT | TAPE / TUBE / INFL | TAPE = TapeHead: a state-variable split at TONE, the low and band parts through a cubic smoothstep, the top clean; drive 0.8× → 8× from a 17-word P table. TUBE = DaTube: u − u^P with the negative half driven twice as hard, level-compensated (a per-block division); the curve is a 17-pair P table. INFL = OInflator: a signed cubic, DRV is its Effect |
 | 2 | 7 | KEY | SELF / T1 | the compressor's key (29 Sep 2026). SELF: the track's own mono input, per sample. T1: the BusDelay host's peak \|mono in\| of T1 per block (`y:$990`, the bus scratch), × KLVL/64, held across the block into the same attack / release smoother. The host also counts its calls at `y:$991`; a count that has not moved for 4 blocks reads as silence (no delay host in the remix, or boot garbage). On the master (T8) KEY is ignored: T8 receives T1 in its input, so a T1 key there would duck T1 too. A KEY byte other than 1 reads as SELF |
 | 2 | 8 | KLVL | 0–127, default 64 | scales T1's key level, 64 = unity |
+| 2 | 9 | TXTR | 0–127, default 0 | Airwindows Pockey2 after FOLD: mu-law encode, quantise to 2^(16 − 12·k/128) steps (16 → 4.1 bits), decode, a hold of floor((k/128)³·32) samples (0 → 31) on one countdown for both channels, and Pockey2's blur (out = held·blur + previous held·(1 − blur), blur = 0.618 − \|coded − previous dry\| floored at 0). One knob drives both of Pockey2's sliders (A = k/128, B = 1 − k/128), wet = 1. 0 skips the stage, bit-exact. 5 Oct 2026; Pockey (the first version) was TXTR from 13 to 22 Sep 2026 |
 
 Page layout history: 16 Sep 2026 put MIX bottom right and SAT top left.
 
@@ -61,6 +63,12 @@ Page layout history: 16 Sep 2026 put MIX bottom right and SAT top left.
   cores in the port; the chip's cross-core timing is not the port's, so a
   core 0 running ahead of core 1 reads the previous block's level (one
   block, 16 samples) -- not measured on hardware.
+- Cost with TXTR (Pockey2, 5 Oct 2026): 1,093 words on each payload, 407
+  cycles per sample by the pricer (worst mode INFL; TAPE 403, TUBE 370), of
+  which TXTR is 163: two calls of `chtx2` (73 words each with the call) and
+  the shared countdown. Its tables are 546 P words (ENC and DEC, 257 points
+  each, and 32 mantissas), parked in the stock curve bank by the build.
+  Payload A FREE 39 in bottleservice. Pockey (the first TXTR) priced 277.
 - Cost with KEY: 938 words on each payload (881 before), 244 cycles per
   sample by the pricer (241 before).
 - `tools/verify/verify_character.py`: defaults bit-exact; MIX=0 bit-exact
@@ -128,6 +136,7 @@ The laws, from [JClones/JSFXClones](https://github.com/JClones/JSFXClones)
 | TUBE | DaTube | `x *= drive+0.5`; `y = x + (d/2)((1−x) − (1−x)^P)` for x>0, `x + d((1+x)^P − (1+x))` for x<0, P = ln10+1; 3 Hz DC remover. Here one table `T(u) = u − u^P`, the sign selects d/2 vs d |
 | INFL | OInflator | `x *= 0.5`; `gr = clamp(2c·\|x\| + (1−c))`, `y = (1 − \|gr·x\|)(gr·x)·2e + (1−e)x`; ×2. No table, no division; Effect on DRV |
 | GLUE / COMP | AC1 | level = \|x\| smoothed 0.5 ms / 500 ms; `gr = (Lv²/2 − 1)² + Lv·a`, `a = 0.75 − (Comp−1)·0.075`, clamp ≤ 1; a polynomial gain per sample, no table |
+| TXTR | Airwindows Pockey2 (Chris Johnson, MIT, 2022; `Pockey2Proc.cpp`) | mu-law encode, `floor(y·R)/R` toward zero with R = (int)2^(4+12B), mu-law decode, a hold of floor(A³·32) samples, blur `0.618 − \|x − lastDry\|` ≥ 0 between the held sample and the previous one. Here the codec is two 257-point tables interpolated, R is built per block from a 32-word mantissa table, and `pockey2_ref.py` is the float transcription the gate measures against |
 | (draft) COMP | LMC1 | feedback console comp: sidechain HP 340 Hz → LP 4 kHz → ×gr → square → 2.5 / 25 ms smoother → √; hard knee, `gr = (L/thr)^−3.077` (≈4:1), −40 dB floor; ported as the power per block: one division + a 33-entry table of r^−1.538 |
 
 FUZZ (SAT's third slot before INFL) and TRNS were retired 13 Sep 2026.
