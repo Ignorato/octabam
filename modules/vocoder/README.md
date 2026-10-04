@@ -2,6 +2,8 @@
 
 A ten-band channel vocoder after the Roland VP-330: the track's audio (a voice) shapes a carrier.
 
+> **Status, 4 Oct 2026: paused, not for release.** On a MKII, one or two VOCODERs on a DSP core (tracks 1-4 share one, 5-8 the other) play; a third, with FX1 = FILTER on those tracks, overruns the core: a loud glitch, then no audio and no sequencer until a reboot. The real cost is about 850-940 cycles a sample, not the 760 `make cycles` counts (one-word displaced moves measured at about 4 cycles, CHIP.md section 2), and the 3,120 usable already includes the four FX1 FILTERs the pricer does not charge. A module a user can stall the unit with by adding it to a third track is not safe to ship as it is.
+
 On the unit it is an FX2 effect. Put it on a track playing a voice, sample or live through a THRU machine: with MODE INT the carrier is built in, two sawtooths an octave apart at NOTE, so turning NOTE (or parameter-locking it on the steps) plays the vocoded voice as a melody. With MODE EXT the carrier is the track's right channel: a THRU track with the voice on input A and a synth on input B. [`DESIGN.md`](DESIGN.md) has the law and the reasons; [`vocoder_ref.py`](vocoder_ref.py) is the float reference the DSP is proved against.
 
 ## Knobs
@@ -26,14 +28,16 @@ All by `tools/verify/verify_vocoder.py` through `dsp_host` on the audition's scr
 - ✅ A sine at a band's centre keeps that band at least 18.6 dB above its neighbours.
 - ✅ NOTE: C1, C3 and C6 within 0.05 % (measured 32.703, 130.813 and 1046.503 Hz); a saved NOTE past C6 plays C6.
 - ✅ Every knob at both ends renders.
-- ✅ 760 cycles a sample (`make cycles REMIX=vocoder`); `make accept REMIX=vocoder` passes every stage: four instances on one core price at 3,040 against the 3,120 a core has after its own work, no layout over the wall. The first version cost 1,085: three on tracks 1-4 (one core) stalled a MKII (audio and sequencer stopped until a reboot); the parallel-move rewrite, a peak-detector envelope and a 24-bit band sum brought it down.
+- 🟡 760 counted cycles a sample (`make cycles REMIX=vocoder`); `make accept` passes, pricing four on a core at 3,040. On the unit this is not true: see the status note above. The first version counted 1,085 (three on a core stalled the unit on OCTABAM7); the parallel-move rewrite, a peak-detector envelope, a 24-bit band sum and the tables in X memory (DJ EQ out of the remix) brought the count down, but three on a core with FX1 FILTERs still overrun (OCTABAM8 and OCTABAM9).
 - Listened to (4 Oct 2026): a LibriVox reading (public domain) through this DSP code in `dsp_host`, at C3, C2, without consonants, a melody parameter-locked per 1/8 and an external chord carrier; judged intelligible and "really good" by the tester. The design was chosen by ear and measurement: the VP-330's steep bands against a first law with shallow ones (DESIGN.md).
 
 ## Open
 
 - Not yet run under the ColdFire port in a project, nor on hardware.
 - The VP-330's ensemble (a bucket-brigade chorus on its output) is not modelled; a chorus on the Octatrack's FX would come after FX2's output only on another track.
-- Four instances on a core leave 80 cycles of the 3,120; more than four on a core is refused by the pricing gate.
+- The instance limit: two per core on a default project (FX1 FILTERs), perhaps three with FX1 empty (not yet tried). Getting four to fit beside four FILTERs needs under about 590 real cycles each.
+- `m4` is not set before the `(r4)+` table walk (other modules set it); one instruction per block, not the stall's cause.
+- The pricing gap is worth reporting upstream: displaced moves and table reads counted as one cycle, and FX1 FILTERs not charged against a budget that contains them.
 
 ## Gates
 
