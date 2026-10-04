@@ -142,9 +142,11 @@ ORDER = [k for k in CARRIED if k not in HIDDEN]
 NO_FB = REMIX.fallback == NO_FALLBACK
 
 BUILD_TAG = os.environ.get("BUILD", "79").encode()
-if not (BUILD_TAG.isdigit() and 1 <= len(BUILD_TAG) <= 2):
+# Two characters: `Modulation` + the tag fills the 12 the field holds.
+# Past image 99 the first character is a letter: A0 = 100, A1 .. A9, B0 = 110.
+if not (BUILD_TAG.isalnum() and BUILD_TAG.isascii() and 1 <= len(BUILD_TAG) <= 2):
     sys.exit(f"BUILD={BUILD_TAG.decode()!r}: the tag is appended to a 13-byte "
-             f"name field, so it must be one or two digits")
+             f"name field, so it is one or two letters or digits (A0 = image 100)")
 
 # ---- the module tables, derived from modules/*/manifest.py ------------------
 # One statement per fact, living in the module that owns it. These dicts keep
