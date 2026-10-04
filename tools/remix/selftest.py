@@ -814,6 +814,7 @@ def main():
              "waveload": ("DARK REV",), "waveload-port": ("DARK REV",),   # CF METER's readout insert, as cfmeter
              "wave": ("SPRING REV", "DARK REV"),   # WAVE runs in their words
              "transient": ("PLATE REV",),   # TRANSIENT runs in its words; the other 13 stay
+             "testgen": ("PLATE REV",),     # TESTGEN runs in its words; the other 13 stay
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
              "rig": _rig, "bottleservice": _rig}
     for _n in registry.remix_names():
