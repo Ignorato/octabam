@@ -70,6 +70,33 @@ then 7,932, then the reference's 8,192); `cfmeter.py` takes the edge
 across that one block. BURN itself (the busy-wait) was not run: in this
 remix BURN is WAVE LOAD's K.
 
+Bryan T's MKII, 4 Oct 2026, his remix `bt_oct_stress` with CF METER + CF
+METER IDLE, 22 takes of three 2 s cycles each, the full set and the port
+comparison in `docs/firmware/ARCHITECTURE.md` "ColdFire time per frame on
+a unit":
+
+| | ISR mean | ISR max |
+|---|---|---|
+| near-empty project, stopped | 119 µs | 198–205 µs |
+| 7 FLEX loaded, stopped | 143 µs | 218 µs |
+| 7 FLEX playing | 244–268 µs | 291–306 µs |
+| 7 STATIC, seven files, playing (idle 0.00 %) | 256–285 µs | 307–330 µs |
+
+First playing voice +37 µs, each further voice ~14 µs; TSTR AUTO and the
+stock DELAY (one or four tracks, TIME moving) add nothing measurable. CPI
+against the port's instruction count: baseline ~1.4, first voice ~8.9,
+each further voice ~3.7. DSP slots on hardware: TUE 0, ROE 0 and spin min
+2,017–2,262 in every take; ESAI_1 reads flagged on 5,520 of 5,520 frames,
+stopped and playing, as in the emulator. Both USB directions were
+streaming in every take (macOS opens the host → OT stream when `rec`
+starts I/O).
+
+Taking a reading: `cfmeter.py --dump` needs two sync → reference edges
+(two 2 s cycles: 17,000 port frames give two rows, 2,000 none); turning the
+meter off mid-session gives "no sync -> reference edge pair found"; read
+ISR mean and max, not idle % (task-level work below the UI's priority
+reads as busy while the panel stays responsive).
+
 ## Open
 
 - Whether DTIM3 runs at 132 MHz on the unit (slot 5 answers it).
@@ -77,8 +104,9 @@ remix BURN is WAVE LOAD's K.
   step + 8 counts) count as idle time.
 - The DSP slots on the unit: a poll's cost in cycles (the `dbrnD` takes,
   `remixes/test/cfmeter/README.md`), whether TUE/ROE hold between frames
-  as the manual says, what ESAI_1's status reads, and timer 0 on core 0
-  (probe 55 ran it on core 1).
+  as the manual says (0 and 0 in every 4 Oct take), and timer 0 on core 0
+  (probe 55 ran it on core 1). ESAI_1 reads flagged every frame on the
+  unit as in the emulator: a sticky bit on an unused port, inferred.
 - Slots 8..15 read core 0 only; CF METER on tracks 1..4 prints zeros
   there (payload B has no spin store and no ESAI).
 

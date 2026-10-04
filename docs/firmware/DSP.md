@@ -111,6 +111,12 @@ module labels above (`P:0x3a1`, `P:0x2bf`, `func_00055a`) are Bryan T's;
 until 30 Aug 2026 they read "parameter unpacking", "resampler" and "gain
 routine".
 
+Its ColdFire cost at 137 → 120 BPM (TSTR AUTO, audibly stretching, seven
+FLEX voices) is not measurable in the frame interrupt: 257–278 µs against
+244–268 µs with TSTR off (Bryan T's CF METER takes, 4 Oct 2026,
+`ARCHITECTURE.md` section 6). Beyond 2× (voice `+3`, `REPITCH.md`) is
+untested.
+
 ## 4. Disassembly ✅
 
 The vendored dsp56300 project (`vendor/dsp56300/build/source/disassemble/
