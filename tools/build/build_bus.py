@@ -475,14 +475,21 @@ STOCK_DELAY_P = 0x400d4ace          # DELAY's E (0x400d4a96) + 0x38
 _SCRATCH = None
 
 # Disassemble what you assemble (AGENTS.md): dsp_asm's own listing (-list)
-# against dsp56kDisassemble's decode of the same bytes, mnemonic by mnemonic.
-# Only mnemonics are compared: a branch displacement or a `do` immediate
-# renders differently in a listing and a decoder without any bug. What this
-# cannot see is a resolver choosing the wrong ADDRESS for a symbolic operand
-# (the label-prefix trap): both tools decode the bytes dsp_asm wrote.
-# Jannik Aßfalg, PR #380, 22 Sep 2026.
+# against dsp56kDisassemble's decode of the same bytes, instruction by
+# instruction -- the mnemonic and every operand field, parallel moves
+# included, so a move the encoder dropped stops the build. Fields are
+# compared after normalising what the two tools print differently: case, the
+# <, << and > size marks, and numbers (decimal or $hex in the source, $hex in
+# the decode). A decoded field that is a label (func_0010a6) matches any
+# number: a branch displacement in the listing is an absolute target in the
+# decode. The decoder omits nop. What this cannot see is a resolver choosing
+# the wrong ADDRESS for a symbolic operand (the label-prefix trap): both tools
+# decode the bytes dsp_asm wrote. Jannik Aßfalg, PR #380, 22 Sep 2026;
+# operands since 4 Oct 2026.
 _LISTLINE = re.compile(r"^([0-9a-f]{6}): (\S+)(?:\s+(.*?))?\s*; "
                        r"[0-9a-f]{6}(?: [0-9a-f]{6})?$")
+_RT_NUM = re.compile(r"(-?)(\$[0-9a-f]+|[0-9]+)")
+_RT_LABEL = re.compile(r"^[a-z][a-z0-9]*_[a-z0-9_]+$")
 
 # `mpy` that dsp_asm encodes as `mpysu` is the one mismatch the shipping
 # code carries on purpose: the second operand is non-negative at every site
@@ -511,6 +518,26 @@ def _listing(text):
     return out
 
 
+def _rt_fields(ops):
+    """Operand tokens (whitespace-separated), each split into its comma
+    fields, every field lower case with no size marks and its numbers hex."""
+    def field(f):
+        f = f.lower().replace("<", "").replace(">", "")
+        return _RT_NUM.sub(
+            lambda m: m.group(1) + format(int(m.group(2)[1:], 16)
+                                          if m.group(2)[0] == "$"
+                                          else int(m.group(2)), "x"), f)
+    return [[field(x) for x in tok.split(",")] for tok in ops.split()]
+
+
+def _rt_same(sop, dop):
+    s, d = _rt_fields(sop), _rt_fields(dop)
+    if [len(t) for t in s] != [len(t) for t in d]:
+        return False
+    return all(sf == df or (_RT_LABEL.match(df) and re.fullmatch(r"-?[0-9a-f]+", sf))
+               for st, dt in zip(s, d) for sf, df in zip(st, dt))
+
+
 def _roundtrip(list_out, blob, org, label):
     src = _listing(list_out)
     if not src:
@@ -522,19 +549,27 @@ def _roundtrip(list_out, blob, org, label):
     dec = _listing(r.stdout)
     bad, mpysu = [], {}
     for a, (sm, sop) in src.items():
-        if a not in dec or dec[a][0] == sm:
+        if a not in dec:
+            if sm != "nop":
+                bad.append((a, sm, sop, "(nothing decoded here)", ""))
             continue
         dm, dop = dec[a]
-        if (sm, dm) == ("mpy", "mpysu"):
+        if sm == "lua":
+            # lua's only rN+nN mode is (rN)+nN (D = rN+nN); dsp_asm takes
+            # (rN+nN) as that encoding and the decoder prints it (rN)+nN.
+            sop = re.sub(r"\((r\d)\+(n\d)\)", r"(\1)+\2", sop)
+        if not _rt_same(sop, dop):
+            bad.append((a, sm, sop, dm, dop))
+        elif (sm, dm) == ("mpy", "mpysu"):
             mpysu.setdefault(sop, []).append(a)
-        else:
+        elif dm != sm:
             bad.append((a, sm, sop, dm, dop))
     who = f" in {label}" if label else ""
     if bad:
         detail = "\n".join(f"    P:0x{a:05x}  wrote '{sm} {sop}'  chip runs "
                            f"'{dm} {dop}'" for a, sm, sop, dm, dop in bad)
         sys.exit(f"disassemble-what-you-assemble: dsp_asm wrote bytes{who} that "
-                 f"do not decode to the mnemonic typed:\n{detail}")
+                 f"do not decode to the instruction typed:\n{detail}")
     found = {k: len(v) for k, v in mpysu.items()}
     audited = MPYSU_AUDITED.get(label, {})
     if any(os.environ.get(k) for k in _VARIANT_FLAGS):

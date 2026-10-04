@@ -83,7 +83,10 @@ vendor_eft() {
   apply_patch vendor/elektron-firmware-tool "$(pwd)/tools/patches/elektron-firmware-tool.patch"
 }
 
-# The patch carries: the one-word displaced move; the AGU pre-decrement
+# The patch carries: the one-word displaced move; a data-ALU op with two
+# parallel moves (XY, X:R, R:Y, class II) and a refusal where a move token
+# has no encoding (before 4 Oct 2026 the non-parallel form was emitted and
+# the moves dropped); the AGU pre-decrement
 # fix; the DMA dual-counter reload at end of block; a same-value DCR
 # rewrite while a self-clearing window is open renews instead of being
 # dropped (measured 1199/1200 frames on DCR2, the ESAI feed -- bit-

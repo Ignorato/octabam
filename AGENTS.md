@@ -131,7 +131,18 @@ a negative multiplier there is silently corrupted. `mpy x0,y1` and
 **Disassemble what you assemble** when a result surprises you — and always
 for a new `mpy` whose second operand can go negative. A related family bit
 us in shipping code: `cmp a,b` had encoded as `max a,b`, which updates only
-the C bit while `blt` tests N^V. **And until 14 Sep 2026 it emitted only
+the C bit while `blt` tests N^V. **Until 4 Oct 2026 it had no encoding
+for a data-ALU op with two parallel moves** (XY, X:R, R:Y, class II):
+`clr`/`add`/... with one were InvalidInstruction, and `mpy`/`mac` fell
+to the non-parallel `mpysu`/`macsu` with both moves dropped (`mac
+x1,y0,b x:(r1)+,x1 y:(r7)+,y0` -> `0126a6`; the chip word is `f4f9ea`).
+`move x:(r1)-n1,x0 y:(r7)+,y0` encoded `(r1)` (`f0e100`): the XY form
+has no `(Rn)-Nn`. Against the stock payloads (A+B) the old `dsp_asm` got
+0 of 688 ALU+XY lines right (605 wrong, 83 refused) and 0 of 258 X:R/R:Y
+lines; the patch makes all 946 the stock word and leaves the result for
+the other 12,079 stock lines unchanged. A move token with no encoding is now
+InvalidInstruction, and the round-trip compares every operand field,
+parallel moves included. **And until 14 Sep 2026 it emitted only
 the TWO-WORD displaced move**: `move x:(r7+$15),a` assembled to
 `0a77ce 000015` where the chip (and every Elektron payload, 533 sites in A)
 has the one-word `0257de` for displacements −64..63 with a data-ALU
@@ -145,9 +156,11 @@ a `dsp_asm` built before it silently emits the two-word form for every
 site — five images (8–12, 14 Sep 2026) and every price quoted with them
 were ~800 words / ~500 cycles heavier than the tree said, found only when
 another session's FREE table did not match. After any change under
-`tools/patches/` or `tools/harness/dsp_host/`: `scripts/setup.sh` (or
-apply the hunk and `cmake --build vendor/dsp56300/build --target dsp_asm
-dsp_host`), then assemble `move x:(r7+$15),a` and expect `0257de`.
+`tools/patches/`: `make dsp-repatch` (`scripts/setup.sh` does not
+re-patch a built tree; it stops when the tree lacks the current patch),
+then `make emu-cf`; after one under `tools/harness/dsp_host/`:
+`scripts/setup.sh`. `make check-asm` expects `0257de` for `move
+x:(r7+$15),a` and `f4f9ea` for `mac x1,y0,b x:(r1)+,x1 y:(r7)+,y0`.
 
 **READING `a0` EXPOSES THE FRACTIONAL LEFT SHIFT THAT READING `a1` HIDES.**
 `mpy` aligns the Q46 product into Q47, so `a1` is the plain fractional
