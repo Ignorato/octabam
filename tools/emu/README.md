@@ -272,11 +272,19 @@ tools/harness/usb_host.py /tmp/ot-usb.sock audio 3 2.0 capture.pcm 4
   markandrus, MIT).
 - **Holding for the client.** After every other phase, the port holds the
   machine until the client has connected and hung up (`--usb-hold-ms` caps
-  it). A `reset` waits until the firmware has attached.
+  it). A `reset` answers once the firmware has attached and acknowledged
+  it (URI), so the bench's first SETUP finds the reset handling done, as a
+  real host's does after its >= 10 ms of reset signalling (5 Oct 2026:
+  answered at landing, a SETUP sent while the reset was unhandled was
+  served and then flushed with everything else, status-stage prime
+  included -- `verify_usb`'s full-speed phase timed out on `out 0`).
 - **Other flags.**
   - `--usb-notify FILE` logs USB DISK MODE's attach/detach edges
     (`0x460e76a0`).
   - `--usb-fs` reports full speed.
+  - `OT_USB_TRACE=1` in the environment prints every bench line, register
+    write, completion and reset on stderr with wall seconds and the SOF
+    count (device time).
 - **Polling cadence.** The bench polls an isochronous endpoint on the
   endpoint's own schedule in device time: 250 µs at high speed for
   bInterval 2, 1 ms at full speed.
@@ -284,9 +292,9 @@ tools/harness/usb_host.py /tmp/ot-usb.sock audio 3 2.0 capture.pcm 4
   isochronous IN endpoint is enabled with no IN waiting, the port holds
   device time until the client's next command, so a bench that is slow on
   the wall clock (a loaded machine) costs wall time, not polls. The hold
-  ends early while the client has a transfer or a `poke`/`call` outstanding
-  (the device must run to finish it), on hangup, and at the `--usb-hold-ms`
-  wall cap. A poll it lets through with no IN waiting is counted in the
+  ends early while the client has a transfer, a `poke`/`call` or an
+  unacknowledged `reset` outstanding (the device must run to finish it),
+  on hangup, and at the `--usb-hold-ms` wall cap. A poll it lets through with no IN waiting is counted in the
   final "iso poll(s) with no IN waiting". The bench issues one command at
   a time, so a poll slot that falls inside an EP0 control transfer made
   while the stream is enabled (`verify_usb_in`: SET_INTERFACE 5, the two
