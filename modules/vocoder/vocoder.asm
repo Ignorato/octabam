@@ -6,6 +6,8 @@
 ; Insert contract: frames in place at x:(r0)/x:(r0+n0), knobs from r6,
 ; state in this instance's r7 block. No bus, no buffers, no shared window.
 ; Uses r4, r5 (m5 linear); r1 is left alone.
+; Runs on FX2 of tracks 1, 2, 5 and 6 only (r7 0x6200 or 0x6500): at most two
+; per DSP core, which the MKII carries; a dry pass on every other slot.
 ;
 ; ---- the law ------------------------------------------------------------------
 ;   m = (L + R)/2 (INT) or L (EXT);  c = 0.3 saw(NOTE) + 0.2 saw(NOTE + 12) (INT)
@@ -54,8 +56,24 @@ init:
         rts
 
 proc:
+; ---- TWO PER CORE, BUILT IN: FX2 positions 0 and 1 only --------------------------
+; Three VOCODERs on one DSP core overran Ignorato's MKII (a glitch, then a stall
+; until a reboot; two ran safely). So it runs only at r7 = 0x6200 and 0x6500,
+; the FX2 state blocks of a core's first two tracks (T1, T2 on core 1; T5, T6
+; on core 0), and is an exact dry pass everywhere else: on T3, T4, T7, T8 and
+; on any FX1 slot (0x6100 + 0x300 pos). r7 per slot measured under the port:
+; modules/send/README.md, "An FX1 slot is not a client".
+        move    r7,a
+        move    #>$6200,x0
+        cmp     x0,a
+        beq     vc_run
+        move    #>$6500,x0
+        cmp     x0,a
+        bne     vc_end                  ; not T1/T2/T5/T6's FX2: dry, nothing written
+vc_run:
 ; ---- per block: the knobs ---------------------------------------------------------
         move    #>$ffffff,m5
+        move    #>$ffffff,m4            ; the (r4)+ table walk: linear, whatever ran before
         move    #>$fab1e0,r4            ; the table base
         move    r4,x:(r7+$12)
         move    x:(r6+$0),a             ; NOTE: the step in bits 16 and up

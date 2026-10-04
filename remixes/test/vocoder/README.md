@@ -1,6 +1,6 @@
 # `vocoder` -- VOCODER
 
-VOCODER beside 13 stock effects (all but PLATE REV, whose words it takes).
+VOCODER beside the stock effects (all but PLATE REV, whose words it takes, and DJ EQ, so its tables sit in X memory). VOCODER runs on FX2 of tracks 1, 2, 5 and 6 only (two per DSP core) and passes audio elsewhere.
 
 ## What is in it
 
@@ -9,7 +9,7 @@ VOCODER beside 13 stock effects (all but PLATE REV, whose words it takes).
 
 ## Status
 
-Renders in `dsp_host` (`tools/verify/verify_vocoder.py`); not yet run on hardware.
+Renders in `dsp_host` (`tools/verify/verify_vocoder.py`); the per-track limit checked under the ColdFire port. On a MKII (OCTABAM7-9, 4 Oct 2026) two per core played and three stalled, which is why the limit is built in; the limit itself is not yet run on hardware.
 
 ## Build
 

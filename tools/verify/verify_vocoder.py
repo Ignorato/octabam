@@ -18,6 +18,8 @@ Gates:
                    power at that band is 15 dB or more above its neighbours'
   NOTE          -> the INT carrier's pitch is NOTE's within 0.05 % (C1, C3, C6)
   NOTE clamp    -> a saved NOTE byte past C6 plays C6
+  two per core  -> runs at r7 0x6200 and 0x6500 (FX2 of T1 T2 T5 T6) and is an exact dry
+                   pass at every other FX2 and FX1 state block
   every knob    -> renders at both ends without dsp_host dying
 
     python3 tools/verify/verify_vocoder.py
@@ -66,18 +68,25 @@ def params(**kw):
     return v
 
 
+def q23f(x):
+    """What dsp_host hands back for an untouched frame: the Q23 input as floats."""
+    return np.asarray(q23(x), float) / (1 << 23)
+
+
 def q23(x):
     return [max(-(1 << 23), min((1 << 23) - 1, int(round(s * (1 << 23))))) for s in x]
 
 
-def render(L, R, **kw):
-    """L, R: float arrays. Returns (L, R) floats from the module."""
+def render(L, R, r7=2, **kw):
+    """L, R: float arrays. Returns (L, R) floats from the module. r7 = dsp_host's state block,
+    0x6000 + 0x100 r7: 2 (0x6200) is a core's first FX2 slot, VOCODER's home; it runs at 2 and 5
+    only (the built-in two-per-core limit)."""
     n = len(L) - len(L) % FRAMES
     li, ri = q23(L[:n]), q23(R[:n])
     fin, fout = TMP / "vc_in.raw", TMP / "vc_out.raw"
     fin.write_bytes(b"".join(struct.pack("<ii", a, b) for a, b in zip(li, ri)))
     cmd = [HOST, "-mem", MEM, "-init", f"{init:x}", "-proc", f"{proc:x}",
-           "-inst", "1", "-r7", "1", "-alloc", "0", "-inmask", "1", "-stereo",
+           "-inst", "1", "-r7", str(r7), "-alloc", "1", "-inmask", "1", "-stereo",
            "-frames", str(FRAMES), "-blocks", str(n // FRAMES),
            "-in", str(fin), "-out", str(fout),
            "-params", ",".join(str(x) for x in params(**kw))]
@@ -179,6 +188,20 @@ for step in (0, 24, 60):
 a, _ = render(noise[:22050], noise[:22050], NOTE=99, LEVL=127)
 b, _ = render(noise[:22050], noise[:22050], NOTE=60, LEVL=127)
 check("a NOTE byte past C6 plays C6", np.array_equal(a, b))
+
+# ---- two per core, built in: runs at r7 0x6200 and 0x6500 only, dry elsewhere -------------------
+# Three on a core overran the MKII. The FX2 blocks are 0x6200 + 0x300 pos and the FX1 blocks
+# 0x6100 + 0x300 pos (measured under the port, modules/send/README.md); dsp_host's -r7 n is
+# 0x6000 + 0x100 n. A dry pass writes nothing, so its output is its input bit for bit.
+src = noise[:22050]
+runs, dry = [], []
+for r7 in (2, 5, 8, 11, 1, 4, 7, 10):
+    L, R = render(src, src, r7=r7, LEVL=127, CONS=127, DRY=0)
+    (dry if np.array_equal(L, q23f(src)) and np.array_equal(R, q23f(src)) else runs).append(r7)
+check("runs at FX2 positions 0 and 1 only (r7 0x6200, 0x6500): T1 T2 T5 T6",
+      runs == [2, 5], f"(runs at {[hex(0x6000 + 0x100 * r) for r in runs]})")
+check("an exact dry pass at FX2 positions 2 and 3 and every FX1 slot",
+      dry == [8, 11, 1, 4, 7, 10], f"(dry at {[hex(0x6000 + 0x100 * r) for r in dry]})")
 
 # ---- every knob at both ends ---------------------------------------------------------------------
 for name, hi in (("NOTE", 60), ("CONS", 127), ("DRY", 127), ("LEVL", 127), ("MODE", 1)):

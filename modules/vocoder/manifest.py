@@ -40,8 +40,8 @@ MODULE = Module(
     key="VOCODER",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.RENDER, proof_note="its own render gate (verify_vocoder); not on hardware",
-    doc="Ten-band vocoder after the Roland VP-330: the track's voice, a built-in carrier at NOTE or input B.",
+    proof=Proof.RENDER, proof_note="verify_vocoder; on a MKII two per core played (OCTABAM7-9, 4 Oct 2026); the built-in two-per-core limit not yet on hardware",
+    doc="Ten-band vocoder after the Roland VP-330: the track's voice, a built-in carrier at NOTE or input B. FX2 of tracks 1, 2, 5 and 6 only.",
     menu=MenuEntry(
         fx2_id=0x1a,
         donor_desc=0x400d58b8,        # DARK REV
