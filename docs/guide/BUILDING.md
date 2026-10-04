@@ -143,7 +143,10 @@ out/OCTATRACK_OCTABAM1.bin            the card image
 out/OCTATRACK_OS1.40C_OCTABAM1.syx    the MIDI image
 ```
 
-`BUILD` is a one- or two-digit number of your choosing. It becomes the
+`BUILD` is a one- or two-character tag of your choosing (digits; past
+image 99 a letter then a digit: `A0` is 100, `A1`..`A9`, `B0` is 110,
+since `Modulation` + three digits overfills the 12-character name
+field). It becomes the
 unit's OS version string (`OCTABAM1`) and the suffix on any octabam
 effect's name, so a unit can always be traced to the build it runs. Bump
 it every time you flash. `VERSION=<up to 10 chars>` overrides the version

@@ -24,7 +24,8 @@ REMIX = Remix(
              "TEMPO SYNC", "CC MAP", "CC FEEDBACK", "MODE DEFAULTS", "RIG HOSTS", "TEMPO BUS",
              "USB MIDI", "USB AUDIO OUT MASTER",
              "OCTAKIT", "SCENES KITS",
-             "SCENES P2", "SCENES P2 KITS", "PLOCKS P2"),
+             "SCENES P2", "SCENES P2 KITS", "PLOCKS P2",
+             "DELAY"),   # the stock DELAY keeps its chooser row: T8 hosts it, and a track whose FX2 was changed on the unit can take it back (4 Oct 2026)
     fallback="SEND",
     hidden=("REVERB SERVER", "DELAY SERVER"),
     host_slots=(("DELAY SERVER", 2), ("REVERB SERVER", 2)),
