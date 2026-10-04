@@ -1672,6 +1672,8 @@ stems_drain:
 .Ld_more:
         cmpi.l  #CHUNK_FRAMES,%d5   | recording: the test seam holds the writer
         bne.s   .Ld_go              | between batches too, not only between passes
+        bsr.w   stems_ui            | and the labels follow the take between chunks: a writer
+                                    | behind the hook stays here, and the menu froze (3 Oct 2026)
         tst.l   stems_hold
         bne.w   .Ld_done
 .Ld_go:

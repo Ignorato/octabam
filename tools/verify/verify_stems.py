@@ -977,6 +977,32 @@ def labels(s):
           f"{shown}, {w[5] if w else None} frames, peak {w[6] if w else None}")
 
 
+def labelsbehind(s):
+    """The labels while the writer is behind the hook: every source on the
+    eight-track THRU fixture, 768 bytes a frame, more than the port's card
+    writes (about 454 bytes a frame, 3 Oct 2026). REC mm:ss must still rise
+    while it records, read from memory at frames 100 and 6,000: the task
+    refreshes the labels between the chunks it writes, not only between
+    passes (verify_stems_menu found them frozen at REC 00:00). A chunk of
+    twelve files takes some 860 frames to write here, so the label may lag
+    by that much: 6,000 frames (2.2 s) leaves room for it."""
+    tag = "labelsbehind"
+    port(s, 6100, stop_at=6050, tag=tag, fixture=FIXTURE_THRU, mask=None, dump_blocks=False,
+         pokes_before=[(s["stems_tracks"] + 2, 0x0f), (s["stems_tracks"] + 3, 0xff)],
+         steps=[ui_step(s, 100, tag, "a"), ui_step(s, 6000, tag, "b")])
+    secs, behind = [], None
+    for when in ("a", "b"):
+        t, w = ui_read(s, tag, when)
+        if t is None:
+            check(f"labelsbehind: the frame dump '{when}' exists", False)
+            return
+        secs.append(int(t[1][-2:]) if t[1].startswith("REC ") else -1)
+        behind = w[3] - w[4]
+    check("labelsbehind: the writer is more than a chunk behind at frame 6,000", behind > CHUNK_FRAMES,
+          f"{behind} frames waiting")
+    check("labelsbehind: the seconds rise while the writer is behind", secs[0] == 0 and secs[1] >= 1, f"{secs}")
+
+
 def nocard(s):
     """REC with no card: the status reads NO CARD and nothing else changes
     (IDLE, no task made). Nothing is armed before play; the card-mounted
@@ -1628,7 +1654,7 @@ def main():
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
              for m in (0x01, 0x03, 0x0F, 0xFF, 0xA5)]
-    runs += [("cut", cut), ("labels", labels), ("nocard", nocard), ("exists", exists),
+    runs += [("cut", cut), ("labels", labels), ("labelsbehind", labelsbehind), ("nocard", nocard), ("exists", exists),
              ("overflow", overflow), ("cardfail", cardfail)]
     if "--long" in sys.argv:
         runs += [("limit", limit)]
