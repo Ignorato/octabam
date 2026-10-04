@@ -1346,8 +1346,7 @@ fs_ccore:
         move    x1,b
         sub     a,b                     ; x - s'
         move    b,x1
-        move    b,x0
-        move    x:(r1)+,y1              ; lpAmt/2
+        move    x:(r1)+,x0  b,y1        ; lpAmt/2 ; x (mpy x0,y1: the signed order)
         mpy     x0,y1,a
         mac     x0,y1,a  x:(r5),x0      ; x0 = lp state
         move    x:(r1)+,y1              ; 1 - lpAmt
@@ -1357,8 +1356,7 @@ fs_ccore:
 ; the o1 pair (B or C)
         move    n4,n3
         move    n4,n5
-        move    x1,x0                   ; x
-        move    x:(r1)+,y1              ; hpAmt/2
+        move    x:(r1)+,x0  a,y1        ; hpAmt/2 ; x (= s', still in a)
         mpy     x0,y1,a
         mac     x0,y1,a
         move    x:(r3+n3),x0            ; hp state
@@ -1368,8 +1366,7 @@ fs_ccore:
         move    x1,b
         sub     a,b
         move    b,x1
-        move    b,x0
-        move    x:(r1)+,y1              ; lpAmt/2
+        move    x:(r1)+,x0  b,y1        ; lpAmt/2 ; x
         mpy     x0,y1,a
         mac     x0,y1,a
         move    x:(r5+n5),x0            ; lp state
@@ -1380,8 +1377,7 @@ fs_ccore:
 ; the o2 pair (D, E or F)
         move    n6,n3
         move    n6,n5
-        move    x1,x0
-        move    x:(r1)+,y1
+        move    x:(r1)+,x0  a,y1        ; hpAmt/2 ; x
         mpy     x0,y1,a
         mac     x0,y1,a
         move    x:(r3+n3),x0
@@ -1391,8 +1387,7 @@ fs_ccore:
         move    x1,b
         sub     a,b
         move    b,x1
-        move    b,x0
-        move    x:(r1)+,y1
+        move    x:(r1)+,x0  b,y1        ; lpAmt/2 ; x
         mpy     x0,y1,a
         mac     x0,y1,a
         move    x:(r5+n5),x0
@@ -1438,8 +1433,7 @@ fs_lcore:
         move    a,x1                    ; v/2 (limited: u within +-2)
         move    x:(r2),y1               ; G' for the four stages
 ; stage 0: y/2 = G'(v-s)/2 + s/2 ; s'/2 = y - s/2  (x1 = v/2 in, y/2 out)
-        move    x:(r5),y0               ; s/2
-        move    x1,a                    ; v/2
+        tfr     x1,a  x:(r5),y0         ; v/2 ; s/2
         sub     y0,a                    ; (v - s)/2
         asr     #$1,a,a                 ; (v - s)/4
         move    a,x0
@@ -1450,8 +1444,7 @@ fs_lcore:
         sub     y0,a                    ; s'/2 = y - s/2
         move    a,x:(r5)+               ; limited: s' within +-2
 ; stage 1
-        move    x:(r5),y0
-        move    x1,a
+        tfr     x1,a  x:(r5),y0
         sub     y0,a
         asr     #$1,a,a
         move    a,x0
@@ -1462,8 +1455,7 @@ fs_lcore:
         sub     y0,a
         move    a,x:(r5)+
 ; stage 2
-        move    x:(r5),y0
-        move    x1,a
+        tfr     x1,a  x:(r5),y0
         sub     y0,a
         asr     #$1,a,a
         move    a,x0
@@ -1474,8 +1466,7 @@ fs_lcore:
         sub     y0,a
         move    a,x:(r5)+
 ; stage 3
-        move    x:(r5),y0
-        move    x1,a
+        tfr     x1,a  x:(r5),y0
         sub     y0,a
         asr     #$1,a,a
         move    a,x0
