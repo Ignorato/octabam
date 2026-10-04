@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""STEM REC against the emulated card's speed: which track counts the 4 MiB
-ring survives at which card delay.
+"""STEM REC against the emulated card's speed: which track counts the ring
+survives at which card delay.
 
     python3 tools/verify/stems_sweep.py [--counts 1,2,4,8] [--latencies 8,16,24,32,48,64] [--seconds 5] [--jobs 2]
     python3 tools/verify/stems_sweep.py --from-logs     # the table again from the last run's logs
@@ -34,7 +34,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import verify_stems as v  # noqa: E402
 
 FPS = 44100 / 16            # frames a second
-RING = 0x400000
+RING = v.RING_SIZE          # the module's ring, 8 MiB since piece 5
 
 
 CAP_S = 3600                # the 60-minute cap ends a take before any later overflow
