@@ -543,9 +543,16 @@ int main()
 
 		// Reset: address and endpoint state cleared, URI + PCI raised.
 		u.write(U::R_DEVICEADDR, 4, 1u << 25, false);
+		const auto nReplies = replies.size();
 		u.command("reset", reply);
 		check("reset clears the address and raises URI + PCI",
 			u.read(U::R_DEVICEADDR, 4) == 0 && (u.read(U::R_USBSTS, 4) & (U::USBSTS_URI | U::USBSTS_PCI)) == (U::USBSTS_URI | U::USBSTS_PCI));
+		// The host's ok waits for the guest's URI acknowledge, so its first
+		// SETUP cannot land on a guest whose reset handler has yet to flush.
+		check("reset is not answered before the guest acknowledges URI", replies.size() == nReplies);
+		u.write(U::R_USBSTS, 4, U::USBSTS_URI, false);
+		check("the URI acknowledge answers the reset with ok",
+			replies.size() == nReplies + 1 && replies.back() == "ok\n" && !(u.read(U::R_USBSTS, 4) & U::USBSTS_URI));
 
 		// A primed queue head whose token still has ACTIVE set is counted.
 		st32(qh0in + 0x0c, 0x80u);

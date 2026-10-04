@@ -99,7 +99,8 @@ namespace ot
 		//   setup <16 hex>     SETUP packet into the EP0 OUT dQH        -> ok
 		//   in <ep> <maxlen>   IN transfer on EP n                       -> in <ep> [<hex>|stall]
 		//   out <ep> [<hex>]   OUT transfer (bytes, or a ZLP) to EP n    -> out <ep> <count>|stall
-		//   reset              bus reset (URI + PCI, address cleared)    -> ok
+		//   reset              bus reset (URI + PCI, address cleared)    -> ok, once the guest
+		//                      has acknowledged URI (its reset handling done)
 		//   speed hs|fs        the port speed PORTSC1 reports            -> ok
 		//   isohz <hz>         the isochronous poll rate the endpoint's
 		//                      bInterval sets (0: 4000 at high speed,
@@ -134,8 +135,9 @@ namespace ot
 		// time here until the bench's next command arrives, so a bench that is
 		// late on the wall clock (a loaded machine) costs wall time, not
 		// device time. The hold ends early when the bench has a transfer or
-		// request outstanding (the device must run to finish it), on hangup,
-		// or at the wall deadline (setBenchDeadline), after which polls are
+		// request outstanding or a bus reset the guest has not acknowledged
+		// (the device must run to finish it), on hangup, or at the wall
+		// deadline (setBenchDeadline), after which polls are
 		// answered as before. A direct `command()` caller (a test) is never
 		// held.
 		bool isoPoll();		// true when an enabled isochronous IN found no request waiting
@@ -194,6 +196,7 @@ namespace ot
 		bool m_sawClient = false;
 		bool m_hostPresent = false;
 		bool m_resetPending = false;
+		bool m_resetUnacked = false;			// landed, URI not yet acknowledged: the host's ok waits
 		std::unique_ptr<Request> m_request;
 		std::chrono::steady_clock::time_point m_benchDeadline = std::chrono::steady_clock::time_point::max();
 		std::function<void(const std::string&)> m_sink;	// where replies go while a command is being served
