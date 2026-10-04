@@ -439,20 +439,37 @@ def main():
         # CC 48 is stock's own crossfader echo (MIDI.md section 4), sent on the
         # current track's channel from the panel path, not the module's
         stray = [(ch, cc) for ch, cc, _ in msgs if cc != 48 and (ch not in ch_track or cc not in mapped)]
-        wrong = []
+        # The sweep is paced (one message per UI tick since 4 Oct 2026), so a
+        # dump is still in flight at the end of a short run: the contract is
+        # that every slot the sweep has reached (its CC is on the wire for
+        # that channel) holds the Part's byte, and the rest are the remainder.
+        sent = {(c, n) for c, n, _ in msgs}
+        wrong, behind = [], 0
         for t in range(8):
             if chans[t] < 0:
                 continue
             ch = chans[t] & 0xf
             for region, off, cc in cfmap:
                 want, got = part_byte(t, region, off), cache[ch * 128 + cc]
-                if got != want:
+                if got == want:
+                    continue
+                if (ch, cc) in sent:
                     wrong.append(f"T{t + 1} CC {cc} cache {got} part {want}")
-        check(f"midi out: every CC sent is a mapped slot on a track's channel ({len(msgs)} CCs on {len({(c, n) for c, n, _ in msgs})} slots)",
+                else:
+                    behind += 1
+        check(f"midi out: every CC sent is a mapped slot on a track's channel ({len(msgs)} CCs on {len(sent)} slots)",
               bool(msgs) and not stray, f"stray {sorted(set(stray))[:6]}" if stray else "")
-        if engine_idle:
-            check("midi out: the emitter's cache holds every mapped Part knob byte (CC FEEDBACK swept every change)",
+        # One sweep cycle is 336 messages + 8 track ends at 120 ticks/s, ~2.9 s;
+        # a shorter run cannot separate "sent, then the Part changed" from
+        # "wrong", so the exact check needs a run of at least one cycle.
+        cycle_frames = int((344 / 120) * 44100 / 16) + 1
+        if engine_idle and a.frames >= cycle_frames:
+            check(f"midi out: every slot the paced sweep reached holds the Part's knob byte ({behind} slot(s) still to come)",
                   not wrong, "; ".join(wrong[:6]))
+        elif engine_idle:
+            print(f"  [info] midi out: {a.frames} frames is under one paced sweep cycle ({cycle_frames}); "
+                  f"{len(wrong)} sent slot(s) differ from the Part now, {behind} not yet reached -- "
+                  f"the per-sweep contract is verify_ccfeedback's (--frames {cycle_frames} makes this exact)")
         else:
             print(f"  [N/A] midi out: the engine was running a command at the end; the sweep waits, {len(wrong)} slot(s) differ")
         # Informational: the bytes after the transport start are the dump's
