@@ -1655,7 +1655,8 @@ def mask_take(s, mask, tag, stop_at=THRU_STOP, frames=THRU_FRAMES, pokes=(), ext
     each equal to its own track's read-back at one fixed offset, sound in
     every frame from its first, no two alike, the writer writing during the
     take, IDLE with no error, and stems_peak exact against the watch log.
-    `extra` and `load_ms` go to the port (a slower card: slow8)."""
+    `extra` and `load_ms` go to the port (a slower card: slow8). Returns
+    the take's length in frames, or None without the fixture."""
     if not FIXTURE_THRU.exists():
         check(f"{tag}: the THRU fixture exists (stems_fixture.py --thru)", False)
         return
@@ -1689,6 +1690,7 @@ def mask_take(s, mask, tag, stop_at=THRU_STOP, frames=THRU_FRAMES, pokes=(), ext
     peak = int.from_bytes(raw.read_bytes(), "big") if raw.exists() else None
     check(f"{tag}: stems_peak is the largest fill the hook saw", peak == rebuilt_peak(ws) and peak > 0,
           f"stems_peak {peak}, rebuilt {rebuilt_peak(ws)}")
+    return nfr
 
 
 def latch(s):
@@ -1698,13 +1700,15 @@ def latch(s):
     mask_take(s, 0x01, "latch", pokes=pokes)
 
 
-def wrap8(s):
-    """An eight-track take past the ring's 8,192 frames: the ring wraps, and
-    every file still equals its track."""
-    mask_take(s, 0xFF, "wrap8", stop_at=9000, frames=10500)
-
-
 RING_FRAMES_8 = RING_SIZE // 512     # 16,384
+
+
+def wrap8(s):
+    """An eight-track take past the ring's 16,384 frames: the ring wraps, and
+    every file still equals its track."""
+    nfr = mask_take(s, 0xFF, "wrap8", stop_at=17000, frames=18500)
+    check("wrap8: the take outran the ring, so the ring wrapped", nfr is not None and nfr > RING_FRAMES_8,
+          f"{nfr} frames, the ring {RING_FRAMES_8}")
 
 
 # overflow8's run: the 4 MiB ring was written out by frame 9,000; the 8 MiB
