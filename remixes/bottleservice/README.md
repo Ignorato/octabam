@@ -193,9 +193,11 @@ leaves neutral. GRAIN's four grains per line are the largest lever:
   (`gk_stock_audio_pattern_primary_begin_report_fatal`, `0x45d114de`);
   with the cable unplugged it did not. Both modules were removed on 4 Oct
   2026; the emulator, which has no USB host streaming into the port, did
-  not reproduce the halt. Songs saved before Octakit had migrated them play
-  silent after the migration on these images (reproduced under the
-  emulator with Octakit alone); new projects play.
+  not reproduce the halt. On image 99 a bank file written by the unit
+  (12:42, 4 Oct 2026) lost a 64-byte burst and the firmware rejected it;
+  every boot into that project then stranded Octakit (silent songs, a
+  halt on pattern paste) -- `docs/contributing/FAILURE_MODES.md`, the two
+  Octakit entries.
 - **Not flashed in this form:** OUT MASTER polling every 250 µs (image 88
   polled every 1 ms) and PLOCKS P2 (page-2 parameter locks;
   `verify_plocksp2` passes on this remix under the emulator, power cycles
