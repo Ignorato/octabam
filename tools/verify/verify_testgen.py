@@ -93,20 +93,24 @@ def params(**kw):
     return v
 
 
-def render(n, src=None, **kw):
-    """n frames; src: MONO Q23 ints fed to both channels (silence if None). Returns (L, R) arrays."""
+def render(n, src=None, slot="fx1", guard=False, **kw):
+    """n frames; src: MONO Q23 ints fed to both channels (silence if None). Returns (L, R) arrays.
+    slot="fx1" (alloc 0, r7 1) is TESTGEN's own slot; "fx2" (alloc 1, r7 2) an FX2 instance,
+    which runs as a dry pass (Claims.fx1_only). guard=True keeps dsp_host's write-guard report."""
+    r7, alloc = {"fx1": ("1", "0"), "fx2": ("2", "1")}[slot]
     n -= n % FRAMES
     src = [0] * n if src is None else src[:n]
     fin, fout = TMP / "tg_in.raw", TMP / "tg_out.raw"
     fin.write_bytes(b"".join(struct.pack("<i", m) for m in src))
     cmd = [HOST, "-mem", MEM, "-init", f"{init:x}", "-proc", f"{proc:x}",
-           "-inst", "1", "-r7", "1", "-alloc", "0", "-inmask", "1",
+           "-inst", "1", "-r7", r7, "-alloc", alloc, "-inmask", "1", *(["-guard"] if guard else []),
            "-frames", str(FRAMES), "-blocks", str(n // FRAMES),
            "-in", str(fin), "-out", str(fout),
            "-params", ",".join(str(x) for x in params(**kw))]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit(f"dsp_host failed for {kw}:\n{r.stdout}\n{r.stderr}")
+    render.guard_out = r.stdout + r.stderr
     w = np.frombuffer(fout.read_bytes(), dtype="<i4").astype(np.int64)
     return w[0::2][:n], w[1::2][:n]
 
@@ -358,6 +362,22 @@ L, R = render(N // 8, LEVL=127, MODE=MODE["DC"], CHAN=3)
 check("DC CHAN L-R: R = -L", int(np.min(L)) >= FULL - 1 and int(np.max(np.abs(L + R))) <= 1)
 L, R = render(N // 8, LEVL=127, MODE=MODE["DC"], CHAN=1)
 check("DC CHAN L: R silent", np.all(L) and not np.any(R))
+
+# ---- FX1 ONLY: an FX2 instance is a dry pass ---------------------------------------------------
+# Claims.fx1_only: the chooser hides the FX2 row and the pricer charges FX1 slots only, both on
+# this promise, so it is proven in every MODE at full level, and the guard sees no stray write.
+dry = all(np.array_equal(L, noise[:len(L)]) and np.array_equal(R, noise[:len(R)])
+          for L, R in (render(N // 8, noise, slot="fx2", LEVL=127, MODE=m, CHAN=3)
+                       for m in range(len(MAN.MODE_LABELS))))
+check("FX2 instance: a bit-exact DRY PASS in every MODE at LEVL 127 (fx1_only)", dry)
+render(N // 8, noise, slot="fx2", guard=True, LEVL=127, MODE=MODE["PINK"])
+g = render.guard_out
+check("FX2 instance trips no write guard", "guard clean" in g,
+      next((ln.strip() for ln in reversed(g.splitlines()) if "guard" in ln), ""))
+render(N // 8, noise, guard=True, LEVL=127, MODE=MODE["PINK"])
+g = render.guard_out
+check("FX1 instance trips no write guard", "guard clean" in g,
+      next((ln.strip() for ln in reversed(g.splitlines()) if "guard" in ln), ""))
 
 # ---- an invalid MODE byte ----------------------------------------------------------------------------
 check("an invalid MODE byte (7) plays SINE", np.array_equal(render(N // 4, LEVL=127, MODE=7)[0], render(N // 4, LEVL=127, MODE=0)[0]))

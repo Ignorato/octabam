@@ -77,7 +77,10 @@ def main():
         return int.from_bytes(img[a - BASE:a - BASE + 4], "big")
 
     # ---- 1. the image ----------------------------------------------------
-    fb_id = mods[remix.fallback].menu.fx2_id
+    # fallback NONE: the build points id 0 (the firmware's own NONE) and the
+    # hidden modules' cursor entries at row 0 (build_bus.py, fb_pos)
+    from remix.schema import NO_FALLBACK
+    fb_id = 0x00 if remix.fallback == NO_FALLBACK else mods[remix.fallback].menu.fx2_id
     fb_pos = u32(ID2POS + fb_id * 4)
     clones = {}
     for key in hidden + listed:

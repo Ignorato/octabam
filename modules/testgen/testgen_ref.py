@@ -148,8 +148,8 @@ def impulse_positions(t, n_out):
 def needle_period(inc):
     """NEEDLE's period in samples for a phase increment inc (a cycle is 2^24):
     round(2^24 / inc), the whole period nearest the set frequency, as the
-    module's integer division computes it."""
-    return ((1 << 24) + inc // 2) // inc
+    module's integer division computes it: (2^25 + inc) // (2 inc)."""
+    return ((1 << 25) + inc) // (2 * inc)
 
 
 def needle_positions(inc, n_out):

@@ -1,10 +1,10 @@
 # TESTGEN: design note
 
-The knobs, the signals' levels and every measured figure are in [`README.md`](README.md); this note keeps the reasons behind the design. Status: 0.1 on hardware since OCTABAM4 (README, On the unit); 0.2's NEEDLE, DC and FX1 listing in the emulator only.
+The knobs, the signals' levels and every measured figure are in [`README.md`](README.md); this note keeps the reasons behind the design. Status: 0.1 on hardware since OCTABAM4; 0.2's NEEDLE, DC and FX1 listing on hardware as OCTABAM10; FX1-only in the emulator so far (README, On the unit).
 
 ## What it is
 
-An Octabam FX2 insert that **replaces** its track's audio with an exact, reproducible test signal. Put it on any track, play a trig (or use a THRU machine), and that track's output (analogue, or a channel of Octabam's USB audio out) carries a known signal. Uses:
+An Octabam FX1 insert that **replaces** its track's audio with an exact, reproducible test signal. Put it on any track, play a trig (or use a THRU machine), and that track's output (analogue, or a channel of Octabam's USB audio out) carries a known signal. Uses:
 
 - measuring the Octatrack's own path: level, frequency response, noise, distortion, channel mapping, latency;
 - measuring Octabam's USB audio on a host: dropouts, latency, the order of channels at stream start;
@@ -29,8 +29,8 @@ LEVL 0 is silent and the default: the first image started a -6 dBFS tone on inse
 ## DSP56300 constraints (Octabam's rules)
 
 - No per-sample division, log or exp: the sweep's ratio, the sine's polynomial and FINE's 2^x (a quartic within 0.19 ppm, per block) are all multiplies; levels come from a table per block.
-- No buffers, no lookahead, so it may sit on FX1 as well as FX2. 150 cycles a sample at most, in PINK and WHITE (two generators and two filters); SWEEP 85, SINE 51, IMPULSE, NEEDLE and DC 18.
-- Size: PLATE REV's 594 words. The first full build was one word over; then the impulse table went, the sine core became a shared subroutine (for FINE and A440), and short-form compares, one restart routine for init and proc and one noise routine for both channels made room for the stereo noise: 588 words (396 of code, 192 of table). For 0.2 the sweep's length table went too (it is (t + 1) 44100, one multiply), which paid for NEEDLE and DC: 594 words exactly (418 of code, 176 of table).
+- FX1 only (`Claims.fx1_only`, Spectrum's idiom): init reads the allocator base, and an FX2 instance returns before it touches a frame. A source belongs at the head of the chain, and two in series on one track crackled on the unit (cause not found). No buffers, no lookahead. 150 cycles a sample at most, in PINK and WHITE (two generators and two filters); SWEEP 85, SINE 51, IMPULSE, NEEDLE and DC 18.
+- Size: PLATE REV's 594 words. The first full build was one word over; then the impulse table went, the sine core became a shared subroutine (for FINE and A440), and short-form compares, one restart routine for init and proc and one noise routine for both channels made room for the stereo noise: 588 words (396 of code, 192 of table). For 0.2 the sweep's length table went too (it is (t + 1) 44100, one multiply), which paid for NEEDLE and DC: 594 words exactly (418 of code, 176 of table). FX1-only cost about ten words more; reading the tables at (r4+n4), a shorter division for NEEDLE, -g kept in a register and `lua` paid for it: 592 words (416 of code), 2 spare.
 - Output replaces the input: a THRU track becomes a signal source.
 
 ## The reference (testgen_ref.py)

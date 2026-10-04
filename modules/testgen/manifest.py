@@ -8,11 +8,11 @@ response. modules/testgen/README.md says what each signal is proved to be.
 SINE at ISO third-octave frequencies and A 440, with a fine tune, an exponential SWEEP (20 Hz to 20 kHz
 over LEN, then 1 s of silence, repeating), PINK and WHITE noise, and an
 IMPULSE train, a NEEDLE pulse train at FREQ and a DC offset; LEVL in 0.5 dB steps,
-CHAN routing. Buffer-free, so a remix may list it on FX1 too.
+CHAN routing. An FX1 effect (buffer-free); on FX2 it passes its input untouched.
 """
 import math as _m
 
-from remix.schema import (BusRole, Category, DspSection, Formatter, Gate, Harness,
+from remix.schema import (BusRole, Category, Claims, DspSection, Formatter, Gate, Harness,
                           Kind, MenuEntry, Module, Param, Proof, YBase)
 
 _FS = 44100.0
@@ -59,7 +59,7 @@ MODULE = Module(
     key="TESTGEN",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, images OCTABAM4-6 (remix testgen), 3-4 Oct 2026; measured at the main outs; 0.2's NEEDLE, DC and FX1 row in the emulator only",
+    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, images OCTABAM4-6 and 10 (remix testgen), 3-4 Oct 2026; 0.1 measured at the main outs; FX1-only in the emulator so far",
     doc="Measurement source: a sine, sweep, pink or white noise, impulses, a needle pulse train or DC replace the track's audio.",
     menu=MenuEntry(
         fx2_id=0x17,
@@ -96,6 +96,11 @@ MODULE = Module(
         gate_label=None,
     ),
     harness=Harness(layout_char="G", is_server=False),
+    # FX1 ONLY: a source belongs at the head of a track's chain. An FX2 instance (a 0.1
+    # project) runs as a dry pass, so the chooser takes no FX2 row and the pricer charges
+    # FX1 slots only. Two in series crackled on Ignorato's MKII (FX1 PINK into FX2 TESTGEN,
+    # OCTABAM10, 4 Oct 2026; cause not found).
+    claims=Claims(fx1_only=True),
     gates=(Gate("tools/verify/verify_testgen.py", remix_arg=False),),
     dear={"LEVL": 127, "FREQ": 31, "FINE": 127, "LEN": 127, "MODE": 0, "CHAN": 3},
 )

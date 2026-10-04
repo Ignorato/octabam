@@ -2,7 +2,7 @@
 
 A measurement source: TESTGEN replaces its track's audio with a known test signal.
 
-On the unit it is an FX2 effect and, in its remix, an FX1 effect too (it has no buffers, so either slot is safe). Put it on a track, play a trig (or use a THRU machine) and that track's output, analogue or a channel of Octabam's USB audio out, carries the signal. Uses: measuring the Octatrack's own path (level, frequency response, distortion, channel mapping), measuring a USB audio stream on a host, and proving other modules' claims by putting a known signal through them. [`DESIGN.md`](DESIGN.md) has the plan for all seven signals; [`testgen_ref.py`](testgen_ref.py) is the float reference and the analysis the gate uses.
+On the unit it is an FX1 effect: a source belongs at the head of a track's chain, and on FX1 it leaves FX2 free for the effect under test. (0.1 was on FX2; a project saved with TESTGEN on FX2 now passes that track's audio through untouched.) Put it on a track's FX1, and that track's output (it runs with the sequencer stopped and no trigs), analogue or a channel of Octabam's USB audio out, carries the signal. Uses: measuring the Octatrack's own path (level, frequency response, distortion, channel mapping), measuring a USB audio stream on a host, and proving other modules' claims by putting a known signal through them. [`DESIGN.md`](DESIGN.md) has the plan for all seven signals; [`testgen_ref.py`](testgen_ref.py) is the float reference and the analysis the gate uses.
 
 Every signal is defined exactly: `testgen_ref.py` reproduces each one as the module computes it, so a capture can be compared against the reference sample by sample, and a sweep can be deconvolved with its own inverse.
 
@@ -51,7 +51,8 @@ The FREQ steps:
 All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scratch image, 3 Oct 2026, unless stated.
 
 - ✅ The output does not depend on the input: full-scale noise in and silence in give identical output.
-- ✅ 150 cycles a sample at most, in PINK and WHITE (two generators and two filters; SWEEP 85, SINE 51, IMPULSE, NEEDLE and DC 18, one loop; `make cycles REMIX=testgen`): with TESTGEN on FX1 and FX2 of all four tracks of a core, it prices at 1,200 of the 3,120 cycles usable.
+- ✅ 150 cycles a sample at most, in PINK and WHITE (two generators and two filters; SWEEP 85, SINE 51, IMPULSE, NEEDLE and DC 18, one loop; `make cycles REMIX=testgen`): TESTGEN on FX1 of all four tracks of a core prices at 600 of the 3,120 cycles usable (an FX2 instance is a dry pass and costs nothing).
+- ✅ FX1 only (0.2): an FX2 instance passes its input through bit-exact in every MODE at LEVL 127, and neither slot writes outside its own memory (`dsp_host -guard`).
 - ✅ Every FREQ index matches the sine the phase accumulator defines, sin(2 pi n inc / 2^24), within 3 LSB at 0 dBFS, from sample 0.
 - ✅ Every FREQ step is within 0.0013 Hz of its nominal value (1 kHz measures 1000.0007 Hz, A440 440.0007 Hz; the accumulator's resolution is 0.0026 Hz).
 - ✅ FINE moves the frequency to FREQ x 2^(FINE/384) within half an accumulator step plus 1 ppm, from -64 to +63 (the 2^x polynomial is within 0.19 ppm); FINE 0 is the FREQ step bit for bit; THD at 1 kHz with FINE +63 is -149.4 dB; 20 kHz with FINE up holds at 20 kHz.
@@ -78,7 +79,8 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 
 ## On the unit, 0.2
 
-- Not run yet: NEEDLE, DC and the FX1 listing are proved in the emulator only (above).
+- ✅ Image OCTABAM10 (`make image REMIX=testgen BUILD=10`, flashed over DIN MIDI) on Ignorato's MKII, 4 Oct 2026 (tester, by ear): boots, OS VERSION reads OCTABAM10; TESTGEN is listed on FX1 and silent on insert; all seven MODEs work; on FX1 it feeds FX2 (a SWEEP through FILTER, shaped as expected); four instances on FX1 of tracks 1-4 (PINK and WHIT) beside DELAY, then DARK REV, on FX2, and the same on tracks 5-8 at once (eight instances, both DSP cores): clean, with the sequencer stopped.
+- ⚠️ In that image TESTGEN was on both choosers, and two in series on one track (FX1 TESTGEN on PINK into FX2 TESTGEN) crackled; the cause was not found. 0.2 therefore takes FX1 only, and an FX2 instance is a dry pass (proved in the emulator, above; on the unit with the next image).
 
 ## Using it
 
