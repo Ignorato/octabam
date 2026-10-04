@@ -84,6 +84,13 @@ So `IN_TARGET` alone does not set the latency. Two levers, both in
   pairings have not been run since. `usb-io-tracks-main-cue-ab` pairs it with OUT TRACKS MAIN CUE.
 - Packet buffers in SDRAM through the alias with USB CROSSBAR on.
 - Latency lever 2 above, after the unit measurement.
+- The second eDMA transfer runs every frame while the stream is closed
+  (word 0 = 0, "use the jacks"), and the frame-IRQ unmask waits for its
+  completion. Writing word 0 = 0 once on close and skipping the transfer
+  would remove one interrupt pass per frame; whether the DSP inject
+  tolerates a missing block is not checked. (Bryan T, 4 Oct 2026, from
+  the CF METER takes: every take streamed, so the closed-stream cost is
+  not measured.)
 
 ## Gates
 

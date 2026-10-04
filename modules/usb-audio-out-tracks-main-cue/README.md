@@ -143,6 +143,17 @@ ring once.
 - `minfill`/`maxfill` on a unit under a busy project and DISK MODE churn:
   the host poll jitter the OUT ring absorbs, which is the floor for a
   lower `AUD_TARGET`.
+- The producer runs every block whether or not a host is listening
+  (*How it works*): for this layout ~2,710 instructions and 320 read-back
+  words per block for nothing while the stream is closed; the packet
+  builder already runs only while the host polls. Gating the producer on
+  the stream being open, with the ring re-anchored when the host opens
+  alt 1 (the first-poll anchor already re-anchors once), is not measured;
+  whether the closed-stream producer is what keeps the ring aligned for a
+  clean start is the question. On the unit the ColdFire's voice path is
+  memory-bound (`docs/firmware/ARCHITECTURE.md` "ColdFire time per frame
+  on a unit"), so the read-back words count more than the instructions.
+  (Bryan T, 4 Oct 2026.)
 
 ## Gates
 
