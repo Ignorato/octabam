@@ -15,11 +15,11 @@ port is built, the fixtures are built from the project template
 out/projects/Ultimate FX 1.5.3) and the port runs of the proof of concept,
 of the streaming plan and of the eight-track plan follow: the mask takes
 on the THRU fixture (1, 2, 4 and 8 tracks, and 0xA5). `--long` adds a
-20-second take, which takes about 20 minutes under the port, the masks of
+20-second take (about 7 minutes under the port, 5 Oct 2026), the masks of
 3, 5, 6 and 7 tracks and T8 alone, the mask latched at the start, an
-eight-track wrap, an eight-track overflow and eight tracks on a card at
-half the speed they need; it stays out of
-`make check`. `--fat32` runs the take checks again on a FAT32 card
+eight-track wrap, an eight-track overflow, eight tracks on a card at half
+the speed they need, and everything at 24 bits outrunning the port's card;
+it stays out of `make check`. `--fat32` runs the take checks again on a FAT32 card
 (`stems_fixture.py --fat32`), after checking the firmware mounted it; it
 stays out of `make check` too.
 

@@ -29,6 +29,7 @@ Remixes
 
 Modules
 - STEM REC: MAIN MENU > STEMS records every track to the card while the sequencer plays, one 16-bit stereo file per track, streamed, up to 60 min (Yves Rosius, 26-30 Sep).
+- STEM REC, piece 5: every track after its fader (its share of MAIN, from core 0's own gain arithmetic redone in the frame hook), MAIN, CUE and the inputs AB/CD as sources (stereo or mono), 24-bit files, an 8 MiB ring; the menu's labels keep moving when the card falls behind (Yves Rosius, 1-4 Oct).
 - USB AUDIO IN AB / CD / ABCD: host channels onto the inputs, the inject a placed DSP section behind a ledger-checked hook (`schema.DspHook`) (28 Sep).
 - USB CROSSBAR: the SCM/XBS setting that cured lost packet tails, written at USB controller init (28 Sep).
 - USB AUDIO OUT MAIN: MAIN L/R alone every 250 µs (28 Sep).

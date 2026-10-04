@@ -75,9 +75,10 @@ MODULE = Module(
     key="STEM REC",
     kind=Kind.CF_PATCH,
     category=Category.MACHINES, author="yvesrosius", author_url="https://github.com/yvesrosius",
-    proof=Proof.HARDWARE, proof_note="Yves's MKII, 30 Sep 2026 (STEMS1): T1-T8, about two minutes",
-    doc="MAIN MENU > STEMS: every track to the card while the sequencer plays "
-        "(streamed: 16-bit, up to 60 min).",
+    proof=Proof.HARDWARE, proof_note="Yves's MKII, 30 Sep 2026 (STEMS1): T1-T8, about two minutes; "
+        "piece 5 (after the fader, the sources, 24 bits) port-gated, unflashed",
+    doc="MAIN MENU > STEMS: every track after its fader, MAIN, CUE and the inputs to the card "
+        "while the sequencer plays (streamed: 16 or 24 bits, up to 60 min).",
     linked=(Linked("stems", "modules/stems/stems.s", dram=True, include=gtab_inc),),
     detours=(Detour(FRAME_SITE, FRAME_STOCK, "stems", "stems_frame_hook",
                     "per-frame tap: the enabled tracks into the ring, then the stock routine",
