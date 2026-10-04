@@ -69,6 +69,10 @@ Page layout history: 16 Sep 2026 put MIX bottom right and SAT top left.
   the shared countdown. Its tables are 546 P words (ENC and DEC, 257 points
   each, and 32 mantissas), parked in the stock curve bank by the build.
   Payload A FREE 39 in bottleservice. Pockey (the first TXTR) priced 277.
+- 5 Oct 2026, the cycles pass (bit-identical, `make verify-ident
+  MOD=character` 9/9): 407 → 403 (TAPE 399, TUBE 366). `chtx2`'s two
+  lookups copy u to b (`move a,b`, a clean copy) and build the fraction
+  there instead of parking it in x1 and reloading a: one word per lookup.
 - Cost with KEY: 938 words on each payload (881 before), 244 cycles per
   sample by the pricer (241 before).
 - `tools/verify/verify_character.py`: defaults bit-exact; MIX=0 bit-exact

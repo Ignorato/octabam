@@ -34,6 +34,13 @@ WDTH. `stamp-defaults` before play.
 
 ## Measured
 
+- **5 Oct 2026, the cycles pass** (bit-identical, `make verify-ident
+  MOD=modulation` 13/13): LINE 354 → 330, COMB 329 → 291, PHSR 298.
+  The lines run as modulo-1024 rings in the two loops (`m5 = $3ff`, a
+  stock modulo; every FX1 allocator base is 1024-aligned, `DSP.md`'s
+  table, line R at +1024), so `mo_itap` and `mo_herm` step to the next
+  delay with a post-decrement read instead of the add / and / n5 /
+  (r5)+n5 / −n5 sequence per point.
 - **27 Sep 2026, the cycle pass** (PR: mod-cycles): pricer per loop LINE
   404 → 354, PHSR 394 → 298, COMB 339 → 329 words/sample; the priced
   worst core beside the bus and the other FX1 stations 2,781 → 2,585 (four Characters beside the reverb now bound it;

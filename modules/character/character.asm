@@ -1065,13 +1065,12 @@ ch_rset:
 chtx2:
         move    x:(r4),a                ; the dry (Pockey2's input)
         abs     a
-        move    a,x1                    ; u = |dry|
+        move    a,b                     ; u = |dry|: a clean copy (b0 = 0) for the fraction
         asr     #$f,a,a                 ; idx = u >> 15
         move    a1,n1
-        move    x1,a
-        and     #>$7fff,a
-        asl     #$8,a,a
-        move    a,x0                    ; frac
+        and     #>$7fff,b
+        asl     #$8,b,b
+        move    b,x0                    ; frac
         move    p:(r1+n1),y0            ; ENC[idx]
         move    (r1)+
         move    p:(r1+n1),b             ; ENC[idx+1]
@@ -1086,14 +1085,13 @@ chtx2:
         move    a1,x0
         mpy     x0,y1,a
         asl     #$2,a,a                 ; q = floor(y R) / R
-        move    a,x1
-        asr     #$f,a,a
+        move    a,b                     ; q, limited and clean, for the fraction
+        asr     #$f,a,a                 ; (a0's product bits shift down, not up)
         add     #>$101,a                ; DEC follows ENC's 257 points
         move    a1,n1
-        move    x1,a
-        and     #>$7fff,a
-        asl     #$8,a,a
-        move    a,x0
+        and     #>$7fff,b
+        asl     #$8,b,b
+        move    b,x0
         move    p:(r1+n1),y0            ; DEC[idx]
         move    (r1)+
         move    p:(r1+n1),b             ; DEC[idx+1]
