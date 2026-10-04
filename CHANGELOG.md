@@ -63,7 +63,7 @@ Gates and tools
 Docs
 - `docs/guide/` (BUILDING, REMIXER) and `docs/contributing/` (MODULES, PLACEMENT, TESTING, TOOLING, FAILURE_MODES cut to Seen / Cause / Fix / Check); tool docs beside the tools (30 Sep).
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
-- ColdFire load on a unit: Bryan T's CF METER takes (4 Oct; `docs/firmware/ARCHITECTURE.md` section 6): first voice +37 µs, each further ~14 µs, memory-bound (CPI 3.7–8.9 against the port); TSTR and the stock DELAY not measurable; interrupt levels from the ICR writes in `KERNEL.md`.
+- ColdFire load on a unit: Bryan T's CF METER takes (4 Oct; `docs/firmware/ARCHITECTURE.md` section 6): ~16.5 µs per playing voice at CPI ~4.4 against the port, no first-voice premium (the morning's +37 µs retracted the same evening), the USB stack ~14 µs idle / ~25 µs playing, no crossbar contention; TSTR and the stock DELAY not measurable; interrupt levels from the ICR writes in `KERNEL.md`.
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
 
 ## sos-capture BUILD=94 and BUILD=95 — 3 Oct 2026 (Bryan T's builds)

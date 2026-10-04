@@ -84,14 +84,18 @@ a unit":
 | 7 FLEX playing | 244–268 µs | 291–306 µs |
 | 7 STATIC, seven files, playing (idle 0.00 %) | 256–285 µs | 307–330 µs |
 
-First playing voice +37 µs, each further voice ~14 µs; TSTR AUTO and the
-stock DELAY (one or four tracks, TIME moving) add nothing measurable. CPI
-against the port's instruction count: baseline ~1.4, first voice ~8.9,
-each further voice ~3.7. DSP slots on hardware: TUE 0, ROE 0 and spin min
-2,017–2,262 in every take; ESAI_1 reads flagged on 5,520 of 5,520 frames,
-stopped and playing, as in the emulator. Both USB directions were
-streaming in every take (macOS opens the host → OT stream when `rec`
-starts I/O).
+Each playing voice ~16.5 µs (no first-voice premium: the morning's +37 µs
+was tracks that had played and fallen silent still costing; fresh loads
+read 106.5 µs with no voices, unplugged); TSTR AUTO and the stock DELAY
+(one or four tracks, TIME moving) add nothing measurable; the USB stack
+~14 µs with nothing playing, ~24–26 µs once anything plays, and no crossbar
+contention on the voice path (16.6 µs per voice unplugged, 16.9 streaming).
+CPI against the port's instruction count: baseline ~1.1, each voice ~4.4.
+DSP slots on hardware: TUE 0, ROE 0 and spin min 2,017–2,262 in every
+take; ESAI_1 reads flagged on 5,520 of 5,520 frames, stopped and playing,
+as in the emulator. The morning takes streamed USB both ways (macOS opens
+the host → OT stream when `rec` starts I/O); the evening ones went out
+through CUE into an SSL 12 (`--lr 2,3`, `--analog`), cable in or out.
 
 Taking a reading: `cfmeter.py --dump` needs two sync → reference edges
 (two 2 s cycles: 17,000 port frames give two rows, 2,000 none); turning the
@@ -102,9 +106,9 @@ reads as busy while the panel stays responsive).
 ## Line fills
 
 MEM and SRC price one cache line in each memory the voice path can touch,
-the question Bryan T's takes left open (the voice path runs at CPI 3.7–8.9
-against the port's instruction count, `docs/firmware/ARCHITECTURE.md`
-"ColdFire time per frame on a unit"). The walk runs inside the frame
+the question Bryan T's takes left open (each voice runs at CPI ~4.4 against
+the port's instruction count, and USB contention is ruled out,
+`docs/firmware/ARCHITECTURE.md` "ColdFire time per frame on a unit"). The walk runs inside the frame
 interrupt after the burn, so it adds to the ISR like BURN does, and it
 reads only: the OS image, its uncached alias, or the SRAM.
 
@@ -114,8 +118,8 @@ slot 3's rise over the MEM 0 reading; the two must agree.
 Procedure, on a near-empty project, transport stopped (ISR 119 µs on
 Bryan T's unit, so ~240 µs of frame is free): T8 FX2 = CF Meter, then for
 SRC 0, 1 and 2 in turn, MEM 8, 16, 32, 64 (SRC 2 stops at 31), an 8 s
-`rec` each, with a host stream open and again with nothing streaming
-(`tools/hw/usb_counters.py --in --watch 1` says which). Expected: SRC 0 at
+`rec` each (a host stream open or not: the evening takes found no USB
+contention on the voice path, so one state is enough). Expected: SRC 0 at
 MEM 8 mostly hits (the data cache is 16 KB), MEM 32 and 64 all misses; SRC
 1 every line a bus read; SRC 2 the SRAM's single-cycle reads. A frame is
 362.8 µs: if slot 3 reaches ~340 µs, lower MEM. Put MEM back to 0 before
