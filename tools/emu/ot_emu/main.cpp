@@ -2330,6 +2330,14 @@ int main(int _argc, char** _argv)
 				std::printf("live script: %zu line(s) from %s over %llu frames, ended %s -- %s\n", n, liveScript.c_str(),
 					static_cast<unsigned long long>(rtos.frameCount() - f0), early ? "early" : (live.quit ? "on quit" : "at the end"),
 					rtos.why().c_str());
+				if(!midiOut.empty())
+				{
+					// MIDI OUT as the firmware wrote it over the live script (CC FEEDBACK's stream, stock's knob echo)
+					const auto& tx = rtos.serialTx0();
+					std::ofstream f(midiOut, std::ios::binary);
+					f.write(reinterpret_cast<const char*>(tx.data()), static_cast<std::streamsize>(tx.size()));
+					std::printf("midi out   : %zu byte(s) on UART0 -> %s\n", tx.size(), midiOut.c_str());
+				}
 				if(pcRing && rtos.pcRingArmed())
 				{
 					const auto& ring = rtos.pcRing();
