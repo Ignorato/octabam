@@ -406,6 +406,50 @@ def main():
     except ValueError:
         print("  [PASS] a six-character parameter name is refused")
 
+    # ---- Param.active = None: the donor's enable nibble ------------------
+    # Only on a MenuEntry(stock_dsp=True) clone; elsewhere None is not drawn.
+    _donor = (0x13311111, 0x00001111)      # slots 0-11 drawn, links on 4-6
+    _sd_params = tuple([Param(b"A", 0, active=True), Param(active=False)]
+                       + [Param()] * 10)
+    _sd = Module(name="sd", key="SD", kind=Kind.DSP_EFFECT, doc="fixture",
+                 menu=MenuEntry(fx2_id=0x18, donor_desc=0x400d5a4a,   # COMPRESSOR
+                                abbr=b"SD", fullname=b"SD",
+                                replaces="COMPRESSOR", stock_dsp=True),
+                 params=_sd_params,
+                 dsp=schema.DspSection(asm="does/not/exist.asm", priority=0,
+                                hooks=(DspHook(0x88, (0x627000, 0x000204), "t"),)))
+    _got = schema.enable_words(_sd.active_params, _sd.linked_params,
+                               _sd.inherited_enable, _donor)
+    if _sd.inherited_enable == tuple(range(2, 12)) and _got == (0x13311101, 0x00001111):
+        print("  [PASS] a stock_dsp clone's Param() keeps the donor's enable nibble")
+    else:
+        bad += 1
+        print(f"  [FAIL] stock_dsp Param(): inherited {_sd.inherited_enable}, "
+              f"words {tuple(hex(w) for w in _got)}")
+    _fx = Module(name="fx", key="FX", kind=Kind.DSP_EFFECT, doc="fixture",
+                 menu=MenuEntry(fx2_id=0x1f, donor_desc=0x400d58b8,
+                                abbr=b"FX", fullname=b"FX"),
+                 params=_sd_params, dsp=schema.DspSection(asm="does/not/exist.asm", priority=0))
+    _got = schema.enable_words(_fx.active_params, _fx.linked_params,
+                               _fx.inherited_enable, _donor)
+    if _fx.inherited_enable == () and _got == (0x00000001, 0):
+        print("  [PASS] Param() on a clone without stock_dsp is not drawn")
+    else:
+        bad += 1
+        print(f"  [FAIL] non-stock_dsp Param(): inherited {_fx.inherited_enable}, "
+              f"words {tuple(hex(w) for w in _got)}")
+    # ---- labels on a raw-word slot are display-only ----------------------
+    _raw = Param(b"MON", 0, count=2, active=True, labels=("OFF", "ON"),
+                 widget_word=0x40046f10)
+    _plain = Param(b"MON", 0, count=2, active=True, labels=("OFF", "ON"),
+                   formatter=Formatter.STEPPED)
+    if not _raw.prints_labels and _plain.prints_labels:
+        print("  [PASS] a raw-word slot with labels gets no label formatter")
+    else:
+        bad += 1
+        print(f"  [FAIL] prints_labels: raw-word slot {_raw.prints_labels}, "
+              f"plain select {_plain.prints_labels}")
+
     # ---- the rig's derivations (tools/remix/rig.py) ---------------------
     # The track model is DERIVED, so hold the derivation to the measured
     # facts: payload A serves TRACKS 5-8, B serves 1-4, an

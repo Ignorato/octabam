@@ -33,7 +33,7 @@ from dsp_modmap import BASE, IMG, PAYLOADS, modules  # noqa: E402
 from remix import registry as remix_registry  # noqa: E402
 from remix.registry import modules as remix_modules  # noqa: E402
 from remix.schema import (DEFAULT_HARVEST, NO_FALLBACK, BusRole,  # noqa: E402
-                          YBase)
+                          YBase, enable_words)
 from remix.state import fx1_hazard  # noqa: E402
 from remix import stock as stock_mod  # noqa: E402
 import label_fmt  # noqa: E402
@@ -252,17 +252,6 @@ P_PARAM_NAMES, P_DEFAULTS = 0x16, 0x5e
 P_PENABLE_LO, P_PENABLE_HI = 0x18e, 0x18a
 
 
-def penable(active, linked=()):
-    """The two enable words: bit 0 of a slot's nibble draws it, bit 1 draws
-    the link element to its left neighbour (PARAM_PAGES.md 3b)."""
-    lo = hi = 0
-    for i in active:
-        bits = 3 if i in linked else 1
-        if i < 8:
-            lo |= bits << (4 * i)
-        else:
-            hi |= bits << (4 * (i - 8))
-    return lo, hi
 
 
 # ---- PROBE MODE (PROBE=1): swap BusVerb for dsp/page2_probe.asm and expose
@@ -710,12 +699,18 @@ def main():
             for idx, cnt in PROBE_COUNTS.items():
                 wr32(clone_P + 0x9a + idx * 4, cnt)
                 wr32(clone_P + 0x6a + idx * 4, 0)   # min 0: slot 7 showed -64   # P+0x9a = count array
-        lo, hi = penable(ACTIVE_PARAMS[name], LINKED_PARAMS.get(name, ()))
+        # Param(active=None) on a stock_dsp clone: the slot's nibble stays
+        # the donor's, already copied into the clone above.
+        _inh = _MODS[name].inherited_enable
+        lo, hi = enable_words(ACTIVE_PARAMS[name], LINKED_PARAMS.get(name, ()),
+                              _inh, (rd32(clone_P + P_PENABLE_LO),
+                                     rd32(clone_P + P_PENABLE_HI)))
         wr32(clone_P + P_PENABLE_LO, lo)
         wr32(clone_P + P_PENABLE_HI, hi)
         clone_addr[name] = clone_P
         print(f"  {name:14s} id 0x{new_id:02x}  clone P=0x{clone_P:08x}  "
-              f"knobs {ACTIVE_PARAMS[name]}")
+              f"knobs {ACTIVE_PARAMS[name]}"
+              + (f"  donor's nibble {list(_inh)}" if _inh else ""))
 
     for name in CLONED_ORDER:
         wr32(FX2_IDS + NEW_IDS[name] * 4, clone_addr[name])
@@ -1461,7 +1456,7 @@ def main():
         if name in BLANKED:
             continue
         for _i, _p in enumerate(_MODS[name].params):
-            if not (_p.active and _p.labels):
+            if not _p.prints_labels:
                 continue
             # A MODE select with views gets the BIGGER cave: it renames the
             # knobs around it before printing its own word, so the panel

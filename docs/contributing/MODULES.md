@@ -194,7 +194,13 @@ state things you might assume:
   `FormatterReg`. `verify_menu` checks such a slot against the declaration
   (int exact, symbol non-zero and not the donor's, `None` the donor's) in
   place of the count rule. The stock formatters and widgets are in
-  `docs/firmware/PARAM_PAGES.md` section 7.
+  `docs/firmware/PARAM_PAGES.md` section 7. The build emits no label
+  formatter for such a slot; its `labels` are display-only (the remixer's
+  help row, the BCR map).
+- **`active` writes the slot's enable nibble.** `True` draws it, `False`
+  hides it. `None` (the default) hides it too, except on a
+  `MenuEntry(stock_dsp=True)` clone, where it keeps the donor's nibble,
+  link bit included; `verify_menu` checks that nibble against the donor's.
 - **A `name` of `None` inherits the donor's; `b""` blanks it.** Write the
   name explicitly even when the donor has it: the harness reads these.
 - A labelled select wider than five values normally falls back to a plain
