@@ -69,6 +69,7 @@ from the card (section 5).
 | [**TAPE ECHO**](modules/tapeecho/README.md) | [repeat98](https://github.com/repeat98) | Economy CPU tape echo: two biquads, simple FREE slew, snapped BEAT TIME and page-1 AGE. | on hardware: the author's unit (OCTACLID4): six instances run, a seventh freezes it, open |
 | [**TESTGEN**](modules/testgen/README.md) | [Ignorato](https://github.com/Ignorato) | Measurement source: a sine, sweep, pink or white noise, impulses, a needle pulse train or DC replace the track's audio. | on hardware: Ignorato's MKII, images OCTABAM4-6 and 10 (remix testgen), 3-4 Oct 2026; 0.1 measured at the main outs; FX1-only in the emulator so far |
 | [**TRANSIENT**](modules/transient/README.md) | [Ignorato](https://github.com/Ignorato) | Transient shaper: ATCK and SUST reshape onsets and tails, level-independent. | on hardware: Ignorato's MKII, images OCTABAM2 and OCTABAM3 (remix transient), 3 Oct 2026 |
+| [**VOCODER**](modules/vocoder/README.md) | [Ignorato](https://github.com/Ignorato) | Ten-band vocoder after the Roland VP-330: the track's voice, a built-in carrier at NOTE or input B. | local render: its own render gate (verify_vocoder); not on hardware |
 | [**WAVE**](modules/wave/README.md) | [sambanks](https://github.com/sambanks) | Experiment: a 4-voice wavetable synth on FX2; a sine on the track sets its pitch and level. | on hardware: Sam's MKII, image 93, 3 Oct 2026: plays, PTCH and the CHROMATIC keys move the pitch |
 
 ### Machines and the sequencer

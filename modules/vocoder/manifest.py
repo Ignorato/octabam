@@ -73,7 +73,7 @@ MODULE = Module(
         r7_latch_slot=None,
         gate_label=None,
     ),
-    harness=Harness(layout_char="V", is_server=False),
+    harness=Harness(layout_char="X", is_server=False),
     gates=(Gate("tools/verify/verify_vocoder.py", remix_arg=False),),
     dear={"NOTE": 60, "CONS": 127, "DRY": 127, "LEVL": 127, "MODE": 1},
 )
