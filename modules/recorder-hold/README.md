@@ -4,6 +4,12 @@ Five ColdFire code caves, no DSP code: a recorder-buffer FLEX voice that
 reads one sample past its recording repeats the last sample instead of
 playing a zero.
 
+Status: the sound-on-sound zero is gone on the unit (Bryan T's MKII,
+`sos-capture` BUILD=95, 3 Oct 2026): no zero in any take, the loop point
+inaudible on real audio ([On the unit](#on-the-unit)). The one-sample
+repeat or skip at each wrap stays, and the repeated sample is recorded into
+the loop ([Open](#open)).
+
 In sound-on-sound (a REC3 trig with SRC3 = the track, on the same step as
 the PLAY trig) the recorder arms 64 samples after the play trig binds, so
 the voice plays the previous pass. Its window is the current arm spacing and
@@ -291,10 +297,11 @@ Not proven:
 
 ### Sound-on-sound (SRC3 = the track)
 
-Bryan T, 12 Sep 2026, on OCTABAM84 in his sound-on-sound setup: still a
-click, every other pass at RLEN 16 at 128 BPM. The port reproduces it
-(26 Sep 2026) and it is a different mechanism from the self-loop, present
-on stock firmware too:
+Bryan T, 12 Sep 2026, on OCTABAM84 in his sound-on-sound setup: a click
+every other pass at RLEN 16 at 128 BPM. The port reproduced it (26 Sep
+2026); it is a different mechanism from the self-loop, present on stock
+firmware too, and gone on the unit since `sos-capture` BUILD=95 (3 Oct
+2026, [On the unit](#on-the-unit)):
 
 - With a REC3 trig (SRC3 = T1) on the step of the PLAY trig, the recorder
   arms 64 samples later than with REC1 alone, so the play trig binds before
@@ -306,8 +313,10 @@ on stock firmware too:
 - The self-loop fixture (REC1 only) and a 1 kHz tone (1,875 cycles per bar
   at 128 BPM, so a sample one bar old has the same value) cannot show it.
 
-`RECORDER HOLD` repeats the last sample in place of the zero. The
-one-sample skip or repeat when the loop length changes by one stays: a loop
+`RECORDER HOLD` repeats the last sample in place of the zero, both where
+the fetch past END comes back empty and where the copies' cap would stop
+the voice (after a second transport start). The one-sample skip or repeat
+when the loop length changes by one stays: a loop
 whose period is not a whole number of samples cannot be seamless in whole
 samples. At a tempo whose bar is a whole number of samples (120 among them)
 the window and the content always match and sound-on-sound is clean without
@@ -315,16 +324,16 @@ a patch.
 
 ### Capturing it sample-exact over USB
 
-On the unit the loop was judged by ear and by analog captures, and the
-port shows the caves firing on the wraps where Bryan T's unit still clicks
-(26 Sep 2026). [`sos-capture`](../../remixes/test/sos-capture/README.md) is
-the recorder fixes with USB AUDIO IN AB and USB AUDIO OUT TRACKS:
+[`sos-capture`](../../remixes/test/sos-capture/README.md) is the recorder
+fixes with USB AUDIO IN AB and USB AUDIO OUT TRACKS; Bryan T's BUILD=94 and
+BUILD=95 captures (3 Oct 2026) were taken with it:
 
 ```bash
 tools/hw/sos_capture.py fixture <a project of yours> SOSCAP --bpm 128 --rlen 16
 tools/hw/sos_capture.py signal sig.wav --bpm 128 --rlen 16     # 997 Hz on L, a sample-index ramp on R
 # SOSCAP on the card, the image flashed, PLAY pressed, then:
 tools/hw/sos_capture.py capture sig.wav unit.wav
+tools/hw/sos_capture.py wraps unit.wav                          # each wrap: REPEAT, SKIP, or a sample neither lag explains
 tools/hw/sos_capture.py compare sig.wav unit.wav                # each recirculating pass against the one before
 tools/hw/sos_capture.py port SOSCAP sig.wav port.wav --image out/mainos_bus.bin
 tools/hw/sos_capture.py compare sig.wav unit.wav port.wav       # -> the port delay that matches the unit's arm
@@ -346,11 +355,11 @@ at their pass and offset, and the aligned diff against the unplanted run
 listed exactly those 21 samples. The port run takes the arm to the sample
 from the ramp (a +7,000-sample input delay recovered exactly).
 
-Not yet known: whether the unit's capture is bit-exact where the port's
-is (AMP and the read-back are the same DSP code on both, but the port is
-not a timing model of the chip); whether macOS presents the unit as one
-device with 16 inputs and 2 outputs (`capture` refuses otherwise and lists
-the devices).
+On the unit (Bryan T, 3 Oct 2026): macOS presents it as one device with
+16 inputs and 2 outputs; T1 carries a white noise floor of about 55 LSB
+(24-bit) on both channels, L/R uncorrelated, present before the signal
+arrives (source not found), so the unit's capture is not bit-exact where
+the port's is. `wraps` classifies from the loop's lag and works through it.
 
 The port's ColdFire rate does not produce the click: `--ips` from 1,200 to
 3,990 ColdFire instructions per sample (30–100 % of the default, which is
