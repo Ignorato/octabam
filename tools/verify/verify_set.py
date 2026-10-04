@@ -174,6 +174,8 @@ def main():
                          "image-stage gates that boot this card (TEMPO BUS) need, as their own shard job")
     ap.add_argument("--image", default="", help="a built image to boot instead of building the remix (a bisect)")
     ap.add_argument("--extra", default="", help="extra ot_emu arguments, e.g. '--dsp-dirty' (garbage DSP RAM, as hardware)")
+    ap.add_argument("--poke-trig", type=int, default=2,
+                    help="the step the port pokes a trig on for T1 (default 2); 0 = none, a run with only the project's own trigs")
     ap.add_argument("--midi-file", default="", help="extra MIDI IN lines appended to the gate's own "
                     "('<frame> <status> <d1> <d2>' in hex, one per line; T<n> in the status is that "
                     "track's channel): a knob script through the panel's real path")
@@ -283,7 +285,7 @@ def main():
         print(f"  card: {mb} MB, {len(audio)} sample file(s) staged for bank {bank} part {part_no}")
         cmd = [str(EMU), "--image", str(image), "--card", str(card), "--set", a.set_name, "--project", a.name,
                "--sequencer", "--internal-clock", "--frames", str(a.frames), "--load-ms", str(a.load_ms),
-               "--dsp", "--main-level", "64", "--audio-in", "tones", "--poke-trig", "2", "--midi", str(midi),
+               "--dsp", "--main-level", "64", "--audio-in", "tones", "--midi", str(midi),
                "--block-dump", str(blocks), "--cmd-log", str(cmds), "--card-out", str(card_after),
                "--dsp-writes", str(writes),
                "--mem-dump", f"{LIVE_IDS:#x},16={dumps['ids']};{RECORDS:#x},512={dumps['records']};{LANES:#x},576={dumps['lanes']}"
@@ -291,6 +293,7 @@ def main():
                   f";0x46c82456,4={dumps['dbptr']};0x80000000,4={dumps['partix']}"
                   f";{BLOB + (bank - 1) * BANK_STRIDE + PART_KNOBS:#x},{4 * PART_STRIDE}={dumps['parts']}" if midi_out else ""),
                "--dsp-peek", "0:Y:36082,1;1:Y:36082,1;1:X:6229,1;1:X:6275,1;0:Y:36081,1;0:Y:9f4,1"] \
+            + (["--poke-trig", str(a.poke_trig)] if a.poke_trig else []) \
             + (["--midi-out", str(midi_out)] if midi_out else []) + a.extra.split()
         if a.stage_only:
             log.write_text(" ".join(cmd) + "\n")

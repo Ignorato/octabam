@@ -371,9 +371,9 @@ of the unit's cycle-to-cycle noise.
 - **The ISR mean alternates ~240 / ~268 µs between consecutive 2 s cycles**
   in most playing takes; one bar at 120 BPM is 2 s. Not investigated.
 
-Method, port side: `verify_set` passes `--poke-trig 2` unconditionally
-(line 286), so every port run has T1 playing; a zero-voice run needs that
-removed. The gate stages samples from the SAVED part of pattern 1 and
+Method, port side: `verify_set` pokes a trig on T1 step 2 by default, so
+every port run has T1 playing; `--poke-trig 0` (since 5 Oct 2026) is the
+zero-voice run. The gate stages samples from the SAVED part of pattern 1 and
 plays pattern 1; working-part edits or a setup on another pattern give
 silent tracks with `0 failure(s)`. The OT's SAVE AS NEW leaves later edits
 in the original project (`ot_bank.trigs(data, 0, track)` reads a copy's

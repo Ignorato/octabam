@@ -16,6 +16,8 @@ read it.
 | page | slot | name | range | what it does |
 |---|---|---|---|---|
 | 1 | 0 | BURN | 0–127, default 0 | read on track 8 only: 2 µs of busy-wait per step at the start of every frame interrupt |
+| 1 | 1 | MEM | 0–127, default 0 | read on track 8 only: MEM KB read after the burn, one longword per 16-byte line, timed into slot 7 |
+| 1 | 3 | SRC | 0–127, default 0 | the region MEM walks: 0 the OS image in cached SDRAM (`0x40000400`), 1 the same through the uncached alias (`0x48000400`), 2 on-chip SRAM (`0x80000000`, 32 KB, MEM clamped to 31); other values read as 0 |
 | 1 | 2 | DBRN | 0–127, default 0 | 24 × DBRN DSP cycles per sample, burnt by the insert before its sample loop (SEND's burn form) |
 
 ## Measured
@@ -97,6 +99,29 @@ meter off mid-session gives "no sync -> reference edge pair found"; read
 ISR mean and max, not idle % (task-level work below the UI's priority
 reads as busy while the panel stays responsive).
 
+## Line fills
+
+MEM and SRC price one cache line in each memory the voice path can touch,
+the question Bryan T's takes left open (the voice path runs at CPI 3.7–8.9
+against the port's instruction count, `docs/firmware/ARCHITECTURE.md`
+"ColdFire time per frame on a unit"). The walk runs inside the frame
+interrupt after the burn, so it adds to the ISR like BURN does, and it
+reads only: the OS image, its uncached alias, or the SRAM.
+
+ns per line = slot 7 × 4 × 7.58 / (MEM × 64). The same number comes from
+slot 3's rise over the MEM 0 reading; the two must agree.
+
+Procedure, on a near-empty project, transport stopped (ISR 119 µs on
+Bryan T's unit, so ~240 µs of frame is free): T8 FX2 = CF Meter, then for
+SRC 0, 1 and 2 in turn, MEM 8, 16, 32, 64 (SRC 2 stops at 31), an 8 s
+`rec` each, with a host stream open and again with nothing streaming
+(`tools/hw/usb_counters.py --in --watch 1` says which). Expected: SRC 0 at
+MEM 8 mostly hits (the data cache is 16 KB), MEM 32 and 64 all misses; SRC
+1 every line a bus read; SRC 2 the SRAM's single-cycle reads. A frame is
+362.8 µs: if slot 3 reaches ~340 µs, lower MEM. Put MEM back to 0 before
+saving the project (it is a Part knob); a freeze at a high MEM clears on a
+power-cycle. Not run on a unit.
+
 ## Open
 
 - Whether DTIM3 runs at 132 MHz on the unit (slot 5 answers it).
@@ -175,7 +200,7 @@ reads as busy while the panel stays responsive).
 | 4 | frame interrupt, longest in the segment, counts / 4 |
 | 5 | frame period (segment / interrupts), counts / 4 |
 | 6 | the idle loop's shortest step, counts |
-| 7 | BURN, counts / 4 |
+| 7 | BURN, counts / 4; with MEM set, the walk's mean duration per frame, counts / 4 |
 | 8 | core 0 spin count, min over the window (polls) |
 | 9 | core 0 spin count, max |
 | 10 | frames with ESAI TUE set |
