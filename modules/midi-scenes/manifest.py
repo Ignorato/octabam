@@ -6,7 +6,8 @@ live 8x30 lock table only the panel writes. midisc adds a second table
 XF morph, part save/reload and the scene clear/copy/paste rows to read it
 when a MIDI event is driving. The panel path is untouched.
 
-Source: `upstream/` is his repository (submodule, tracking 1.40MIDISC8.2).
+Source: `upstream/` is his repository (submodule at 4f9a894, MIDISC2.0; the
+gas units are his 1.40MIDISC8.2 code, which 2.0 did not change -- README).
 His caves are written in his Python encoder; his `tools/gas_port.py`
 regenerates `gas/*.s` from the same builders and proves each region
 assembles to his bytes at his addresses (`tools/verify/verify_midiscenes.py`
