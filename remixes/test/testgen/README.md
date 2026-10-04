@@ -9,7 +9,7 @@ TESTGEN beside 13 stock effects (all but PLATE REV, whose words it takes).
 
 ## Status
 
-Renders in `dsp_host` (`tools/verify/verify_testgen.py`); not yet run on hardware.
+Ran on Ignorato's MKII as OCTABAM4, OCTABAM5 and OCTABAM6, 3-4 Oct 2026 (`make image REMIX=testgen BUILD=6`), and measured at its main outs (`modules/testgen/README.md`).
 
 ## Build
 

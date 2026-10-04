@@ -81,8 +81,9 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 
 ## Open
 
-- Not yet run on hardware.
-- What the Octatrack's own path does to the signal after FX2 (track level, the mixer, the converters) is what TESTGEN is for; it is not measured yet.
+- How other units measure: the figures above are one MKII through one Scarlett, and do not separate the two.
+- Above 19 kHz the response is not resolved by the 1 s sweep and its analysis; a longer sweep, or SINE at 20 kHz, would.
+- The USB audio path (Octabam's USB audio out on a host) is not measured yet; TESTGEN is meant for that too.
 
 ## Gates
 

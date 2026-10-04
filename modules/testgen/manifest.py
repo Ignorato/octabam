@@ -58,7 +58,7 @@ MODULE = Module(
     key="TESTGEN",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.RENDER, proof_note="its own render gate (verify_testgen); not on hardware",
+    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, images OCTABAM4-6 (remix testgen), 3-4 Oct 2026; measured at the main outs",
     doc="Measurement source: a sine, sweep, pink or white noise or impulses replace the track's audio.",
     menu=MenuEntry(
         fx2_id=0x17,
