@@ -89,6 +89,11 @@ if [ ! -x "$DIS" ] || [ ! -x "$ASM" ] || [ ! -x "$HOST" ]; then
   fi
 else
   echo "   already built: $DIS, $ASM, $HOST"
+  # A built tree is not re-patched here: one built under an older
+  # tools/patches/dsp56300.patch keeps the older assembler and emulator.
+  git -C vendor/dsp56300 apply --check --reverse "$(pwd)/tools/patches/dsp56300.patch" 2>/dev/null \
+    || { echo "   [!] vendor/dsp56300 does not carry the current tools/patches/dsp56300.patch."; \
+         echo "       Fix: make dsp-repatch (then make emu-cf)"; exit 1; }
   # Stage the tree's dsp_host/dsp_asm sources AND rebuild them: until 27 Sep
   # 2026 this path only copied, so a binary built before a harness change
   # kept running with the old options (PR #356 was reviewed twice on a
