@@ -70,6 +70,8 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 - ✅ Image OCTABAM5 (`make image REMIX=testgen BUILD=5`, with FINE and A440), same unit and day: boots, OS VERSION reads OCTABAM5; on insert LEVL reads 0 (silent), and FREQ shows its steps in Hz; FINE tunes smoothly; all five MODEs and the four CHAN settings work as expected (tester, by ear).
 - ✅ Image OCTABAM6 (`make image REMIX=testgen BUILD=6`, the 46-bit noise per channel and CHAN MONO), same unit, 4 Oct 2026: boots, OS VERSION reads OCTABAM6; WHITE and PINK with CHAN L+R sound wide, and with MONO centred (tester, on headphones).
 
+- ✅ Measured through the unit's MAIN OUT into a Focusrite Scarlett 18i8 at 48 kHz (OCTABAM6, 4 Oct 2026; the whole chain, Octatrack and Scarlett together): LEVL steps exact within 0.002 dB over 54 dB; THD at 1 kHz -94 dB at 0 dBFS and -106.5 dB at -12 dBFS; THD+N -92 dB at 0 dBFS; noise floor -109 dBFS; crosstalk below -113 dB; response from 20 Hz to 19 kHz within -0.26 dB of 1 kHz (by SWEEP and deconvolution); PINK -2.98 and -3.01 dB/octave with L and R uncorrelated (0.003) after the converters. The two clocks differ by 23 ppm.
+
 ## Using it
 
 - **A level or a channel check**: SINE at 1 kHz (FREQ 17), LEVL 127 gives a 0 dBFS peak; step LEVL to find where a path clips, 0.5 dB at a time. CHAN L-R shows whether a path keeps polarity.
