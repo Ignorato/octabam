@@ -20,7 +20,8 @@ The full text before this rewrite: `git show 666b6154:CHANGELOG.md`.
   three output instructions; the 909 adds four instructions per sample.
 
 Remixes
-- bottleservice takes the computer's stereo output onto inputs C/D (USB AUDIO IN CD + USB CROSSBAR); USB AUDIO OUT MASTER polls every 250 µs (28 Sep).
+- bottleservice takes the computer's stereo output onto inputs C/D (USB AUDIO IN CD + USB CROSSBAR); USB AUDIO OUT MASTER polls every 250 µs (28 Sep). Both IN modules out again on 4 Oct (#575, image A0 below).
+- bottleservice keeps the stock DELAY's FX2 chooser row; `BUILD` tags past 99 are a letter and a digit (`A0` = 100) (4 Oct, #576).
 - Twelve `usb-io-<out>-<in>` test remixes and `usb-out-main`; USB remixes named by direction (`usb-full` → `usb-out-tracks`, `usb-lean` → `usb-out-tracks-main-cue`, `usb-master` → `usb-out-master`, `usb-mc` → `usb-out-main-cue`) (28 Sep).
 - `remixes/test/` holds the one-module carriers; `mods` moved there, `restock` removed (28–30 Sep).
 - `octatrick` carries SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP, TUNER, USB MIDI, USB AUDIO OUT TRACKS MAIN CUE and USB AUDIO IN ABCD + USB CROSSBAR on the stock effects less SPATIALIZER (its payload-A words hold the IN inject); `octatrick-usb` folded into it and removed (Tim Hastie, 29 Sep, #526).
@@ -81,6 +82,20 @@ captured sample-exact over USB AUDIO OUT TRACKS.
 - Not run: STOP/PLAY on BUILD=94. The repeated sample is recorded into the
   buffer and replays until the next pair (RLEN 4: 35.2 % of tone rms at the
   stored seam, 18.8 % at the skip).
+
+## Image A0 (100) — 4 Oct 2026 (`bottleservice` at `feb52f5f`)
+
+On the unit (Sam's MKII): boots into a re-hosted project, pattern paste
+works. bottleservice less USB AUDIO IN CD and USB CROSSBAR; the stock
+DELAY in the FX2 chooser (SEND, DELAY); PLOCKS P2, Octakit, the rig.
+- Images 95–99 (3–4 Oct, same remix with the two USB IN modules): PLAY
+  halted with a computer on USB (image 97); on image 99 the unit wrote a
+  bank file short one 64-byte burst with the card's MBR in its place, the
+  firmware rejected it on every later boot, and Octakit stayed stranded
+  QUIESCED for the session (silent songs, a halt on pattern paste) --
+  `docs/contributing/FAILURE_MODES.md`, the two Octakit entries.
+- The stranded-load path in Octakit is open (a failed stock bank load has
+  no recovery); the bad project stays off the unit.
 
 ## Image 93 — 3 Oct 2026 (`wave` at `e90912d9`)
 
