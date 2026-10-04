@@ -23,11 +23,11 @@ def _q23(v):
     return min(round(v * (1 << 23)), 0x7FFFFF) & 0xFFFFFF
 
 
-# P table, 152 words, read through the ptable literal:
-#   +0   BAND[10] x {f1, f2, W/2}   the pair's tuning and the folded weight
-#   +30  NINC[61]   NOTE step k (C1 + k) -> the phase increment, a cycle 2^24
-#   +91  NIDT[61]   1/(du 2^11), du = NINC / 2^24, for the polyBLEP
-BAND = tuple(_q23(v) for f1, f2, w in _ref.band_coefs() for v in (f1, f2, w))
+# P table, 172 words, read through the ptable literal:
+#   +0   BAND[10] x {f1, f2, W/2, f1, f2}  in the order the band loop reads them
+#   +50  NINC[61]   NOTE step k (C1 + k) -> the phase increment, a cycle 2^24
+#   +111 NIDT[61]   1/(du 2^11), du = NINC / 2^24, for the polyBLEP
+BAND = tuple(_q23(v) for f1, f2, w in _ref.band_coefs() for v in (f1, f2, w, f1, f2))
 NINC = tuple(_ref.note_inc(k) for k in range(61))
 NIDT = tuple(_q23(_ref.note_idt(k)) for k in range(61))
 

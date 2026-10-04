@@ -9,7 +9,8 @@ synthesis response, a high-consonant circuit). modules/vocoder/DESIGN.md has the
     sawtooths at NOTE (INT) or R/2 (EXT)
   each band k: two Chamberlin band-pass sections, at fc x 0.91 and fc x 1.10, Q 7, the input
     scaled by q = 1/7 so each section peaks at the input's level; the same pair on m and on c
-  envelope: v = (W_k / 2) |band_k(m)|; e += (0.3 ms up, 10 ms down) (v - e), 48-bit
+  envelope: v = (W_k / 2) |band_k(m)|; e = max(v, e (1 - ad)), ad for 10 ms: a peak
+    detector, instant attack, as the VP-330's diodes; 48-bit
   out = LEVL limit(2^8 sum_k e_k band_k(c) + (CONS/32) hp6(m/2) + (DRY/128) m)
   W_k folds in the VP-330's pre-emphasis (1 - 0.9 z^-1 at fc), its de-emphasis (a 9 dB fall
     across the bands) and the pair's gain at fc (1/g^2), so the bass bands are not starved
@@ -88,7 +89,7 @@ def vocode(L, R, mode=0, note=24, cons=48, dry=0, levl=100):
         b = _svf_bp(_svf_bp(c, f1, q), f2, q)
         e = np.empty(n); ev = 0.0
         for i, v in enumerate(w * np.abs(a)):
-            ev += (au if v > ev else ad) * (v - ev)
+            ev = max(v, ev * (1 - ad))               # a peak detector: instant attack
             e[i] = ev
         acc += e * b
     hf = 2 * math.sin(math.pi * HP_FC / FS)

@@ -20,20 +20,20 @@ The modulator is the left and right channels averaged (INT), or the left channel
 
 All by `tools/verify/verify_vocoder.py` through `dsp_host` on the audition's scratch image, 4 Oct 2026, unless stated. The test modulator is synthetic: a 120 Hz glottal pulse train through three formants, the vowel changing every 200 ms, with noise bursts for consonants.
 
-- ✅ The output matches the float reference within -85.7 dB (INT at C3) and -85.6 dB (EXT with a chord carrier), level within 0.001 dB.
+- ✅ The output matches the float reference within -62.4 dB (INT at C3) and -64.2 dB (EXT with a chord carrier), level within 0.001 dB. The difference is the band sum's 24-bit rounding (it was -85.7 dB with a 48-bit sum, which cost two moves a band); it exists only while a band is active.
 - ✅ Silence in gives silence out, bit-exact, with CONS and DRY up.
-- ✅ 0.3 s into a pause the output is -121.8 dBFS: the envelopes decay in 48 bits (in 24 they stuck at about -90 dBFS and let the carrier through between words).
-- ✅ A sine at a band's centre keeps that band at least 18.7 dB above its neighbours.
+- ✅ 0.3 s into a pause the output is -136.3 dBFS: the envelopes decay in 48 bits (in 24 they stuck at about -90 dBFS and let the carrier through between words).
+- ✅ A sine at a band's centre keeps that band at least 18.6 dB above its neighbours.
 - ✅ NOTE: C1, C3 and C6 within 0.05 % (measured 32.703, 130.813 and 1046.503 Hz); a saved NOTE past C6 plays C6.
 - ✅ Every knob at both ends renders.
-- ✅ 1,085 cycles a sample (`make cycles REMIX=vocoder`): four instances on one core price at 4,340 of 4,535.
+- ✅ 760 cycles a sample (`make cycles REMIX=vocoder`); `make accept REMIX=vocoder` passes every stage: four instances on one core price at 3,040 against the 3,120 a core has after its own work, no layout over the wall. The first version cost 1,085: three on tracks 1-4 (one core) stalled a MKII (audio and sequencer stopped until a reboot); the parallel-move rewrite, a peak-detector envelope and a 24-bit band sum brought it down.
 - Listened to (4 Oct 2026): a LibriVox reading (public domain) through this DSP code in `dsp_host`, at C3, C2, without consonants, a melody parameter-locked per 1/8 and an external chord carrier; judged intelligible and "really good" by the tester. The design was chosen by ear and measurement: the VP-330's steep bands against a first law with shallow ones (DESIGN.md).
 
 ## Open
 
 - Not yet run under the ColdFire port in a project, nor on hardware.
 - The VP-330's ensemble (a bucket-brigade chorus on its output) is not modelled; a chorus on the Octatrack's FX would come after FX2's output only on another track.
-- The cost: 1,085 cycles a sample is high; parallel moves would cut it.
+- Four instances on a core leave 80 cycles of the 3,120; more than four on a core is refused by the pricing gate.
 
 ## Gates
 
