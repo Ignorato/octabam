@@ -410,20 +410,35 @@ def all14w(s):
               all((m > 0 and x >= m - 7) or (m < 0 and x <= m + 7) for m, x in rail), f"{len(rail)} rail samples")
 
 
+# overflow24's run, on the port's own card: everything at 24 bits needs
+# 1,152 bytes a frame, more than the card writes, so the ring (7,281 frames)
+# fills by itself; then the task writes it out and goes IDLE. Measured
+# (v5-p5-fix1.log): RING FULL 12,402 frames into the take (the writer took
+# 5,120 frames meanwhile, ~475 bytes a frame), IDLE 13,085 frames later
+# (~640 bytes a frame), 25,487 in all.
+OVERFLOW24_FRAMES = 30000
+
+
 def overflow24(s):
-    """Everything on at 24 bits on a slow emulated card: the ring fills, the
-    take stops with RING FULL, and every file holds a whole number of frames
-    under a header that says so."""
-    log, dump, card, words, _ = port(s, 6000, tag="overflow24", fixture=FIXTURE_THRU, mask=None, dump_blocks=False,
+    """Everything on at 24 bits on the port's card, too slow for it: the ring
+    fills, the take stops with RING FULL, the task writes the ring out and
+    goes IDLE, and every file holds the take's frames under a header that
+    says so."""
+    log, dump, card, words, _ = port(s, OVERFLOW24_FRAMES, tag="overflow24", fixture=FIXTURE_THRU, mask=None,
+                                     dump_blocks=False,
                                      pokes_before=[(s["stems_tracks"] + 2, 0x0f), (s["stems_tracks"] + 3, 0xff),
                                                    (s["stems_fmt"] + 3, 0b111)],
-                                     extra=("--ata-latency", str(SLOW_LATENCY)), load_ms=60000)
+                                     extra=watched(s))
     st, status, _, wr, rd, nfr = words
-    check("overflow24: RING FULL", status == ERR_OVERFLOW, f"status {status}")
+    ws = writes(s, log)
+    marks = [(int(x) // 16, w, v) for x, w, v in ws]
+    check("overflow24: RING FULL, then IDLE", status == ERR_OVERFLOW and st == ST_IDLE,
+          f"status {status}, state {st}, {nfr} frames; (frame, word, value) {marks}")
     f = {n.upper(): d for n, d in take_files(card, FIXTURE_THRU)}
-    check("overflow24: every file whole, its header its length",
-          len(f) == 12 and all(len(d) >= 44 and wav_fmt(d)[4] == len(d) - 44 and (len(d) - 44) % wav_fmt(d)[2] == 0
-                               for d in f.values()), f"{len(f)} files")
+    check("overflow24: twelve files, each the take's frames under a header that says so",
+          len(f) == 12 and all(len(d) >= 44 and wav_fmt(d)[4] == len(d) - 44 == nfr * wav_fmt(d)[2] * 16
+                               for d in f.values()),
+          f"{len(f)} files, {sorted({len(d) for d in f.values()})} bytes, {nfr} frames")
 
 
 def capture(prefix, chans):
