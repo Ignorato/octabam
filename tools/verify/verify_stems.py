@@ -1115,6 +1115,64 @@ def same_as_alone(s):
               a[3] == g[3] and fa == fg and len(fa) > 0, f"{a[3]} vs {g[3]}, {len(fa)} and {len(fg)} files")
 
 
+HOOK_SIDE = ("stems_frame_hook", "stems_mirror", "stems_emac_in", "stems_emac_out", "stems_half",
+             "stems_track_src", "stems_track_gains", "stems_track16", "stems_track24", "stems_bus_src",
+             "stems_bus16", "stems_bus24", "stems_copy_frame", "stems_tdelay_step", "stems_layout",
+             "stems_trace_frame")
+HOOK_CEILING = 7415   # the measured worst case, everything at 24 bits; 5,000 until Yves's
+                      # decision of 4 Oct 2026 to test the cost on the unit (spec 4.6)
+
+
+def hook_cost(s, cov):
+    """Instructions the hook runs a frame, from a --coverage file (one
+    `hexaddr count` line per instruction from the transport start): the
+    counts inside the hook's routines (each from its symbol to the next
+    symbol), over the times its first instruction ran (STEM_REC.md 10.0).
+    Returns (per frame, frames, {routine: per frame})."""
+    starts = sorted(set(s.values()))
+    spans = []
+    for name in HOOK_SIDE:
+        a = s[name]
+        nxt = next((x for x in starts if x > a), a + 0x1000)
+        spans.append((name, a, nxt))
+    total, frames, split = 0, 0, {}
+    for line in pathlib.Path(cov).read_text().splitlines():
+        f = line.split()
+        if len(f) != 2:
+            continue
+        a, n = int(f[0], 16), int(f[1])
+        if a == s["stems_frame_hook"]:
+            frames = n
+        for name, lo, hi in spans:
+            if lo <= a < hi:
+                total += n
+                split[name] = split.get(name, 0) + n
+                break
+    per = {k: v // frames for k, v in split.items()} if frames else {}
+    return (total // frames if frames else None), frames, per
+
+
+def cost(s):
+    """Gate 7: everything on at 24 bits, the eight-track THRU fixture, a take
+    armed before play: at most HOOK_CEILING instructions a frame; and the
+    cost with the recorder idle (the mirror alone), recorded. The detail
+    splits the count by routine."""
+    for tag, before, src, fmt in (("costrec", None, 0xfff, 0b001), ("costidle", (), 0x0ff, 0b110)):
+        cov = run_path(tag, "cov")
+        log, *_ = port(s, 400, tag=tag, fixture=FIXTURE_THRU, mask=None, dump_blocks=False, calls_before=before,
+                       pokes_before=[(s["stems_tracks"] + 2, src >> 8), (s["stems_tracks"] + 3, src & 0xff),
+                                     (s["stems_fmt"] + 3, fmt)],
+                       extra=("--coverage", str(cov)))
+        per, frames, split = hook_cost(s, cov) if cov.exists() else (None, 0, {})
+        top = ", ".join(f"{k} {v}" for k, v in sorted(split.items(), key=lambda kv: -kv[1]) if v)
+        if tag == "costrec":
+            check(f"cost: at most {HOOK_CEILING} hook instructions a frame, everything on at 24 bits",
+                  per is not None and per <= HOOK_CEILING, f"{per} a frame over {frames} frames ({top})")
+        else:
+            check("cost: the hook with the recorder idle (the mirror) is measured", per is not None,
+                  f"{per} a frame over {frames} frames ({top})")
+
+
 def nocard(s):
     """REC with no card: the status reads NO CARD and nothing else changes
     (IDLE, no task made). Nothing is armed before play; the card-mounted
@@ -1766,7 +1824,7 @@ def main():
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
              for m in (0x01, 0x03, 0x0F, 0xFF, 0xA5)]
-    runs += [("same_as_alone", same_as_alone), ("cut", cut), ("labels", labels), ("labelsbehind", labelsbehind), ("nocard", nocard), ("exists", exists),
+    runs += [("cost", cost), ("same_as_alone", same_as_alone), ("cut", cut), ("labels", labels), ("labelsbehind", labelsbehind), ("nocard", nocard), ("exists", exists),
              ("overflow", overflow), ("cardfail", cardfail)]
     if "--long" in sys.argv:
         runs += [("limit", limit)]
