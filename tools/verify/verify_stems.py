@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """STEM REC -- the row, the tap and the file, checked without hardware.
 
-    python3 tools/verify/verify_stems.py [remix] [--long] [--fat32] [--static] [--only=NAME,...]
+    python3 tools/verify/verify_stems.py [remix] [--long] [--fat32] [--static] [--only=NAME,...] [--alone]
 
 Static, from the built image: MAIN MENU has five categories, the four
 stock ones byte for byte and STEMS fifth, with its icon and its list;
-CONTROL is stock; the STEMS list ships filled in, its eleven rows with
+CONTROL is stock; the STEMS list ships filled in, its eighteen rows with
 their actions, headings and labels as at boot; the frame site jumps to the
 hook; the ring and the stack sit at the top of the platform reserve, above
 the runtime's stage. `--static` stops there; `--only=NAME,...` runs only
@@ -22,6 +22,12 @@ half the speed they need; it stays out of
 `make check`. `--fat32` runs the take checks again on a FAT32 card
 (`stems_fixture.py --fat32`), after checking the firmware mounted it; it
 stays out of `make check` too.
+
+Each check's first run on a fixture shares one boot with the others'
+(the port's --scenario: one LOAD PROJECT, a child forked per run), unless
+it sets a boot option (PRE_BOOT: a block dump, an audio capture, a write
+watch, dirty DSP RAM, a card latency). `--alone` boots every run on its
+own, as before; same_as_alone checks the two give the same takes.
 """
 import json
 import os
@@ -102,6 +108,8 @@ fails = 0
 
 def check(label, ok, detail=""):
     global fails
+    if RECORDING is not None:
+        return                     # prefetch() is collecting runs: a check's lines don't count
     print(f"  [{'PASS' if ok else 'FAIL'}] {label}{'  ' + detail if detail else ''}")
     fails += 0 if ok else 1
 
@@ -625,9 +633,23 @@ def master(s):
           f"state {st}, status {status}, {len(data) if data else None} bytes for {nfr} frames")
 
 
-def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
-         card_in=None, dump_blocks=True, stack=False, mems=(), calls_before=None, fixture=None,
-         pokes_before=(), mask=0x01, load_ms=20000, steps=(), midi_lines=()):
+PRE_BOOT = ("--dsp-dirty", "--ata-latency", "--block-dump", "--audio-out", "--watch-mem")
+# Options a scenario can't set: the port applies them at the boot, before
+# the fork (main.cpp: --dsp-dirty and --ata-latency set the machine up,
+# --watch-mem installs its watch, --audio-out switches the capture on, and
+# --block-dump opens one stream a child with another path closes). A run
+# with one boots alone.
+PREFETCH = {}                                 # tag -> what port() returns, filled by prefetch()
+RECORDING = None                              # a list while prefetch() collects the runs checks will make
+
+
+class _Recorded(Exception):
+    pass
+
+
+def _port_parts(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), pokes=(),
+                card_in=None, dump_blocks=True, stack=False, mems=(), calls_before=None, fixture=None,
+                pokes_before=(), mask=0x01, load_ms=20000, steps=(), midi_lines=()):
     """One fixture run under the port: the module's action called before
     play (`--call-before-play`: the action arms, and the hook takes the
     ARMED-to-RECORDING edge on the first playing frame), STOP at `stop_at`
@@ -668,11 +690,11 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     fx = json.loads(pathlib.Path(fixture or FIXTURE).read_text())
     pokes_before = ([(s["stems_tracks"] + 3, mask)] if mask is not None else []) + list(pokes_before)
     work = pathlib.Path("out/stems_runs"); work.mkdir(parents=True, exist_ok=True)
-    dump, card = work / f"{tag}.dump", work / f"{tag}.img"
-    mem, ring = work / f"{tag}.mem", work / f"{tag}.ring"
-    dumps = f"0x{s['stems_state']:x},24={mem}"
+    paths = {"log": work / f"{tag}.log", "dump": work / f"{tag}.dump", "card": work / f"{tag}.img",
+             "mem": work / f"{tag}.mem", "ring": work / f"{tag}.ring", "ring_bytes": ring_bytes}
+    dumps = f"0x{s['stems_state']:x},24={paths['mem']}"
     if ring_bytes:
-        dumps += f";0x{s['stems_ring']:x},{ring_bytes}={ring}"
+        dumps += f";0x{s['stems_ring']:x},{ring_bytes}={paths['ring']}"
     if stack:
         dumps += f";0x{s['stems_stack']:x},{STACK_SIZE}={work / (tag + '.stack')}"
     for addr, length, name in mems:
@@ -682,37 +704,104 @@ def port(s, frames, stop_at=None, extra=(), tag="run", ring_bytes=0, calls=(), p
     if stop_at is not None:
         at.append(f"{stop_at}:0x{KEY_STOP:x}:0")
         pk.append((STOP_GATE, 1))
-    args = [str(EMU), "--image", str(IMAGE), "--card", card_in or fx["card"], "--set", fx["set"],
-            "--project", fx["project"], "--sequencer", "--internal-clock",
-            "--frames", str(frames), "--load-ms", str(load_ms), "--dsp", "--main-level", "64",
-            "--pre-roll", str(PRE_ROLL), "--poke-trig", "2",
-            *(["--block-dump", str(dump)] if dump_blocks else []),
-            *(["--call-before-play", ",".join(f"0x{a:x}:0" for a in before)] if before else []),
-            "--card-out", str(card), "--mem-dump", dumps, *extra]
+    pre = [str(EMU), "--image", str(IMAGE), "--card", card_in or fx["card"], "--set", fx["set"],
+           "--project", fx["project"], "--load-ms", str(load_ms), "--dsp"]
     if fx.get("audio_in"):
-        args += ["--audio-in", fx["audio_in"]]
+        pre += ["--audio-in", fx["audio_in"]]
+    post = ["--sequencer", "--internal-clock", "--frames", str(frames), "--main-level", "64",
+            "--pre-roll", str(PRE_ROLL), "--poke-trig", "2",
+            *(["--block-dump", str(paths["dump"])] if dump_blocks else []),
+            *(["--call-before-play", ",".join(f"0x{a:x}:0" for a in before)] if before else []),
+            "--card-out", str(paths["card"]), "--mem-dump", dumps, *extra]
     if fx.get("midi"):
-        args += ["--midi", fx["midi"]]
+        post += ["--midi", fx["midi"]]
     if at:
-        args += ["--at", ",".join(at)]
+        post += ["--at", ",".join(at)]
     if pk:
-        args += ["--poke", ";".join(f"0x{a:x}={b}" for a, b in pk)]
+        post += ["--poke", ";".join(f"0x{a:x}={b}" for a, b in pk)]
     if pokes_before:
-        args += ["--poke-before-play", ";".join(f"0x{a:x}={b}" for a, b in pokes_before)]
+        post += ["--poke-before-play", ";".join(f"0x{a:x}={b}" for a, b in pokes_before)]
     for st in steps:
-        args += ["--step", st]
+        post += ["--step", st]
     if "--dsp-peek" not in extra:
-        args += ["--dsp-peek", "0:X:0x3dd,50"]          # the gains the stems used (dsp_state)
+        post += ["--dsp-peek", "0:X:0x3dd,50"]          # the gains the stems used (dsp_state)
     if midi_lines:
         mid = work / f"{tag}.midi.txt"
         mid.write_text("".join(line + "\n" for line in midi_lines))
-        args += ["--midi", str(mid)]
-    r = subprocess.run(args, capture_output=True, text=True)
-    (work / f"{tag}.log").write_text(r.stdout + r.stderr)   # the port's report, for the call timing
-    m = mem.read_bytes() if mem.exists() else b"\0" * 24
+        post += ["--midi", str(mid)]
+    return pre, post, paths
+
+
+def _port_result(paths, log):
+    paths["log"].write_text(log)                    # the port's report, for the call timing
+    m = paths["mem"].read_bytes() if paths["mem"].exists() else b"\0" * 24
     words = [int.from_bytes(m[i:i + 4], "big") for i in range(0, 24, 4)]
-    return (r.stdout + r.stderr, dump, card, words,
-            ring.read_bytes() if ring_bytes and ring.exists() else b"")
+    ring = paths["ring"].read_bytes() if paths["ring_bytes"] and paths["ring"].exists() else b""
+    return log, paths["dump"], paths["card"], words, ring
+
+
+def port(s, frames, **kw):
+    """One fixture run under the port, its arguments as _port_parts takes
+    them. Returns (log, dump, card, state words, ring bytes). A result
+    prefetch() already made is returned as it is."""
+    if RECORDING is not None:
+        RECORDING.append({"frames": frames, **kw})
+        raise _Recorded
+    tag = f"{kw.get('tag', 'run')}{SUFFIX}"
+    if tag in PREFETCH:
+        return PREFETCH.pop(tag)
+    pre, post, paths = _port_parts(s, frames, **kw)
+    r = subprocess.run(pre + post, capture_output=True, text=True)
+    return _port_result(paths, r.stdout + r.stderr)
+
+
+def port_group(s, runs, jobs=1):
+    """Several runs on one fixture as scenarios of one boot (the port's
+    --scenario: one load, a child forked per run). `runs` are port()'s
+    keyword arguments, `frames` among them; the result is what port()
+    returns for each, in order. Runs that don't share one boot, or that set
+    a boot option (PRE_BOOT), each boot alone instead."""
+    parts = [_port_parts(s, **r) for r in runs]
+    pre = parts[0][0]
+    if any(p[0] != pre for p in parts) or any(o in p[1] for p in parts for o in PRE_BOOT):
+        return [port(s, **r) for r in runs]
+    assert not any(" " in a for _, post, _ in parts for a in post), "a scenario's arguments split on spaces"
+    args = list(pre)
+    for _, post, paths in parts:
+        args += ["--scenario", " ".join([str(paths["log"])] + post)]
+    args += ["--scenario-jobs", str(jobs)]
+    r = subprocess.run(args, capture_output=True, text=True)
+    pathlib.Path("out/stems_runs/group.log").write_text(r.stdout + r.stderr)
+    return [_port_result(paths, paths["log"].read_text() if paths["log"].exists() else "")
+            for _, _, paths in parts]
+
+
+def prefetch(s, checks, jobs=1):
+    """Each check's first run, collected without running anything (port()
+    records its arguments and stops the check), then run as one boot per
+    fixture; each check then finds its first result waiting. A check that
+    can't be collected, a run with a boot option, a fixture with one run,
+    and every later run of a check boot on their own as before."""
+    global RECORDING
+    import contextlib
+    import io
+    RECORDING = []
+    for c in checks:
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                c(s)
+        except Exception:
+            pass
+    runs, RECORDING = RECORDING, None
+    groups = {}
+    for r in runs:
+        pre, post, _ = _port_parts(s, **r)
+        if not any(o in post for o in PRE_BOOT):
+            groups.setdefault(tuple(pre), []).append(r)
+    for g in groups.values():
+        if len(g) > 1:
+            for r, res in zip(g, port_group(s, g, jobs)):
+                PREFETCH[f"{r.get('tag', 'run')}{SUFFIX}"] = res
 
 
 def tap(s):
@@ -1005,6 +1094,25 @@ def labelsbehind(s):
     check("labelsbehind: the writer is more than a chunk behind at frame 6,000", behind > CHUNK_FRAMES,
           f"{behind} frames waiting")
     check("labelsbehind: the seconds rise while the writer is behind", secs[0] == 0 and secs[1] >= 1, f"{secs}")
+
+
+def same_as_alone(s):
+    """Task 10b: a scenario of one boot gives what a boot of its own gives:
+    three runs on the one-THRU fixture (armed before play, 24 bits, a take
+    started while playing), each alone and then together; the state words
+    and every file of each take, byte for byte. No block dump: it is one
+    stream opened at boot, so a run that wants one boots alone."""
+    runs = [dict(frames=260, stop_at=180, tag="sa1", fixture=FIXTURE_THRU1, dump_blocks=False),
+            dict(frames=260, stop_at=180, tag="sa2", fixture=FIXTURE_THRU1, dump_blocks=False,
+                 pokes_before=[(s["stems_fmt"] + 3, 0b111)]),
+            dict(frames=260, stop_at=180, tag="sa3", fixture=FIXTURE_THRU1, dump_blocks=False,
+                 calls_before=(), calls=((58, s["stems_action"]),))]
+    alone = [port(s, **r) for r in runs]
+    together = port_group(s, [{**r, "tag": r["tag"] + "g"} for r in runs])
+    for r, a, g in zip(runs, alone, together):
+        fa, fg = take_files(a[2], FIXTURE_THRU1), take_files(g[2], FIXTURE_THRU1)
+        check(f"same_as_alone {r['tag']}: the state words and every file equal its own boot's",
+              a[3] == g[3] and fa == fg and len(fa) > 0, f"{a[3]} vs {g[3]}, {len(fa)} and {len(fg)} files")
 
 
 def nocard(s):
@@ -1658,7 +1766,7 @@ def main():
             ("stream", stream), ("wrap", wrap), ("cap", cap), ("eight", eight)]
     runs += [(f"mask{m:02x}", lambda s, m=m: mask_take(s, m, f"mask{m:02x}"))
              for m in (0x01, 0x03, 0x0F, 0xFF, 0xA5)]
-    runs += [("cut", cut), ("labels", labels), ("labelsbehind", labelsbehind), ("nocard", nocard), ("exists", exists),
+    runs += [("same_as_alone", same_as_alone), ("cut", cut), ("labels", labels), ("labelsbehind", labelsbehind), ("nocard", nocard), ("exists", exists),
              ("overflow", overflow), ("cardfail", cardfail)]
     if "--long" in sys.argv:
         runs += [("limit", limit)]
@@ -1674,6 +1782,10 @@ def main():
         print(f"  [SKIP] port runs: no project template at {TEMPLATE} "
               "(STEMS_TEMPLATE=<dir>, a local copy of EZBot's Ultimate FX 1.5.3)")
     elif fixtures():
+        chosen = [fn for run_name, fn in runs if (only is None or run_name in only)
+                  and run_name != "same_as_alone"]
+        if "--alone" not in sys.argv:
+            prefetch(s, chosen)           # one boot per fixture for each check's first run (Task 10b)
         for run_name, fn in runs:
             if only is None or run_name in only:
                 fn(s)
