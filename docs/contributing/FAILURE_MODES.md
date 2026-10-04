@@ -11,6 +11,18 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 - **Cause:** inferred from the cable test: something live only with a USB host breaks the state Octakit checks when the sequencer applies a pattern's Part (`gk_selector_begin_physical` fails outside her quiesced state). USB AUDIO IN does its per-frame work in the frame interrupt's state machine beside Octakit's audio patches. Not reproduced under the port (no USB host streams into it).
 - **Fix:** USB AUDIO IN CD and USB CROSSBAR removed from bottleservice, 4 Oct 2026. To find out: PLAY with USB plugged on the image without them; whether USB AUDIO OUT MASTER (250 µs since 28 Sep; image 88 polled 1 ms) alone triggers it.
 
+## Unattended halt in Octakit's Part-refresh wrapper, D0 = BUSY (image A0, bottleservice) 🔴 open
+
+- **Seen:** Sam's MKII, image A0, 4 Oct 2026, evening: found halted with `EXCEPTION VEC:04 ADDR:45D2803C D0:FFFFFFFD` = `gk_part_refresh_abort_fatal_report_part_refresh_fatal_workspace`, `GK_ERR_BUSY` (−3), after being left alone with a BCR2000 on MIDI (CC FEEDBACK in the image).
+- **Cause:** open. Her wrapper around the Part page writer found her Kit workspace busy when a Part write arrived with nobody at the panel. Under the port, none of these halted: Bottleservice26 playing 1,500,000 frames; playing with a CC on T8's FX1 every other frame for 60,000 frames; playing with one CC per frame round-robin over every track's FX1/FX2 page-1 and page-2 slots for 60,000 frames. The port has no BCR traffic and does not run her background Kit save on a timer.
+- **Fix:** open. To find out: whether the BCR echoes a received CC (a loop: a p-locked step → CC FEEDBACK → BCR → the OT's Part writer); whether it recurs with MIDI IN disconnected; what her workspace was busy with (the return addresses on the stack at SP 0x460d8cf4 were not read).
+
+## MIDI CC stops reaching an FX1 station after a pattern copy and SAVE KIT (image A0, bottleservice) 🔴 open
+
+- **Seen:** Sam's MKII, image A0, 4 Oct 2026: CHARACTER on T8's FX1 in a fresh project; pattern A01 copied to A02, SAVE KIT to slot 2 on A02. On A02 no CC moves CHARACTER (page 1 or 2; the panel knobs do); back on A01 the same CCs work.
+- **Cause:** open. Under the port (Octakit alone and bottleservice, the OCTABAM89_setgate project): pattern C01 → C02, SAVE KIT to an existing migrated slot (010) and to a new slot (013), then CC 34 on T8's channel — CHARACTER's lane byte took the value both times, T8's FX1 id unchanged. The fresh-project route (CREATE EMPTY PROJECT) stalls under the port at the create's progress bar on the bottleservice image, so the exact sequence was not run.
+- **Fix:** open. To find out: the project as saved on the unit, run under the port with the same CC (`verify_set`-style); whether other tracks' CCs still land on A02; whether a power cycle into A02 keeps it deaf.
+
 ## Octakit stranded for the session after a bank file fails to load: pattern paste halts, every Part apply is skipped (silence) ✅ measured under the port
 
 - **Seen:** Sam's MKII, images 95–99, 3–4 Oct 2026: songs played silent (meters still), and a pattern paste in a fresh project halted with `EXCEPTION VEC:04 ADDR:45D1364E` = `gk_current_pattern_part_set_fatal`. Booting with the remembered project missing from the card halted at `45D173EE` = `gk_stock_empty_project_runtime_initialize_report_fatal`, D0 = −3 (BUSY).
