@@ -14,11 +14,13 @@ on the same signal.
   the IN module's inject).
 
 `tools/hw/sos_capture.py` is the procedure (fixture project, signal,
-capture, port run, compare); its docstring has the commands.
+capture, port run, compare, wraps); its docstring has the commands. On
+macOS the terminal needs Microphone access, or CoreAudio records digital
+zero with no error (`capture` stops on it).
 
 ```
 make check REMIX=sos-capture
 make image REMIX=sos-capture BUILD=1   # -> out/OCTATRACK_OCTABAM1.bin
 ```
 
-Under the port only; not flashed in this form.
+On Bryan T's MKII as BUILD=94 (`f6ce41d6`) and BUILD=95 (`cd017851`), 3 Oct 2026: [`CHANGELOG.md`](../../../CHANGELOG.md).
