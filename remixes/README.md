@@ -10,7 +10,7 @@ A remix is a named selection of modules; `make image REMIX=<name> BUILD=<n>` bui
 
 | remix | contains | proof |
 |---|---|---|
-| [`bottleservice`](bottleservice/README.md) | The delay and reverb bus (BusDelay on T1's FX2, BusVerb on T5's FX2, SEND on every other track's FX2, the stock DELAY on T8) + SPECTRUM, CHARACTER and MODULATION on FX1 + USB MIDI + USB AUDIO OUT MASTER (T8 to the computer) + USB AUDIO IN CD (the computer onto inputs C/D) + Octakit. | on hardware: Sam's MKII, image 88, 27 Sep 2026 |
+| [`bottleservice`](bottleservice/README.md) | The delay and reverb bus (BusDelay on T1's FX2, BusVerb on T5's FX2, SEND on every other track's FX2, the stock DELAY on T8) + SPECTRUM, CHARACTER and MODULATION on FX1 + USB MIDI + USB AUDIO OUT MASTER (T8 to the computer) + Octakit. | on hardware: Sam's MKII, image 88, 27 Sep 2026 |
 
 ## Effects
 

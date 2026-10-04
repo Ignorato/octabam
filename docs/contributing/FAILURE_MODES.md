@@ -5,6 +5,18 @@ a mode is seen on hardware.
 
 Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.md`.
 
+## PLAY or a sample load halts the unit in Octakit's pattern-apply check with a computer on USB (bottleservice, USB AUDIO IN CD) 🟡 inferred
+
+- **Seen:** Sam's MKII, images 95 and 97 (bottleservice with USB AUDIO IN CD + USB CROSSBAR), 3–4 Oct 2026. `EXCEPTION VEC:04 ADDR:45D114DE` = `gk_stock_audio_pattern_primary_begin_report_fatal` in Octakit's runtime, on a sample load and on PLAY in a new project, with the USB cable to a computer. With the cable unplugged PLAY did not halt. Image 96 (without the two modules and without PLOCKS P2) loaded a sample without a halt; PLAY there with USB plugged was not tried.
+- **Cause:** inferred from the cable test: something live only with a USB host breaks the state Octakit checks when the sequencer applies a pattern's Part (`gk_selector_begin_physical` fails outside her quiesced state). USB AUDIO IN does its per-frame work in the frame interrupt's state machine beside Octakit's audio patches. Not reproduced under the port (no USB host streams into it).
+- **Fix:** USB AUDIO IN CD and USB CROSSBAR removed from bottleservice, 4 Oct 2026. To find out: PLAY with USB plugged on the image without them; whether USB AUDIO OUT MASTER (250 µs since 28 Sep; image 88 polled 1 ms) alone triggers it.
+
+## Songs saved before Octakit migrated them play silent after the migration 🟡 reproduced under the port
+
+- **Seen:** Sam's MKII, images 95–98, 3–4 Oct 2026: every song project without Octakit's kit files (`kits3a/b`) plays no audio after loading; meters still; new projects play.
+- **Cause:** open. Under the port, a song with its samples and no kit files ("Pheasant - 2026 1") plays on `rig` (no Octakit; main out non-zero) and is silent on `octakit` (Octakit alone) and on bottleservice: the migration, not a bottleservice module.
+- **Fix:** open. Workaround: start new projects. To find out: what the migrated Kits hold that the Parts did not (track levels, machine/sample slots, the scene or mute state).
+
 ## Pops and clicks from T1 with BusDelay when T1 plays its own trigs 🔴 open
 
 - **Seen:** Discord, Arcdmd_, 29 Sep 2026. Image, unit model, T1's machine and trig pattern not stated.
