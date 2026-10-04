@@ -25,7 +25,8 @@ REMIX = Remix(
              "USB MIDI", "USB AUDIO OUT MASTER",
              "OCTAKIT", "SCENES KITS",
              "SCENES P2", "SCENES P2 KITS", "PLOCKS P2",
-             "DELAY"),   # the stock DELAY keeps its chooser row: T8 hosts it, and a track whose FX2 was changed on the unit can take it back (4 Oct 2026)
+             "DELAY",    # the stock DELAY keeps its chooser row: T8 hosts it (4 Oct 2026)
+             "FX2 LOCK"),   # and the chooser cannot change any track's FX2 (4 Oct 2026, image A1)
     fallback="SEND",
     hidden=("REVERB SERVER", "DELAY SERVER"),
     host_slots=(("DELAY SERVER", 2), ("REVERB SERVER", 2)),
