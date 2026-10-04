@@ -145,6 +145,25 @@ def impulse_positions(t, n_out):
     return np.arange(0, n_out, (t + 1) * IMPULSE_UNIT)
 
 
+def needle_period(inc):
+    """NEEDLE's period in samples for a phase increment inc (a cycle is 2^24):
+    round(2^24 / inc), the whole period nearest the set frequency, as the
+    module's integer division computes it: (2^25 + inc) // (2 inc)."""
+    return ((1 << 25) + inc) // (2 * inc)
+
+
+def needle_positions(inc, n_out):
+    """Where the module's NEEDLE puts its full-scale samples: every needle_period(inc) from sample 0.
+    The train is strictly periodic, at FS / P Hz."""
+    return np.arange(0, n_out, needle_period(inc))
+
+
+def dc_q23(level_q23):
+    """The module's DC: full scale times the level, every sample (IMPULSE with a period of one).
+    level_q23 is the LEVEL table's entry; the product rounds (mpyr)."""
+    return (((1 << 23) - 1) * level_q23 * 2 + (1 << 23)) >> 24
+
+
 def thd_db(x, f, harmonics=9):
     """THD of a steady sine x at f, by a Blackman-Harris windowed FFT."""
     n = len(x)
@@ -213,5 +232,7 @@ if __name__ == "__main__":
     db = 20 * np.log10(Hm[band] / np.median(Hm[band]))
     flat = float(np.max(np.abs(db)))
     print(f"the module's 1 s sweep law through an identity path: flat within {flat:.2f} dB, 40 Hz-16 kHz"); ok &= flat < 0.5
+    p = needle_period(380436)
+    print(f"NEEDLE at FREQ 1 kHz: a period of {p} samples, {FS / p:.2f} Hz"); ok &= p == 44
     print(f"LEVL 127 = {20 * math.log10(level_lin(127)):.1f} dBFS, LEVL 0 = {20 * math.log10(level_lin(0)):.1f} dBFS; FREQ 18 = {freq_hz(18)} Hz, FREQ 14 = {freq_hz(14)} Hz")
     print("SELF-CHECK", "OK" if ok else "FAILED")

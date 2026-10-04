@@ -77,7 +77,10 @@ def main():
         return int.from_bytes(img[a - BASE:a - BASE + 4], "big")
 
     # ---- 1. the image ----------------------------------------------------
-    fb_id = mods[remix.fallback].menu.fx2_id
+    # fallback NONE: the build points id 0 (the firmware's own NONE) and the
+    # hidden modules' cursor entries at row 0 (build_bus.py, fb_pos)
+    from remix.schema import NO_FALLBACK
+    fb_id = 0x00 if remix.fallback == NO_FALLBACK else mods[remix.fallback].menu.fx2_id
     fb_pos = u32(ID2POS + fb_id * 4)
     clones = {}
     for key in hidden + listed:
@@ -139,8 +142,11 @@ def main():
         for key in hidden:
             check(f"{key} is not in the chooser list", True)
         cand = None
+    # fallback NONE: the build restores the firmware's NONE row at row 0
+    # (build_bus.py, "with NONE at row 0"), so the listed modules start at 1
+    skip = 1 if remix.fallback == NO_FALLBACK else 0
     for cand in ((NEW_LIST, LONG_LIST) if listed_p else ()):
-        row = [u32(cand + 4 * i) for i in range(16)]
+        row = [u32(cand + 4 * (i + skip)) for i in range(16)]
         if row[0] in clones.values():
             entries = []
             for v in row:

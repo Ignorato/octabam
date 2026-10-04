@@ -32,6 +32,11 @@ PINK           -> per channel: -3 dB/octave within 0.3, no octave band more than
                     0.1 dB; L and R independent; MONO
 IMPULSE        -> full scale (within 1 LSB) at exactly the reference's positions, zero
                     everywhere else
+NEEDLE         -> every FREQ index: full scale at exactly every round(2^24 / inc) samples
+                    from sample 0, zero elsewhere; with FINE the period is the whole one
+                    nearest the set frequency (within half a sample); MONO and L-R
+DC             -> every sample LEVEL[k] (within 1 LSB) at LEVL 1, 64 and 127; L-R
+                    gives R = -L; L only has R silent
 an invalid MODE byte -> SINE
 every knob     -> renders without dsp_host dying
 
@@ -88,20 +93,24 @@ def params(**kw):
     return v
 
 
-def render(n, src=None, **kw):
-    """n frames; src: MONO Q23 ints fed to both channels (silence if None). Returns (L, R) arrays."""
+def render(n, src=None, slot="fx1", guard=False, **kw):
+    """n frames; src: MONO Q23 ints fed to both channels (silence if None). Returns (L, R) arrays.
+    slot="fx1" (alloc 0, r7 1) is TESTGEN's own slot; "fx2" (alloc 1, r7 2) an FX2 instance,
+    which runs as a dry pass (Claims.fx1_only). guard=True keeps dsp_host's write-guard report."""
+    r7, alloc = {"fx1": ("1", "0"), "fx2": ("2", "1")}[slot]
     n -= n % FRAMES
     src = [0] * n if src is None else src[:n]
     fin, fout = TMP / "tg_in.raw", TMP / "tg_out.raw"
     fin.write_bytes(b"".join(struct.pack("<i", m) for m in src))
     cmd = [HOST, "-mem", MEM, "-init", f"{init:x}", "-proc", f"{proc:x}",
-           "-inst", "1", "-r7", "1", "-alloc", "0", "-inmask", "1",
+           "-inst", "1", "-r7", r7, "-alloc", alloc, "-inmask", "1", *(["-guard"] if guard else []),
            "-frames", str(FRAMES), "-blocks", str(n // FRAMES),
            "-in", str(fin), "-out", str(fout),
            "-params", ",".join(str(x) for x in params(**kw))]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit(f"dsp_host failed for {kw}:\n{r.stdout}\n{r.stderr}")
+    render.guard_out = r.stdout + r.stderr
     w = np.frombuffer(fout.read_bytes(), dtype="<i4").astype(np.int64)
     return w[0::2][:n], w[1::2][:n]
 
@@ -211,7 +220,7 @@ for k in range(1, 128):
     lworst = max(lworst, abs((rms_db(L) - rms_db(L127[:len(L)])) + (127 - k) * 0.5))
 check("level: every LEVL step is 0.5 dB exactly within 0.01 dB (1 = -63 dB)", lworst < 0.01,
       f"(worst {lworst:.4f} dB)")
-silent = all(not np.any(np.concatenate(render(N // 8, MODE=m, LEN=0))) for m in range(5))
+silent = all(not np.any(np.concatenate(render(N // 8, MODE=m, LEN=0))) for m in range(len(MAN.MODE_LABELS)))
 check("LEVL 0, the default: every MODE is silent (no sound until LEVL is turned up)",
       silent and DEFAULTS[K["LEVL"]] == 0)
 
@@ -232,7 +241,7 @@ GAP = REF.SWEEP_GAP
 
 # ---- SWEEP --------------------------------------------------------------------------------------
 check("SWEEP: the P table's growth constants are the reference's",
-      MAN.SWD == tuple(REF.sweep_d(t) for t in range(16)) and MAN.SWN == tuple(REF.len_seconds(t) * int(FS) for t in range(16)))
+      MAN.SWD == tuple(REF.sweep_d(t) for t in range(16)))
 for t, periods in ((0, 2), (15, 1)):
     n = periods * (REF.len_seconds(t) * int(FS) + GAP) + 3000
     L, R = render(n, LEVL=127, MODE=MODE["SWEP"], LEN=8 * t)
@@ -313,11 +322,68 @@ for t in (0, 3):
           np.array_equal(where, want) and int(np.min(L[want])) >= FULL - 1 and np.array_equal(L, R),
           f"({len(where)} impulses, at {[int(i) for i in where]})")
 
+# ---- NEEDLE ----------------------------------------------------------------------------------------
+bad = []
+for k in range(len(MAN.FREQS)):
+    inc = MAN.FINC[k]
+    n = 8 * REF.needle_period(inc) + 300
+    L, R = render(n, LEVL=127, MODE=MODE["NEDL"], FREQ=k)
+    where = np.nonzero(L)[0]
+    want = REF.needle_positions(inc, len(L))
+    if not (np.array_equal(where, want) and int(np.min(L[want])) >= FULL - 1 and np.array_equal(L, R)):
+        bad.append(k)
+    if k in (0, 14, 18, 31):
+        print(f"  [info] NEEDLE FREQ {k} ({MAN.FREQS[k]} Hz): every {REF.needle_period(inc)} samples, "
+              f"{FS / REF.needle_period(inc):.2f} Hz")
+check("NEEDLE: every FREQ index full scale at exactly every round(2^24 / inc) samples from 0, zero elsewhere",
+      not bad, f"(failed at FREQ {bad})" if bad else "")
+fw, fdesc = 0.0, ""
+for k, fine in ((0, 0), (0, 127), (7, 0), (7, 127), (14, 32), (18, 96)):
+    L, _ = render(int(FS) // 2, LEVL=127, MODE=MODE["NEDL"], FREQ=k, FINE=fine)
+    gaps = np.diff(np.nonzero(L)[0])
+    want = FS / REF.freq_hz(k, fine)
+    e = abs(float(gaps[0]) - want) if len(set(gaps.tolist())) == 1 else 99.0
+    if e > fw:
+        fw, fdesc = e, f"FREQ {k} FINE {fine - 64:+d}: every {gaps[0]} samples, want {want:.2f}"
+check("NEEDLE with FINE: strictly periodic, the whole period nearest the set frequency (within half a sample)",
+      fw <= 0.5, f"(worst {fw:.3f} samples, {fdesc})")
+L, R = render(N // 4, LEVL=127, MODE=MODE["NEDL"], CHAN=3)
+check("NEEDLE CHAN L-R: R = -L", np.any(L) and int(np.max(np.abs(L + R))) <= 1)
+L, R = render(N // 4, LEVL=127, MODE=MODE["NEDL"], CHAN=4)
+check("NEEDLE CHAN MONO: R = L", np.any(L) and np.array_equal(L, R))
+
+# ---- DC ----------------------------------------------------------------------------------------------
+dw = 0
+for k in (1, 64, 127):
+    L, R = render(N // 8, LEVL=k, MODE=MODE["DC"])
+    dw = max(dw, int(np.max(np.abs(L - REF.dc_q23(MAN.LEVEL[k])))), int(np.max(np.abs(R - L))))
+check("DC: every sample is LEVEL[k] at LEVL 1, 64 and 127 (within 1 LSB), both channels", dw <= 1, f"(worst {dw} LSB)")
+L, R = render(N // 8, LEVL=127, MODE=MODE["DC"], CHAN=3)
+check("DC CHAN L-R: R = -L", int(np.min(L)) >= FULL - 1 and int(np.max(np.abs(L + R))) <= 1)
+L, R = render(N // 8, LEVL=127, MODE=MODE["DC"], CHAN=1)
+check("DC CHAN L: R silent", np.all(L) and not np.any(R))
+
+# ---- FX1 ONLY: an FX2 instance is a dry pass ---------------------------------------------------
+# Claims.fx1_only: the chooser hides the FX2 row and the pricer charges FX1 slots only, both on
+# this promise, so it is proven in every MODE at full level, and the guard sees no stray write.
+dry = all(np.array_equal(L, noise[:len(L)]) and np.array_equal(R, noise[:len(R)])
+          for L, R in (render(N // 8, noise, slot="fx2", LEVL=127, MODE=m, CHAN=3)
+                       for m in range(len(MAN.MODE_LABELS))))
+check("FX2 instance: a bit-exact DRY PASS in every MODE at LEVL 127 (fx1_only)", dry)
+render(N // 8, noise, slot="fx2", guard=True, LEVL=127, MODE=MODE["PINK"])
+g = render.guard_out
+check("FX2 instance trips no write guard", "guard clean" in g,
+      next((ln.strip() for ln in reversed(g.splitlines()) if "guard" in ln), ""))
+render(N // 8, noise, guard=True, LEVL=127, MODE=MODE["PINK"])
+g = render.guard_out
+check("FX1 instance trips no write guard", "guard clean" in g,
+      next((ln.strip() for ln in reversed(g.splitlines()) if "guard" in ln), ""))
+
 # ---- an invalid MODE byte ----------------------------------------------------------------------------
 check("an invalid MODE byte (7) plays SINE", np.array_equal(render(N // 4, LEVL=127, MODE=7)[0], render(N // 4, LEVL=127, MODE=0)[0]))
 
 # ---- every knob at both ends renders ----------------------------------------------------------
-for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("FINE", 127), ("MODE", 4), ("CHAN", 4)):
+for name, hi in (("LEVL", 127), ("FREQ", 127), ("LEN", 127), ("FINE", 127), ("MODE", len(MAN.MODE_LABELS) - 1), ("CHAN", 4)):
     for v in (0, hi):
         render(N // 8, noise, **{name: v})
 check("every knob at both ends renders", True)
