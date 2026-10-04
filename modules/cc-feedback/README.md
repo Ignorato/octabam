@@ -11,7 +11,11 @@ sweep compares the PART's knob bytes with the stock emitter's cache (page
 1: the machine's PLAYBACK block `+0x8edaa + t·30 + machine·6` and the
 LFO·AMP·FX1·FX2 array `+0x8ee9a + t·24`; page 2: `+0x8f07e`/`+0x8f084 +
 t·30`), not the live lane: locks, slides and scenes rewrite the lane every
-step and never the Part.
+step and never the Part. Paced: one message per UI tick (120 Hz, `PACE`
+in `cc_feedback.s`), so a bank or pattern change with a different Kit
+reaches the controller over about three seconds instead of one burst —
+on image A2 (4 Oct 2026) the unpaced dump of the new Part locked a
+BCR2000 up the moment the bank changed.
 
 ## Measured
 
@@ -23,7 +27,8 @@ step and never the Part.
   live-lane byte rewritten (a lock step), AUDIO CC OUT without EXT and a
   track with its channel off emit nothing; the LFO block goes out as CC
   28..33 and AMP as 22..27; PLAYBACK page 1 follows the track's machine
-  block; a MIDI track on the channel is refused by the emitter.
+  block; a MIDI track on the channel is refused by the emitter; the first sweep emits
+  exactly one message and the next carries on with the track's next slot.
 - The port (`verify_set`, bottleservice and usb-audio on OCTABAM89_setgate
   bank 3, before the engine gate): the load's part dumped as 281 CC
   messages, 582 bytes with running status, on all eight channels; UART0's
@@ -42,8 +47,10 @@ step and never the Part.
   values (the cache equalled the lane where the lane had stopped) and the
   batch timer had not fired yet. `verify_set` therefore checks the
   emitter's cache against the Part's knob bytes (the module's contract;
-  the lane until 4 Oct 2026) when the engine is idle at the end, and the
-  wire for shape: every CC sent is a mapped slot on a track's channel.
+  the lane until 4 Oct 2026) for every slot the paced sweep has reached
+  when the engine is idle at the end, counts the remainder still to come,
+  and checks the wire for shape: every CC sent is a mapped slot on a
+  track's channel.
 
 ## On the unit
 
@@ -59,8 +66,13 @@ step and never the Part.
   or two writers disagreeing (a CC-written value against the sequencer's
   per-step refresh from the Part) is open; the Part-based sweep reports
   neither.
+- Image A2 (4 Oct 2026, the Part-based sweep, unpaced): no stream while
+  B1 played untouched (a Midihub export held only the knob turns, CC 22
+  and CC 46), and the BCR2000 died the moment the bank changed — the
+  dump of the new Part, up to 336 messages in about a second. Paced to
+  one per tick the same day (image A3).
 - DIN bandwidth for a full dump of eight tracks is 344 messages, about
-  one second at 31.25 kbaud without running status.
+  one second at 31.25 kbaud without running status; paced, about three.
 
 ## Open
 

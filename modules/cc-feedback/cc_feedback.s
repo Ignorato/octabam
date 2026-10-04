@@ -39,6 +39,13 @@
 | array's AMP and LFO blocks swapped in its map (lane 6..11 is LFO, 12..17
 | AMP), so an AMP turn went out under the LFO numbers and back.
 |
+| Paced: at most PACE messages per UI tick (120 Hz). A bank or pattern
+| change with a different Kit differs on most of the 336 mapped slots, and
+| the unpaced sweep put that whole dump on the wire in about a second --
+| the BCR2000 locked up the moment the bank changed (Sam's MKII, image A2,
+| 4 Oct 2026). The sweep keeps its place (cf_track, cf_pos) and carries
+| on next tick; a track with nothing to send costs one tick as before.
+|
 | The sweep waits while the engine task runs a command (a project load, a
 | bank or part change): ENGQ+0xc is the TCB the kernel's event wait
 | (0x40000818) parks there while the engine is blocked on its queue, and
@@ -60,9 +67,10 @@
         .set    EVENT,   0x46c7e0e2    | the UI tick event the loop pends on
         .set    RESUME,  0x40055962    | the instruction after the displaced pea
         .set    ENGQ,    0x460d17ce    | the engine's command queue: +4 count, +8 event flag, +0xc waiting TCB
+        .set    PACE,    1             | messages per UI tick
 
         .text
-        .globl  cf_tick, cf_sweep, cf_track, cf_map
+        .globl  cf_tick, cf_sweep, cf_track, cf_pos, cf_map
 
 | jmp detour at 0x4005595c: replays the displaced `pea EVENT`. a2/a3 are
 | the loop's function pointers; the sweep preserves them.
@@ -74,8 +82,8 @@ cf_tick:
 | cf_sweep(): track cf_track (advanced each call), the 42 mapped CCs.
 | Preserves every register but d0/d1/a0/a1.
 cf_sweep:
-        lea     %sp@(-40),%sp
-        movem.l %d2-%d6/%a2-%a6,%sp@
+        lea     %sp@(-44),%sp
+        movem.l %d2-%d7/%a2-%a6,%sp@
         moveq   #0,%d0
         move.b  CCOUT,%d0
         btst    #1,%d0
@@ -84,15 +92,10 @@ cf_sweep:
         beq.w   9f                      | the engine is running a command: wait
         moveq   #0,%d2
         move.b  cf_track,%d2            | d2 = track
-        move.l  %d2,%d0
-        addq.l  #1,%d0
-        moveq   #7,%d1
-        and.l   %d1,%d0
-        move.b  %d0,cf_track            | the next call takes the next track
         lea     TRIGCH,%a0
         move.b  %a0@(0,%d2:l),%d3
         extb.l  %d3                     | d3 = channel
-        blt.w   9f                      | off
+        blt.w   8f                      | off: the next track next tick
         move.l  DBPTR,%a2
         moveq   #0,%d0
         move.b  PARTIX,%d0
@@ -126,13 +129,17 @@ cf_sweep:
         lea     CACHE,%a3
         adda.l  %d0,%a3                 | a3 = the channel's cache
         lea     cf_map,%a2
+        moveq   #0,%d0
+        move.b  cf_pos,%d0
+        adda.l  %d0,%a2                 | where the last tick stopped in this track's map
+        moveq   #0,%d7                  | messages this tick
 1:      moveq   #0,%d6
         move.b  %a2@+,%d6               | region: 0 PLAYBACK p1, 1 page-1 array, 2 page-2 row
         moveq   #0,%d4
         move.b  %a2@+,%d4               | offset in the region
         moveq   #0,%d5
         move.b  %a2@+,%d5               | CC number; 0 ends the table
-        beq.s   9f
+        beq.s   8f                      | the track is done: the next track next tick
         move.l  %a5,%a0
         tst.l   %d6
         beq.s   2f
@@ -151,13 +158,28 @@ cf_sweep:
         move.l  %d2,%sp@-               | track
         jsr     EMIT
         lea     %sp@(12),%sp
-        bra.s   1b
-9:      movem.l %sp@,%d2-%d6/%a2-%a6
-        lea     %sp@(40),%sp
+        addq.l  #1,%d7
+        moveq   #PACE,%d0
+        cmp.l   %d0,%d7
+        blt.s   1b
+        move.l  %a2,%d0
+        sub.l   #cf_map,%d0
+        move.b  %d0,cf_pos              | paced out: resume here next tick
+        bra.s   9f
+8:      clr.b   cf_pos
+        move.l  %d2,%d0
+        addq.l  #1,%d0
+        moveq   #7,%d1
+        and.l   %d1,%d0
+        move.b  %d0,cf_track            | the next tick takes the next track
+9:      movem.l %sp@,%d2-%d7/%a2-%a6
+        lea     %sp@(44),%sp
         rts
 
 cf_track:
         .byte   0                       | the track the next sweep takes
+cf_pos:
+        .byte   0                       | the map offset the next sweep resumes at (0 = the track's start)
         .balign 2
 | (region, offset, CC) triples, 0 ends. Region 0: PLAYBACK page 1 -> CC
 | 16..21. Region 1: the page-1 array, LFO +0..5 -> CC 28..33, AMP +6..11 ->
