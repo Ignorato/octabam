@@ -1,502 +1,74 @@
 # `recorder-loop-fix` — RECORDER LOOP FIX
 
-Eight ColdFire code caves, no DSP code, for a FLEX voice that plays its own
-recorder buffer every bar: the self-recording loop and sound-on-sound.
-Formerly four modules (FLEX SEEK BIND, FLEX SEEK BIND CTR, RECORDER
-SPACING, RECORDER HOLD), merged on 4 Oct 2026 with every cave's bytes and
-placement unchanged (`mods` and `sos-capture` images byte-identical).
+A FLEX track that plays its own recorder buffer every bar (the
+self-recording loop, or sound-on-sound with SRC3 = the track) clicks at the
+loop point at any tempo whose bar is not a whole number of samples: 82,687.5
+at 128 BPM. The sequencer arms the recorder at `floor(k × 82,687.5)`, so the
+arms are alternately 82,687 and 82,688 samples apart. Four faults sit on
+that. Each has its own caves in this module.
 
-Status: on hardware. The self-recording loop click is gone on OCTABAM83
-(Sam's MKII, 12 Sep 2026); the sound-on-sound zero is gone on Bryan T's
-`sos-capture` BUILD=95 (3 Oct 2026), with the loop point inaudible on real
-audio. The one-sample repeat or skip at each wrap stays, and in
-sound-on-sound the repeated sample is recorded into the loop
-([Hold](#hold-sound-on-sound)).
+## 1. Every bar restarts the voice
 
-| caves | fault | source | hook |
-|---|---|---|---|
-| [seek bind](#seek-bind) | every bar a new note: the DSP re-primes the voice (a chirp, then hash) | `seekbind.s` | `0x4000f8cc` |
-| [seek-bind counter](#seek-bind-counter) | the per-bind counter resets the read pointer (a ±1.5-sample seam) | `seekbind_ctr.s` | `0x4000f834` |
-| [spacing](#spacing) | one constant recording length against alternating arm spacings (a −26 dB scuff on alternate bars) | `spacing_cave.s` | `0x40006e0c` |
-| [hold](#hold-sound-on-sound) | sound-on-sound plays one sample past the recording: a zero | `hold_*.s`, `fix.inc` | `0x400086c2`, `0x4000853e`, `0x4000854e`, `0x40008716`, `0x400085d8` |
+**Fault.** On a re-trig of the same recorder buffer, the bind routine
+(`0x4000f450`) finds the same slot, type and generation, but its position
+compare fails, so it reports a new note. The DSP re-primes the voice: a
+chirp, then hash at 140 % of the signal for about 300 samples.
 
-The user guide to the whole loop click is
-[below](#the-loop-click-what-it-is-and-how-to-test-it).
+**Fix.** `seekbind.s`, hooked at `0x4000f8cc`: when slot, type and
+generation match, the bind takes the same-sample path, and the DSP seeks the
+running voice.
 
-## Seek bind
+## 2. The read pointer resets
 
-On a recorder-buffer voice re-trigged every bar, stock treated every bar as
-a new note and the DSP re-primed the voice: a chirp, then hash at 140 % of
-the signal for about 300 samples. The cave makes a FLEX re-bind onto the
-same sample slot, type and generation take the bind's same-sample path, so
-the DSP seeks the running voice instead. Pairs with the
-[seek-bind counter](#seek-bind-counter): the seek path alone leaves the
-voice's per-bind counter incrementing, which the frame builder reads as a
-new voice.
+**Fault.** The same-sample path still increments the voice's per-bind
+counter (`+0x90`). The frame builder reads that as a new voice and resets
+the read pointer: a ±1.5-sample seam at the loop point.
 
-### On the unit
+**Fix.** `seekbind_ctr.s`, hooked at `0x4000f834`: on a same-sample re-bind
+the counter is left alone.
 
-- On hardware as OCTABAM81/82/83 (Sam's MKII, 12 Sep 2026), stacked with
-  the counter and spacing caves: the bar-boundary chirp is gone
-  ([the captures](#measured-on-the-unit-and-not)).
+## 3. One input sample is lost on alternate passes
 
-### Open
+**Fault.** The length converter (`0x40006dfc`) gives every pass the same
+length, 82,687 samples at 128 BPM / RLEN 16. On the passes where the next
+arm comes 82,688 samples later, one input sample is never recorded, and the
+wrap joins two moments two samples apart: a −26 dB, ~1 ms scuff on
+alternate bars.
 
-- This cave alone: not measured. The three recorder caves have only been
-  tested stacked.
-
-### The cave
-
-The bind routine (`0x4000f450`) decides at its tail whether a re-bind is
-the same sample (return 0) or a new one (return `0x100`). It has a
-slot/type/generation verdict on the stack (`sp@55`) and then compares the
-play position against a settings field (`0x4000f8cc..0x4000f8ea`). On a
-recorder-buffer voice re-trigged every bar the verdict holds and the
-position compare fails.
-
-The cave is hooked on the verdict test. When the verdict holds it takes the
-same-sample continuation with result 1; otherwise it takes the stock
-"different" path. The position reset and everything else stay stock.
-
-Hook: `0x4000f8cc` (`tstb (55,sp)` / `beqs 0x4000f8ea`, 6 bytes,
-replayed).
-
-## Seek-bind counter
-
-Without it, the seek-bind cave's seek path still bumped the voice's
-per-bind counter, the frame builder re-sent the voice to the DSP as new and
-the read pointer was reset: every pass carried a ±1.5-sample seam at the
-loop point. On a same-sample re-bind the cave leaves the counter alone.
-
-### On the unit
-
-- On hardware as OCTABAM82/83 (Sam's MKII, 12 Sep 2026), stacked with the
-  seek-bind and spacing caves: the seam is gone.
-
-### Open
-
-- This cave alone, or without the seek-bind cave: not measured (it has no
-  effect on a bind that takes the stock "different" path).
-
-### The cave
-
-The counter is `+0x90` in the voice record; the store at `+0x98` is always
-replayed. Hook: `0x4000f834` (`addql #1,(144,a2)` / `movel a0,(152,a2)`, 8
-bytes, replayed). Reads the same stack verdict the seek-bind cave reads
-(`(59,sp)` at this depth).
-
-## Spacing
-
-A fixed-RLEN recording is exactly as long as the gap to the next arm,
-derived from the current arm with no lane lookahead and no stored state.
-The length converter returns one constant length for a whole loop (82,687 at
-128 BPM / RLEN 16) while the sequencer arms at `floor(k × period)` of an
-exact fractional period, so consecutive arms are alternately 82,687 and
-82,688 samples apart. Where they disagree the buffer's wrap splices two input
-moments two samples apart: a −26 dB, ~1 ms scuff on alternate bars (measured
-on hardware as OCTABAM82; `git show 3ceba41:docs/history/RTOS_FORK.md` section 10.53, section 10.56).
-
-### Measured
-
-- `L'` equals the sequencer's own next spacing on 115,200 (tempo, RLEN, pass)
-  triples, as the model and as an instruction-accurate simulation of the
-  assembled bytes. Over all 11,208 (tempo, RLEN) pairs in 60.0–200.0: `q`
-  equals the stock length at every integer-period tempo (the golden case
-  cannot regress) and `|L' − L| ≤ 1` everywhere (the ±1 guard is kept).
-
-### On the unit
-
-As OCTABAM83 (with the seek-bind and counter caves): zero of 46 bars
-above 1.25× where 82 had 16; 128 BPM reads identical to the stock golden
-capture ([the loop click](#the-loop-click-what-it-is-and-how-to-test-it)).
-
-### Open
-
-- Whether this cave alone suffices; the three have only been tested
-  stacked.
-
-### The cave
+**Fix.** `spacing_cave.s`, hooked at `0x40006e0c`: each pass is exactly as
+long as the gap to the next arm, computed from the current arm:
 
     q, r = divmod(RLEN × 15,876,000, tempo24)
-    k    = arm / q                                 arm = 0x46c7fa84[track]
-    L'   = q + floor((k+1)r/D) − floor(k·r/D)
-
-RLEN is recovered from the stock length, so nothing is kept between passes.
-
-Hook: `0x40006e0c` (the converter's last three instructions, replayed).
-Reads: `0x80001814` (tempo24), `0x46c7fa84[track]`, `164(%sp)` (the track).
-Writes: nothing but `d4`, the length.
-
-### Reading the disassembly
-
-objdump prints every `divu.l` in the source as `remul` (0x4c4x is one
-encoding family, named after the remainder form); with the extension word's
-Dq and Dr fields equal, ColdFire writes the quotient. `spacing_cave.s` has
-the references.
-
-## Hold (sound-on-sound)
-
-In sound-on-sound (a REC3 trig with SRC3 = the track, on the same step as
-the PLAY trig) the recorder arms 64 samples after the play trig binds, so
-the voice plays the previous pass. Its window is the current arm spacing and
-its content is the previous one. At a tempo whose bar is not a whole number
-of samples the spacings alternate (82,687 / 82,688 at 128 BPM), and on each
-pass where the window is one sample longer the voice fetches index END
-(`+0x64`). No block is mapped there, so the fetch returns the pool base
-`0x40a955e0`, one zero sample plays, and SRC3 records it back into the loop.
-
-After a second transport start (PLAY again, or PLAY after CONTROL > MEMORY
-reallocates the recorders) the zero comes from a different place. The
-recording stays 82,687 samples long on every pass (`+0x64` = `0x142ff`)
-while the window still alternates, and the recorder's position (`+0x34`) is
-past END when the voice reaches it. The plain copy caps a voice reading the
-buffer its own recorder writes at END − index (`0x400086f0..0x4000871e`); at
-index END the cap is 0, and stock stops the voice (`0x40008722`) and
-zero-fills the rest of the frame (`0x4000872c`); the crossfade copy has the
-same cap (`0x40008582..0x400085e2`, against the further of its two read
-positions). The fetch never sees index END, so the three fetch caves do not
-act; the two guard caves sit on the two caps.
-
-### Measured
-
-In the port (26 Sep 2026), `recfix` image, fixtures built from the
-RECTRIG backup: T1 FLEX on R1, REC1 + REC3 (SRC3 = T1) + PLAY on the same
-steps, a 997 Hz tone into A/B. The residual of a two-tap sinusoid predictor
-at each wrap, relative to the local amplitude:
-
-| fixture | without | with |
-|---|---|---|
-| 128 BPM, RLEN 16, trig on step 1 — the one-sample-long wrap | 195 % | 7 % |
-| 128 BPM, RLEN 4, trigs 1/5/9/13 — pass 8, then its repeats | 187 %, 47 %, 12 %, 3 % | 9 %, 2 % |
-| 128 BPM, RLEN 4 — pass 16 | 62 %, 15 %, 4 % | 13 %, 3 % |
-
-The caves substitute on those wraps only: 2 of 4 wraps at RLEN 16, 3 of 19 at
-RLEN 4 (there the crossfade copy reads both positions, so each wrap is two
-substitutions). What remains, 7–13 %,
-is the one-sample change in loop delay that any whole-sample loop of a
-fractional period has: the one-sample-short passes measure the same, with or
-without the cave.
-
-Unchanged, all eight tracks' voice audio bit-identical: the self-loop
-(REC1 only) at 128 BPM RLEN 4 and 16 against `recfix`, and sound-on-sound at
-120 BPM RLEN 4 and 16 against stock.
-
-Before the arena-base rewrite (PR #444 alone), in a remix with a DRAM
-runtime the fetch caves compared against the stock base and never fired: 0
-substitutions and 31 zero samples at RLEN 4 in the port. Found by Bryan T
-on his USB recording remix, 26 Sep 2026.
-
-#### After a second transport start (port, 4 Oct 2026)
-
-`sos-capture` image, fixtures from `sos_capture.py fixture` (SOSCAP: 128
-BPM, RLEN 16, trig on step 1; RLEN 4 with trigs 1/5/9/13; 120 BPM RLEN 16;
-the self-loop, REC3 cleared, at RLEN 16 and 4), the `sos_capture.py`
-signal delayed 4 s. "Second start" is `ot_emu --step
-9000:call:0x4009b964,0`, the transport start called again while the
-pattern plays; the MEMORY rows run the page's confirm (`0x40066844`) with
-the staged settings at frame 100, before it. Events on T1 (two-tap
-predictor residual > 3 % of the local amplitude, then the samples):
-
-| take | three hold caves | five hold caves |
-|---|---|---|
-| SOSCAP, one start | repeat on each long wrap | bit-identical |
-| SOSCAP, second start | zero on each long wrap (3) | repeat (3) |
-| SOSCAP, same MEMORY settings applied, second start | zero (3) | repeat (3) |
-| SOSCAP, 24 → 16 → 24-bit, second start | zero (3) | repeat (3) |
-| SOSCAP, 24 → 16-bit, second start | zero (3) | repeat (3) |
-| RLEN 4, one start | 20 repeats | bit-identical |
-| RLEN 4, second start | 18 repeats, 3 zeros (1 pass in 8) | 21 repeats |
-| 120 BPM, one start | none | bit-identical |
-| 120 BPM, second start | 2 zeros in the first pass, as the signal arrives | 1 repeat, 1 zero, same place |
-| self-loop RLEN 16, one start | 1 repeat | bit-identical |
-| self-loop RLEN 16, second start | 1 zero | 1 repeat |
-| self-loop RLEN 4, one start | 1 repeat | bit-identical |
-| self-loop RLEN 4, second start | 1 zero | 1 repeat |
-
-Every row also has the end of the input signal (a ZERO with L = 0 on both
-sides in the self-loop rows), left out above. With five hold caves T1 differs
-from three only at the wrap samples; T8 in this project carries T1
-about 34 samples later and differs in those spans. The zero is written at
-`0x4000872c` into the ColdFire's block to the DSP (core 1, T1's last
-sample of that frame), measured with a write watch on the slot.
-
-### On the unit
-
-- Bryan T, 26 Sep 2026, his USB recording remix with the caves following
-  the moved base: 128 BPM / RLEN 16 still clicks every other pass.
-- Bryan T, 3 Oct 2026, `sos-capture` BUILD=94 over USB: in steady state
-  every long-pass wrap is an exact repeat (the caves fire). Right after a
-  recorder reallocation every long-pass wrap is one sample of digital
-  zero, for the whole take; reproduced twice. The port reproduces this
-  with a second transport start, with or without the reallocation (above).
-- Bryan T, 3 Oct 2026, `sos-capture` BUILD=95 (`cd017851`, five hold caves):
-
-  | take | long-pass wraps |
-  |---|---|
-  | 16 → 24-bit reallocation, PLAY | repeat, no zero |
-  | 24-bit off and on, reload, PLAY | repeat, no zero |
-  | STOP / PLAY, nothing changed (three takes) | repeat, no zero |
-  | steady state | repeat, no zero |
-  | RLEN 4 trigs 1/5/9/13 after a reallocation | skip / repeat pair once in 8 passes, no zero |
-  | 120 BPM RLEN 16 | no event at any wrap |
-
-  At 128 / RLEN 16 the repeat is where the loop's lag goes 82,687 →
-  82,688 and the skip where it goes back. Real audio at 128 / RLEN 16 and
-  at 224 / RLEN 4: no audible loop point.
-
-### Open
-
-- Whether STOP / PLAY alone gives the zero on BUILD=94 (not run), and so
-  whether the port's second start is the unit's trigger.
-- The repeated sample is recorded into the buffer and replays at the wrap
-  every pass until the next pair rewrites it (Bryan T, RLEN 4: 35.2 % of
-  tone rms at the stored seam, 18.8 % at the skip).
-- Why a second transport start leaves the recording 82,687 samples on
-  every pass.
-- The crossfade cap's wrapping layout (`+0x17` set) and reverse reads stay
-  stock.
-- Reverse playback (the fixup acts on forward fetches only).
-- 16-bit recorder formats: the second-start take above repeats at 16-bit
-  as well; the one-start path is not measured at 16-bit.
-
-### The caves
-
-The three fetch caves sit after one fetch of the forward copy paths and run the
-shared fixup in `fix.inc`: a fetch of exactly END that came back unmapped
-becomes a fetch of END − 1 with a count of one. The two guard caves replace
-the plain and crossfade copies' caps at END.
-
-| cave | hook | stock bytes |
-|---|---|---|
-| `hold_copy.s` | `0x400086c2` | `move.l d0,d3 / addq.l #8,sp / tst.l d1` |
-| `hold_xfade_a.s` | `0x4000853e` | `movea.l d0,a3 / move.l d1,d4 / move.l (76,a2),-(sp)` |
-| `hold_xfade_b.s` | `0x4000854e` | `move.l d0,d7 / lea (16,sp),sp / tst.l d4` |
-| `hold_guard.s` | `0x40008716` | `suba.l d0,a1 / cmpa.l d2,a1 / bge.s` |
-| `hold_xguard.s` | `0x400085d8` | `sub.l d0,d5 / cmp.l d2,d5 / bge.s` |
-
-Conditions, fetch caves: the fetch returned the arena base with a positive
-count, `+0x15` is negative (a recorder buffer) and the fetched index equals
-`+0x64`. Guard caves: the copy's cap comes out at 0 with the index exactly at
-`+0x64` and forward fetches (the crossfade guard also needs `+0x17` clear); it fetches
-END − 1 and, when that is mapped, copies one sample from it instead of
-stopping the voice (the crossfade guard replaces whichever of its two reads sits at
-END). Anything further
-past END is stock.
-
-The arena base is `0x40a955e0` on stock. A remix with a DRAM runtime (USB
-AUDIO, any `dram=True` unit) moves it by the platform's 1,707 pages to
-`0x41495de0`, and the fetch then returns the moved base. The manifest
-declares each hold cave's base literals (three in each fetch cave, one in each
-cap cave) (`pool_base_literals`); the
-build checks the count and rewrites them with the firmware's own base sites
-(build report: `arena: hold cave ...: 3 arena-base literal(s) -> ...`).
-
-## Gates
-
-The build re-assembles each cave and compares against the bytes pinned in
-`manifest.py`. Assemble from the repo root (for the `.include`):
-`m68k-elf-as -mcpu=5475 -o x.o modules/recorder-loop-fix/hold_copy.s`.
-
-## The loop click: what it is and how to test it
-
-For anyone who records loops on the Octatrack's recorder. The symptom: a
-click at the loop point when recording a bar into the recorder and looping
-it back (sound-on-sound); 128 BPM clicks, 120 BPM does not.
-
-> This is not official Elektron firmware. Read `docs/guide/BUILDING.md`
-> before you flash. Build your own image from your own copy of the OS.
-
-### What it is
-
-A bar is not always a whole number of samples. At 128 BPM a bar is
-82,687.5 samples. The recorder writes whole samples, so the length
-converter writes 82,687 every pass; the sequencer keeps the halves and
-fires each recorder trig at `floor(k × 82,687.5)`, so consecutive arms are
-alternately 82,687 and 82,688 samples apart. On every pass where the arm
-came one sample later than the recording ended, one sample of the input is
-never recorded, and the loop's wrap splices two moments two samples apart.
-
-At 120 BPM a bar is 88,200 samples, exact, so the arms are evenly spaced.
-At RLEN 4 the period is 20,671.875 samples, so the sample is lost once
-every eight passes ("around the sixth repeat"). Only 46 of the 1,401 tempi
-from 60.0 to 200.0 give a whole-number bar: 120, 125, 126, 135, 140, 144
-and 150 among them (`out/hw/softretrig/tempo_seam.py` lists them).
-
-Two louder faults sat on top of it:
-
-1. The voice was restarted from scratch every loop: the DSP was told the
-   re-bind was a new note and re-primed the voice: a chirp, then hash at
-   140 % of the signal's level over 300 samples.
-2. The read pointer was reset onto the same alternating grid: a
-   ±1.5-sample lurch every bar.
-
-### The fixes
-
-Four groups of caves in this module, no DSP code:
-
-| caves | what they do |
-|---|---|
-| [seek bind](#seek-bind) | a re-bind on the same buffer is a seek for the DSP, not a new note, so the voice is not re-primed |
-| [seek-bind counter](#seek-bind-counter) | holds the per-bind counter, so the read pointer is not reset |
-| [spacing](#spacing) | makes each pass exactly as long as the gap to its next arm, from where the current arm landed (the sequencer's own `floor(k × period)` grid, reconstructed by integer arithmetic); no lookahead, no state between passes |
-| [hold](#hold-sound-on-sound) | sound-on-sound: repeats the last sample where the voice would play a zero |
-
-The seek-bind, counter and spacing caves are 186 bytes of code. At any tempo whose bar is a whole
-number of samples the spacing cave writes back the length that was
-already there: a bit-exact no-op, proven for all 11,208 (tempo, RLEN)
-pairs and observed over 21,000 emulator calls at 65.6.
-
-The [`mods`](../../remixes/test/mods/README.md) test remix carries this module
-(with the other ColdFire mods) on the fourteen stock FX2 effects. `recfix`,
-the remix of the first three alone, was removed on 28 Sep 2026 (`git show
-13eb3339:remixes/recfix/remix.py`); OCTABAM84 was built from it.
-
-```bash
-git clone --recurse-submodules https://github.com/sambanks/octabam
-cd octabam
-make setup
-make os && make recon
-make check REMIX=mods
-make image REMIX=mods BUILD=84         # -> out/OCTATRACK_OCTABAM84.bin
-```
-
-`docs/guide/BUILDING.md` is the walk-through. Always pass `REMIX=mods`
-to `make check`, `make bus` and `make image` alike (there is no default
-remix, and every verifier reads the one image at `out/mainos_bus.bin`).
-
-### How to test it
-
-The fixture, the self-recording loop:
-
-- T1 = FLEX machine, pointed at its own recorder buffer (R1)
-- recorder source INAB, RLEN 16 (then repeat at RLEN 4)
-- a RECORDER trig and a PLAY trig on T1, on step 1, pattern 1X/16 steps
-- internal clock, 128.0 BPM
-- FX1 and FX2 off on T1 (a reverb smears a discontinuity)
-- a continuous source into A/B: a steady tone is the most revealing; a
-  drum loop hides the click under its transients
-
-Listen for a tick once per bar at the loop point. Before the patch it is
-there at 128 and absent at 120; after, absent at both.
-
-| # | do this | before | after |
-|---|---|---|---|
-| 1 | 128.0 BPM, RLEN 16 | tick every bar | nothing |
-| 2 | 120.0 BPM, same | clean | still clean; if 120 got worse, stop and say so: the patch does nothing there by construction |
-| 3 | 128.0 BPM, RLEN 4 | tick roughly every 8th pass | nothing |
-
-If you can record the output: `out/hw/softretrig/gaps.py` predicts each
-sample from one tone period earlier, so a steady tone cancels and a hole
-or a step becomes a spike (the per-bar worst-1 ms report was the scratch
-script `perbar.py`, not in the repository).
-
-### Measured on the unit, and not
-
-Sam's MKII, a 1 kHz tone into the self-recording loop, 90 s takes:
-
-| | before | after |
-|---|---|---|
-| worst 1 ms in each bar, even bars | 1.10× the noise floor | 1.10× |
-| worst 1 ms in each bar, odd bars | 1.70× (worst bar 11.5×) | 1.10× (worst bar 1.11×) |
-| bars with anything above 1.25× the floor | 16 of 23 | 0 of 46 |
-| 65.6 BPM control | clean | clean, identical floor |
-| 132.0 BPM (a different fraction) | — | clean |
-
-That table was OCTABAM83 (the seek-bind, counter and spacing caves plus the DSP effects).
-OCTABAM84 (`recfix`) re-flashed and re-captured gives even bars 1.10× / odd
-bars 1.10× with a residual floor of 2.67 % of rms, identical to 83's. Sam's
-build of that image is sha256 `ecb574a9…`; a build from the same stock
-1.40C (`370c55a3…`) should match.
-
-Not proven:
-
-- Any unit other than one MKII. The MKI runs the byte-identical stock OS.
-- Whether all three self-loop cave groups are needed; they have only been
-  tested together.
-- Real material over long periods; the measurements are a tone for 90 s.
-- A sporadic blip, about one per 45-90 s take, on every image including
-  the broken one (1.6× to 11.5× the noise floor, at no repeating bar
-  position): something else, untested. An occasional tick that is not
-  once-per-bar is probably this.
-
-### Sound-on-sound (SRC3 = the track)
-
-Bryan T, 12 Sep 2026, on OCTABAM84 in his sound-on-sound setup: a click
-every other pass at RLEN 16 at 128 BPM. The port reproduced it (26 Sep
-2026); it is a different mechanism from the self-loop, present on stock
-firmware too, and gone on the unit since `sos-capture` BUILD=95 (3 Oct
-2026, [Hold](#hold-sound-on-sound)):
-
-- With a REC3 trig (SRC3 = T1) on the step of the PLAY trig, the recorder
-  arms 64 samples later than with REC1 alone, so the play trig binds before
-  the arm and the voice plays the PREVIOUS pass: the output is the input one
-  bar + 64 samples later (REC1 alone: 64 samples, the pass being recorded).
-- The window/content mismatch is the hold caves' ([Hold](#hold-sound-on-sound)).
-- The spacing cave changes nothing here: the next arm ends each recording,
-  so stock and `recfix` record the same lengths.
-- The self-loop fixture (REC1 only) and a 1 kHz tone (1,875 cycles per bar
-  at 128 BPM, so a sample one bar old has the same value) cannot show it.
-
-The hold caves repeat the last sample in place of the zero, both where
-the fetch past END comes back empty and where the copies' cap would stop
-the voice (after a second transport start). The one-sample skip or repeat
-when the loop length changes by one stays: a loop
-whose period is not a whole number of samples cannot be seamless in whole
-samples. At a tempo whose bar is a whole number of samples (120 among them)
-the window and the content always match and sound-on-sound is clean without
-a patch.
-
-### Capturing it sample-exact over USB
-
-[`sos-capture`](../../remixes/test/sos-capture/README.md) is this module
-with USB AUDIO IN AB and USB AUDIO OUT TRACKS; Bryan T's BUILD=94 and
-BUILD=95 captures (3 Oct 2026) were taken with it:
-
-```bash
-tools/hw/sos_capture.py fixture <a project of yours> SOSCAP --bpm 128 --rlen 16
-tools/hw/sos_capture.py signal sig.wav --bpm 128 --rlen 16     # 997 Hz on L, a sample-index ramp on R
-# SOSCAP on the card, the image flashed, PLAY pressed, then:
-tools/hw/sos_capture.py capture sig.wav unit.wav
-tools/hw/sos_capture.py wraps unit.wav                          # each wrap: REPEAT, SKIP, or a sample neither lag explains
-tools/hw/sos_capture.py compare sig.wav unit.wav                # each recirculating pass against the one before
-tools/hw/sos_capture.py port SOSCAP sig.wav port.wav --image out/mainos_bus.bin
-tools/hw/sos_capture.py compare sig.wav unit.wav port.wav       # -> the port delay that matches the unit's arm
-tools/hw/sos_capture.py port SOSCAP sig.wav port.wav --delay N
-tools/hw/sos_capture.py compare sig.wav unit.wav port.wav       # -> the samples where unit and port differ
-```
-
-The ramp on R makes every sample T1 plays name the input sample it was
-recorded from, so the unit's arm is located to the sample and the port
-is started with its input on the same one. Once the signal stops, the
-loop recirculates and each pass is compared with the one before, per
-sample over shifts of −2..+2, so the one-sample walk drops out and a
-missing, repeated or foreign sample stays.
-
-Measured under the port (30 Sep 2026, `sos-capture`, 128 BPM, RLEN 16,
-AMP VOL 127): every recirculating pass matches the one before; a zero
-sample and a 20-sample burst planted in a copy of the capture were found
-at their pass and offset, and the aligned diff against the unplanted run
-listed exactly those 21 samples. The port run takes the arm to the sample
-from the ramp (a +7,000-sample input delay recovered exactly).
-
-On the unit (Bryan T, 3 Oct 2026): macOS presents it as one device with
-16 inputs and 2 outputs; T1 carries a white noise floor of about 55 LSB
-(24-bit) on both channels, L/R uncorrelated, present before the signal
-arrives (source not found), so the unit's capture is not bit-exact where
-the port's is. `wraps` classifies from the loop's lag and works through it.
-
-The port's ColdFire rate does not produce the click: `--ips` from 1,200 to
-3,990 ColdFire instructions per sample (30–100 % of the default, which is
-not a measurement), RLEN 16 and RLEN 4, recirculating passes identical to
-the pass before at every rate; a slower ColdFire moves the arm 2–8 samples
-against the input and nothing else (30 Sep 2026).
-
-### Where the detail is
-
-- `git show 3ceba41:docs/history/RTOS_FORK.md` section 10.53 (the diagnosis and
-  the tempo table), section 10.55 (a fix that failed), sections 10.56-10.57 (the cave and
-  its gates), section 10.58 (the hardware result)
-- `remixes/test/mods/remix.py`, `remixes/test/mods/README.md`
-- `out/hw/softretrig/tempo_seam.py`; the arithmetic gate (115,200 cases)
-  was the scratch script `lever_e.py`, not in the repository
-- this page's earlier home: `git show 666b6154:docs/firmware/RECORDER_CLICK.md`
+    k    = arm / q
+    L'   = q + floor((k+1)·r / tempo24) − floor(k·r / tempo24)
+
+## 4. Sound-on-sound plays a zero
+
+**Fault.** With a REC3 trig (SRC3 = the track) on the step of the PLAY
+trig, the voice plays the previous pass. Its window is the current arm
+spacing and its content the previous pass's length, so on every other pass
+the window is one sample longer than the recording. That sample plays as a
+zero, and SRC3 records it back into the loop. The zero comes from two
+places:
+
+- The fetch of index END (`+0x64`) finds no block and returns the empty pool
+  base.
+- After a second transport start (PLAY again, or PLAY after CONTROL >
+  MEMORY reallocates the recorders), the recording stays 82,687 samples on
+  every pass, and the recorder is past END when the voice reaches it. The
+  copy loops cap a voice reading the buffer its own recorder writes at
+  END − index. At END that cap is 0, so the voice is stopped and the rest of
+  the frame is zero-filled.
+
+**Fix.** The last sample is repeated instead.
+
+- Three fetch caves (`hold_copy.s`, `hold_xfade_a.s`, `hold_xfade_b.s`, with
+  `fix.inc`), hooked at `0x400086c2`, `0x4000853e` and `0x4000854e`: an
+  empty fetch of END becomes a fetch of END − 1 with a count of one.
+- Two guard caves (`hold_guard.s`, `hold_xguard.s`), hooked at `0x40008716`
+  (plain copy) and `0x400085d8` (crossfade copy): at END, the copy takes
+  one sample from END − 1 instead of stopping the voice.
+
+A loop whose period is not a whole number of samples still gains or loses
+one sample at each wrap. In sound-on-sound the repeated sample is recorded
+into the loop and replays until the next skip removes it.

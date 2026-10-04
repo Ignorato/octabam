@@ -7,7 +7,7 @@ sample-exact on a unit and compared with the port running the same project
 on the same signal.
 
 - **RECORDER LOOP FIX**: the loop click fix,
-  [`modules/recorder-loop-fix`](../../../modules/recorder-loop-fix/README.md#the-loop-click-what-it-is-and-how-to-test-it).
+  [`modules/recorder-loop-fix`](../../../modules/recorder-loop-fix/README.md).
 - **USB MIDI**, **USB AUDIO OUT TRACKS**, **USB CROSSBAR**, **USB AUDIO IN AB**:
   as in `usb-io-tracks-ab`. SPATIALIZER is on neither menu (its words hold
   the IN module's inject).
