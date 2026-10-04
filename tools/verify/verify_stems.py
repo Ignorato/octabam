@@ -74,6 +74,7 @@ STACK_SIZE, STACK_FILL = 0x2000, 0x5354454d                   # stems.s: DramReg
 STACK_LIMIT = 6 * 1024     # above this, the plan raises the stack to 16 KB before a flash
 RING_SIZE = 0x800000               # stems.s: the ring, 8 MiB (piece 5)
 RING_SIZE_T1 = RING_SIZE           # T1 only: 131,072 frames of 64 bytes
+RING_FRAMES_T1 = RING_SIZE_T1 // 64
 FILE_NAMES = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "MAIN", "CUE", "AB", "CD", "A", "B", "C", "D"]
 LAYOUT_CASES = [  # (sources, format, files, ring frame bytes)
     (0x001, 0b110, ["T1"], 64),
@@ -1045,7 +1046,7 @@ def labels(s):
     whole seconds or one less (the writer task rewrites the line at most a
     pass late), rising from 00:00 to 00:01. After it: REC, DONE mm:ss with
     the take's length, and PEAK n% from the recorder's own peak (one track:
-    a 65,536-frame ring). The menu isn't open: the rows are memory, and the
+    a 131,072-frame ring). The menu isn't open: the rows are memory, and the
     screen draws them at the next key (STEM_REC.md 16.1)."""
     tag = "labels"
     port(s, LABEL_FRAMES, stop_at=LABEL_STOP, tag=tag, dump_blocks=False,
@@ -1403,7 +1404,7 @@ LIMIT_FRAMES = 55300                     # the --long take: about 20 s, past the
 
 def limit(s):
     """A 20-second take, stopped by STOP: past the old 15-second cap. T1's
-    ring (65,536 frames) does not wrap in 20 s, so the file's data must equal
+    ring (131,072 frames) does not wrap in 20 s, so the file's data must equal
     the ring's first frames with each 16-bit word byte-swapped: the ring is
     big-endian, the file little-endian. A sector sent twice or lost keeps
     the size and fails this."""
@@ -1456,19 +1457,21 @@ def exists(s):
 
 def overflow(s):
     """The writer held (stems_hold, a test seam) and the ring made to look
-    nearly full after the action: rd poked 65,436 frames behind wr, and
-    rd_off 100 frames past wr_off. The hook stops with ERR_OVERFLOW once
-    100 frames are in. FINISHING ignores the hold, so the task writes all
-    65,536 frames and closes a playable file. A STOP, then the row, arms
-    again: the task came back to IDLE."""
-    used = 65536 - 100
+    nearly full after the action: rd poked 100 frames short of the ring's
+    capacity behind wr (131,072 frames of 64 bytes at T1), and rd_off 100
+    frames past wr_off. The hook stops with ERR_OVERFLOW once 100 frames
+    are in. FINISHING ignores the hold, so the task writes the whole ring
+    and closes a playable file. A STOP, then the row, arms again: the task
+    came back to IDLE."""
+    used = RING_FRAMES_T1 - 100
     rd = (-used) & 0xffffffff
     rd_off = 100 * 64
     pokes = [(s["stems_hold"] + 3, 1)]
     pokes += [(s["stems_rd"] + i, (rd >> (24 - 8 * i)) & 0xff) for i in range(4)]
     pokes += [(s["stems_rd_off"] + i, (rd_off >> (24 - 8 * i)) & 0xff) for i in range(4)]
     # REC pressed at frame 1000, inside the task's long FINISHING (the guard
-    # trips near frame 75; IDLE comes about frame 5,300): it must change
+    # trips near frame 75; IDLE came about frame 5,300 with the 4 MiB ring,
+    # twice that with 8 MiB): it must change
     # nothing. The menu's words are dumped just before the re-arm and at the end.
     log, _, card, words, _ = port(s, OVERFLOW_FRAMES, stop_at=OVERFLOW_STOP, tag="overflow",
                                   pokes=pokes, dump_blocks=False,
@@ -1485,7 +1488,7 @@ def overflow(s):
           f"status writes {statuses}")
     check("overflow: 100 frames, then the guard", 100 in wrs and 101 not in wrs, f"wr reached {max(wrs, default=0)}")
     data = take(card) or b""
-    ok = len(data) >= 44 and int.from_bytes(data[40:44], "little") == len(data) - 44 == 65536 * 64
+    ok = len(data) >= 44 and int.from_bytes(data[40:44], "little") == len(data) - 44 == RING_SIZE_T1
     check("overflow: the file holds the whole ring and its header agrees", ok,
           f"{len(data)} bytes")
     check("overflow: the task wrote and went IDLE, and the row armed again",
