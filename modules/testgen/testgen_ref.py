@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Float reference for TESTGEN (B-013): the signals and the analysis that proves them.
+"""Float reference for TESTGEN: the signals and the analysis that proves them.
 
     python3 modules/testgen/testgen_ref.py      # self-check on ideal signals
 """

@@ -64,8 +64,9 @@
 
 init:
         move    #>$ffffff,m5
-        bsr     tg_rst                  ; every slot, so the first block need
-        rts                             ; not restart (its knob memories read 0)
+        bsr     tg_rst                  ; every slot; the first block restarts
+        rts                             ; again (its knob memories read 0), to
+                                        ; the same state
 
 proc:
 ; ---- per block: MODE (slot 6), FREQ, LEN; any change restarts -----------------

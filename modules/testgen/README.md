@@ -62,7 +62,7 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 - History: 0.1's WHITE was a 24-bit generator whose low bits repeated on short cycles (the low 16 bits every 1.5 s, -48 dB under the noise) and whose L and R were the same; replaced at the tester's request.
 - ✅ IMPULSE puts a full-scale sample at exactly the reference's positions (every 0.25 s at LEN 0, every 1 s at LEN 24) and zero everywhere else.
 - ✅ An invalid saved MODE byte plays SINE; every knob at both ends renders.
-- ✅ Under the ColdFire port in a real project (`verify_set`, `OT_PROJECT`, 3 Oct 2026): a project made on a MKII on stock 1.40C (T1 THRU, T2 STATIC with trigs), TESTGEN put on T2's FX2 in every part of every bank with `ot_project.py set-fx` (LEVL 115, FREQ 17, LEN 32). LOAD PROJECT completed and 900 frames ran; the live FX2 id on T2 read 0x17; T2's chain output was -16.5 dB against -41.7 dB in (the sine replaces the track's quiet audio); the load rewrote no project file; every shared-window DSP write lay in a permitted range. This proves the module loads and its signal reaches the chain on the emulated firmware, not the signal's accuracy there.
+- ✅ Under the ColdFire port in a real project (`verify_set`, `OT_PROJECT`, 3 Oct 2026): a project made on a MKII on stock 1.40C (T1 THRU, T2 STATIC with trigs), TESTGEN put on T2's FX2 in every part of every bank with `ot_project.py set-fx` (LEVL 115, FREQ 17, LEN 32: then 1 kHz at -6 dBFS, the 0.1 knob map). LOAD PROJECT completed and 900 frames ran; the live FX2 id on T2 read 0x17; T2's chain output was -16.5 dB against -41.7 dB in (the sine replaces the track's quiet audio); the load rewrote no project file; every shared-window DSP write lay in a permitted range. This proves the module loads and its signal reaches the chain on the emulated firmware, not the signal's accuracy there.
 
 ## On the unit
 
@@ -74,7 +74,7 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 
 ## Using it
 
-- **A level or a channel check**: SINE at 1 kHz (FREQ 17), LEVL 127 gives a 0 dBFS peak; step LEVL to find where a path clips, 0.5 dB at a time. CHAN L-R shows whether a path keeps polarity.
+- **A level or a channel check**: SINE at 1 kHz (FREQ 18, the default), LEVL 127 gives a 0 dBFS peak; step LEVL to find where a path clips, 0.5 dB at a time. CHAN L-R shows whether a path keeps polarity.
 - **A frequency response**: record a whole SWEEP period from where you want to measure, then deconvolve it with `testgen_ref.deconvolve(capture, f1=20.0007, T=<LEN/8 + 1>)`: the peak is the path's impulse response, and the harmonic distortion lands before it in time, apart from the linear part. `testgen_ref.sweep_dsp` gives the exact sweep for sample-accurate comparison.
 - **A noise floor or a quick response**: PINK into a spectrum analyser, with third-octave bands, reads flat for a flat path.
 - **Latency and dropouts**: IMPULSE, then count the samples between the impulses in a capture; a missing or shifted impulse is a dropout.
