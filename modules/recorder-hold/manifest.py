@@ -40,7 +40,7 @@ MODULE = Module(
     key="RECORDER HOLD",
     kind=Kind.CF_PATCH,
     category=Category.FIXES, author="sambanks", author_url="https://github.com/sambanks",
-    proof=Proof.PORT, proof_note="26 Sep 2026",
+    proof=Proof.HARDWARE, proof_note="Bryan T's MKII, sos-capture BUILD=95, 3 Oct 2026",
     doc="ColdFire cave: a recorder-buffer FLEX voice reading one sample past its "
         "recording repeats the last sample instead of reading zero.",
     cf_patches=(

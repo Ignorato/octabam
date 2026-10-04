@@ -44,7 +44,8 @@ Modules
 - CF METER: ColdFire frame-interrupt and idle time read out as audio on T8 (probe, 27 Sep).
 - Removed: WarpFold, Ripple, Rungs, Streamz, BodeShift, NIMBUS, HELLO WORLD, HELLO DRAM; their FX2 ids return to stock's entries (27 Sep).
 - Octatrick 2.9: `timhastie/octatrick-modules` `v9.1` → `v2.9` (`525f4b1`): MIDI IN, chord recording with inversions, LEG modes, sample-track glide, step transpose, SCALE / GLIDE in battery RAM (2.8); ROOT, the quantizer as a DRAM unit (ROM 3,319 → 243 B), FINE 0c on a new synth track, no limiter, the engine owns the AMP envelope, `po_retrig`, the index ramp (2.9). TUNER added: UP + TEMPO, one DRAM unit, three detours (Tim Hastie, 29 Sep, #526).
-- Not in any flashed remix: RECORDER HOLD and RLEN PLEN (26 Sep, port-gated); MIDI SCENES re-pinned to 1.40MIDISC8.2 (25 Sep).
+- RECORDER HOLD: two caves on the copies' cap at END, the zero after a second transport start or a recorder reallocation (4 Oct, #564; on Bryan T's unit, sos-capture BUILD=95).
+- Not in any flashed remix: RLEN PLEN (26 Sep, port-gated); MIDI SCENES re-pinned to 1.40MIDISC8.2 (25 Sep).
 
 Gates and tools
 - `make check` is `check-shared` + `check-remix`; manifests name their gates (`schema.Gate`) and dear settings (`Module.dear`); no default remix (27 Sep).
@@ -61,6 +62,24 @@ Docs
 - `docs/guide/` (BUILDING, REMIXER) and `docs/contributing/` (MODULES, PLACEMENT, TESTING, TOOLING, FAILURE_MODES cut to Seen / Cause / Fix / Check); tool docs beside the tools (30 Sep).
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
+
+## sos-capture BUILD=94 and BUILD=95 — 3 Oct 2026 (Bryan T's builds)
+
+On Bryan T's MKII, the sound-on-sound loop (SOSCAP: T1 FLEX on R1, PLAY +
+REC1 + REC3 with SRC3 = T1 on step 1, 128 BPM, RLEN 16, 24-bit recorders)
+captured sample-exact over USB AUDIO OUT TRACKS.
+- BUILD=94 (`f6ce41d6`, three hold caves): in steady state every long-pass
+  wrap is an exact repeat; after a recorder reallocation every long-pass
+  wrap is one sample of zero, for the whole take (two reallocations).
+- BUILD=95 (`cd017851`, PR #564, five hold caves): no zero in any take
+  (16 → 24-bit reallocation, 24-bit off/on + reload, STOP/PLAY three times,
+  steady state, RLEN 4 trigs 1/5/9/13 after a reallocation); 120 BPM has no
+  event at any wrap. Every 128 / RLEN 16 wrap is a repeat (lag 82,687 →
+  82,688) or a skip (82,688 → 82,687). Real audio at 128 / RLEN 16 and
+  224 / RLEN 4: no audible loop point.
+- Not run: STOP/PLAY on BUILD=94. The repeated sample is recorded into the
+  buffer and replays until the next pair (RLEN 4: 35.2 % of tone rms at the
+  stored seam, 18.8 % at the skip).
 
 ## Image 93 — 3 Oct 2026 (`wave` at `e90912d9`)
 
