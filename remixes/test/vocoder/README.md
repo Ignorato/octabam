@@ -9,7 +9,7 @@ VOCODER beside the stock effects (all but PLATE REV, whose words it takes, and D
 
 ## Status
 
-Renders in `dsp_host` (`tools/verify/verify_vocoder.py`); the per-track limit checked under the ColdFire port. On a MKII (OCTABAM7-9, 4 Oct 2026) two per core played and three stalled, which is why the limit is built in; the limit itself is not yet run on hardware.
+Renders in `dsp_host` (`tools/verify/verify_vocoder.py`); the per-track limit checked under the ColdFire port. On a MKII (OCTABAM7-9, 4 Oct 2026) two per core played and three stalled, which is why the limit is built in; with the limit built in, OCTABAM12 ran VOCODER on FX2 of all eight tracks, stable (two vocoding per core, the rest dry).
 
 ## Build
 

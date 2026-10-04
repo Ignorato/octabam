@@ -40,7 +40,7 @@ MODULE = Module(
     key="VOCODER",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.RENDER, proof_note="verify_vocoder; on a MKII two per core played (OCTABAM7-9, 4 Oct 2026); the built-in two-per-core limit not yet on hardware",
+    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, OCTABAM12 (remix vocoder), 4 Oct 2026: on FX2 of all eight tracks, T1 T2 T5 T6 vocode, the rest dry, stable; by ear",
     doc="Ten-band vocoder after the Roland VP-330: the track's voice, a built-in carrier at NOTE or input B. FX2 of tracks 1, 2, 5 and 6 only.",
     menu=MenuEntry(
         fx2_id=0x1a,

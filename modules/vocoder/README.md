@@ -32,9 +32,13 @@ All by `tools/verify/verify_vocoder.py` through `dsp_host` on the audition's scr
 - 🟡 760 counted cycles a sample (`make cycles REMIX=vocoder`); `make accept` passes, pricing four on a core at 3,040. On the unit this is not true: see the status note above. The first version counted 1,085 (three on a core stalled the unit on OCTABAM7); the parallel-move rewrite, a peak-detector envelope, a 24-bit band sum and the tables in X memory (DJ EQ out of the remix) brought the count down, but three on a core with FX1 FILTERs still overrun (OCTABAM8 and OCTABAM9).
 - Listened to (4 Oct 2026): a LibriVox reading (public domain) through this DSP code in `dsp_host`, at C3, C2, without consonants, a melody parameter-locked per 1/8 and an external chord carrier; judged intelligible and "really good" by the tester. The design was chosen by ear and measurement: the VP-330's steep bands against a first law with shallow ones (DESIGN.md).
 
+## On the unit
+
+- OCTABAM7-9 (Ignorato's MKII, 4 Oct 2026, by ear): VOCODER plays and is intelligible; one or two per core play; a third on a core (FX1 = FILTER) overran it, a loud glitch, then no audio or sequencer until a reboot.
+- ✅ OCTABAM12 (`make image REMIX=vocoder BUILD=12`, from the card), same unit and day, by ear: on the Octatrack Advisor's project with VOCODER on FX2 of T1, T2 and T3 (the set that stalled OCTABAM9), T1 and T2 vocode and T3 passes its audio dry; with T4 added, T4 is dry too; then VOCODER on FX2 of all eight tracks: T1, T2, T5 and T6 vocode, T3, T4, T7 and T8 are dry, stable on both cores.
+
 ## Open
 
-- The built-in limit on hardware: next image.
 - The VP-330's ensemble (a bucket-brigade chorus on its output) is not modelled; a chorus on the Octatrack's FX would come after FX2's output only on another track.
 - More than two per core: getting four to fit beside four FILTERs needs under about 590 real cycles each; until then the limit is built in.
 - The pricing gap is worth reporting upstream: displaced moves and table reads counted as one cycle, and FX1 FILTERs not charged against a budget that contains them.
