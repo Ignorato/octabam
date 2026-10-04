@@ -1564,7 +1564,7 @@ namespace ot
 			out.stop = runToPc(g_engineReceive, left);
 			if(out.stop != Stop::Gate)
 				break;
-			if((m_noPost || m_machine.pcCount() > 0) && m_machine.peek32(g_engineQueue + 4) == 0)
+			if((m_noPost || m_machine.pcCount() > 0) && (m_loadEarly || m_machine.peek32(g_engineQueue + 4) == 0))
 			{
 				out.handledMs = (m_sample - postSample) / g_sampleHz * 1000.0;
 				out.handledInstr = m_machine.instructions();
