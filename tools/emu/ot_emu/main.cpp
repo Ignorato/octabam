@@ -1248,6 +1248,7 @@ int main(int _argc, char** _argv)
 	std::string pokeAfterLoad;	// O9c: "addr=byte;addr=byte" written after the load, before the frames (drive an apply the load skips)
 	std::string pokeEarly;		// the same, written before --call (the current-track byte 0x80000000 an editor call reads)
 	bool noPost = false;		// 2 Oct 2026: --no-post: no LOAD PROJECT post; the firmware's own power-up load (with --cs1-in, a power cycle)
+	bool loadEarly = false;		// 4 Oct 2026: live phase from LOAD PROJECT's first handling, the background bank loads still queued
 	std::string cs1In;		// 2 Oct 2026: --cs1-in FILE: CS1 (0x10000000, the memory that keeps the current bank over a power-off) holds FILE's bytes before the boot; with a --mem-dump of 0x10000000,0x100000 from an earlier run it is a power cycle
 	std::string callSpec;		// "addr[,arg,...]": a firmware routine called AS MAIN after the load (a menu action the port has no panel for -- Part Reload, 14 Sep 2026)
 	int callAt = -1;			// with --sequencer: make that call this many frames AFTER the transport start instead (a panel edit while playing: the transport start re-applies the part over the live lane, so an edit made before it is gone)
@@ -1341,6 +1342,7 @@ int main(int _argc, char** _argv)
 		else if(a == "--poke-early" && i + 1 < _argc)	pokeEarly = _argv[++i];
 		else if(a == "--cs1-in" && i + 1 < _argc)	cs1In = _argv[++i];
 		else if(a == "--no-post")				noPost = true;
+		else if(a == "--load-early")			loadEarly = true;
 		else if(a == "--call" && i + 1 < _argc)		callSpec = _argv[++i];
 		else if(a == "--call-at" && i + 1 < _argc)	callAt = std::atoi(_argv[++i]);
 		else if(a == "--step" && i + 1 < _argc)		steps.emplace_back(_argv[++i]);
@@ -1837,6 +1839,7 @@ int main(int _argc, char** _argv)
 				if(ataLatency >= 0.0)
 					rtos.setAtaLatency(ataLatency);
 				rtos.setNoPost(noPost);
+				rtos.setLoadEarly(loadEarly);
 				load = rtos.loadProjectLive(setName, projectName, loadMs, 3000.0, namesEarly);
 				const auto& r = load;
 				m.setPeriphTrace(false);
@@ -2301,6 +2304,8 @@ int main(int _argc, char** _argv)
 					return 1;
 				}
 				const auto f0 = rtos.frameCount();
+				if(pcRing)
+					rtos.armPcRingNow(pcRing);
 				std::string line;
 				size_t n = 0;
 				bool early = false;
@@ -2325,6 +2330,15 @@ int main(int _argc, char** _argv)
 				std::printf("live script: %zu line(s) from %s over %llu frames, ended %s -- %s\n", n, liveScript.c_str(),
 					static_cast<unsigned long long>(rtos.frameCount() - f0), early ? "early" : (live.quit ? "on quit" : "at the end"),
 					rtos.why().c_str());
+				if(pcRing && rtos.pcRingArmed())
+				{
+					const auto& ring = rtos.pcRing();
+					const auto pos = rtos.pcRingPos();
+					const size_t k = std::min(ring.size(), pos);
+					std::printf("             pc ring (last %zu of %zu instructions since the script start):\n", k, pos);
+					for(size_t i = 0; i < k; ++i)
+						std::printf("               %#010x\n", ring[(pos - k + i) % ring.size()]);
+				}
 			}
 			else if(!livePath.empty() && !sequencer)
 			{

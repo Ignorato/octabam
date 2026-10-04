@@ -6,8 +6,8 @@ A remix of Octatrack OS 1.40C, built from your own copy of it, that adds:
   FX1 effects (a filter, a drive pedal and a modulation pedal);
 - **scene locks and parameter locks on page 2** and a TEMPO window that
   edits the bus engines;
-- **USB MIDI** and **USB audio** (the master track into a computer, and the
-  computer's stereo output onto inputs C/D) over the Octatrack's own USB port;
+- **USB MIDI** and **USB audio** (the master track into a computer) over the
+  Octatrack's own USB port;
 - Em's **Octakit**: 256 Kits per project instead of 64 bank-tied Parts.
 
 Named after the set it is built for. Runs on an MKII; see [Where it has
@@ -41,7 +41,6 @@ flowchart LR
     D -- DLY --> R
     D --> O1["track 1 out: the repeats"]
     R --> O5["track 5 out: the tail"]
-    U["USB in<br/>the computer's L/R"] --> CD["inputs C/D"]
 ```
 
 | track | FX2 | knobs |
@@ -137,14 +136,6 @@ Plug the unit into a computer over its USB port.
   the computer carrying track 8 left and right, after T8's effects and
   before T8's LEVEL and the MAIN volume. With MASTER TRACK on, that is the
   whole mix. ([`usb-audio-out-master`](../../modules/usb-audio-out-master/README.md))
-- **USB audio in: the computer onto inputs C/D.** The computer's stereo
-  output arrives on inputs C and D in place of the jacks; A and B stay the
-  jacks. When the computer closes the stream, C and D are the jacks again.
-  High speed only. ([`usb-audio-in-cd`](../../modules/usb-audio-in-cd/README.md),
-  Bryan T; [`usb-crossbar`](../../modules/usb-crossbar/README.md) gives the
-  USB controller first call on the crossbar so no packet loses its tail
-  under a busy project.)
-
   ```bash
   sox -t coreaudio "Elektron Octatrack DPS-1" -c 2 -r 44100 -b 24 take.wav trim 0 60
   ```
@@ -175,7 +166,7 @@ that let Octakit, CC MAP and the scene locks share the same hooks are
 | | stock | bottleservice |
 |---|---|---|
 | sample and recorder memory | 14,602 pages | 12,367 pages (Octakit's Kit store and the USB buffers take the rest) |
-| DSP time per core | | worst case priced at 2,581 of 3,120 cycles: four MODULATION on tracks 5–8 beside the reverb. Not in that price: the USB in inject at the frame head of core 0, about 250 cycles a frame (33 instructions over 16 samples), which `make cycles` does not see |
+| DSP time per core | | worst case priced at 2,581 of 3,120 cycles: four MODULATION on tracks 5–8 beside the reverb. |
 
 On image 88 a fourth MODULATION beside the reverb overran the DSP and
 three fit; the cycle pass that followed prices four inside the budget and
@@ -196,17 +187,21 @@ leaves neutral. GRAIN's four grains per line are the largest lever:
   2026). Load, play, TEMPO window, Kit save and reload, USB audio and a
   page-2 scene lock are the things to try on it; which of them have been
   tried is not written down yet.
+- **Images 95 and 97 (3–4 Oct 2026, unreleased):** with USB AUDIO IN CD
+  and USB CROSSBAR in the image and a computer on the USB port, PLAY in a
+  new project halted the unit in Octakit's pattern-apply check
+  (`gk_stock_audio_pattern_primary_begin_report_fatal`, `0x45d114de`);
+  with the cable unplugged it did not. Both modules were removed on 4 Oct
+  2026; the emulator, which has no USB host streaming into the port, did
+  not reproduce the halt. On image 99 a bank file written by the unit
+  (12:42, 4 Oct 2026) lost a 64-byte burst and the firmware rejected it;
+  every boot into that project then stranded Octakit (silent songs, a
+  halt on pattern paste) -- `docs/contributing/FAILURE_MODES.md`, the two
+  Octakit entries.
 - **Not flashed in this form:** OUT MASTER polling every 250 µs (image 88
-  polled every 1 ms), USB AUDIO IN CD with USB CROSSBAR, and PLOCKS P2
-  (page-2 parameter locks; `verify_plocksp2` passes on this remix under
-  the emulator, power cycles included). On the unit:
-  `tools/hw/usb_probe.py`, then the computer's output onto C/D through a
-  THRU machine.
-- **Not checked by the build:** USB AUDIO IN's on-chip SRAM window
-  (`0x80007c00`–`0x80007fff`, its dTDs and packet buffers) is a ledger claim
-  against modules that declare SRAM; Octakit's runtime declares none, so an
-  overlap with it would not be refused. Bryan T's census found nothing above
-  `0x80006907` in the modules and nothing above `0x80007874` in stock.
+  polled every 1 ms) and PLOCKS P2 (page-2 parameter locks;
+  `verify_plocksp2` passes on this remix under the emulator, power cycles
+  included).
 - **Under the ColdFire emulator:** `make check REMIX=bottleservice` with a
   real project, every gate green; Kit save, FUNC + CUE reload, cross-Kit
   load and LOAD KIT copy/paste keep values written by MODE DEFAULTS and CC

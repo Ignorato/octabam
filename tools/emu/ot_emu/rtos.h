@@ -532,6 +532,10 @@ namespace ot
 		// --no-post: the load is the firmware's own power-up one (the current bank
 		// from CS1, the rest from the card); LOAD PROJECT is not posted.
 		void setNoPost(bool _on) { m_noPost = _on; }
+		// 4 Oct 2026: end the load at LOAD PROJECT's first handling, with the
+		// engine's queued work (the other banks' background loads) still to
+		// run -- the unit's state while the user starts working.
+		void setLoadEarly(bool _on) { m_loadEarly = _on; }
 		const std::vector<std::string>& ataTrace() const { return m_ataTrace; }
 
 		uint64_t idleSkips() const { return m_idleSkips; }
@@ -744,6 +748,7 @@ namespace ot
 		bool m_trigLogInstalled = false;
 		bool m_partPtrWatched = false;
 		bool m_noPost = false;
+		bool m_loadEarly = false;
 		// O15e: the wake watches behind the memory conditions (card ready,
 		// the bank byte, the main gain table); armed once, at first use.
 		bool m_cardReadyWatched = false, m_curBankWatched = false, m_gainTableWatched = false;

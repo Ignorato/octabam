@@ -5,6 +5,24 @@ a mode is seen on hardware.
 
 Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.md`.
 
+## PLAY or a sample load halts the unit in Octakit's pattern-apply check with a computer on USB (bottleservice, USB AUDIO IN CD) 🟡 inferred
+
+- **Seen:** Sam's MKII, images 95 and 97 (bottleservice with USB AUDIO IN CD + USB CROSSBAR), 3–4 Oct 2026. `EXCEPTION VEC:04 ADDR:45D114DE` = `gk_stock_audio_pattern_primary_begin_report_fatal` in Octakit's runtime, on a sample load and on PLAY in a new project, with the USB cable to a computer. With the cable unplugged PLAY did not halt. Image 96 (without the two modules and without PLOCKS P2) loaded a sample without a halt; PLAY there with USB plugged was not tried.
+- **Cause:** inferred from the cable test: something live only with a USB host breaks the state Octakit checks when the sequencer applies a pattern's Part (`gk_selector_begin_physical` fails outside her quiesced state). USB AUDIO IN does its per-frame work in the frame interrupt's state machine beside Octakit's audio patches. Not reproduced under the port (no USB host streams into it).
+- **Fix:** USB AUDIO IN CD and USB CROSSBAR removed from bottleservice, 4 Oct 2026. To find out: PLAY with USB plugged on the image without them; whether USB AUDIO OUT MASTER (250 µs since 28 Sep; image 88 polled 1 ms) alone triggers it.
+
+## Octakit stranded for the session after a bank file fails to load: pattern paste halts, every Part apply is skipped (silence) ✅ measured under the port
+
+- **Seen:** Sam's MKII, images 95–99, 3–4 Oct 2026: songs played silent (meters still), and a pattern paste in a fresh project halted with `EXCEPTION VEC:04 ADDR:45D1364E` = `gk_current_pattern_part_set_fatal`. Booting with the remembered project missing from the card halted at `45D173EE` = `gk_stock_empty_project_runtime_initialize_report_fatal`, D0 = −3 (BUSY).
+- **Cause:** measured under the port (Octakit alone). Octakit's lifecycle word (`__gk_lifecycle_state`, `0x45f85c84`) is set QUIESCED by boot init, empty-project init and every bank load, and cleared only by `gk_lifecycle_activate_current` after the load's post step. When the stock bank load returns an error (a bank file the firmware cannot parse, −51; a missing project, −12) `gk_stock_banks_load_work` returns at its error exit without activating; stock carries on with the bank it initialised, Octakit stays QUIESCED: `gk_stock_pattern_payload_store` halts on the next paste and the sequencer's Part apply takes her quiesced path. On Sam's card the remembered project (`PROJECT 261004p`) had a `bank01.work` the firmware rejects (below), so every boot into it stranded the session. A project load or CREATE EMPTY PROJECT that succeeds re-activates (measured; on the unit the paste worked after a project change).
+- **Fix:** open in Octakit (a stock load error has no recovery path; running her post step on the stock result activates and then halts in her workspace validation; missing files make her persistence return −10). Workaround: never load the bad project; change project after any load that stock reports in its LOG (`Couldn't read bank file ... PARSE ERROR / WRONG CHECKSUM`). To find out: Em's intended semantics for a failed stock load.
+
+## A bank file written by the unit that the firmware then rejects: one 64-byte burst dropped from a 16 KiB card write, the card's MBR in its place 🟡 measured file, cause inferred
+
+- **Seen:** Sam's MKII, image 99 (bottleservice with USB AUDIO IN CD + USB CROSSBAR, a computer on USB), 4 Oct 2026 12:42:14: `PROJECT 261004p/bank01.work` written with `project.work`, `markers.work` and `p2lk01.work` in the same second (a project change or SYNC, not SAVE: no `.strd`). Checksum 0x7188 stored, 0x4e8c computed; with the checksum repaired the firmware still rejects it (−51). Content: from 0x2c000 to 0x30000 every byte is 64 earlier than in a good bank, and the last 64 bytes of that span are the card's MBR code (`33 c0 8e d0 bc 00 7c fb 50 07 50 1f …`). Three other saves that day (09:40, 12:45, 14:13) are intact.
+- **Cause:** inferred: a 16 KiB ATA write lost one 64-byte burst at its head and took a 64-byte block from another buffer (sector 0, read at mount) at its tail — a DMA/bus-arbitration fault, not a serialiser error. USB CROSSBAR raises the USB host's crossbar priority on SDRAM; it is the one module in the image that changes bus arbitration under card DMA. Not reproduced under the port (a project SAVE with PLOCKS P2 writes every bank intact; the port has no bus timing).
+- **Fix:** USB CROSSBAR and USB AUDIO IN CD removed from bottleservice (image 100). To find out: whether a bank written on image 100 ever fails again; the bad file is at `~/octa/backups/card_20261004_strand/`.
+
 ## Pops and clicks from T1 with BusDelay when T1 plays its own trigs 🔴 open
 
 - **Seen:** Discord, Arcdmd_, 29 Sep 2026. Image, unit model, T1's machine and trig pattern not stated.
