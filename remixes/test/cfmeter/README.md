@@ -35,10 +35,11 @@ the same selection without the loop, is the variant that passed before.
 | `synth8-v4` | 8 tracks, VOIC 4, CHRD OCT3 (four voices per track) |
 | `burnB` | the `synth8-v1` state, BURN = 20, 40, 60, … until the unit misbehaves (note the value and what happened) |
 | `dbrnD` | the `play` state, DBRN = 20, 40, 60, …: spin min must fall by 24 × D × 16 cycles per frame; the value at which spin max jumps by a frame's worth or TUE counts is core 0's wall |
+| `memK-sS` | the `idle` state, SRC = S (0 cached SDRAM, 1 uncached alias, 2 SRAM), MEM = K (8, 16, 32, 64; 31 at most for S = 2), with and without a host stream open: slot 7 × 4 × 7.58 ns / (K × 64) is one line's cost in that memory (`modules/cfmeter/README.md` "Line fills") |
 
-Put BURN and DBRN back to 0 before saving or switching projects: they are
-stored in the Part like any knob. A freeze at a high BURN or DBRN is
-cleared by a power-cycle.
+Put BURN, MEM and DBRN back to 0 before saving or switching projects: they
+are stored in the Part like any knob. A freeze at a high BURN, MEM or DBRN
+is cleared by a power-cycle.
 
 The period column should read 362.8 µs; if it does not, DTIM3 is not at
 132 MHz and every µs figure scales by 362.8 / period. The DSP period

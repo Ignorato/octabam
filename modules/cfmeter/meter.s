@@ -31,8 +31,15 @@
 |   4  frame interrupt, longest in the segment, counts / 4
 |   5  frame period (segment / interrupts), counts / 4
 |   6  the idle loop's shortest step, counts
-|   7  BURN, counts / 4
+|   7  BURN, counts / 4; with MEM set, the walk's mean duration, counts / 4
 |   8..15  0 here: the insert prints its own DSP meter (meter_out.asm)
+|
+| MEM (page 1 slot 1) walks MEM KB after the burn, one longword read per
+| 16-byte line, timed on DTCN3 into m_wsum; SRC (slot 3) picks the region:
+| 0 the OS image in cached SDRAM (0x40000400), 1 the same through the
+| uncached alias (0x48000400), 2 on-chip SRAM (0x80000000, 32 KB, so MEM
+| is clamped to 31). Slot 7 then prints the walk, not BURN: counts x 4 x
+| 7.58 ns / (MEM x 64 lines) is the cost of one line.
 |
 | With WAVE LOAD in the remix (remix.inc sets WAVE_LOAD), BURN is K
 | instead: m_isr renders K 4-voice wave engines (cl_load) where it would
@@ -43,6 +50,11 @@
         .equ    DTCN3,      0xfc07c00c
         .equ    LANE8,      0x80000a08          | 0x80000810 + 7 * 72
         .equ    BURN,       LANE8 + 24          | FX2 page 1 slot 0
+        .equ    MEM,        LANE8 + 25          | FX2 page 1 slot 1: KB walked per frame
+        .equ    SRC,        LANE8 + 27          | FX2 page 1 slot 3: 0 cached SDRAM, 1 uncached alias, 2 SRAM
+        .equ    SDRAM_OS,   0x40000400
+        .equ    SDRAM_UNC,  0x48000400
+        .equ    SRAM,       0x80000000
         .equ    P2VAL,      LANE8 + 0x38        | FX2 page 2 slots 6/7
         .equ    FX2ID8,     0x80000ed3          | T8's live FX2 id (0x80000ecc + 7)
         .equ    METER_ID,   0x0e
@@ -62,7 +74,7 @@ m_isr:
         moveq   #0,%d1
         move.b  FX2ID8,%d1
         cmpi.l  #METER_ID,%d1
-        bne.s   2f                              | T8's FX2 is not CF METER: no burn
+        bne.s   6f                              | T8's FX2 is not CF METER: no burn, no walk
         move.b  BURN,%d1
         beq.s   2f
         .ifdef  WAVE_LOAD
@@ -74,7 +86,37 @@ m_isr:
 1:      move.l  DTCN3,%d0
         sub.l   %d1,%d0
         bmi.s   1b
-2:      move.l  (%sp)+,%d1
+2:      moveq   #0,%d1
+        move.b  MEM,%d1
+        beq.s   6f
+        move.l  %a0,-(%sp)
+        move.l  %d3,-(%sp)
+        move.l  %d2,-(%sp)
+        moveq   #0,%d0
+        move.b  SRC,%d0
+        lea     SDRAM_OS,%a0
+        subq.l  #1,%d0
+        bne.s   3f
+        lea     SDRAM_UNC,%a0
+3:      subq.l  #1,%d0
+        bne.s   4f
+        lea     SRAM,%a0
+        cmpi.l  #31,%d1
+        bls.s   4f
+        moveq   #31,%d1                         | SRAM is 32 KB
+4:      lsl.l   #6,%d1                          | 16-byte lines
+        move.l  DTCN3,%d2
+5:      move.l  (%a0),%d3
+        lea     16(%a0),%a0
+        subq.l  #1,%d1
+        bne.s   5b
+        move.l  DTCN3,%d3
+        sub.l   %d2,%d3
+        add.l   %d3,m_wsum
+        move.l  (%sp)+,%d2
+        move.l  (%sp)+,%d3
+        move.l  (%sp)+,%a0
+6:      move.l  (%sp)+,%d1
         move.l  (%sp)+,%d0
         jmp     STOCK_ISR
 
@@ -143,11 +185,18 @@ m_close:
         move.l  m_istep,%d0
         bsr.w   m_clamp
         move.l  %d0,24(%a0)                     | 6: shortest step
-        moveq   #0,%d0
+        move.l  m_wsum,%d0
+        beq.s   5f
+        divu.l  %d4,%d0                         | the walk's mean (d4 = interrupts, > 0 when m_wsum is)
+        lsr.l   #2,%d0
+        bsr.w   m_clamp
+        clr.l   m_wsum
+        bra.s   6f
+5:      moveq   #0,%d0
         move.b  BURN,%d0
         mulu.w  #66,%d0                         | x 2 us = x 264 counts, / 4
         bsr.w   m_clamp
-        move.l  %d0,28(%a0)                     | 7: BURN
+6:      move.l  %d0,28(%a0)                     | 7: BURN, or the walk
         clr.l   (%a0)                           | 0: sync
         move.l  #REF,%d0
         move.l  %d0,4(%a0)                      | 1: reference
@@ -178,6 +227,7 @@ m_icnt: .long   0
 m_imax: .long   0
 m_iacc: .long   0
 m_istep: .long  0
+m_wsum: .long   0
 m_k:    .long   0
 m_val:  .zero   32
 m_out:  .word   0
