@@ -6,7 +6,8 @@
 | Every stock address below, with its evidence: docs/firmware/STEM_REC.md.
 |
 | Three parts share the state words below:
-|   stems_action      MAIN MENU > STEMS > REC, in the UI task; stems_track_action T1-T8
+|   stems_action      MAIN MENU > STEMS > REC, in the UI task; stems_source_action
+|                     T1-T8, MAIN, CUE, AB, CD; stems_switch_action the format
 |   stems_frame_hook  the per-frame tap, in the audio interrupt at IPL 5
 |   stems_task        our own RTOS task: the ring to the card, while recording
 | The state is one aligned long, so every read and write of it is one
@@ -254,10 +255,12 @@ bus_src:    .long   BUS, BUS+0x80, IN_AB_OFF, IN_CD_OFF
 | label or a whole new one. The menu redraws on keys only (STEM_REC.md
 | 16.1): a label the task changes shows at the next key.
         .equ    ROW_LEN,       24           | a menu row (MAINMENU.md 1)
-        .equ    MENU_ROWS,     11
+        .equ    MENU_ROWS,     18
         .equ    MENU_VISIBLE,  7            | a submenu pane's rows
-        .equ    ROW_TRK0,      2            | T1's row
-        .equ    ROW_PEAK,      10           | PEAK: the last row
+        .equ    ROW_SRC0,      2            | T1's row; the sources T1-T8, MAIN, CUE, AB, CD follow
+        .equ    NSRC,          12
+        .equ    ROW_SW0,       14           | AB STEREO; CD STEREO and 24 BIT follow
+        .equ    ROW_PEAK,      17           | PEAK: the last row
 | Rows with action 0 are headings. The engine skips ONE such row, not two
 | in a row, and never moves onto a last one (STEM_REC.md 16.1), so the
 | status row sits alone between REC and T1, and PEAK is the last row.
@@ -282,20 +285,32 @@ stems_list:                                 | shipped filled in: the boot's set-
 stems_rows:                                 | label, window, action, getter, child, page id
         .long   lbl_rec,   0, stems_action, 0, 0, 0
         .long   lbl_ready, 0, 0, 0, 0, 0    | the status: action 0, a heading the cursor skips
-        .long   trk1_on, 0, stems_track_action, 0, 0, 0
-        .long   trk2_on, 0, stems_track_action, 0, 0, 0
-        .long   trk3_on, 0, stems_track_action, 0, 0, 0
-        .long   trk4_on, 0, stems_track_action, 0, 0, 0
-        .long   trk5_on, 0, stems_track_action, 0, 0, 0
-        .long   trk6_on, 0, stems_track_action, 0, 0, 0
-        .long   trk7_on, 0, stems_track_action, 0, 0, 0
-        .long   trk8_on, 0, stems_track_action, 0, 0, 0
+        .long   trk1_on, 0, stems_source_action, 0, 0, 0
+        .long   trk2_on, 0, stems_source_action, 0, 0, 0
+        .long   trk3_on, 0, stems_source_action, 0, 0, 0
+        .long   trk4_on, 0, stems_source_action, 0, 0, 0
+        .long   trk5_on, 0, stems_source_action, 0, 0, 0
+        .long   trk6_on, 0, stems_source_action, 0, 0, 0
+        .long   trk7_on, 0, stems_source_action, 0, 0, 0
+        .long   trk8_on, 0, stems_source_action, 0, 0, 0
+        .long   main_off, 0, stems_source_action, 0, 0, 0
+        .long   cue_off, 0, stems_source_action, 0, 0, 0
+        .long   ab_off, 0, stems_source_action, 0, 0, 0
+        .long   cd_off, 0, stems_source_action, 0, 0, 0
+        .long   abst_on, 0, stems_switch_action, 0, 0, 0
+        .long   cdst_on, 0, stems_switch_action, 0, 0, 0
+        .long   b24_off, 0, stems_switch_action, 0, 0, 0
         .long   lbl_peak0, 0, 0, 0, 0, 0    | PEAK: a heading, the last row, which the cursor never reaches
 rec_by_state:   .long   lbl_rec, lbl_cancel, lbl_stop, lbl_saving       | row 1, by state
 st_by_state:    .long   lbl_ready, lbl_armed, 0, lbl_saving             | the status; RECORDING is the task's
 err_names:      .long   0, err_ring, err_path, err_open, err_exists, err_write, err_seek, err_close, err_task
-trk_on:         .long   trk1_on, trk2_on, trk3_on, trk4_on, trk5_on, trk6_on, trk7_on, trk8_on
-trk_off:        .long   trk1_off, trk2_off, trk3_off, trk4_off, trk5_off, trk6_off, trk7_off, trk8_off
+src_on:         .long   trk1_on, trk2_on, trk3_on, trk4_on, trk5_on, trk6_on, trk7_on, trk8_on
+                .long   main_on, cue_on, ab_on, cd_on
+src_off:        .long   trk1_off, trk2_off, trk3_off, trk4_off, trk5_off, trk6_off, trk7_off, trk8_off
+                .long   main_off, cue_off, ab_off, cd_off
+sw_bit:         .long   1, 2, 0     | rows 14-16: AB STEREO, CD STEREO, 24 BIT in stems_fmt
+sw_on:          .long   abst_on, cdst_on, b24_on
+sw_off:         .long   abst_off, cdst_off, b24_off
 lbl_rec:        .asciz  "REC"
 lbl_cancel:     .asciz  "CANCEL"
 lbl_stop:       .asciz  "STOP"
@@ -328,6 +343,20 @@ trk7_on:  .asciz "T7 [X]"
 trk7_off: .asciz "T7 [ ]"
 trk8_on:  .asciz "T8 [X]"
 trk8_off: .asciz "T8 [ ]"
+main_on:  .asciz "MAIN [X]"
+main_off: .asciz "MAIN [ ]"
+cue_on:   .asciz "CUE [X]"
+cue_off:  .asciz "CUE [ ]"
+ab_on:    .asciz "AB [X]"
+ab_off:   .asciz "AB [ ]"
+cd_on:    .asciz "CD [X]"
+cd_off:   .asciz "CD [ ]"
+abst_on:  .asciz "AB STEREO [X]"
+abst_off: .asciz "AB STEREO [ ]"
+cdst_on:  .asciz "CD STEREO [X]"
+cdst_off: .asciz "CD STEREO [ ]"
+b24_on:   .asciz "24 BIT [X]"
+b24_off:  .asciz "24 BIT [ ]"
 fmt_rec:        .asciz  "REC %02d:%02d"
 fmt_done:       .asciz  "DONE %02d:%02d"
 fmt_peak:       .asciz  "PEAK %d%s"         | "%" as an argument: %% is untested in the stock sprintf
@@ -420,22 +449,22 @@ stems_ui_state:
 .Lv_out:
         rts
 
-| ---- a track row's action: action(0), in the UI task --------------------
-| The row under the cursor names the track (the list's absolute selection,
-| less T1's row, as octalab's checkbox rows do). Locked while a take
-| records or saves: the take keeps the mask it latched at its start, and
-| the rows show what records. The last track that's on stays on, so a take
-| always has a track the rows show. The test and the flip run with
-| interrupts masked, so the hook can't latch between them.
-        .global stems_track_action
-stems_track_action:
+| ---- a source row's action (T1-T8, MAIN, CUE, AB, CD): action(0), in the
+| UI task. The row under the cursor names the source (the list's absolute
+| selection, less T1's row, as octalab's checkbox rows do). Locked while a
+| take records or saves: the take keeps the sources it latched at its
+| start, and the rows show what records. The last source that's on stays
+| on, so a take always has a file the rows show. The test and the flip run
+| with interrupts masked, so the hook can't latch between them.
+        .global stems_source_action
+stems_source_action:
         lea     -8(%sp),%sp
         movem.l %d2-%d3,(%sp)
         move.l  stems_list+LIST_SEL,%d3
-        subq.l  #ROW_TRK0,%d3               | track k, 0..7
-        moveq   #8,%d0
+        subq.l  #ROW_SRC0,%d3               | source k, 0..11
+        moveq   #NSRC,%d0
         cmp.l   %d0,%d3
-        bcc.s   .Lk_out                     | not a track row (unsigned: below T1 too)
+        bcc.s   .Lk_out                     | not a source row (unsigned: below T1 too)
         move.w  %sr,%d2
         move.w  #0x2700,%sr
         move.l  stems_state,%d1
@@ -443,31 +472,79 @@ stems_track_action:
         cmp.l   %d0,%d1
         bcc.s   .Lk_keep                    | RECORDING or FINISHING: locked
         moveq   #1,%d0
-        lsl.l   %d3,%d0                     | the track's bit
+        lsl.l   %d3,%d0                     | the source's bit
         move.l  stems_tracks,%d1
         eor.l   %d0,%d1
-        tst.b   %d1
-        beq.s   .Lk_keep                    | the last track on: it stays on
-        move.l  %d1,stems_tracks
+        movea.l %d1,%a0                     | the new word
+        andi.l  #0xfff,%d1
+        beq.s   .Lk_keep                    | the last source on: it stays on
+        move.l  %a0,stems_tracks
         move.w  %d2,%sr
-        lea     trk_off,%a0
+        lea     src_off,%a1
+        move.l  %a0,%d1
         and.l   %d0,%d1
         beq.s   .Lk_label
-        lea     trk_on,%a0
+        lea     src_on,%a1
 .Lk_label:
-        move.l  (%a0,%d3.l*4),%d0           | the label
+        movea.l (%a1,%d3.l*4),%a0           | the label
         move.l  %d3,%d1
-        addq.l  #ROW_TRK0,%d1
-        lsl.l   #3,%d1                      | row * 8
+        addq.l  #ROW_SRC0,%d1
+        moveq   #ROW_LEN,%d0
+        mulu.l  %d0,%d1
         movea.l %d1,%a1
-        adda.l  %d1,%a1
-        adda.l  %d1,%a1                     | row * 24
         adda.l  #stems_rows,%a1
-        move.l  %d0,(%a1)                   | the row's label pointer
+        move.l  %a0,(%a1)                   | the row's label pointer
         bra.s   .Lk_out
 .Lk_keep:
         move.w  %d2,%sr
 .Lk_out:
+        movem.l (%sp),%d2-%d3
+        lea     8(%sp),%sp
+        rts
+
+| ---- a switch row's action (AB STEREO, CD STEREO, 24 BIT): action(0) -------
+| Flips its bit of stems_fmt; locked while a take records or saves, as the
+| source rows are.
+        .global stems_switch_action
+stems_switch_action:
+        lea     -8(%sp),%sp
+        movem.l %d2-%d3,(%sp)
+        move.l  stems_list+LIST_SEL,%d3
+        subi.l  #ROW_SW0,%d3                | switch k, 0..2
+        moveq   #3,%d0
+        cmp.l   %d0,%d3
+        bcc.s   .Lw_out
+        move.w  %sr,%d2
+        move.w  #0x2700,%sr
+        move.l  stems_state,%d1
+        moveq   #ST_RECORDING,%d0
+        cmp.l   %d0,%d1
+        bcc.s   .Lw_keep                    | locked while a take records or saves
+        lea     sw_bit,%a0
+        move.l  (%a0,%d3.l*4),%d1
+        moveq   #1,%d0
+        lsl.l   %d1,%d0                     | the format's bit
+        move.l  stems_fmt,%d1
+        eor.l   %d0,%d1
+        move.l  %d1,stems_fmt
+        move.w  %d2,%sr
+        lea     sw_off,%a1
+        and.l   %d0,%d1
+        beq.s   .Lw_label
+        lea     sw_on,%a1
+.Lw_label:
+        movea.l (%a1,%d3.l*4),%a0
+        move.l  %d3,%d1
+        addi.l  #ROW_SW0,%d1
+        moveq   #ROW_LEN,%d0
+        mulu.l  %d0,%d1
+        movea.l %d1,%a1
+        adda.l  #stems_rows,%a1
+        move.l  %a0,(%a1)
+        bra.s   .Lw_out
+.Lw_keep:
+        move.w  %d2,%sr
+.Lw_out:
         movem.l (%sp),%d2-%d3
         lea     8(%sp),%sp
         rts

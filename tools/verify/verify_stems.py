@@ -39,7 +39,7 @@ RUNTIME_ELF = pathlib.Path("out/platform/runtime/runtime.elf")
 LAYOUT_DIR = pathlib.Path("out/platform")      # platform_build.LAYOUT lives here, by name
 CONTROL_DESC, CONTROL_ROWS, ROW_LEN, STOCK_N = 0x400cbd54, 0x400cc5a8, 24, 6
 ROOT_DESC, ROOT_ROWS, ROOT_N = 0x400cbd8c, 0x400cc698, 4      # MAIN MENU's root (MAINMENU.md 2)
-MENU_ROWS, ROW_TRK0, ROW_PEAK, MENU_VISIBLE = 11, 2, 10, 7     # stems.s: the STEMS list
+MENU_ROWS, ROW_TRK0, ROW_PEAK, MENU_VISIBLE = 18, 2, 17, 7     # stems.s: the STEMS list
 FRAME_SITE = 0x40004b12
 ATA_FIRST_SITE = 0x40014cfe  # the stock PIO write's first sector (STEM_REC.md 11.7)
 
@@ -165,24 +165,28 @@ def runtime_long(s, name):
 
 def menu_static(s):
     """The STEMS list as it ships: filled in (the boot's set-up covers only
-    the stock lists), eleven rows, REC's and the tracks' actions, two
+    the stock lists), eighteen rows, REC's, the sources' and the switches'
+    actions, two
     headings never next to each other (the engine skips one row with
     action 0, not two in a row, and never moves onto a last one:
     STEM_REC.md 16.1), every label as at boot, the record-dot icon."""
     lng = lambda a: int.from_bytes(runtime_at(s, a, 4), "big")  # noqa: E731
     txt = lambda a: runtime_at(s, a, 32).split(b"\0")[0].decode("latin1")  # noqa: E731
     lst = [lng(s["stems_list"] + 4 * k) for k in range(7)]
-    check("the STEMS list ships filled in: 11 rows, 7 visible, its rows",
+    check("the STEMS list ships filled in: 18 rows, 7 visible, its rows",
           lst == [MENU_ROWS, 0, 0, 0, MENU_VISIBLE, MENU_ROWS, s["stems_rows"]], f"{[hex(x) for x in lst]}")
     rows = [[lng(s["stems_rows"] + ROW_LEN * r + 4 * k) for k in range(6)] for r in range(MENU_ROWS)]
-    check("row 1 runs stems_action, row 2 and the last are headings, T1-T8 run stems_track_action",
-          [r[2] for r in rows] == [s["stems_action"], 0] + [s["stems_track_action"]] * 8 + [0],
-          f"{[hex(r[2]) for r in rows]}")
+    check("REC runs stems_action; T1-T8 and MAIN to CD stems_source_action; the three switches "
+          "stems_switch_action; the status and PEAK are headings",
+          [r[2] for r in rows] == [s["stems_action"], 0] + [s["stems_source_action"]] * 12
+          + [s["stems_switch_action"]] * 3 + [0], f"{[hex(r[2]) for r in rows]}")
     check("no row has a window, a getter, a child or a page id",
           all(r[1] == r[3] == r[4] == r[5] == 0 for r in rows))
     texts = [txt(r[0]) for r in rows]
-    check("the rows ship as REC, READY, T1 [X] .. T8 [X], PEAK 0%",
-          texts == ["REC", "READY"] + [f"T{k} [X]" for k in range(1, 9)] + ["PEAK 0%"], f"{texts}")
+    check("the rows ship with the boot defaults",
+          texts == ["REC", "READY"] + [f"T{k} [X]" for k in range(1, 9)]
+          + ["MAIN [ ]", "CUE [ ]", "AB [ ]", "CD [ ]", "AB STEREO [X]", "CD STEREO [X]", "24 BIT [ ]", "PEAK 0%"],
+          f"{texts}")
     check("the category is labelled STEMS", txt(s["stems_cat_label"]) == "STEMS")
     icon = [lng(s["stems_icon"] + 4 * k) for k in range(5)]
     p0 = [lng(s["stems_icon_p0"] + 4 * k) for k in range(19)]

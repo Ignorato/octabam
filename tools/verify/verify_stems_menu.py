@@ -10,17 +10,18 @@ as an MKII (MAIN MENU = PROJ) and as an MKI (FUNC+MIXER). Each boot:
 - SYSTEM opens and the cursor reaches OS UPGRADE, the recovery path; ENTER
   is never pressed there;
 - STEMS opens on REC; DOWN lands on T1 and UP on REC, the status row
-  skipped both ways; DOWN reaches T8 and stays there: PEAK, the last row,
-  is never reached (a row with action 0 is skipped one at a time and never
-  moved onto at the end, STEM_REC.md 16.1);
-- every track row turned off in turn leaves T8 on (the last track stays);
-  T3 off, then every other track on again;
+  skipped both ways; DOWN reaches 24 BIT and stays there: PEAK, the last
+  row, is never reached (a row with action 0 is skipped one at a time and
+  never moved onto at the end, STEM_REC.md 16.1);
+- every track row turned off in turn leaves T8 on (the last source
+  stays); with MAIN on, T8 can go off and MAIN can't; the three switches
+  flip and say so; T3 off, then every other track on again;
 - REC arms (CANCEL, ARMED) and cancels (REC, READY), then arms;
 - with the menu closed, PLAY; the menu reopened on STEMS shows STOP and
   REC mm:ss, and a key later the seconds have moved on (the menu redraws
   on keys only, STEM_REC.md 16.1); T3 is locked;
 - with the menu closed, STOP; the take ends DONE, and its folder holds
-  seven files, T3's missing;
+  seven tracks and MAIN, T3's missing;
 - every text the module can show, drawn in the status row, ends left of
   the pane's clip edge, and STEMS left of the root column's.
 The keys, as measured (STEM_REC.md 16.1): YES enters a list, LEFT goes
@@ -50,7 +51,8 @@ WORK = pathlib.Path("out/stems_runs")
 ERRS = ["RING FULL", "PATH FAILED", "OPEN FAILED", "SAME MINUTE", "WRITE FAILED",
         "SEEK FAILED", "CLOSE FAILED", "TASK FAILED"]
 TEXTS = (["REC", "CANCEL", "STOP", "SAVING", "READY", "ARMED", "NO CARD", "PEAK 0%", "PEAK 100%",
-          "REC 60:00", "DONE 60:00"] + ERRS + [f"T{k} [{m}]" for k in range(1, 9) for m in "X "])
+          "REC 60:00", "DONE 60:00"] + ERRS + [f"T{k} [{m}]" for k in range(1, 9) for m in "X "]
+         + [f"{n} [{m}]" for n in ("MAIN", "CUE", "AB", "CD", "AB STEREO", "CD STEREO", "24 BIT") for m in "X "])
 
 
 def texts(p, s):
@@ -136,21 +138,46 @@ def walk(model, s, fx):
         vs.check(f"{model}: DOWN from REC lands on T1 and UP from T1 on REC", (down, up) == (vs.ROW_TRK0, 0),
                  f"{(down, up)}")
         walked = []
-        for _ in range(9):
+        for _ in range(16):
             p.press("down")
             walked.append(sel(lst))
-        shot("t8")
-        t8 = vs.ROW_TRK0 + 7
-        vs.check(f"{model}: DOWN reaches T8 and stays there, never on the PEAK row",
-                 walked == list(range(vs.ROW_TRK0, t8 + 1)) + [t8], f"{walked}")
-        for _ in range(7):
-            p.press("up")                               # T8 -> T1
+        shot("last")
+        last = 16
+        vs.check(f"{model}: DOWN reaches 24 BIT and stays there, never on the PEAK row",
+                 walked == list(range(vs.ROW_TRK0, last + 1)) + [last], f"{walked}")
+        for _ in range(last - vs.ROW_TRK0):
+            p.press("up")                               # back to T1
         for k in range(8):                              # every track off in turn, T1 to T8
             p.press(ENTER)
             if k < 7:
                 p.press("down")                         # no DOWN past T8: it might wrap
         left = p.long(s["stems_tracks"]) & 0xFF
         vs.check(f"{model}: turning every track off leaves the last one on", left == 0x80, f"mask {left:#04x}")
+        p.press("down")                                 # T8 -> MAIN (row 10)
+        p.press(ENTER)                                  # MAIN on
+        p.press("up")                                   # T8
+        p.press(ENTER)                                  # T8 off: MAIN keeps a source
+        p.press("down")                                 # MAIN
+        p.press(ENTER)                                  # MAIN off: refused, the last source
+        left = p.long(s["stems_tracks"]) & 0xFFF
+        vs.check(f"{model}: with MAIN on, T8 can go off, and the last source stays on",
+                 left == 0x100, f"sources {left:#05x}")
+        p.press("up")                                   # T8
+        p.press(ENTER)                                  # T8 on again; MAIN stays on for the take
+        for _ in range(7):
+            p.press("down")                             # T8 (row 9) -> 24 BIT (row 16)
+        p.press(ENTER)
+        p.press(ENTER)                                  # 24 BIT on, then off
+        p.press("up")                                   # CD STEREO (row 15)
+        p.press(ENTER)                                  # off
+        fmt = p.long(s["stems_fmt"]) & 7
+        t = texts(p, s)
+        vs.check(f"{model}: the switches flip and say so",
+                 fmt == 0b010 and t[14:17] == ["AB STEREO [X]", "CD STEREO [ ]", "24 BIT [ ]"],
+                 f"fmt {fmt:03b}, {t[14:17]}")
+        p.press(ENTER)                                  # CD STEREO on again
+        for _ in range(6):
+            p.press("up")                               # CD STEREO (row 15) -> T8 (row 9)
         shot("tracks-off")
         for _ in range(7):
             p.press("up")                               # T8 -> T1; then T1 .. T7 on again, T3 stays off
@@ -212,8 +239,8 @@ def walk(model, s, fx):
         widths(p, s, model)
         p.card_flush()
     names = [n.upper() for n, _ in vs.take_files(str(card))]
-    vs.check(f"{model}: the take holds seven files, T3's missing",
-             names == [f"T{k}.WAV" for k in (1, 2, 4, 5, 6, 7, 8)], f"{names}")
+    vs.check(f"{model}: the take holds seven tracks and MAIN, T3's missing",
+             names == ["MAIN.WAV"] + [f"T{k}.WAV" for k in (1, 2, 4, 5, 6, 7, 8)], f"{names}")
 
 
 def main():
@@ -239,7 +266,7 @@ def main():
     s = vs.syms()
     fx = json.loads(vs.FIXTURE.read_text())
     WORK.mkdir(parents=True, exist_ok=True)
-    for model in ("mkii", "mki"):
+    for model in ("mkii",) if "--mkii" in sys.argv else ("mkii", "mki"):    # --mkii: a development switch
         walk(model, s, fx)
     return 1 if vs.fails else 0
 

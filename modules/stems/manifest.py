@@ -2,9 +2,12 @@
 
 MAIN MENU > STEMS > REC arms a recording, or starts one if the
 sequencer is running; selecting it again stops it, and so does the
-sequencer stopping or 60 minutes. T1 to T8 turn tracks on and off (all
-eight at boot; locked during a take). Each enabled track is a file,
-<set>/AUDIO/YYMMDD-HHMM/T<n>.wav, 16-bit stereo. stems_peak keeps the
+sequencer stopping or 60 minutes. T1 to T8, MAIN, CUE, AB and CD turn
+sources on and off (the eight tracks at boot; locked during a take);
+AB STEREO and CD STEREO (on at boot) record an input pair as one stereo
+file or two mono ones; 24 BIT (off at boot) records 24-bit files. Each
+source is a file, <set>/AUDIO/YYMMDD-HHMM/<name>.wav: the tracks after
+the fader, MAIN and CUE as mixed, the inputs raw. stems_peak keeps the
 take's largest ring fill, for the menu's PEAK row. Design:
 docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md; the menu,
 docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md.

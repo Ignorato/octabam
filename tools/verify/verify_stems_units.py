@@ -565,5 +565,49 @@ def bus24(rt, seed=10):
             check(f"bus24: index {idx:#04x}, kind {kind}", got == want, f"{got[:9].hex()} vs {want[:9].hex()}")
 
 
+@unit
+def actions(rt):
+    """stems_source_action and stems_switch_action: each row flips its bit
+    and its label follows; the last source stays on; every row is locked
+    while recording (2) or saving (3); the status and PEAK rows do nothing."""
+    s = rt.s
+
+    def press(row, state=0):
+        rt.w32(s["stems_list"] + 0x0c, row)
+        rt.w32(s["stems_state"], state)
+        rt.call("stems_source_action" if 2 <= row <= 13 else "stems_switch_action")
+
+    def label(row):
+        return rt.rmem(rt.r32(s["stems_rows"] + 24 * row), 16).split(b"\0")[0].decode()
+
+    rt.w32(s["stems_tracks"], 0xff)
+    rt.w32(s["stems_fmt"], 6)
+    press(10)
+    check("actions: MAIN on", rt.r32(s["stems_tracks"]) == 0x1ff and label(10) == "MAIN [X]",
+          f"{rt.r32(s['stems_tracks']):#x} {label(10)}")
+    for row in range(2, 10):
+        press(row)
+    check("actions: every track off while MAIN is on",
+          rt.r32(s["stems_tracks"]) == 0x100 and label(9) == "T8 [ ]")
+    press(10)
+    check("actions: the last source stays on", rt.r32(s["stems_tracks"]) == 0x100 and label(10) == "MAIN [X]")
+    for state in (2, 3):
+        press(9, state)
+        press(16, state)
+    check("actions: locked while recording and saving",
+          rt.r32(s["stems_tracks"]) == 0x100 and rt.r32(s["stems_fmt"]) == 6)
+    press(16)
+    press(14)
+    press(15)
+    check("actions: 24 BIT on, both STEREO rows off, the labels follow",
+          rt.r32(s["stems_fmt"]) == 0b001
+          and [label(r) for r in (14, 15, 16)] == ["AB STEREO [ ]", "CD STEREO [ ]", "24 BIT [X]"],
+          f"{rt.r32(s['stems_fmt']):03b}")
+    press(1)
+    press(17)
+    check("actions: the status and PEAK rows change nothing",
+          rt.r32(s["stems_tracks"]) == 0x100 and rt.r32(s["stems_fmt"]) == 0b001)
+
+
 if __name__ == "__main__":
     sys.exit(main())
