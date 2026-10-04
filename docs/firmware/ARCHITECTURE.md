@@ -311,30 +311,33 @@ unit µs × 264.
 
 | | port ISR | instructions | unit ISR | unit cycles | CPI |
 |---|---|---|---|---|---|
-| 0 voices | 144.7 µs | ~25,470 | 138.6 µs | ~36,590 | ~1.4 |
-| 0 → 1 voice | +6.3 µs | ~1,110 | +37.4 µs | ~9,870 | ~8.9 |
-| each voice, 1 → 7 | +5.7 µs | ~1,000 | +13.9 µs | ~3,660 | ~3.7 |
+| 0 voices | 144.7 µs | ~25,470 | 138.6 µs | ~36,590 | ~1.4 ❌ (history-contaminated; the follow-up below has 106.5 µs unplugged, CPI ~1.1) |
+| 0 → 1 voice | +6.3 µs | ~1,110 | +37.4 µs | ~9,870 | ~8.9 ❌ (retracted the same evening: +14.6 µs, CPI ~3.5) |
+| each voice, 1 → 7 | +5.7 µs | ~1,000 | +13.9 µs | ~3,660 | ~3.7 ❌ (revised: +16.5 µs, CPI ~4.4) |
 
 Port points: 0 voices 144.7, T1 151.0, T1 + T5 156.6, 4 voices 168.2, 7
 voices 185.2 µs; 1,009 instructions per voice over 1 → 4 and 994 over
 4 → 7. On the unit 1 → 4 gives CPI ~4.4 and 4 → 7 ~2.9, a spread the size
 of the unit's cycle-to-cycle noise.
 
-- **Voice cost = a first-voice premium + a per-voice cost.** First voice
-  +37 µs, each further voice 11–17 µs (14 average); seven voices put the
-  ISR at 255–260 µs of 362.8. Equal on either DSP core (T1 alone = T5 alone
-  = 176 µs), equal with one shared sample or seven (259 vs 255 µs); the
-  running transport with no voice costs nothing (139 µs vs 143 stopped).
+- **Voice cost.** ❌ The morning reading, a first-voice premium of +37 µs
+  then 11–17 µs per voice, was retracted the same evening: the 0- and
+  1-voice takes were taken after seven tracks had played and had their
+  trigs cleared, and fresh loads read 121 and 146 µs with USB streaming
+  (the follow-up below). Every voice costs the same, ~16.5 µs. Still
+  standing from the morning: seven voices put the ISR at 255–260 µs of
+  362.8; equal on either DSP core (T1 alone = T5 alone), equal with one
+  shared sample or seven (259 vs 255 µs); the running transport with no
+  voice costs nothing (139 µs vs 143 stopped).
 - **The voice path is memory-bound; the rest of the ISR is not.** The port
-  prices every voice, the first included, at ~1,000–1,100 instructions; on
-  the unit the baseline runs at CPI ~1.4, each added voice at ~3.7, the
-  first at ~8.9: ~6,200 cycles of stall shared by all voices, then a
-  per-voice stall. Candidates, not separated: SDRAM line fills (CACR
-  `0xA50CE100`, ACR0 `0x4007E020`, written at `0x4001f3e0` and
-  `0x4001fc44` ✅: SDRAM `0x40000000..0x47FFFFFF` cached copyback,
-  everything else cache-inhibited), uncached accesses, and SDRAM contention
-  with USB DMA (USB CROSSBAR puts the USB controller first on the SDRAM
-  slave, with bursts; it streamed in every take).
+  prices every voice at ~1,000–1,100 instructions; on the unit the
+  baseline runs at CPI ~1.1 and each voice at ~4.4 (~4,360 cycles for
+  ~1,000 instructions; the follow-up's figures). Candidates: SDRAM line
+  fills (CACR `0xA50CE100`, ACR0 `0x4007E020`, written at `0x4001f3e0`
+  and `0x4001fc44` ✅: SDRAM `0x40000000..0x47FFFFFF` cached copyback,
+  everything else cache-inhibited) and uncached accesses. SDRAM contention
+  with USB DMA is ruled out by the follow-up: the per-voice slope is 16.6 µs
+  unplugged and 16.9 µs with USB streaming.
 - **A loaded, stopped project costs ~24 µs per frame** over a near-empty
   one (143 vs 119 µs).
 - **Timestretch at 137 → 120 BPM adds nothing measurable.** The renderer
@@ -370,6 +373,55 @@ of the unit's cycle-to-cycle noise.
   long ColdFire ISRs delaying frame delivery, is retracted.)
 - **The ISR mean alternates ~240 / ~268 µs between consecutive 2 s cycles**
   in most playing takes; one bar at 120 BPM is 2 s. Not investigated.
+
+#### Follow-up the same evening: USB and the crossbar ✅ (Bryan T, 4 Oct 2026)
+
+Same image and unit, T8 alone on CUE, CUE L/R into an SSL 12 (`tools/hw/rec
+20 <out>.wav "SSL 12"`, `cfmeter.py --lr 2,3`), so the USB cable can be out.
+"USB streaming" = cable in and a dummy `rec 60` on the Octatrack device in
+another window (both directions open); "unplugged" = cable out, the OUT
+producer and USB IN's per-frame transfer still running. Every take from a
+freshly loaded project (no trigs / T1 / T1–T7, one long sample), 20 s = 9
+cycles; the ISR mean alternates between consecutive 2 s windows (~3 µs at 1
+voice, ~18 µs unplugged and ~27 µs with USB at 7), so each figure is the
+mean of the two phases' means. The analog path reads ~0.6 % high (the frame
+period reads 365.0 for 362.8); raw below, ×0.994 where marked. The decoder
+needed a wider sync window for the analog path (`cfmeter.py --analog`).
+Validation: 7 voices with USB streaming, 252.7 µs here against 259.3 over
+USB in the morning.
+
+| fresh load | unplugged | USB streaming | USB cost |
+|---|---|---|---|
+| no voices | 107.1 µs | 121.2 µs | 14.1 µs |
+| T1 | 121.8 µs | 145.7 µs | 23.9 µs |
+| T1–T7 | 221.4 µs | 247.0 µs | 25.6 µs |
+
+×0.994: 106.5 / 120.5, 121.1 / 144.8, 220.1 / 245.5 µs. Repeatability: no
+voices unplugged, 9 cycles within ±0.5 µs; T1 unplugged, three fresh loads
+122.0 / 121.7 / 121.8 µs. ISR max: no voices ~127 unplugged, ~201–209 with
+USB; T1 ~148 or ~200 alternating (a trig in the window or not) unplugged,
+~223–246 with USB; T1–T7 ~253–274 / ~282–314.
+
+| | unit (×0.994) | cycles | port instructions | CPI |
+|---|---|---|---|---|
+| baseline ISR, no voices | 106.5 µs | ~28,100 | ~25,470 | ~1.1 |
+| first voice | +14.6 µs | ~3,850 | ~1,110 | ~3.5 |
+| each further voice, T1 → T1–T7 | +16.5 µs | ~4,360 | ~1,000 | ~4.4 |
+
+- **No crossbar contention on the voice path:** 16.6 µs per added voice
+  unplugged, 16.9 µs with USB streaming.
+- **The USB stack costs** ~14 µs of mean ISR per frame with nothing
+  playing, ~24–26 µs as soon as anything plays, flat from 1 to 7 voices.
+  The ~10 µs step at the first voice is repeatable and unexplained.
+- **The worst frame is set by trigs** when anything plays (the frame that
+  starts a voice); at idle USB's own spikes set it (~127 → ~205 µs). The
+  mean, not the max, prices USB.
+- **Tracks that have played keep costing after they fall silent:** ~18 µs
+  across seven tracks with none sounding, ~30 µs with one; the source of
+  the morning's first-voice premium.
+- Guidance: ~15–17 µs of mean ISR per playing voice, no first-voice
+  premium, plus ~24–26 µs for the USB stack while a host streams and
+  anything plays.
 
 Method, port side: `verify_set` pokes a trig on T1 step 2 by default, so
 every port run has T1 playing; `--poke-trig 0` (since 5 Oct 2026) is the
@@ -408,11 +460,14 @@ container), `string_func_map.py`, the `Ghidra*.java` headless scripts.
   the dispatch itself is not.
 - Remaining ATA handlers; large functions the decompiler does not lift.
 - The vector table (`0x400` preamble, not in this section).
-- ColdFire load (the CF METER takes above): where the first playing
-  voice's ~6,200 cycles of stall are spent, and whether it can be moved
-  to SRAM; ns per cache line fill on cached SDRAM, the uncached alias
-  (`+0x08000000`) and on-chip SRAM `0x80000000`, with the USB stream open
-  and closed (a CF METER BURN variant); DTIM3 around the two HC polls and
-  inside the level-6 handlers, for the nested share; the ~240 / ~268 µs
-  alternation; the USB stack's cost by difference (a take from the analog
-  outs with the cable out); a recording take (the 8-recorder SOS project).
+- ColdFire load (the CF METER takes above): why the voice path stalls
+  (~4,360 cycles for ~1,000 instructions per voice; USB contention ruled
+  out), and whether its data can move to SRAM; ns per cache line fill on
+  cached SDRAM, the uncached alias (`+0x08000000`) and on-chip SRAM
+  `0x80000000` (CF METER's MEM/SRC knobs, not yet run on a unit); DTIM3
+  around the two HC polls and inside the level-6 handlers, for the nested
+  share; the ~10 µs USB step when anything starts playing; why tracks that
+  have played keep costing after they fall silent (a fresh no-voice
+  project, measure, a bar of T1, clear it, measure again); the alternating
+  2 s windows (a 4 s period, the swing growing with voices); a recording
+  take (the 8-recorder SOS project).
