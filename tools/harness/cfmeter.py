@@ -6,18 +6,24 @@
 
 The insert prints a square wave per 16-sample block: L = N x 128, R =
 8192 x 128 (24-bit units), so N = 8192 x |L| / |R| per block, whatever
-the gain after the slot. N steps through eight slots, 125 ms each, the
-first 0 (the sync) and the second 8192. Each cycle is printed as one row:
-idle %, the frame interrupt's mean and longest duration and the frame
-period in microseconds (DMA timer 3 taken at 132 MHz; the period column
-checks that rate: 16 / 44,100 s = 362.8 us), the idle loop's shortest
-step in timer counts, and BURN in microseconds.
+the gain after the slot. N steps through sixteen slots, 125 ms each, the
+first 0 (the sync) and the second 8192. Slots 2..7 are the ColdFire's
+(DMA timer 3 at 132 MHz): idle %, the frame interrupt's mean and longest
+duration and the frame period in microseconds (16 / 44,100 s = 362.8 us
+checks the rate), the idle loop's shortest step in timer counts, BURN in
+microseconds. Slots 8..15 are core 0's own, over the 2 s window before
+slot 8: the spin count of the wait for the next frame (min / max, polls),
+ESAI underrun (TUE) and overrun (ROE) frames and ESAI_1's, the frame
+period on the DSP's timer 0 (min / max, microseconds at CLK/2 = 99.95
+MHz; 362.8 us nominal) and the frames in the window (5,512 nominal).
 """
 import argparse, math, statistics, sys, wave
 import numpy as np
 
 CLK = 132e6
+DSPCLK2 = 199.9e6 / 2            # timer 0 counts at CLK/2 (docs/firmware/CHIP.md: 199.9 MHz measured)
 REF = 8192
+SLOTS = 16
 
 
 def load_wav(path, lr):
@@ -63,8 +69,8 @@ def per_block(L, R, n=16):
 
 def cycles(nb):
     """Each cycle starts where N steps from the sync (~0) to the reference
-    (8192); its eight slots are one eighth of the distance to the next such
-    edge each, read as the median of each slot's middle half."""
+    (8192); its sixteen slots are one sixteenth of the distance to the next
+    such edge each, read as the median of each slot's middle half."""
     ok = ~np.isnan(nb)
     ref = ok & (np.abs(nb - REF) < 0.01 * REF)
     sync = ok & (np.abs(nb) < 20)
@@ -74,9 +80,9 @@ def cycles(nb):
              if ref[i] and not ref[i - 1] and (sync[i - 1] or sync[i - 2])]
     rows = []
     for e0, e1 in zip(edges, edges[1:]):
-        seg = (e1 - e0) / 8
+        seg = (e1 - e0) / SLOTS
         row = []
-        for k in range(8):
+        for k in range(SLOTS):
             a = e0 + int((k - 1 + 0.25) * seg) if k else e0 - int(0.75 * seg)
             b = e0 + int((k - 1 + 0.75) * seg) if k else e0 - int(0.25 * seg)
             row.append(float(np.nanmedian(nb[max(a, 0):b])))
@@ -99,16 +105,25 @@ def main():
     if not rows:
         sys.exit("cfmeter: no sync -> reference edge pair found")
     us = lambda q: q * 4 / CLK * 1e6
-    print(f"{len(rows)} cycle(s) of 1 s; values are the medians of each 125 ms slot")
+    dus = lambda q: q * 4 / DSPCLK2 * 1e6
+    print(f"{len(rows)} cycle(s) of 2 s; values are the medians of each 125 ms slot")
+    print("ColdFire (slots 2-7)")
     print(f"{'idle %':>7} {'isr mean us':>11} {'isr max us':>10} {'period us':>9} {'isr %':>6} {'step cnt':>8} {'burn us':>7}")
     for r in rows:
         idle = r[2] / 16384 * 100
         per = us(r[5])
         print(f"{idle:7.2f} {us(r[3]):11.1f} {us(r[4]):10.1f} {per:9.1f} "
               f"{(us(r[3]) / per * 100 if per else float('nan')):6.1f} {r[6]:8.0f} {us(r[7]):7.1f}")
+    print("DSP core 0 (slots 8-15, the 2 s window before each)")
+    print(f"{'spin min':>8} {'spin max':>8} {'TUE':>5} {'ROE':>5} {'ESAI1':>5} {'per min us':>10} {'per max us':>10} {'frames':>6}")
+    for r in rows:
+        print(f"{r[8]:8.0f} {r[9]:8.0f} {r[10]:5.0f} {r[11]:5.0f} {r[12]:5.0f} "
+              f"{dus(r[13]):10.1f} {dus(r[14]):10.1f} {r[15]:6.0f}")
     med = lambda j: statistics.median(r[j] for r in rows)
     print(f"median: idle {med(2) / 16384 * 100:.2f} %, isr mean {us(med(3)):.1f} us, "
-          f"isr max {us(med(4)):.1f} us, period {us(med(5)):.1f} us (16/44100 s = 362.8 us)")
+          f"isr max {us(med(4)):.1f} us, period {us(med(5)):.1f} us (16/44100 s = 362.8 us); "
+          f"spin min {med(8):.0f}, TUE {med(10):.0f}, ROE {med(11):.0f}, "
+          f"DSP period {dus(med(13)):.1f}..{dus(med(14)):.1f} us, frames {med(15):.0f} (5,512 per 2 s)")
 
 
 if __name__ == "__main__":

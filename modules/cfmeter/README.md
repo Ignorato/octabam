@@ -2,16 +2,21 @@
 
 A probe. It measures, on the unit, how long the ColdFire's frame interrupt
 takes and how much time main's idle loop gets (with
-[CF METER IDLE](../cfmeter-idle/README.md)), and prints the numbers as
-audio on track 8. It is the instrument for pricing ColdFire voice engines
-such as [SYNTH MACHINE](../synth/README.md): the synth renders inside the
-frame interrupt.
+[CF METER IDLE](../cfmeter-idle/README.md)), and, on core 0, how long the
+DSP waits for each frame, whether the ESAI underran or overran, and the
+frame period; it prints the numbers as audio on track 8. It is the
+instrument for pricing ColdFire voice engines such as
+[SYNTH MACHINE](../synth/README.md) (the synth renders inside the frame
+interrupt) and for reading the DSP's load during normal play, where the
+burn sweep (`docs/firmware/CHIP.md` section 2) has to break the unit to
+read it.
 
 ## Knobs
 
 | page | slot | name | range | what it does |
 |---|---|---|---|---|
 | 1 | 0 | BURN | 0–127, default 0 | read on track 8 only: 2 µs of busy-wait per step at the start of every frame interrupt |
+| 1 | 2 | DBRN | 0–127, default 0 | 24 × DBRN DSP cycles per sample, burnt by the insert before its sample loop (SEND's burn form) |
 
 ## Measured
 
@@ -29,6 +34,25 @@ The difference is 40.0 µs, BURN 20 × 2 µs. The port prices every
 instruction at one step of its own clock, so its durations are not the
 unit's; the run proves the chain (lane → DSP record → insert → read-back
 → decoder) and the BURN arithmetic.
+
+The DSP meter under the port (`tools/verify/verify_cfmeter.py cfmeter-port`,
+4 Oct 2026; `OCTABAM89_setgate` with T8 FX2 = CF METER, 900 frames, T8's
+block read at `X:0x6b00`):
+
+| DBRN | spin min | spin max | period min | period max | TUE | ROE | ESAI_1 | frames |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 5,003 | 7,798 | 7,680 | 8,968 | 0 | 0 | 898 | 898 |
+| 40 | 2,808 | 7,798 | 7,680 | 8,961 | 0 | 0 | 898 | 898 |
+| 127 | 7,549 | 8,144 | 16,128 | 17,160 | 0 | 0 | 898 | 898 |
+
+Periods are counts / 4 of the port's steps / 2. DBRN 40 burns 15,360
+steps per frame and takes 2,195 polls away: 7.0 steps per poll, the spin
+loop's seven instructions at the port's one step each. DBRN 127 (48,768
+per frame) is past core 0's frame under the port: every period doubles
+and the spin count rises, the DSP having missed `M_DSR2`'s value and
+waited for the ring to come round (slots 9 and 14's late-frame
+signature). ESAI_1's status reads TUE on every frame in the vendored
+emulator, which feeds nothing into it; the unit's reading is open.
 
 ## On the unit
 
@@ -51,12 +75,22 @@ remix BURN is WAVE LOAD's K.
 - Whether DTIM3 runs at 132 MHz on the unit (slot 5 answers it).
 - Interrupts shorter than the idle loop's threshold (2 × its shortest
   step + 8 counts) count as idle time.
+- The DSP slots on the unit: a poll's cost in cycles (the `dbrnD` takes,
+  `remixes/test/cfmeter/README.md`), whether TUE/ROE hold between frames
+  as the manual says, what ESAI_1's status reads, and timer 0 on core 0
+  (probe 55 ran it on core 1).
+- Slots 8..15 read core 0 only; CF METER on tracks 1..4 prints zeros
+  there (payload B has no spin store and no ESAI).
 
 ## Gates
 
 - `make check REMIX=cfmeter` (with CF METER IDLE) passes since 28 Sep 2026:
   the port follows the detoured idle park and loads the project.
-- `verify_set.py cfmeter-port` and `tools/harness/cfmeter.py --dump` (the run above).
+- `tools/verify/verify_cfmeter.py` (the module's gate, with a project):
+  the DSP meter's slots from T8's block at DBRN 0, 40 and 127 (the table
+  above).
+- `verify_set.py cfmeter-port` and `tools/harness/cfmeter.py --dump` (the
+  ColdFire run above).
 
 ## How it works
 
@@ -77,14 +111,31 @@ remix BURN is WAVE LOAD's K.
   epilogue. USB AUDIO's producer (`0x4000d9a0`, the instruction before)
   is inside the measured span.
 - **Publisher.** In `m_tail`, every 125 ms (16,500,000 counts): eight
-  values into a table, the displayed slot k advanced. Every frame, while
-  T8's live FX2 is CF METER: N_k
-  into T8's FX2 page-2 lane bytes `+0x38/+0x39` (word `$c`) and 8192 into
-  `+0x3a/+0x3b` (word `$d`). The copier `0x4000cae8` delivers them to the
-  DSP record (`docs/firmware/PARAM_PAGES.md` section 5c, section 6).
-- **Readout.** The DSP insert (`meter_out.asm`, FX2 id `0x0e`, 29 words)
-  writes L = word `$c` / 2 and R = word `$d` / 2 as a square wave that
-  flips sign every block, replacing the track's audio. N = 8192 ×
+  values into a table, the displayed slot k advanced through 0..15. Every
+  frame, while T8's live FX2 is CF METER: N_k (0 for k ≥ 8) into T8's FX2
+  page-2 lane bytes `+0x38/+0x39` (word `$c`), 8192 into `+0x3a/+0x3b`
+  (word `$d`) and k into `+0x3c/+0x3d` (word `$e`). The copier
+  `0x4000cae8` delivers them to the DSP record
+  (`docs/firmware/PARAM_PAGES.md` section 5c, section 6).
+- **The DSP meter.** The insert (`meter_out.asm`, FX2 id `0x0e`, 204
+  words) runs on T8, which is core 0. Once per frame (one step of
+  `x:$415`, the housekeeping at `P:0x549`) it reads the spin count core
+  0's wait for the next frame stores at `P:0x92` (`x:$3f81`: the polls of
+  `M_DSR2` at `P:0x4b-0x53`), the ESAI status register (`x:$ffffb3`; TUE
+  bit 14, ROE bit 7) and ESAI_1's (`y:$ffff93`), and timer 0 (`x:$ffff8c`,
+  free-running at CLK/2 from init, probe 55's setting), into min / max /
+  count slots of its r7 block. When k reaches 8 the slots are copied to
+  the print copy and reset, so each printed window is the 2 s before slot
+  8. TUE and ROE hold until the status register is read (the DSP56300
+  family manual: cleared by a read of SAISR followed by the next transmit
+  writes / receive reads) and stock reads it only at boot, so one read
+  per frame sees every event since the last (inferred from the manual;
+  not measured on the unit). DBRN burns 24 × DBRN cycles per sample
+  before the sample loop: the spin count must fall by it, which
+  calibrates a poll's cost in cycles.
+- **Readout.** The insert writes L = value / 2 and R = word `$d` / 2 as a
+  square wave that flips sign every block, replacing the track's audio;
+  value is word `$c` for k < 8 and its own slot for k ≥ 8. N = 8192 ×
   rms(L) / rms(R), whatever the gain after the slot.
 
 | k | N |
@@ -97,6 +148,19 @@ remix BURN is WAVE LOAD's K.
 | 5 | frame period (segment / interrupts), counts / 4 |
 | 6 | the idle loop's shortest step, counts |
 | 7 | BURN, counts / 4 |
+| 8 | core 0 spin count, min over the window (polls) |
+| 9 | core 0 spin count, max |
+| 10 | frames with ESAI TUE set |
+| 11 | frames with ESAI ROE set |
+| 12 | frames with ESAI_1 TUE or ROE set |
+| 13 | frame period on timer 0, min, counts / 4 (CLK/2: 9,064 nominal) |
+| 14 | frame period on timer 0, max, counts / 4 |
+| 15 | frames in the window (5,512 nominal) |
+
+A late frame (the DSP arrives at the wait after `M_DSR2` passed its
+value) waits for the ring to come round again: slot 9 jumps by a whole
+frame's polls. Values clamp at 32,767.
 
 `tools/harness/cfmeter.py` decodes a capture (a WAV, T8 on USB channels
-15/16 by default) or the port's `--block-dump`.
+15/16 by default) or the port's `--block-dump`; a cycle is 2 s, and the
+decoder needs two sync edges, so a take is 6 s at least.
