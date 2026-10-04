@@ -68,6 +68,7 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 
 - ✅ Image OCTABAM4 (`make image REMIX=testgen BUILD=4`) on Ignorato's MKII, 3 Oct 2026: boots, and TESTGEN is listed on FX2. Two findings from the tester, both fixed in the next image: LEVL defaulted to 115 (-6 dBFS), so a loud tone started on insert; and FREQ, then a plain 0-127 knob, reached 5 kHz by about 24.
 - ✅ Image OCTABAM5 (`make image REMIX=testgen BUILD=5`, with FINE and A440), same unit and day: boots, OS VERSION reads OCTABAM5; on insert LEVL reads 0 (silent), and FREQ shows its steps in Hz; FINE tunes smoothly; all five MODEs and the four CHAN settings work as expected (tester, by ear).
+- ✅ Image OCTABAM6 (`make image REMIX=testgen BUILD=6`, the 46-bit noise per channel and CHAN MONO), same unit, 4 Oct 2026: boots, OS VERSION reads OCTABAM6; WHITE and PINK with CHAN L+R sound wide, and with MONO centred (tester, on headphones).
 
 ## Using it
 
