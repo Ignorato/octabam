@@ -95,6 +95,14 @@ ACTIVE_PARAMS = {k: _MODS[k].active_params for k in _ORDER
                  if k not in STOCK_KEYS}
 LINKED_PARAMS = {k: _MODS[k].linked_params for k in _ORDER
                  if k not in STOCK_KEYS}
+# Param(active=None) on a stock_dsp clone: the slot's nibble is the donor's
+# (schema.Module.inherited_enable), checked against the pristine donor.
+INHERITED = {k: _MODS[k].inherited_enable for k in _ORDER
+             if k not in STOCK_KEYS}
+
+
+def _nibble(lo, hi, i):
+    return ((lo if i < 8 else hi) >> (4 * (i if i < 8 else i - 8))) & 0xf
 # a host page's link elements stop at its last drawn slot (build_bus.py)
 for _k, _n in REMIX.host_slots:
     if _k in LINKED_PARAMS:
@@ -277,6 +285,19 @@ def main():
         got = {i for i in range(12)
                if ((lo if i < 8 else hi) >> (4 * (i if i < 8 else i - 8))) & 1}
         want = set(ACTIVE_PARAMS[name])
+        wantl = set(LINKED_PARAMS[name])
+        _inh = INHERITED[name]
+        if _inh:
+            _dP = _MODS[name].menu.donor_desc + 0x38
+            _dlo = rd32(stock, _dP + P_PENABLE_LO)
+            _dhi = rd32(stock, _dP + P_PENABLE_HI)
+            for i in _inh:
+                _dn, _gn = _nibble(_dlo, _dhi, i), _nibble(lo, hi, i)
+                check(_gn == _dn,
+                      f"{name}: p{i} (active=None, stock_dsp) keeps the donor's "
+                      f"enable nibble 0x{_dn:x} (got 0x{_gn:x})")
+                want |= {i} if _dn & 1 else set()
+                wantl |= {i} if _dn & 2 else set()
         check(got == want,
               f"{name}: enabled knobs {sorted(got)} == expected {sorted(want)} "
               f"(lo=0x{lo:08x} hi=0x{hi:08x})")
@@ -284,11 +305,11 @@ def main():
         # exactly the manifest's, and no other bit anywhere in a nibble
         linked = {i for i in range(12)
                   if ((lo if i < 8 else hi) >> (4 * (i if i < 8 else i - 8))) & 2}
-        wantl = set(LINKED_PARAMS[name])
         check(linked == wantl,
               f"{name}: linked knobs {sorted(linked)} == expected {sorted(wantl)}")
         stray = {i for i in range(12)
-                 if ((lo if i < 8 else hi) >> (4 * (i if i < 8 else i - 8))) & 0xc}
+                 if i not in _inh
+                 and ((lo if i < 8 else hi) >> (4 * (i if i < 8 else i - 8))) & 0xc}
         check(not stray, f"{name}: no nibble carries bits 2/3 (stock's PLAYBACK-only flags) {sorted(stray)}")
         # a knob that is enabled but unnamed would render as a blank row
         for i in sorted(got):
@@ -564,8 +585,26 @@ def main():
         check(got["abbr"] == mod.menu.abbr.decode("latin1"),
               f"{name}: its abbreviation is "
               f"{got['abbr']!r} == {mod.menu.abbr.decode('latin1')!r}")
-        want_slots = [p.name.decode("latin1") for p in mod.params
-                      if p.active and p.name]
+        # an inherited slot (active=None, stock_dsp) draws as its donor's
+        # does: its expected name is the manifest's, else the donor's
+        _inh = INHERITED.get(name, ())
+        _dP = mod.menu.donor_desc + 0x38
+        _dlo = rd32(stock, _dP + P_PENABLE_LO)
+        _dhi = rd32(stock, _dP + P_PENABLE_HI)
+        want_slots = []
+        for i, p in enumerate(mod.params):
+            if i in _inh:
+                if not _nibble(_dlo, _dhi, i) & 1:
+                    continue
+                _a = _dP + P_PARAM_NAMES + i * 6 - BASE
+                nm = (p.name if p.name is not None
+                      else stock[_a:_a + 6].split(b"\0")[0])
+            elif p.active:
+                nm = p.name
+            else:
+                continue
+            if nm:
+                want_slots.append(nm.decode("latin1"))
         drew = [x for x in got["slots"] if x]
         check(drew == want_slots,
               f"{name}: its {len(want_slots)} drawn slot names are the "

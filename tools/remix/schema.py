@@ -137,7 +137,10 @@ class Param:
     """One of the twelve parameter slots on an effect's two pages.
 
     `None` means "do not write this field", which leaves the donor's value in
-    place. That is a real and different thing from writing a zero.
+    place. That is a real and different thing from writing a zero. The
+    exception is `active`: None keeps the donor's enable nibble only on a
+    `MenuEntry(stock_dsp=True)` clone, and is written as not drawn on every
+    other clone.
 
     Page 1 is slots 0-5 (r6+0..5). Page 2 is slots 6-11: even slots are
     delivered in the KNOB field (bits 16-23) of r6+$c/$d/$e, odd slots in the
@@ -151,7 +154,10 @@ class Param:
     name: bytes | None = None          # <=5 chars in a 6-byte NUL-terminated field; b"" blanks it
     default: int | None = None         # u8 written at P+0x5e+idx
     count: int | None = None           # value count; None leaves the donor's
-    active: bool = False               # drawn at all (the enable bitmap)
+    # Drawn at all (the slot's nibble in the enable bitmap). None on a
+    # MenuEntry(stock_dsp=True) clone keeps the donor's nibble, link bit
+    # included; everywhere else None is written as not drawn, as False is.
+    active: bool | None = None
     formatter: Formatter = Formatter.INHERIT
     # Display-only, consumed by the remixer and never by the build (the
     # refhash gate proves it): one line saying what the knob DOES, and for a
@@ -187,6 +193,13 @@ class Param:
     @property
     def has_raw_words(self) -> bool:
         return any(w is not None for w in self.raw_words)
+
+    @property
+    def prints_labels(self) -> bool:
+        """The build emits a label formatter for this slot. A slot with raw
+        descriptor words is drawn by those words, which take P+0x0ca: its
+        labels are display-only (the remixer's help row, the BCR map)."""
+        return bool(self.active and self.labels) and not self.has_raw_words
 
     def __post_init__(self):
         for _f, _w in zip(("formatter_word", "widget_word", "word_12a"), self.raw_words):
@@ -227,6 +240,28 @@ class Param:
                 raise ValueError(
                     f"default {self.default} is outside its value count "
                     f"{self.count} -- the panel uses it as an index")
+
+
+def enable_words(active, linked=(), inherited=(), donor=(0, 0)):
+    """A descriptor's two enable words (P+0x18e slots 0-7, P+0x18a slots
+    8-11, one nibble each): bit 0 draws the slot, bit 1 draws the link
+    element to its left neighbour (PARAM_PAGES.md 3b). A slot in `inherited`
+    takes its whole nibble from `donor`, the donor's (lo, hi)."""
+    lo = hi = 0
+    for i in active:
+        bits = 3 if i in linked else 1
+        if i < 8:
+            lo |= bits << (4 * i)
+        else:
+            hi |= bits << (4 * (i - 8))
+    for i in inherited:
+        sh = 4 * (i if i < 8 else i - 8)
+        m = 0xf << sh
+        if i < 8:
+            lo = (lo & ~m) | (donor[0] & m)
+        else:
+            hi = (hi & ~m) | (donor[1] & m)
+    return lo, hi
 
 
 @dataclass(frozen=True)
@@ -1332,8 +1367,20 @@ class Module:
 
     @property
     def active_params(self) -> list[int]:
-        """Slots the panel draws -- the enable bitmap, in index order."""
+        """Slots the manifest declares drawn (active=True), in index order.
+        A slot in inherited_enable is drawn or not as its donor's is."""
         return [i for i, p in enumerate(self.params) if p.active]
+
+    @property
+    def inherited_enable(self) -> tuple[int, ...]:
+        """Slots whose enable nibble (draw and link bits) is the donor's:
+        active=None on a MenuEntry(stock_dsp=True) clone. Empty params are
+        twelve Param()s."""
+        if self.menu is None or not self.menu.stock_dsp:
+            return ()
+        if not self.params:
+            return tuple(range(12))
+        return tuple(i for i, p in enumerate(self.params) if p.active is None)
 
     @property
     def linked_params(self) -> list[int]:
