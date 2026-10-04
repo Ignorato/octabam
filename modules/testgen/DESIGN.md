@@ -1,6 +1,6 @@
 # TESTGEN: design note
 
-The knobs, the signals' levels and every measured figure are in [`README.md`](README.md); this note keeps the reasons behind the design. Status: on hardware since OCTABAM4 (README, On the unit).
+The knobs, the signals' levels and every measured figure are in [`README.md`](README.md); this note keeps the reasons behind the design. Status: 0.1 on hardware since OCTABAM4 (README, On the unit); 0.2's NEEDLE, DC and FX1 listing in the emulator only.
 
 ## What it is
 
@@ -19,6 +19,8 @@ An Octabam FX2 insert that **replaces** its track's audio with an exact, reprodu
 | PINK | WHITE through Paul Kellet's three-pole filter, one per channel | A cheap, well-known approximation; its slope is gated, -3 dB/octave within 0.3 |
 | WHITE | x' = 0x5DEECE66D x + 11 mod 2^46 (drand48's multiplier), the sample its top 23 bits, one generator per channel | A 24-bit generator came first: its low bits repeated on short cycles (the low 16 every 1.5 s, -48 dB under the noise). x is held as two 23-bit halves, so every product has non-negative operands. R starts 0x3243f6a8885 steps ahead of L: a half-period jump only flips the top bit, so R would be a fixed function of L; the irregular jump was tested (cross-correlation and a 2-D chi-square) |
 | IMPULSE | One full-scale sample every LEN/4 seconds | Exact; its period is computed from the sweep's length rather than tabled, to save words |
+| NEEDLE | One full-scale sample every P = round(2^24 / inc) samples: the whole period nearest FREQ and FINE | A strictly periodic train has a clean line spectrum; a phase-accumulator train would hit the exact frequency on average but jitter by a sample, spreading spurs between the lines. P comes from one 48-by-24 integer division per block, and the train reuses IMPULSE's loop |
+| DC | Full scale on every sample, times LEVL | IMPULSE's loop with a period of one: no code of its own |
 
 Any change of MODE, FREQ or LEN restarts every generator from the same state (FINE does not, so tuning by ear is smooth), so a capture lines up with the reference from the change on.
 
@@ -27,8 +29,8 @@ LEVL 0 is silent and the default: the first image started a -6 dBFS tone on inse
 ## DSP56300 constraints (Octabam's rules)
 
 - No per-sample division, log or exp: the sweep's ratio, the sine's polynomial and FINE's 2^x (a quartic within 0.19 ppm, per block) are all multiplies; levels come from a table per block.
-- No buffers, no lookahead. 150 cycles a sample at most, in PINK and WHITE (two generators and two filters); SWEEP 85, SINE 51, IMPULSE 18.
-- Size: PLATE REV's 594 words. The first full build was one word over; then the impulse table went, the sine core became a shared subroutine (for FINE and A440), and short-form compares, one restart routine for init and proc and one noise routine for both channels made room for the stereo noise: 588 words (396 of code, 192 of table).
+- No buffers, no lookahead, so it may sit on FX1 as well as FX2. 150 cycles a sample at most, in PINK and WHITE (two generators and two filters); SWEEP 85, SINE 51, IMPULSE, NEEDLE and DC 18.
+- Size: PLATE REV's 594 words. The first full build was one word over; then the impulse table went, the sine core became a shared subroutine (for FINE and A440), and short-form compares, one restart routine for init and proc and one noise routine for both channels made room for the stereo noise: 588 words (396 of code, 192 of table). For 0.2 the sweep's length table went too (it is (t + 1) 44100, one multiply), which paid for NEEDLE and DC: 594 words exactly (418 of code, 176 of table).
 - Output replaces the input: a THRU track becomes a signal source.
 
 ## The reference (testgen_ref.py)

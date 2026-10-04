@@ -2,7 +2,7 @@
 
 A measurement source: TESTGEN replaces its track's audio with a known test signal.
 
-On the unit it is an FX2 effect. Put it on a track, play a trig (or use a THRU machine) and that track's output, analogue or a channel of Octabam's USB audio out, carries the signal. Uses: measuring the Octatrack's own path (level, frequency response, distortion, channel mapping), measuring a USB audio stream on a host, and proving other modules' claims by putting a known signal through them. [`DESIGN.md`](DESIGN.md) has the plan for all five signals; [`testgen_ref.py`](testgen_ref.py) is the float reference and the analysis the gate uses.
+On the unit it is an FX2 effect and, in its remix, an FX1 effect too (it has no buffers, so either slot is safe). Put it on a track, play a trig (or use a THRU machine) and that track's output, analogue or a channel of Octabam's USB audio out, carries the signal. Uses: measuring the Octatrack's own path (level, frequency response, distortion, channel mapping), measuring a USB audio stream on a host, and proving other modules' claims by putting a known signal through them. [`DESIGN.md`](DESIGN.md) has the plan for all seven signals; [`testgen_ref.py`](testgen_ref.py) is the float reference and the analysis the gate uses.
 
 Every signal is defined exactly: `testgen_ref.py` reproduces each one as the module computes it, so a capture can be compared against the reference sample by sample, and a sweep can be deconvolved with its own inverse.
 
@@ -15,18 +15,20 @@ Every signal is defined exactly: `testgen_ref.py` reproduces each one as the mod
 | PINK | pink noise: Kellet's three-pole filter on WHITE, one filter per channel | RMS -14.4 dBFS |
 | WHIT | white noise: a 46-bit linear congruential generator (drand48's multiplier), its top 23 bits; one generator per channel, so with CHAN L+R the two sides are independent | peak 0 dBFS, RMS -4.77 dBFS |
 | IMPL | a single full-scale sample every LEN/4 seconds | peak 0 dBFS |
+| NEDL | a needle pulse train: a single full-scale sample every P samples, P = round(44100 / f) for the frequency f set by FREQ and FINE, so the train is strictly periodic at 44100 / P Hz (1k gives P = 44, 1002.27 Hz; A440 gives 100, 441 Hz; the top steps are coarse: 20k gives 2, 22.05 kHz) | peak 0 dBFS |
+| DC | a constant: full scale on every sample, scaled by LEVL (CHAN L-R gives +DC on L and -DC on R) | 0 dBFS |
 
-A change of MODE, FREQ or LEN restarts the signal from its first sample: a sine from phase 0, a sweep from 20 Hz, the noise from its seed, the impulses with one at once.
+A change of MODE, FREQ or LEN restarts the signal from its first sample: a sine from phase 0, a sweep from 20 Hz, the noise from its seed, the impulses and the needle train with one at once.
 
 ## Knobs
 
 | page | slot | name | range | what it does |
 |---|---|---|---|---|
 | 1 | 0 | LEVL | 0-127 | output level: 0 = silent (the default), 1 = -63 dBFS, 127 = 0 dBFS, 0.5 dB a step (115 = -6 dBFS) |
-| 1 | 1 | FREQ | select, shown in Hz | SINE frequency: the 31 ISO third-octave centres, 20 Hz to 20 kHz, and A440, across the knob's whole turn; 1k is the default |
+| 1 | 1 | FREQ | select, shown in Hz | SINE and NEEDLE frequency: the 31 ISO third-octave centres, 20 Hz to 20 kHz, and A440, across the knob's whole turn; 1k is the default |
 | 1 | 2 | LEN | 0-127 | SWEEP length in whole seconds, LEN/8 + 1 (0 = 1 s, 32 = 5 s, the default, 120 = 16 s); the IMPULSE period is a quarter of it (0.25 s to 4 s) |
-| 1 | 3 | FINE | -64..+63 | SINE fine tune: -200 to +197 cents in 3.125-cent steps, so FREQ and FINE together reach any frequency from 17.8 Hz to 20 kHz; 0 is the FREQ step exactly. Turning it does not restart the tone |
-| 2 | 6 | MODE | select | SINE, SWEP, PINK, WHIT, IMPL |
+| 1 | 3 | FINE | -64..+63 | SINE and NEEDLE fine tune: -200 to +197 cents in 3.125-cent steps, so FREQ and FINE together reach any frequency from 17.8 Hz to 20 kHz; 0 is the FREQ step exactly. Turning it does not restart the tone |
+| 2 | 6 | MODE | select, across the knob's whole turn | SINE, SWEP, PINK, WHIT, IMPL, NEDL, DC |
 | 2 | 8 | CHAN | select | L+R, L only, R only, L and inverted R (a polarity check), MONO. For the noises, L+R gives independent noise on each side, and MONO the same noise on both |
 
 LEVL starts at 0, so choosing TESTGEN makes no sound until you turn it up: a full-level tone on insert is hard on ears and speakers (reported on the unit with the first image, which defaulted to -6 dBFS). FREQ was a plain 0-127 knob in that image, with the 31 frequencies packed into its first quarter; it is now a select that shows the frequency.
@@ -49,7 +51,7 @@ The FREQ steps:
 All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scratch image, 3 Oct 2026, unless stated.
 
 - ✅ The output does not depend on the input: full-scale noise in and silence in give identical output.
-- ✅ 150 cycles a sample at most, in PINK and WHITE (two generators and two filters; SWEEP 85, SINE 51, IMPULSE 18; `make cycles REMIX=testgen`): four instances on one core price at 600 of 4,535.
+- ✅ 150 cycles a sample at most, in PINK and WHITE (two generators and two filters; SWEEP 85, SINE 51, IMPULSE, NEEDLE and DC 18, one loop; `make cycles REMIX=testgen`): with TESTGEN on FX1 and FX2 of all four tracks of a core, it prices at 1,200 of the 3,120 cycles usable.
 - ✅ Every FREQ index matches the sine the phase accumulator defines, sin(2 pi n inc / 2^24), within 3 LSB at 0 dBFS, from sample 0.
 - ✅ Every FREQ step is within 0.0013 Hz of its nominal value (1 kHz measures 1000.0007 Hz, A440 440.0007 Hz; the accumulator's resolution is 0.0026 Hz).
 - ✅ FINE moves the frequency to FREQ x 2^(FINE/384) within half an accumulator step plus 1 ppm, from -64 to +63 (the 2^x polynomial is within 0.19 ppm); FINE 0 is the FREQ step bit for bit; THD at 1 kHz with FINE +63 is -149.4 dB; 20 kHz with FINE up holds at 20 kHz.
@@ -61,6 +63,8 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 - ✅ PINK, each channel: -3.000 and -3.001 dB/octave, no octave band more than 0.44 dB off the fit; within -107.9 dB of the float filter on the same noise; RMS -14.39 and -14.52 dBFS. With CHAN L+R the channels are independent (differenced cross-correlation at most 0.0022).
 - History: 0.1's WHITE was a 24-bit generator whose low bits repeated on short cycles (the low 16 bits every 1.5 s, -48 dB under the noise) and whose L and R were the same; replaced at the tester's request.
 - ✅ IMPULSE puts a full-scale sample at exactly the reference's positions (every 0.25 s at LEN 0, every 1 s at LEN 24) and zero everywhere else.
+- ✅ NEEDLE (0.2, 4 Oct 2026): at every FREQ index, a full-scale sample at exactly every round(2^24 / inc) samples from sample 0 and zero elsewhere (20 Hz every 2,205 samples, 1 kHz every 44); with FINE, strictly periodic at the whole period nearest the set frequency (worst 0.40 samples off, 100 Hz with FINE +63); CHAN L-R gives R = -L and MONO R = L.
+- ✅ DC (0.2, 4 Oct 2026): every sample equals the LEVL table's value at LEVL 1, 64 and 127 (0 LSB off), on both channels; CHAN L-R gives R = -L, L only leaves R silent.
 - ✅ An invalid saved MODE byte plays SINE; every knob at both ends renders.
 - ✅ Under the ColdFire port in a real project (`verify_set`, `OT_PROJECT`, 3 Oct 2026): a project made on a MKII on stock 1.40C (T1 THRU, T2 STATIC with trigs), TESTGEN put on T2's FX2 in every part of every bank with `ot_project.py set-fx` (LEVL 115, FREQ 17, LEN 32: then 1 kHz at -6 dBFS, the 0.1 knob map). LOAD PROJECT completed and 900 frames ran; the live FX2 id on T2 read 0x17; T2's chain output was -16.5 dB against -41.7 dB in (the sine replaces the track's quiet audio); the load rewrote no project file; every shared-window DSP write lay in a permitted range. This proves the module loads and its signal reaches the chain on the emulated firmware, not the signal's accuracy there.
 
@@ -72,12 +76,21 @@ All by `tools/verify/verify_testgen.py` through `dsp_host` on the audition's scr
 
 - ✅ Measured through the unit's MAIN OUT into a Focusrite Scarlett 18i8 at 48 kHz (OCTABAM6, 4 Oct 2026; the whole chain, Octatrack and Scarlett together): LEVL steps exact within 0.002 dB over 54 dB; THD at 1 kHz -94 dB at 0 dBFS and -106.5 dB at -12 dBFS; THD+N -92 dB at 0 dBFS; noise floor -109 dBFS; crosstalk below -113 dB; response from 20 Hz to 19 kHz within -0.26 dB of 1 kHz (by SWEEP and deconvolution); PINK -2.98 and -3.01 dB/octave with L and R uncorrelated (0.003) after the converters. The two clocks differ by 23 ppm.
 
+## On the unit, 0.2
+
+- Not run yet: NEEDLE, DC and the FX1 listing are proved in the emulator only (above).
+
 ## Using it
 
 - **A level or a channel check**: SINE at 1 kHz (FREQ 18, the default), LEVL 127 gives a 0 dBFS peak; step LEVL to find where a path clips, 0.5 dB at a time. CHAN L-R shows whether a path keeps polarity.
 - **A frequency response**: record a whole SWEEP period from where you want to measure, then deconvolve it with `testgen_ref.deconvolve(capture, f1=20.0007, T=<LEN/8 + 1>)`: the peak is the path's impulse response, and the harmonic distortion lands before it in time, apart from the linear part. `testgen_ref.sweep_dsp` gives the exact sweep for sample-accurate comparison.
 - **A noise floor or a quick response**: PINK into a spectrum analyser, with third-octave bands, reads flat for a flat path.
 - **Latency and dropouts**: IMPULSE, then count the samples between the impulses in a capture; a missing or shifted impulse is a dropout.
+- **A line spectrum, or an effect's response to transients**: NEEDLE puts equal energy into every harmonic of 44100 / P up to Nyquist, so a capture's spectrum reads the path's magnitude response at those lines.
+- **DC coupling, or a bias into the next effect**: DC shows whether a path passes DC, and on FX1 it offsets the signal FX2 receives.
+- **On FX1**: TESTGEN there feeds a known signal into the track's FX2, so an FX2 effect, stock or Octabam, can be measured on its own.
+
+⚠️ DC on speakers: whether DC reaches the analogue outputs depends on their coupling, which is not measured yet. If it does, a large offset pushes a speaker's cone off centre and heats its voice coil. Start DC at a low LEVL with monitors connected.
 
 ## Open
 
