@@ -2719,7 +2719,9 @@ hostquit:
         _xt_readers = stock_mod.curve_bank_readers()
         _xt_kept = sorted({k for ks in _xt_readers.values() for k in ks
                            if k == "OUTSIDE-DONOR" or k in _listed})
-        _xt_tables = [k for k in sorted((k for k in CARRIED if k in _texts),
+        # Every placed section with a table: chooser rows and hook-only
+        # sections alike (_texts holds a HOOKED one on its own payloads only).
+        _xt_tables = [k for k in sorted((k for k in CARRIED + HOOKED if k in _texts),
                                         key=lambda k: _MODS[k].dsp.priority)
                       if "$facade" in _texts[k] or PTABLE_MARK in _texts[k]]
         _pristine = IMG.read_bytes()
