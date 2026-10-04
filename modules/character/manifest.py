@@ -2,9 +2,11 @@
 
 A per-track insert on stock LO-FI's id 0x1c (FX1 only; an FX2 instance runs
 as a dry pass, decided from the allocator base at init). Chain order:
-fold -> saturate -> tilt -> compress -> width.
+fold -> texture -> saturate -> tilt -> compress -> width.
 
   * FOLD -- a wrap-and-reflect wavefolder at a held level;
+  * TXTR -- Airwindows Pockey2 (MIT): mu-law bit reduction and a sample
+    hold on one knob, with Pockey2's blur. 0 skips the stage, bit-exact;
   * SAT -- three JClones (MIT) characters: TAPE = TapeHead (a state-variable
     split at TONE, the low and band parts through a cubic smoothstep, the
     top clean), TUBE = DaTube (u - u^P, the negative half driven twice as
@@ -17,7 +19,8 @@ fold -> saturate -> tilt -> compress -> width.
     (never on the master, which receives T1 itself);
   * WDTH -- mid/side width, drawn -64..+63: -64 mono, +63 2x side.
 
-Page 1: DRV FOLD WDTH COMP TONE MIX; page 2: SAT KEY KLVL (29 Sep 2026:
+Page 1: DRV FOLD WDTH COMP TONE MIX; page 2: SAT KEY KLVL TXTR (5 Oct 2026:
+TXTR, Pockey2; 29 Sep 2026:
 KEY and KLVL; 22 Sep 2026: TXTR removed,
 WDTH in its slot; 20 Sep 2026: TONE back on page 1 in the return's slot)."""
 
@@ -50,6 +53,12 @@ TUBE_UP = _tube_up()
 # TapeHead's drive: d/8 with d = 0.8 * 10^(i/16) (0.8x .. 8x over DRV/128),
 # 17 words, interpolated (idx = knob >> 19, frac = the 19 bits under it),
 # placed after TUBE_UP's 34 in the P table:
+# TXTR (Airwindows Pockey2, MIT): its mu-law codec as two 257-point tables
+# over [0, 1] (index = the top 8 bits, linearly interpolated), then T, the 32
+# mantissas floor(2^(21 + j/32)) the resolution is built from per block.
+POCKEY_ENC = tuple(round(8388607 * min(1.0, _m.log(1 + 255 * i / 256) / _m.log(255))) for i in range(257))
+POCKEY_DEC = tuple(round(8388607 * (256 ** (i / 256) - 1) / 255) for i in range(257))
+POCKEY_T = tuple(int(_m.floor(2 ** (21 + j / 32))) for j in range(32))
 TAPE_D8 = (0x0ccccd, 0x0ec7fd, 0x1111af, 0x13b608, 0x16c311, 0x1a48fe, 0x1e5a84, 0x230d41, 0x287a27, 0x2ebe07, 0x35fa27, 0x3e54f4, 0x47facd, 0x531ef0, 0x5ffc89, 0x6ed7eb, 0x7fffff)
 
 
@@ -59,7 +68,7 @@ MODULE = Module(
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.HARDWARE, proof_note="Sam's MKII",
-    doc="FX1 station: fold, saturation, tilt, compressor, width.",
+    doc="FX1 station: fold, texture (Pockey2), saturation, tilt, compressor, width.",
     menu=MenuEntry(
         fx2_id=0x1c,
         replaces="LO-FI",
@@ -93,14 +102,16 @@ MODULE = Module(
               doc="the compressor's key: SELF = this track's input, T1 = T1's level (ignored on the master)"),
         Param(b"KLVL", 64, 128, active=True, formatter=_PLAIN,
               doc="how hard T1 drives the compressor with KEY = T1: 64 = unity, 127 = x2"),
-        _BLANK, _BLANK, _BLANK,
+        Param(b"TXTR", 0, active=True, formatter=_PLAIN,
+              doc="Airwindows Pockey2 (MIT): mu-law bits 16 -> 4 and a 0 -> 31 sample hold; 0 = off"),
+        _BLANK, _BLANK,
     ),
     # SAT names itself by its value (tools/build/mode_names.with_selfname).
     # No knob changes meaning by mode.
     mode_slot=6,                      # SAT names itself (TAPE / TUBE / INFL)
     dsp=DspSection(
         asm="modules/character/character.asm",
-        ptable=TUBE_UP + TAPE_D8,
+        ptable=TUBE_UP + TAPE_D8 + POCKEY_ENC + POCKEY_DEC + POCKEY_T,
         priority=13,                  # after the Spectrum station
         bus_role=BusRole.NONE,        # an insert; never on the bus
         ybase=YBase.NEVER,            # an FX1 module may own no buffers; the
