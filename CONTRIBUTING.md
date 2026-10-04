@@ -17,7 +17,7 @@ instructions at a cave's hook site. A `CfPatch.hook_stock` is the six to
 ten bytes the installer overwrites with its `jsr` and the cave replays; the
 build refuses an image that does not hold them, which is the check that
 keeps a cave off the wrong OS. Those opcodes (four sites, 30 bytes in all,
-across `tempo-sync`, `recorder-spacing`, `flex-seekbind*`) are an
+across `tempo-sync` and `recorder-loop-fix`) are an
 instruction, not a firmware, and every ColdFire module carries its own
 the same way. Keep a hook to whole instructions and the minimum span; data
 tables, routines and anything longer than the displaced instructions come

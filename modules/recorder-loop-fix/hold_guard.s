@@ -1,4 +1,4 @@
-| RECORDER HOLD, the plain copy's guard -- hooked at 0x40008716 (suba.l d0,a1
+| RECORDER LOOP FIX hold, the plain copy's guard -- hooked at 0x40008716 (suba.l d0,a1
 | / cmpa.l d2,a1 / bge.s), where the copy caps a voice reading the buffer its
 | own recorder is writing (+0x14 = 1, recorder position +0x34 past END) at
 | END - index. At index END the cap is 0: stock stops the voice (0x40008722)

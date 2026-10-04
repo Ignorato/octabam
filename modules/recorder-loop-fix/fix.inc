@@ -1,4 +1,4 @@
-| RECORDER HOLD's fixup, included by each hook stub.
+| RECORDER LOOP FIX's hold fixup, included by each hook stub.
 | In:  d0/d1 = what the voice's fetch (the (-68,fp) function) returned for
 |      index a0: d0 = sample address, d1 = samples there (negative: reverse).
 |      Past the recording no block is mapped: d0 = the pool base 0x40a955e0.

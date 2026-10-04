@@ -1,4 +1,4 @@
-| RECORDER HOLD, the crossfade copy's guard -- hooked at 0x400085d8 (sub.l
+| RECORDER LOOP FIX hold, the crossfade copy's guard -- hooked at 0x400085d8 (sub.l
 | d0,d5 / cmp.l d2,d5 / bge.s), where the crossfade copy caps a voice reading
 | the buffer its own recorder is writing at END - the further of its two read
 | positions (+0x48, +0x4c). At END the cap is 0 and stock stops the voice

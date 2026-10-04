@@ -1293,7 +1293,7 @@ def main():
         print(f"  arena: base 0x{_abase:08x}, {_acount:,} pages "
               f"({_acount * arena.PAGE // 1048576} MB) left for samples and recorders "
               f"(stock {arena.PAGES:,}); {len(arena.pokes(_reservations))} words rewritten")
-    # A cave that compares against the arena base (RECORDER HOLD: the fetch
+    # A cave that compares against the arena base (RECORDER LOOP FIX's hold caves: the fetch
     # returns the base for an unmapped page) carries the stock literal; it
     # follows the base like the firmware's own sites. The declared count is
     # checked in every build, moved or not.

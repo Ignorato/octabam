@@ -44,6 +44,7 @@ Modules
 - CF METER: ColdFire frame-interrupt and idle time read out as audio on T8 (probe, 27 Sep).
 - Removed: WarpFold, Ripple, Rungs, Streamz, BodeShift, NIMBUS, HELLO WORLD, HELLO DRAM; their FX2 ids return to stock's entries (27 Sep).
 - Octatrick 2.9: `timhastie/octatrick-modules` `v9.1` → `v2.9` (`525f4b1`): MIDI IN, chord recording with inversions, LEG modes, sample-track glide, step transpose, SCALE / GLIDE in battery RAM (2.8); ROOT, the quantizer as a DRAM unit (ROM 3,319 → 243 B), FINE 0c on a new synth track, no limiter, the engine owns the AMP envelope, `po_retrig`, the index ramp (2.9). TUNER added: UP + TEMPO, one DRAM unit, three detours (Tim Hastie, 29 Sep, #526).
+- RECORDER LOOP FIX: FLEX SEEK BIND, FLEX SEEK BIND CTR, RECORDER SPACING and RECORDER HOLD merged into one module, every cave's bytes and placement unchanged (`mods` and `sos-capture` images byte-identical) (4 Oct).
 - RECORDER HOLD: two caves on the copies' cap at END, the zero after a second transport start or a recorder reallocation (4 Oct, #564; on Bryan T's unit, sos-capture BUILD=95).
 - Not in any flashed remix: RLEN PLEN (26 Sep, port-gated); MIDI SCENES re-pinned to 1.40MIDISC8.2 (25 Sep).
 
