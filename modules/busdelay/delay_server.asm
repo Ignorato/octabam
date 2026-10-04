@@ -1687,10 +1687,8 @@ gmode:
         sub     x0,a                    ; W - dist
         and     #>$7fff,a                                                  ; @B
         and     #>$3fff,a                                                  ; @DEV
-        move    a1,x0
-        move    x0,a
-        move    b,y0                    ; frac (s is consumed)
-        move    a,r5
+        move    a1,r5                   ; a1 straight in: no limiter, no A2 to clean
+        move    b,y0                    ; frac (s is consumed); spaces the r5 write
         move    y:(r5+n5),b             ; t0 (the line base in n5)
         add     #>$1,a                  ; one sample NEWER
         and     #>$7fff,a                                                  ; @B
@@ -1712,9 +1710,7 @@ gmode:
         add     x0,a
         move    x:(r7-$11),x0
         and     x0,a
-        move    a1,x0
-        move    x0,a
-        move    a,r6
+        move    a1,r6                   ; a1 straight in (the loop top reads r6 back)
 gvlz:
 ; ---- wet L = sum of four * makeup --------------------------------------
 ; four windows at quarter offsets sum to exactly 2, so the makeup coeff's
@@ -1795,10 +1791,8 @@ gvlz:
         sub     x0,a                    ; W - dist
         and     #>$7fff,a                                                  ; @B
         and     #>$3fff,a                                                  ; @DEV
-        move    a1,x0
-        move    x0,a
-        move    b,y0                    ; frac (s is consumed)
-        move    a,r5
+        move    a1,r5                   ; a1 straight in: no limiter, no A2 to clean
+        move    b,y0                    ; frac (s is consumed); spaces the r5 write
         move    y:(r5+n5),b             ; t0 (the line base in n5)
         add     #>$1,a                  ; one sample NEWER
         and     #>$7fff,a                                                  ; @B
@@ -1820,9 +1814,7 @@ gvlz:
         add     x0,a
         move    x:(r7-$11),x0
         and     x0,a
-        move    a1,x0
-        move    x0,a
-        move    a,r6
+        move    a1,r6                   ; a1 straight in (the loop top reads r6 back)
 gvrz:
 ; ---- wet R -------------------------------------------------------------
         move    n6,a

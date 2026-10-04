@@ -76,6 +76,12 @@ back as SEM at whatever SHPE it held. Once per project, before play:
   the loop reads. Before it did, filter B's frozen HP poles held a stale
   value and put up to a full-scale DC on a station's output, which surfaced
   on hardware as the master compressor collapsing the right channel.
+- 5 Oct 2026, the cycles pass (bit-identical, `make verify-ident
+  MOD=spectrum` 11/11): ISO 264 → 252, LADR 216 → 208. `fs_ccore` loads
+  each stage's coefficient and its x with one X:R move (`move
+  x:(r1)+,x0  a,y1`, the multiply's operands swapped, `mpy x0,y1` still
+  the signed order); `fs_lcore`'s stages ride the state read on the v/2
+  transfer (`tfr x1,a  x:(r5),y0`).
 - Cost (pricer words/sample per mode, SVF / VOWL / LADR / ISO): 126 / 216
   / 238 / 292 on 23 Sep 2026 after SHPE and the makeup → 107 / 170 / 198 /
   250 after the loop pass the same day (one `do n7` per MODE, dispatched
