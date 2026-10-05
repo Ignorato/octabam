@@ -157,7 +157,12 @@ code is a new unit listed LAST in the recipe's `sources`, in a
   returns −51, the apply runs once (the background load's second −51
   finds the bytes agreeing and skips it), activation clears the word, no
   fatal, a pattern paste completes; a clean project enters the fixup with
-  d0 = 1 and skips it. Raw runtime 154,878 B (hers 154,766; her code
+  d0 = 1 and skips it. On the unit (image A4, 5 Oct, the rejected file
+  as `PROJECT STRAND`): PARSE ERROR on load, then PLAY halts at
+  `gk_stock_audio_pattern_primary_begin_report_fatal` (no lease for the
+  rejected bank's part; reproduced under the port). With the rejected
+  file deleted (stock −12, bank initialised empty) load, play and paste
+  are clean under the port. Raw runtime 154,878 B (hers 154,766; her code
   budget ends 770 B above it). A project name with no directory on the
   card (stock −12 on every file) still strands: her work-pair create
   returns −10 with nowhere to write (`docs/contributing/FAILURE_MODES.md`).
