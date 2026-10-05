@@ -45,7 +45,7 @@ MODULE = Module(
               doc="track 8 only: MEM KB read after the burn, a longword per 16-byte line, timed into slot 7"),
         Param(b"DBRN", 0, active=True, formatter=Formatter.PLAIN,
               doc="24 x DBRN DSP cycles per sample burnt before the sample loop; slots 8/9 fall by it"),
-        _BLANK,  # FILTER's slot 3 is bipolar and the donor's formatter stays on a module with no stepped slot
+        _BLANK,
         Param(b"SPAN", 0, active=True, formatter=Formatter.PLAIN,
               doc="slot 7: 0 BURN or the walk, 1 HC polls, 2 eDMA handler time inside the ISR, 3 all of it"),
         Param(b"SRC", 0, active=True, formatter=Formatter.PLAIN,

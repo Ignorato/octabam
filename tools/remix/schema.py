@@ -1410,6 +1410,15 @@ class Module:
                      if p.formatter in (Formatter.STEPPED, Formatter.WIDE_STEPPED))
 
     @property
+    def plain_slots(self) -> tuple[int, ...]:
+        """Knobs drawn as the stock numeric dial: the build zeroes both
+        formatter words whatever the donor's slot drew. Until 5 Oct 2026 the
+        zeroing ran only for a module with a stepped slot; CF METER's SRC on
+        FILTER's bipolar slot 3 drew as a balance dial."""
+        return tuple(i for i, p in enumerate(self.params)
+                     if p.formatter is Formatter.PLAIN)
+
+    @property
     def wide_stepped_slots(self) -> tuple[int, ...]:
         """Labelled selects whose values use the full 128-position dial arc.
 

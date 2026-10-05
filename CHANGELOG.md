@@ -59,6 +59,7 @@ Gates and tools
 - Tape Echo probe: glibc `random()` vectors on every host, oracle built `-fwrapv` (27 Sep).
 - `tools/hw/bcr2000.py` (28 Sep), `tools/hw/usb_probe.py` (Bryan T, 28 Sep), `tools/harness/usb_align.py` (28 Sep), `tools/ghidra` (roblg, #483, 28 Sep).
 - `verify_docs` checks every relative Markdown link; the remixer TUI draws again (30 Sep).
+- `Formatter.PLAIN` zeroes a clone's formatter words on any module, not only one with a stepped slot (5 Oct); refhash 24/24 bit-identical, no shipping module changed.
 
 Docs
 - `docs/guide/` (BUILDING, REMIXER) and `docs/contributing/` (MODULES, PLACEMENT, TESTING, TOOLING, FAILURE_MODES cut to Seen / Cause / Fix / Check); tool docs beside the tools (30 Sep).
