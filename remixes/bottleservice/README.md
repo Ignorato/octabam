@@ -92,6 +92,29 @@ Turning a MODE knob re-defaults the knobs around it to that mode's
 starting values, on the panel and over MIDI
 ([`mode-defaults`](../../modules/mode-defaults/README.md)).
 
+### What the effects are based on
+
+| effect | mode | based on | licence |
+|---|---|---|---|
+| SPECTRUM | SEM | audiojs/filter `oberheim` (Zavalishin's zero-delay SVF) | MIT |
+| SPECTRUM | LADR | audiojs/filter `moogLadder` | MIT |
+| SPECTRUM | VOWL | Peterson & Barney (1952) formant measurements | paper |
+| SPECTRUM | ISO | Airwindows Capacitor2 | MIT |
+| CHARACTER | TAPE · TUBE · INFL | JClones TapeHead · DaTube · OInflator (JSFX) | MIT |
+| CHARACTER | COMP | JClones AC1 (JSFX) | MIT |
+| MODULATION | JUNO | jpcima `HeraChorus.dsp` + pendragon-andyh's Juno-60 measurements | ISC |
+| MODULATION | DIM | Roland SDD-320 service notes and published measurements | laws |
+| MODULATION | FLNG | Dattorro, *Effect Design Part 2* (JAES 1997), Table 6 | paper |
+| MODULATION | PHSR | ChowDSP ChowPhaser (Schulte Compact Phasing A) | BSD-3-Clause |
+| MODULATION | COMB | Mutable Instruments Rings `string.h` / `string.cc` | MIT |
+| REVERB | all | written here; the input diffuser's delay lengths are at Dattorro's scale | — |
+| DELAY | GRAIN | written here; voiced against Efx Fragments' "1 Bar Glimmers" by ear | — |
+| SEND | — | written here | — |
+| stock DELAY (T8) | — | Elektron, from your own 1.40C | — |
+
+Each module's README has what was changed from its source;
+[THIRD_PARTY.md](../../THIRD_PARTY.md) has the copyright holders.
+
 ## Scenes, tempo and MIDI
 
 - **Scene locks on page 2.** Hold a scene and turn a page-2 knob on FX1 or
