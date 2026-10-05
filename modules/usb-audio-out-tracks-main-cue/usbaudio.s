@@ -324,6 +324,48 @@ audio_getiface_shim:
     pea     GETIFACE_STOCKP
     jmp     GETIFACE_REJOIN
 
+| ---- bus reset and session end (installed at 0x4001e91c and 0x4001e952) -------
+| The stock USBSTS.URI handler (jsr 0x4001d6b8: flush, dTD tokens cleared,
+| ENDPTCTRL1 cleared) and the OTGSC.BSVIS session-end path (USBCMD.RS and
+| USBINTR cleared) write neither this unit's alt bytes nor ENDPTCTRL3. USB
+| 2.0 9.1.1.5 puts every interface back to alternate setting 0 on a reset;
+| without these two shims a cable pull or a host crash with the stream open
+| left usbaudio_alt (and USB AUDIO IN's in_alt) at 1: the producer kept
+| running, the kick re-primed EP3 IN before the device was configured, the
+| next SET_INTERFACE took .Lep3_same, and GET_INTERFACE answered 1.
+| Both shims record the alt 0 request, the way audio_setiface_shim does for
+| alt 0, and the frame ISR tears EP3 down. The ISR prologue has saved
+| d0-d2/a0-a4 (the epilogue at 0x4001e98e restores them); a2 is live in the
+| session-end path (0x4001e93a, used at 0x4001e974) and is not touched.
+|
+| Reset: displaced jsr %pc@(0x4001d6b8); moveq #64,%d0 (6 bytes); the next
+| instruction is 0x4001e922.
+    .global audio_reset_shim
+audio_reset_shim:
+    jsr     0x4001d6b8              | displaced
+    bsr     audio_alt0_request
+    moveq   #64,%d0                 | displaced: USBSTS.URI, written back at 0x4001e922
+    jmp     0x4001e922
+
+| Session end: displaced movel 0xfc0b0140,%d0 (USBCMD, 6 bytes); the next
+| instruction is 0x4001e958. The request is recorded before the stock code
+| clears USBCMD.RS.
+    .global audio_sessend_shim
+audio_sessend_shim:
+    bsr     audio_alt0_request
+    movel   0xfc0b0140,%d0          | displaced
+    jmp     0x4001e958
+
+| Alt 0 requested on every interface this unit and USB AUDIO IN own. The
+| request bytes only: the frame ISR flushes, disables EP3 and clears the
+| dTDs. Clobbers nothing.
+audio_alt0_request:
+    clrb    usbaudio_alt
+.if USB_IN
+    clrb    in_alt
+.endif
+    rts
+
 | ---- EP0 buffer-page fix (installed at 0x4001d4b2 inside usb_ep0_send) -------
 | usb_ep0_send sets only the dTD's buffer PAGE 0 (0x4ec95028), never PAGE 1.
 | A descriptor whose buffer crosses a 4 KB page then transmits only the bytes
