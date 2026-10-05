@@ -615,7 +615,11 @@ image with although no claim overlaps.
 
 **`Runtime`** is the third form: a recipe (`firmware.json`) the build
 compiles, packs, identity-checks and appends as its own payload of the
-loader (Octakit's shape). One per image.
+loader (Octakit's shape). One per image. `Runtime.patches` are unified
+diffs applied to a copy of the author's sources after her own build has
+reproduced her pins; the patched build has pins of its own
+(`Runtime.patched`) and the same refuse-on-drift rule
+(`modules/octakit/README.md` "Patches on her runtime").
 
 ### The oracle
 

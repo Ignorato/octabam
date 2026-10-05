@@ -92,6 +92,12 @@ MODULE = Module(
         report_note=" -- Em's Octakit (emuyia/ems-octakit), submodule "
                     "modules/octakit/upstream",
         pinned_returns=_pinned_returns(),
+        patches=("modules/octakit/patches/0001-banks-load-error-applies-current-bank.patch",),
+        patched={
+            "raw": {"size": 154878, "sha256": "1d08ca38deda63c164e78107ca03efe71914b542136fd1f627753ff266b5382a"},
+            "packed": {"size": 75688, "sha256": "9bf4b944e2b8de4c40bf8d29aeff6409b30c85b63d181f4327644cdb11da7c86"},
+            "append": {"size": 75852, "sha256": "9d3b0015db79546ba89c173f9b2f3daf25bb7f883a1c5b7b50f8c94171ac7e7a"},
+        },
     ),
     # Her runtime, Kit store and backup: the top 528 pages of the audio page
     # arena (0x45d0dde0..0x46025de0). Her four recipe writes shrink the arena

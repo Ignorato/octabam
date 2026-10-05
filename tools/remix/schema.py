@@ -1037,6 +1037,14 @@ class Runtime:
     # -- OKMS1's Part Reload, 14 Sep 2026. Derived from the sources
     # (Octakit: abi.inc's *_RETURN equates), never typed.
     pinned_returns: tuple[int, ...] = ()
+    # Unified diffs (repo-relative, `patch -p1` against `sources`) the build
+    # applies to a COPY of the author's sources before compiling, and the
+    # identities (raw, packed, append: size + sha256) the patched build must
+    # reproduce -- the same refuse-on-drift rule as the recipe's own pins.
+    # The author's own sources are still built first and proved against her
+    # pins, so a patch is a visible, pinned delta on a proven base.
+    patches: tuple[str, ...] = ()
+    patched: dict | None = None
 
 
 @dataclass(frozen=True)

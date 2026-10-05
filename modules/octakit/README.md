@@ -122,6 +122,44 @@ Measured under the port (`bottleservice`, the `make accept` stress project,
   `gk_workspace_mark_dirty_pending` → `gk_workspace_commit_update` →
   `gk_descriptor_release`. All six are `.global` in her runtime.
 
+## Patches on her runtime
+
+`manifest.py` lists `Runtime.patches`: unified diffs the build applies to
+a COPY of her sources after her own build has reproduced her pins, with
+the patched build's own pins (`Runtime.patched`: raw, packed, append) as
+the refuse-on-drift rule. Her recipe writes that carry the runtime's
+length, its x33 hashes or a linker-derived address (the backup's start)
+carry the patched values; the build substitutes them over each guard's
+region because her writes are sparse and a literal can straddle two of
+them (4 Oct 2026: `4e00|01 52` across a kept stock byte). A patch must
+not move a stock slice: the build checks every `.incbin`'d routine at
+its recorded offset, so a site edit is a same-length replacement and new
+code is a new unit listed LAST in the recipe's `sources`, in a
+`.runtime.*` section, after `persistence.c`.
+
+- `patches/0001-banks-load-error-applies-current-bank.patch` (5 Oct 2026,
+  unflashed): a stock bank load that returns an error (a bank file whose
+  checksum fails, −51; a missing one, −12) returned from
+  `gk_stock_banks_load_work` before the post step, so the lifecycle word
+  stayed QUIESCED for the session: every paste halted at
+  `gk_current_pattern_part_set_fatal`, every Part apply was skipped. Stock's
+  load loop applies the current bank (SRAM working copy `0x4000faf0`,
+  pattern request `0x400a1030`, engine part load `0x40009094`,
+  `0x400907b8..ea`) only when its file parsed, so after an error the
+  engine's bank/part bytes (`0x80001828/9`) are the previous project's and
+  her `gk_ui_transition_prepare_entry_release` returns CORRUPT at the
+  engine-bank compare. `octabam_banks_load_fixup.S` runs that apply when
+  the engine's bytes disagree with the current bank/part (the engine part
+  load through her trampoline: her wrapper accepts four stock callers in
+  the quiesced state), then the post step and the activation run on the
+  stock result, which is still what the caller sees. Measured under the
+  port with Sam's rejected `bank01.work` staged as the current bank: stock
+  returns −51, the apply runs once (the background load's second −51
+  finds the bytes agreeing and skips it), activation clears the word, no
+  fatal, a pattern paste completes; a clean project enters the fixup with
+  d0 = 1 and skips it. Raw runtime 154,878 B (hers 154,766; her code
+  budget ends 770 B above it).
+
 ## Updating
 
 Bump the submodule and rebuild; the identity checks either pass or name the
