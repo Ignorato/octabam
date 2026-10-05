@@ -31,6 +31,15 @@ pattern content beyond pattern 1 playing.
   trackbtn1 the same sweep across a single PTN+TRIG 2 switch.
   presses   the chain, 250 track presses at 180 ms.
   cc        a CC every frame for 3,000 frames with a program change.
+  extplay   the trackbtn1 switch with the transport on MIDI start and a
+            120 BPM MIDI clock (the Rytm as master).
+  extnoclk  the same with MIDI start and no clock: the switch does not
+            land, so extplay's transport is the clock's.
+  a5        under that clock: STOP, PTN+TRIG, PLAY, three times over the
+            chain's patterns: each plays its Kit, the last one playing.
+  unattended  the chain on that clock for 60 s with a CC every 250 ms
+            across tracks 1-8 (CC 7, 46, 47, 55: a BCR2000): each slot is
+            its Kit outside the levels the CCs wrote (+0x10..+0x21).
   load      PART, UP UP, YES (MKII): the current pattern plays the Kit
             two rows up, its slot holds it, UNDO KIT then brings the old
             one back.
@@ -127,7 +136,7 @@ class Script:
     """A --live-script at emulated milliseconds."""
 
     def __init__(self):
-        self.t, self.lines = 1500, []
+        self.t, self.lines, self.bg = 1500, [], []
 
     def send(self, x, gap=60):
         self.lines.append(f"{self.t:.0f} {x}"); self.t += gap
@@ -151,8 +160,17 @@ class Script:
     def wait(self, ms):
         self.send("enc 6 0", ms)
 
+    def clock(self, start, end, bpm=120):
+        """MIDI clock (F8, 24 per beat) from start to end ms, beside the
+        keys: an external master keeps time while the panel is used."""
+        t, step = start, 60000 / bpm / 24
+        while t < end:
+            self.bg.append((t, f"{t:.0f} midi f8")); t += step
+
     def text(self):
-        return "\n".join(self.lines + [f"{self.t + 300:.0f} quit"]) + "\n"
+        fg = [(float(l.split(" ", 1)[0]), l) for l in self.lines]
+        lines = [l for _t, l in sorted(fg + self.bg, key=lambda x: x[0])]
+        return "\n".join(lines + [f"{self.t + 300:.0f} quit"]) + "\n"
 
 
 def v3_reference(files):
@@ -304,6 +322,29 @@ def main():
     s = Script(); chain(s, sweep); add("trackbtn", s, cpokes)
     s = Script(); s.tap("no"); s.tap("play", 2000); s.hold("ptn", 1); sweep(s)
     add("trackbtn1", s, [(pa(1), 0), (pb(1), 0)])
+
+    # An external master (the Rytm): MIDI start, 120 BPM clock, stop.
+    def extstart(s, ms):
+        s.send("midi fa", 0); s.clock(s.t, s.t + ms); s.wait(ms)
+    s = Script(); s.tap("no", 1000); t0 = s.t; s.send("midi fa", 2000); s.hold("ptn", 1); s.wait(17000)
+    s.clock(t0, s.t); add("extplay", s, [(pa(1), 0), (pb(1), 0)])
+    s = Script(); s.tap("no", 1000); s.send("midi fa", 2000); s.hold("ptn", 1); s.wait(17000)
+    add("extnoclk", s, [(pa(1), 0), (pb(1), 0)])
+
+    def a5(s):                               # STOP, switch, PLAY under the master, x3
+        s.tap("no", 1000); extstart(s, 4000)
+        for p in (1, 2, 3):
+            s.send("midi fc", 300); s.hold("ptn", p, gap=200); extstart(s, 4000 if p < 3 else 8000)
+    s = Script(); a5(s); add("a5", s, cpokes)
+
+    def unattended(s):                       # the chain on the master's clock, CCs from a BCR2000
+        s.tap("no", 1000); t0 = s.t; s.send("midi fa", 2000)
+        s.down("ptn"); s.down(1, 120); s.tap(2, 120); s.tap(3, 120); s.up(1, 120); s.up("ptn", 300)
+        for i in range(240):
+            ch, cc = i % 8, (7, 46, 47, 55)[i // 8 % 4]
+            s.send(f"midi {0xb0 + ch:02x} {cc:02x} {(i * 13) % 128:02x}", 250)
+        s.clock(t0, s.t)
+    s = Script(); unattended(s); add("unattended", s, cpokes)
 
     def presses(s):
         for i in range(250):
@@ -461,7 +502,7 @@ def main():
         trk = (OUT / f"{tag}_trk.bin").read_bytes()
         return s, slot(b, s) == kit(im, k), trk
 
-    for tag in ("free", "repoint", "stopped", "progchg", "trackbtn1"):
+    for tag in ("free", "repoint", "stopped", "progchg", "trackbtn1", "extplay"):
         if not exists(tag):
             continue
         s = clean(tag)
@@ -473,18 +514,37 @@ def main():
               ok and eng[0] == BANK and eng[1] == sl and engine <= {sl})
         if tag == "free":
             check("free: the pattern's own slot (2), nothing repointed", sl == 1 and s["REPOINT"] == 0)
-        if tag in ("repoint", "stopped", "progchg", "trackbtn1"):
+        if tag in ("repoint", "stopped", "progchg", "trackbtn1", "extplay"):
             check(f"{tag}: the Part byte repointed off the playing slot ({sl + 1})", sl != 0 or tag == "stopped")
 
-    for tag in ("chain", "trackbtn", "presses"):
+    for tag in ("chain", "trackbtn", "presses", "unattended"):
         if not exists(tag):
             continue
         clean(tag)
         b, im = b3_(tag), img(tag)
         sl = [b[p * PSTRIDE + PBYTE] for p in (1, 2, 3)]
-        held = [slot(b, x) == kit(im, k) for x, k in zip(sl, (0, 1, 4))]
+        # unattended: the CCs edit the playing Parts' levels (+0x10..+0x21,
+        # measured); AUTOSAVE is off, so the Kits keep theirs
+        cut = (lambda x: x[:0x10] + x[0x22:]) if tag == "unattended" else (lambda x: x)
+        held = [cut(slot(b, x)) == cut(kit(im, k)) for x, k in zip(sl, (0, 1, 4))]
         check(f"{tag}: patterns 2-4 on slots {[x + 1 for x in sl]}, each holding its Kit ({held})",
               len(set(sl)) == 3 and all(held))
+
+    if exists("extnoclk"):
+        clean("extnoclk")
+        eng = (OUT / "extnoclk_eng.bin").read_bytes()
+        check(f"extnoclk: MIDI start without the clock, the switch does not land (engine {eng[0] + 1}:{eng[1] + 1}): "
+              "extplay's switch is the clock's", eng[0] == BANK and eng[1] == 0)
+
+    if exists("a5"):
+        clean("a5")
+        b, im = b3_("a5"), img("a5")
+        sl = [b[p * PSTRIDE + PBYTE] for p in (1, 2, 3)]
+        held = [slot(b, x) == kit(im, k) for x, k in zip(sl, (0, 1, 4))]
+        eng = (OUT / "a5_eng.bin").read_bytes()
+        check(f"a5: patterns 2-4 on slots {[x + 1 for x in sl]}, each holding its Kit ({held}); "
+              f"the engine on pattern 4's (engine {eng[0] + 1}:{eng[1] + 1})",
+              all(held) and eng[0] == BANK and eng[1] == sl[2])
 
     if exists("cc"):
         clean("cc")
@@ -660,7 +720,7 @@ def main():
         check("import: kits.work written, her files left in place",
               any(k.lower().endswith("/import/kits.work") for k in files)
               and all(any(k.endswith(f"/IMPORT/kits3{p}.work") for k in files) for p in "ab"))
-    else:
+    elif not only or "import" in only:
         print("  [SKIP] import: no kits3a/b.work at --octakit-project")
 
     # ---- a rejected bank file, a missing project --------------------------------
@@ -673,7 +733,7 @@ def main():
         run([EMU, "--image", image, "--card", c, "--set", "OCTABAM", "--project", "STRAND", "--load-ms", "90000",
              "--dsp", "--live-script", OUT / "strand.script", "--mem-dump", dumps("strand")], OUT / "strand.txt")
         clean("strand")
-    else:
+    elif not only or "strand" in only:
         print("  [SKIP] strand: no project at --strand-project")
     if not only or "noproj" in only:
         run([EMU, "--image", image, "--card", card, "--set", "OCTABAM", "--project", "NOPROJ", "--load-ms", "90000",

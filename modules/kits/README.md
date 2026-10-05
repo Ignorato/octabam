@@ -109,6 +109,12 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
   switch (ems-octakit #5), the same sweep across a single PTN+TRIG
   switch, 250 track presses at 180 ms over the chain, and
   a CC 7 every frame for 3,000 frames: no halt, every counter zero.
+- ✅ The transport on MIDI start and a 120 BPM MIDI clock (the Rytm as
+  master): a PTN+TRIG switch lands on the clock (with MIDI start and no
+  clock it does not: the clock is what moves the sequencer); STOP,
+  PTN+TRIG, PLAY three times over the chain's patterns, each playing its
+  Kit; the chain for 60 s on the clock with a CC every 250 ms across
+  tracks 1-8 (CC 7, 46, 47, 55). No halt, every counter zero.
 - ✅ LOAD KIT, UNDO KIT, SAVE KIT with the name editor, quick save, the list
   copy / paste / clear and their undos, the AUTOSAVE and KEEP LEVELS rows
   and behaviours, a pattern copy and paste carrying its Kit (and the undo
