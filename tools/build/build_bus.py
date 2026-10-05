@@ -419,6 +419,20 @@ if SPEC:
                  f"those replace a server with a probe (BURN=1 is allowed: "
                  f"with SPEC it is the rig burn on SEND, see RIG_BURN)")
 
+if not SPEC:
+    # Without SPEC every carried module is placed on both payloads, so the
+    # ledger's per-payload exemption for owns_fx2_buffers does not hold. The
+    # two servers overlap there in the pinned non-SPEC images (plain,
+    # render-delay, xbus-only); any other owner is refused by name.
+    _fx2_own = [k for k in CARRIED if _MODS[k].claims is not None
+                and _MODS[k].claims.owns_fx2_buffers]
+    _fx2_other = [k for k in _fx2_own if k not in ("REVERB SERVER", "DELAY SERVER")]
+    if _fx2_other and len(_fx2_own) > 1:
+        sys.exit(f"{', '.join(_fx2_other)} owns the FX2 instance buffers beside "
+                 f"{', '.join(k for k in _fx2_own if k not in _fx2_other)}: "
+                 f"without SPEC=1 every module is placed on both payloads, so "
+                 f"their payloads={{...}} declarations do not separate them")
+
 # ---- DSP code placement (task 13) ------------------------------------------
            # DLSRC= swaps the delay engine for an alternate source file --
            # the same mechanism as RVSRC below, for the same reason: the
@@ -2689,14 +2703,20 @@ hostquit:
         # keeps the reverb, payload B the delay; the other is not placed at all
         # and its id is aliased to the fallback after placement (it needs its
         # which only exists once SEND has been assembled at this cursor).
-        absent = None
+        absent = []
         if SPEC:
-            absent = "DELAY SERVER" if tag == "A" else "REVERB SERVER"
-            plan = tuple(p for p in plan if p[0] != absent)
-            # A remix that never carried that module has nothing to specialize
-            # away, and its id is already handled by the omitted-id alias.
-            if absent not in NEW_IDS:
-                absent = None
+            # A chooser module is placed on the payloads its DspSection
+            # declares (BusVerb A, BusDelay B). Its id on the other payload
+            # is aliased after placement.
+            for _k in CARRIED:
+                _d = _MODS[_k].dsp
+                _pl = _d.payloads if _d is not None else frozenset({"A", "B"})
+                if not _pl & {"A", "B"}:
+                    sys.exit(f"{_k}: DspSection.payloads {sorted(_pl)} names "
+                             f"neither payload A nor B")
+                if tag not in _pl and _k in NEW_IDS:
+                    absent.append(_k)
+            plan = tuple(p for p in plan if p[0] not in absent)
         if NO_FB:
             # The DSP half of the NONE fallback, and it needs no new code:
             # the per-payload null stub is already in the image and is what
@@ -3106,16 +3126,16 @@ hostquit:
             wrw_p(pp["xtab"] + _m.menu.fx2_id * 3, fb_init)
             wrw_p(pp["xtab"] + (32 + _m.menu.fx2_id) * 3, fb_proc)
 
-        if absent is not None:
+        for _abs in absent:
             # The absent engine's id must still dispatch to something on this
             # core -- the chooser list is shared across all eight tracks and
             # nothing stops it being selected here. Point it at the SEND client
             # already placed above: same fail-safe id 0 uses, and a track that
             # selects the "wrong" server becomes a send to the right one.
-            wrw_p(pp["xtab"] + NEW_IDS[absent] * 3, fb_init)
-            wrw_p(pp["xtab"] + (32 + NEW_IDS[absent]) * 3, fb_proc)
-            print(f"  {absent:13} NOT PLACED on this core -- id "
-                  f"0x{NEW_IDS[absent]:02x} aliased to SEND P:0x{fb_init:05x} "
+            wrw_p(pp["xtab"] + NEW_IDS[_abs] * 3, fb_init)
+            wrw_p(pp["xtab"] + (32 + NEW_IDS[_abs]) * 3, fb_proc)
+            print(f"  {_abs:13} NOT PLACED on this core -- id "
+                  f"0x{NEW_IDS[_abs]:02x} aliased to SEND P:0x{fb_init:05x} "
                   f"(selecting it here makes the track a send, not silence)")
 
         if probe == "silence":

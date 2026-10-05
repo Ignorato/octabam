@@ -1033,6 +1033,68 @@ def main():
         if _ok:
             print("  [PASS] 'XHARVEST probe' puts both table blocks in SPRING "
                   "REV's X data on both payloads, first-fit, words in the image")
+    # ---- a chooser module's declared payloads under SPEC ----------------
+    # A module declaring payloads={"B"} and owns_fx2_buffers beside BusVerb
+    # passes the ledger (disjoint payloads) and must be placed on B only.
+    _pf_dir = ROOT / "modules/pbfixture"
+    _pf_remix = ROOT / "remixes/_selftest_pb.py"
+    try:
+        _pf_dir.mkdir(exist_ok=True)
+        (_pf_dir / "fixture.asm").write_text("init:\n        rts\nproc:\n        rts\n")
+        (_pf_dir / "manifest.py").write_text(
+            "from remix.schema import Claims, DspSection, Kind, MenuEntry, Module, Param, YBase\n"
+            "MODULE = Module(name='pbfixture', key='PBFIXTURE', kind=Kind.DSP_EFFECT,\n"
+            "    doc='fixture', menu=MenuEntry(fx2_id=0x1e, donor_desc=0x400d58b8,\n"
+            "    abbr=b'PBF', fullname=b'PbFixture'),\n"
+            "    params=tuple([Param(b'A', 0, active=True)] + [Param()] * 11),\n"
+            "    claims=Claims(owns_fx2_buffers=True),\n"
+            "    dsp=DspSection(asm='modules/pbfixture/fixture.asm', priority=40,\n"
+            "        payloads=frozenset({'B'}), ybase=YBase.NEVER))\n")
+        _pf_remix.write_text(
+            "from remix.schema import Remix\n"
+            "REMIX = Remix(name='_selftest_pb', doc='scratch', fallback='SEND',\n"
+            "    modules=('REVERB SERVER', 'SEND', 'PBFIXTURE'))\n")
+        r = subprocess.run([sys.executable, "tools/build/build_bus.py"],
+                           cwd=ROOT, capture_output=True, text=True,
+                           env={**os.environ, "REMIX": "_selftest_pb",
+                                "XBUS": "1", "SPEC": "1"})
+        _pn = subprocess.run([sys.executable, "tools/build/build_bus.py"],
+                             cwd=ROOT, capture_output=True, text=True,
+                             env={**os.environ, "REMIX": "_selftest_pb",
+                                  "XBUS": "1"})
+    finally:
+        _pf_remix.unlink(missing_ok=True)
+        shutil.rmtree(_pf_dir, ignore_errors=True)
+        for junk in (ROOT / "remixes/__pycache__").glob("_selftest_pb*"):
+            junk.unlink(missing_ok=True)
+    if _pn.returncode and "PBFIXTURE owns the FX2 instance buffers" in (_pn.stdout + _pn.stderr):
+        print("  [PASS] 'payload probe': without SPEC the same remix is refused by name")
+    else:
+        bad += 1
+        print(f"  [FAIL] 'payload probe': non-SPEC build rc={_pn.returncode}, not refused by name")
+    if r.returncode:
+        bad += 1
+        print(f"  [FAIL] 'payload probe' does not build:\n"
+              f"{r.stdout[-600:]}{r.stderr[-400:]}")
+    else:
+        _pl, _placed, _alias = None, {}, {}
+        for line in r.stdout.splitlines():
+            m = re.match(r"-- payload (\w+) --", line.strip())
+            if m:
+                _pl = m.group(1)
+            if (_pl and "NOT PLACED" not in line
+                    and re.match(r"\s+PBFIXTURE\s.*\bid 0x1e\b", line)):
+                _placed.setdefault(_pl, []).append(line)
+            if _pl and re.match(r"\s+PBFIXTURE\s+NOT PLACED", line):
+                _alias[_pl] = line
+        if sorted(_placed) == ["B"] and sorted(_alias) == ["A"]:
+            print("  [PASS] 'payload probe': a payloads={'B'} module with "
+                  "owns_fx2_buffers is placed on B only under SPEC and its id "
+                  "is aliased on A")
+        else:
+            bad += 1
+            print(f"  [FAIL] 'payload probe': placed on {sorted(_placed)}, "
+                  f"aliased on {sorted(_alias)}; expected B / A")
     try:
         DspSection(asm="x.asm", priority=0, ptable2=(1,))
         bad += 1
