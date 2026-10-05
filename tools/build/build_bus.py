@@ -40,6 +40,7 @@ import label_fmt  # noqa: E402
 import mode_names  # noqa: E402
 import wide_dial  # noqa: E402
 from remix import dsp_ranges, ledger  # noqa: E402
+from remix import ybase as ybase_lit  # noqa: E402
 
 OUT = pathlib.Path("out/mainos_bus.bin")
 DIS = pathlib.Path("vendor/dsp56300/build/source/dsp_host/dsp_asm")
@@ -2197,8 +2198,9 @@ mkgo:""",
     # $30000 as its payload discriminator. The gate is emitted per payload now
     # and carries no literal, so only the Y base remains.
     _want = (1 if DEV or SPEC else 0) if os.environ.get("XBUS") == "1" else 1
-    if delay_src is not None and delay_src.count("$30000") != _want:
+    if delay_src is not None and ybase_lit.count(delay_src) != _want:
         sys.exit(f"expected exactly {_want} $30000 literal(s) in the DELAY source")
+    _delay_lit_want = _want
 
     dev_delay = None            # (words) for the .mem dump append, DEV only
     for tag, va, ln in PAYLOADS:
@@ -2375,7 +2377,7 @@ mkgo:""",
         # three get the substitution rather than DELAY SERVER alone.
         # Under XBUS the SENDER and SERVER carry the payload discriminator, so
         # they get the substitution; the delay slot is a bare stub.
-        _sub = lambda s: s.replace("$30000", f"${pp['ybase']:x}")
+        _sub = lambda s: ybase_lit.substitute(s, pp['ybase'])
         _x = os.environ.get("XBUS") == "1"
 
         # ---- ROTLATCH: resolve this block's write offset, per payload ------
@@ -2392,9 +2394,16 @@ mkgo:""",
                        "DELAY SERVER": "bus_notfirst"}
         _hkb = os.environ.get("HKB") == "1"
 
+        def _marker_once(src, name, marker):
+            if src.count(marker) != 1:
+                sys.exit(f"{name}: the {marker.strip()} marker must appear exactly "
+                         f"once (found {src.count(marker)}; a comment that spells "
+                         f"it counts)")
+
         def _gate(src, name):
             if "; XBUS_GATE" not in src:
                 return src
+            _marker_once(src, name, "; XBUS_GATE")
             # DEV places the delay in payload A but it must behave as payload B
             # -- it is not the housekeeper there either; SEND's self-healing
             # election covers that, exactly as on hardware.
@@ -2447,10 +2456,9 @@ mkgo:""",
             """Seed the client's block label at init. PAYLOAD B ONLY."""
             if "; ROTINIT" not in src:
                 return src
+            _marker_once(src, name, "; ROTINIT")
             as_b = (tag == "B") or (DEV and name == "DELAY SERVER")
             if not as_b:
-                # first occurrence only: the delay's rebase note begins a
-                # line with the marker's text
                 return src.replace("; ROTINIT",
                                    f";  (payload {tag} reads the shared word "
                                    f"every block: nothing to seed)", 1)
@@ -2464,12 +2472,6 @@ mkgo:""",
                 f"        move    a,x:(r7+${slot:02x})",
                 "seedskip:"])
             return src.replace("; ROTINIT", body, 1)
-
-        def _marker_once(src, name, marker):
-            if src.count(marker) != 1:
-                sys.exit(f"{name}: the {marker.strip()} marker must appear exactly "
-                         f"once (found {src.count(marker)}; a comment that spells "
-                         f"it counts)")
 
         def _rotlatch(src, name, slot):
             if "; ROTLATCH" not in src:
@@ -2601,10 +2603,21 @@ mkgo:""",
                           f"a client that never housekeeps")
                 _texts[_k] = _src_k
 
+        def _ybase_check(m, src):
+            if any(os.environ.get(k) for k in _VARIANT_FLAGS):
+                return None
+            return ybase_lit.check(m.key, src, _delay_lit_want if m.key == "DELAY SERVER" else None)
+
         def _ybase(m, src):
             if DEV and m.dsp.dev_pin_ybase is not None:
-                return src.replace("$30000", f"${m.dsp.dev_pin_ybase:x}")
+                _err = _ybase_check(m, src)
+                if _err:
+                    sys.exit(_err)
+                return ybase_lit.substitute(src, m.dsp.dev_pin_ybase)
             if m.dsp.ybase is YBase.ALWAYS or (m.dsp.ybase is YBase.XBUS and _x):
+                _err = _ybase_check(m, src)
+                if _err:
+                    sys.exit(_err)
                 return _sub(src)
             return src
 

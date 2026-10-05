@@ -394,8 +394,8 @@ bus_mine:
 ; (222 sites, most of them per sample). Slot NN is written x:(r7+(NN-$49))
 ; from here on -- x:(r7-$35) is $14, x:(r7+$3f) is $88 -- and the header
 ; map and every comment keep the RAW numbers. Everything that compares or
-; stores r7 ITSELF (the position-0 test, the role lock, the ROTLATCH /
-; ROTINIT / HOSTGUARD bodies the build substitutes) runs ABOVE this point
+; stores r7 ITSELF (the position-0 test, the role lock, the rotation-latch,
+; rotation-seed and host-guard bodies the build substitutes) runs ABOVE this point
 ; on the raw value; the duplicate-server rts above never reaches it; the
 ; GRAIN record bases below derive from the rebased value; `dry:` puts the
 ; raw block back before the rts. Costs 8 words a call, pays ~190.
