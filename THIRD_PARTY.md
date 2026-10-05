@@ -16,7 +16,7 @@ time (`.incbin`, `make os`).
 | Mutable Instruments Rings `string.h` / `string.cc` | MIT | Emilie Gillet | `modules/modulation` COMB |
 | ChowDSP ChowPhaser (Schulte Compact Phasing A model) | BSD-3-Clause | Jatin Chowdhury | `modules/modulation` PHSR |
 | Airwindows Pockey | MIT | Chris Johnson | `modules/character` TXTR, 13 to 22 Sep 2026 (removed; `git show OCTABAM43:modules/character/pockey_ref.py`) |
-| Airwindows Pockey2 | MIT | Chris Johnson | `modules/character` TXTR since 5 Oct 2026 (`pockey2_ref.py`) |
+| Airwindows Pockey2 | MIT | Chris Johnson | `modules/character-txtr` TXTR (`pockey2_ref.py`; in `modules/character` on 5 Oct 2026, moved out the same day) |
 | JClones TapeHead, DaTube, OInflator, AC1 (JSFX) | MIT | JClones | `modules/character` SAT (TAPE / TUBE / INFL), COMP / GLUE |
 | audiojs/filter `moogLadder`, `oberheim` (Zavalishin's zero-delay forms) | MIT | audiojs contributors | `modules/spectrum` LADR, LP / BP |
 | markandrus/octemu `custom/coldfire/usb-midi.s`, `custom/usb-midi.py` (descriptors) | MIT | markandrus | `modules/usb-midi` (his text; one ISA-B substitution, README) |

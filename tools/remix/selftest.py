@@ -816,7 +816,8 @@ def main():
              "transient": ("PLATE REV",),   # TRANSIENT runs in its words; the other 13 stay
              "testgen": ("PLATE REV",),     # TESTGEN runs in its words; the other 13 stay
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "rig": _rig, "bottleservice": _rig}
+             "rig": _rig, "bottleservice": _rig,
+             "character-txtr": _rig}   # bottleservice with the TXTR station
     for _n in registry.remix_names():
         _r = registry.remix(_n)
         _hv = stock.region_of(stock.harvested(
