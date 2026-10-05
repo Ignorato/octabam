@@ -508,6 +508,7 @@ with the load average noted because it moves every number:
 | the cover's per-remix halves, `JOBS=3` | 530 s (574 s before the image job was split out, 681 s whole, 986 s before the scenesp2 fork) |
 | `verify_scenesp2` on bottleservice, quiet machine | 109-111 s one load per run, 73-74 s one load and forked scenarios |
 | `verify_tempobus`, quiet machine | 49 s wall-clock paced, 34 s scripted |
+| `verify_kits` on bottleservice, quiet machine | 630 s: 29 scenarios, 371 s emulated, no DSP cores, 3 at a time, native binary (6 Oct 2026; the first reach run took 3,375 s for the whole per-remix half with the cores on, 6 at a time on two shards, under Rosetta) |
 
 Typical changes (with `JOBS=4`, kept shards):
 

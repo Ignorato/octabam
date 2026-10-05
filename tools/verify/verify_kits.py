@@ -74,6 +74,15 @@ without a project or the port, or for a remix without KITS.
 
 What it cannot see: the hardware; the arranger (its schedule runs in the
 tick, counted as CNT_ISR, untested here); the sound.
+
+Cost. The load and the scenarios run without the DSP cores: the frame
+engine runs the transport and every check passes without them (6 Oct
+2026: base + free 119 s against 404 s with --dsp, the same 10 checks).
+Three scenarios at a time, the port's default for four performance
+cores. The whole gate on bottleservice, native binary, quiet machine:
+630 s. A playing pattern switch on OCTABAM89_setgate lands between 12 s
+and 17 s emulated after PTN+TRIG (waits of 6, 9 and 12 s failed), so the
+17 s and 48 s waits stay.
 """
 import argparse
 import os
@@ -241,7 +250,7 @@ def main():
 
     card = stage(pdir, "KITS")
     base = [EMU, "--image", image, "--card", card, "--set", "OCTABAM", "--project", "KITS",
-            "--load-ms", "90000", "--mkii", "--dsp"]
+            "--load-ms", "90000", "--mkii"]
 
     def dumps(tag):
         return (f"{KS:#x},48={OUT / f'{tag}_st.bin'};{KI:#x},{IMG_LEN}={OUT / f'{tag}_img.bin'};"
@@ -380,7 +389,7 @@ def main():
     add("unsaved", s, extra=["--card-out", OUT / "unsaved.img"],
         more_dumps=f";{CS1:#x},{CS1_LEN:#x}={OUT / 'cs1_unsaved.bin'}")
     if scen:
-        run(base + [x for sc in scen for x in ("--scenario", sc)] + ["--scenario-jobs", "6"], OUT / "port.txt")
+        run(base + [x for sc in scen for x in ("--scenario", sc)] + ["--scenario-jobs", "3"], OUT / "port.txt")
 
     # ---- reading a run back ---------------------------------------------------
     def st(tag):
