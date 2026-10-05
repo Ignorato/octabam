@@ -63,6 +63,7 @@ apply_patch() {
     echo "   local patch already applied: $(basename "$2")"
   else
     echo "   [!] $(basename "$2") does NOT apply to $1 at $(git -C "$1" rev-parse --short HEAD)"
+    echo "       (tried: git apply --check; git apply --check --reverse)"
     echo "       and is not already applied either. Fix: rm -rf $1; make setup"
     echo "       (vendor/dsp56300 with an older version of the patch: make dsp-repatch)"
     exit 1

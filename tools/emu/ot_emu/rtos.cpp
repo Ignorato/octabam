@@ -628,7 +628,7 @@ namespace ot
 				for(const auto& sh : g_shapes)
 					if(sh.core == core && sh.words == words)
 						return sh.samples;
-				return (2.04 * static_cast<double>(words) + 2.0) / 4160.0;	// DSP instructions per sample (dsp.h g_dspIps)
+				return (2.04 * static_cast<double>(words) + 2.0) / 4532.0;	// DSP instructions per sample (dsp.h g_dspIps)
 			});
 		}
 		m_edma.setCompletionGate([this, co](const uint32_t _ch)
