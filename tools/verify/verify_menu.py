@@ -52,9 +52,8 @@ ID2POS = 0x400d6150
 LIST_REFS = [0x400375f4, 0x40052496, 0x40059a42]
 FX1_ID_LOOKUP = 0x400d5f58
 FX1_CHOOSER = 0x400d6060
-# 11 entries + the NUL terminator = 12 words; 0x400d6090 is FX2_LIST (the
-# stock table build_bus mirrors the live chooser into when Octakit is
-# present), so a wider window reads that table as FX1 damage.
+# 11 entries + the NUL terminator = 12 words; 0x400d6090 is FX2_LIST, so a
+# wider window reads that table as FX1 damage.
 FX1_CHOOSER_LEN = 0x30
 FX1_ID2POS = 0x400d60d0                 # FX1's own cursor-row table
 FX1_LIST_REFS = [0x40037990, 0x40052706, 0x40059bd2]
@@ -195,21 +194,6 @@ def main():
         if v == 0:
             break
         a += 4
-
-    if "OCTAKIT" in REMIX.modules:
-        print("\n=== OCTAKIT: its machine-selection runtime hardcodes the "
-              "stock FX2 table at 0x400d6090 and accepts cursor 0..14; "
-              "the stock table must shadow the live OCTABAM chooser ===")
-        check(N_REAL <= 15,
-              f"OCTAKIT-compatible FX2 chooser has at most 15 rows "
-              f"(got {N_REAL})")
-        for i in range(16):
-            shadow = rd32(img, 0x400d6090 + i * 4)
-            want = positions[i] if i < len(positions) else 0
-            check(shadow == want,
-                  f"OCTAKIT shadow[{i}] == "
-                  f"{'live chooser' if i < len(positions) else '0'} "
-                  f"(0x{shadow:08x})")
 
     print("\n=== list is exactly the three real entries, and the chooser's "
           "viewport was shrunk to match so no row can read past the "
@@ -509,19 +493,6 @@ def main():
         check(_rows == _want,
               f"FX1 viewport row count == {_want} (got {_rows})"
               + (" -- it scrolls" if len(_list) > CHOOSER_ROWS else ""))
-        if "OCTAKIT" in REMIX.modules:
-            # Octakit reads the stock FX1 table at 0x400d6060 by cursor
-            # 0..10; the build mirrors the relocated list into it.
-            check(len(_list) <= 11,
-                  f"OCTAKIT-compatible FX1 chooser has at most 11 rows "
-                  f"(got {len(_list)})")
-            for _i in range(12):
-                _shadow = rd32(img, FX1_CHOOSER + _i * 4)
-                _want = _list[_i] if _i < len(_list) else 0
-                check(_shadow == _want,
-                      f"OCTAKIT FX1 shadow[{_i}] == "
-                      f"{'live chooser' if _i < len(_list) else '0'} "
-                      f"(0x{_shadow:08x})")
         _listed = set()
         for _n, _k in enumerate(REMIX.fx1):
             _m = _MODS[_k]

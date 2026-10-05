@@ -875,23 +875,6 @@ def main():
     for i, v in enumerate(entries):
         wr32(list_addr + i * 4, v)
 
-    # Octakit's machine-selection runtime hardcodes the stock FX2 chooser
-    # table at 0x400d6090 and accepts cursor positions 0..14. OCTABAM moves
-    # the live chooser elsewhere, so mirror the active list back into the
-    # original 15-row stock table when Octakit is present. This keeps
-    # Octakit's descriptor/payload validation coherent without modifying
-    # Octakit itself.
-    if "OCTAKIT" in REMIX.modules:
-        if len(real) > 15:
-            sys.exit(
-                "OCTAKIT supports at most 15 FX2 chooser rows: "
-                "its machine-selection runtime accepts cursor 0..14"
-            )
-
-        for i in range(16):
-            wr32(FX2_LIST + i * 4,
-                 entries[i] if i < len(entries) else 0)
-
     # and size the viewport: shrink it to a short list so there are no rows
     # left to pad, never grow it past the seven the screen has -- a longer
     # list scrolls, as stock's fifteen-entry list does.
@@ -987,46 +970,14 @@ def main():
     _replay = os.environ.get("TEMPOCAVE") == "replay"
     _plan = []
     # ---- overrides (schema.Override): a bridge stands in at a shared site --
-    # Collected before anything is written: which detours to skip, which
-    # recipe writes to skip, and the continuation symbols the bridge's stub
-    # and any overridden cave link against -- the TARGET the skipped write
-    # carried (a `jmp abs.l`'s address, or a 4-byte pointer entry).
+    # Collected before anything is written: which detours to skip.
     _ovr_detours: set[tuple[int, str]] = set()          # (site, module key)
-    _ovr_writes: dict[str, set[str]] = {}               # module key -> write names
-    _defsym_ovr: dict[str, int] = {}                    # symbol -> target
     for _k in REMIX.modules:
         for _o in getattr(remix_modules()[_k], "overrides", ()):
             if _o.module not in REMIX.modules:
                 sys.exit(f"{_k} overrides {_o.module} at 0x{_o.site:08x}, which this "
                          f"remix does not carry -- nothing to bridge; drop {_k}")
-            if _o.write is None:
-                _ovr_detours.add((_o.site, _o.module))
-                continue
-            _ovr_writes.setdefault(_o.module, set()).add(_o.write)
-            if _o.defsym:
-                _rt = getattr(remix_modules()[_o.module], "runtime", None)
-                if _rt is None:
-                    sys.exit(f"{_k}: override names write {_o.write!r} of {_o.module}, "
-                             f"which has no runtime recipe")
-                _spec = json.loads(pathlib.Path(_rt.recipe).read_text())
-                _data = None
-                for _p in _spec["patches"]:
-                    if _p["name"] == _o.write:
-                        _wl = [w for w in _p["writes"]
-                               if _spec["format"]["os_load_address"] + w["offset"] == _o.site]
-                        if _wl:
-                            _data = bytes.fromhex(_wl[0]["data"])
-                if _data is None:
-                    sys.exit(f"{_k}: {_o.module} has no write {_o.write!r} at 0x{_o.site:08x}")
-                if _data[:2] == b"\x4e\xf9" and len(_data) >= 6:
-                    _defsym_ovr[_o.defsym] = int.from_bytes(_data[2:6], "big")   # jmp abs.l
-                elif len(_data) == 4:
-                    _defsym_ovr[_o.defsym] = int.from_bytes(_data, "big")       # a pointer
-                else:
-                    sys.exit(f"{_k}: cannot read a target out of {_o.module}'s write "
-                             f"{_o.write!r} ({_data.hex()}) -- not a jmp abs.l or a pointer")
-                print(f"  {_k}: {_o.defsym} = 0x{_defsym_ovr[_o.defsym]:08x} "
-                      f"({_o.module}'s {_o.write} at 0x{_o.site:08x}, bridged)")
+            _ovr_detours.add((_o.site, _o.module))
 
     for _c in _caves:
         _b = _c.pinned
@@ -1067,7 +1018,7 @@ def main():
         # Linked.defsyms: a bridge's target, else an earlier global, else
         # the declared value; the oracle links the declared values.
         _decl = dict(_u.defsyms)
-        _mine = tuple((n, _defsym_ovr.get(n, _exports.get(n, v))) for n, v in _u.defsyms)
+        _mine = tuple((n, _exports.get(n, v)) for n, v in _u.defsyms)
         _rest = tuple((n, v) for n, v in _exports.items() if n not in _decl)
         for _n, _v in _mine:
             if _v != _decl[_n]:
@@ -1167,8 +1118,8 @@ def main():
             # A bridge may redefine one of this cave's defsyms (CC_NEXT):
             # the linked bytes then differ from the ratified form by exactly
             # that address, so the oracle is set aside for it and said so.
-            _bridged = [n for n, _v in _c.defsyms if n in _defsym_ovr or n in _exports]
-            _cdefs = tuple((n, _defsym_ovr.get(n, _exports.get(n, v))) for n, v in _c.defsyms)
+            _bridged = [n for n, _v in _c.defsyms if n in _exports]
+            _cdefs = tuple((n, _exports.get(n, v)) for n, v in _c.defsyms)
             _lb, _lsyms, _lglob = _link(
                 _c.source, _c.cave_addr, _c.cpu,
                 pathlib.Path("out/linked/caves") / re.sub(r"\W+", "_", _c.label),
@@ -1177,7 +1128,7 @@ def main():
             _ref = (_c.reference(_c.cave_addr) if _c.reference is not None
                     else _c.pinned if _c.emit is None else _b)
             if _bridged:
-                print(f"  {_c.label}: {', '.join(f'{n} -> 0x{_defsym_ovr.get(n, _exports.get(n, 0)):08x}' for n in _bridged)}"
+                print(f"  {_c.label}: {', '.join(f'{n} -> 0x{_exports.get(n, 0):08x}' for n in _bridged)}"
                       f" (bridged; the ratified-bytes oracle is set aside for this cave)")
                 _ref = b""
             if _ref and _lb != _ref:
@@ -1256,51 +1207,8 @@ def main():
         if _inside:
             _cave_top, _last_placed = _c.cave_addr + len(_b), _c.label
 
-    # ==== 1c. loader-appended DRAM runtimes (schema.Runtime) =================
-    # The third placement class: the OS image GROWS by an append (early
-    # loader + stage + packed runtime) and the runtime executes from DRAM.
-    # Its recipe's sparse writes into the image are pokes with the same
-    # assert-before-write discipline as a cave's; the append is stitched on
-    # at the very end, after every other pass has seen the stock-length
-    # image. tools/remix/runtime_build.py re-derives every identity the
-    # recipe pins, so nothing lands here that does not match the author's
-    # own build byte for byte. Nothing runs for a remix without a runtime.
     _appends = []
     _platform_at = None
-    _payloads = []                  # runtimes carried by octabam's loader (1e)
-    for _k in REMIX.modules:
-        _m = remix_modules()[_k]
-        _rt = getattr(_m, "runtime", None)
-        if _rt is None:
-            continue
-        from remix import runtime_build
-        _work = pathlib.Path("out/runtime") / _m.name
-        # A runtime whose recipe writes the arena geometry (Octakit's four)
-        # declares them in its ArenaReserve; the build computes those
-        # literals from EVERY reservation in the remix (1e) instead.
-        _skip = tuple(getattr(getattr(_m, "arena", None), "recipe_writes", ())) + \
-            tuple(_ovr_writes.get(_m.key, ()))                 # bridged (schema.Override)
-        _writes, _append, _info = runtime_build.build(_rt, IMG.read_bytes(), _work,
-                                                      skip=_skip)
-        _sym[_m.key] = _info["symbols"]
-        _exports.update({k: v for k, v in _info["symbols"].items()
-                         if not k.startswith("_") or k.startswith("__gk_")})
-        for _va, _expect, _write, _name in _writes:
-            _got = bytes(img[_va - BASE:_va - BASE + len(_expect)])
-            if _got != _expect:
-                sys.exit(f"{_m.key}: runtime write {_name} at 0x{_va:08x} finds "
-                         f"{_got.hex()}, not stock {_expect.hex()} -- another module "
-                         f"got there first; refusing")
-            img[_va - BASE:_va - BASE + len(_write)] = _write
-        # Her append (loader + stage + packed runtime) is NOT stitched on:
-        # her runtime becomes a PAYLOAD of octabam's loader (section 1e),
-        # staged at her own stage address so her relocation still finds it.
-        _payloads.append(_info["payload"])
-        print(f"  {_m.key}: {len(_writes)} writes into the image, runtime "
-              f"{_info['runtime_size']:,} B -> packed {_info['packed_size']:,} B "
-              f"(m68k-elf-gcc {_info['gcc']}, recipe pins {_info['gcc_pinned']}; "
-              f"rebuilt runtime, packed runtime and append all match the "
-              f"recipe) -- carried as a payload of octabam's loader{_rt.report_note}")
 
     # ==== 1d. linker-backed units (schema.Linked/Detour/TableGrow/Poke) =====
     # Placement by the BUILD: each unit is assembled and linked at the
@@ -1313,25 +1221,17 @@ def main():
     # author's own build output, so a source or toolchain drift from the
     # bytes they ratified fails here even though the image carries the unit
     # elsewhere. Nothing runs for a remix without linked units.
-    if _payloads and not _toolchain:
-        sys.exit("linked units need m68k-elf-as/ld/objcopy/nm -- run `make setup` "
-                 "(Homebrew: brew install m68k-elf-gcc)")
-
     # ==== 1e. the platform runtime: DRAM units + other payloads, one loader ==
     # Every `dram=True` unit in the remix is linked as ONE image at the
     # base of the platform's arena reserve, packed and carried behind
-    # octabam's loader together with any runtime built in 1c (Octakit) --
-    # equal payloads, one boot detour. The loader itself is the append;
+    # octabam's loader, one boot detour. The loader itself is the append;
     # nothing here touches the OS zero runs.
     # ---- the audio page arena: every reservation, one geometry -----------
-    # Modules that live in the arena declare their pages (Octakit: the top
-    # 528); the platform reserves its own at the bottom whenever the remix
-    # carries DRAM units. tools/remix/arena.py stacks them and yields the
-    # writes: the base literal at its 24 sites and the four geometry words.
+    # The platform reserves its pages at the bottom whenever the remix
+    # carries DRAM units. tools/remix/arena.py yields the writes: the base
+    # literal at its 24 sites and the four geometry words.
     from remix import arena
-    _reservations = [(_m.name, _m.arena.where, _m.arena.pages)
-                     for _k in REMIX.modules for _m in (remix_modules()[_k],)
-                     if getattr(_m, "arena", None) is not None]
+    _reservations = []
     if _dram:
         _reservations.append(("octabam platform", "bottom", arena.PLATFORM_PAGES))
     _reserve = None
@@ -1373,20 +1273,20 @@ def main():
     _dram_defs: dict[str, int] = {}
     _unit_defs: dict[str, tuple] = {}
     for _m, _u in _dram:
-        _mine = tuple((n, _defsym_ovr.get(n, _exports.get(n, v))) for n, v in _u.defsyms)
+        _mine = tuple((n, _exports.get(n, v)) for n, v in _u.defsyms)
         for _n, _v in _mine:
             if _dram_defs.get(_n, _v) != _v:
                 sys.exit(f"{_m.key} {_u.label}: defsym {_n} = 0x{_v:x}, but another DRAM unit "
                          f"has 0x{_dram_defs[_n]:x} -- the platform runtime is one link")
             _dram_defs[_n] = _v
         _unit_defs[_u.label] = _mine
-    _pdefs = {**_dram_defs, **_defsym_ovr}
+    _pdefs = dict(_dram_defs)
     _sel = {_k: remix_modules()[_k] for _k in REMIX.modules}
 
-    if _dram or _payloads:
+    if _dram:
         from remix import platform_build
         _pappend, _psyms, _boot, _pnames = platform_build.build(
-            [(_m.key, _u) for _m, _u in _dram], _payloads, pathlib.Path("out/platform"),
+            [(_m.key, _u) for _m, _u in _dram], [], pathlib.Path("out/platform"),
             reserve=_reserve, defsyms=_pdefs, unit_defs=_unit_defs,
             includes={_u.label: _u.include(_sel) for _m, _u in _dram if _u.include is not None})
         for _m, _u in _dram:
@@ -1412,21 +1312,15 @@ def main():
                              f"author's {_rsha} -- source or toolchain drift; refusing")
                 print(f"  {_m.key} {_u.label}: matches the author's build at 0x{_ra:08x} ({len(_rb):,} B)")
         _exports.update(_psyms)
-        for _p in _payloads:
-            _exports.update({k: v for k, v in _p.get("symbols", {}).items() if k.startswith("gk_")})
         _platform_at = len(_appends)
         _appends.append(("octabam loader + payloads (" + ", ".join(_pnames) + ")", _pappend))
-        if "OCTAKIT" not in REMIX.modules:
-            # Octakit's own recipe already routes the boot site through her
-            # wrapper, which calls the loader at its fixed address; without
-            # her, the redirect is ours to make.
-            _ba, _bexp, _bw, _bnote = _boot
-            _got = bytes(img[_ba - BASE:_ba - BASE + len(_bexp)])
-            if _got != _bexp:
-                sys.exit(f"boot site 0x{_ba:08x} holds {_got.hex()}, not stock "
-                         f"{_bexp.hex()} -- refusing to redirect boot")
-            img[_ba - BASE:_ba - BASE + len(_bw)] = _bw
-            print(f"    poke 0x{_ba:08x}: {_bexp.hex()} -> {_bw.hex()}  {_bnote}")
+        _ba, _bexp, _bw, _bnote = _boot
+        _got = bytes(img[_ba - BASE:_ba - BASE + len(_bexp)])
+        if _got != _bexp:
+            sys.exit(f"boot site 0x{_ba:08x} holds {_got.hex()}, not stock "
+                     f"{_bexp.hex()} -- refusing to redirect boot")
+        img[_ba - BASE:_ba - BASE + len(_bw)] = _bw
+        print(f"    poke 0x{_ba:08x}: {_bexp.hex()} -> {_bw.hex()}  {_bnote}")
         _dsize = sum(1 for _ in _dram)
         print(f"  platform runtime: {_dsize} DRAM unit(s) linked at "
               f"0x{_reserve[0]:08x}, payloads {', '.join(_pnames)}, "
@@ -1801,21 +1695,6 @@ def main():
                              f"duplicate")
                 wr32(_slot, clone_addr[_n])
             wr32(FX1_ID2POS + _eid * 4, _pos + 1)      # past NONE at row 0
-        # Octakit's machine-selection runtime hardcodes the stock FX1 table
-        # too (0x400d6060, cursor 0..10), so the relocated list is mirrored
-        # back the same way as the FX2 one above. Unmirrored, a cursor
-        # position resolves to whatever stock row sat there: Octakit's
-        # validation passes on that descriptor and it identifies the wrong
-        # machine, silently.
-        if "OCTAKIT" in REMIX.modules:
-            if len(_new) - 1 > 11:
-                sys.exit(
-                    "OCTAKIT supports at most 11 FX1 chooser rows (NONE "
-                    "included): its machine-selection runtime accepts "
-                    "cursor 0..10"
-                )
-            for _i in range(12):
-                wr32(FX1_LIST + _i * 4, _new[_i] if _i < len(_new) else 0)
         _ours = [n for n in _fx1 if not _MODS[n].is_stock]
         print(f"  FX1 chooser = {len(_new) - 1} rows at 0x{_fx1_addr:08x} "
               f"(NONE + {', '.join(_fx1)}), {len(FX1_LIST_REFS)} refs "
@@ -3310,11 +3189,6 @@ hostquit:
         # only; letting it land on the flashable path is the one way this
         # hatch could do harm.
         out = pathlib.Path("out/mainos_bus_dev.bin")
-    # A loader-appended runtime grows the image here, last of all: every
-    # pass above worked on the stock-length image. The combined OS must
-    # match the identity the recipe pins for exactly this (single-runtime)
-    # composition; a remix that combines the runtime with other modules
-    # cannot match it, and says so instead of failing.
     # Analog BD replaces the source renderer on both cores. Its uploads
     # must see the final DSP payloads, before they are packed for boot.
     if "ANALOG BD" in REMIX.modules:
@@ -3338,7 +3212,7 @@ hostquit:
             img[_aa - BASE:_aa - BASE + len(_aw)] = _aw
             print(f"    poke 0x{_aa:08x}: {_aexp.hex()} -> {_aw.hex()}  {_anote}")
         _pappend, _psyms2, _boot, _pnames = platform_build.build(
-            [(_m.key, _u) for _m, _u in _dram], _payloads, pathlib.Path("out/platform"),
+            [(_m.key, _u) for _m, _u in _dram], [], pathlib.Path("out/platform"),
             reserve=_reserve, defsyms=_pdefs, preboot=_pres, unit_defs=_unit_defs,
             includes={_u.label: _u.include(_sel) for _m, _u in _dram if _u.include is not None})
         if _psyms2 != _psyms or _platform_at is None:

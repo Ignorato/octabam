@@ -1,7 +1,7 @@
 """character-txtr -- bottleservice with CHARACTER TXTR in CHARACTER's place.
 
 The image for testing Character's texture stage on a unit: the same rig,
-hosts, USB and Octakit as bottleservice, the station swapped for the one
+hosts, USB and KITS as bottleservice, the station swapped for the one
 with TXTR (Airwindows Pockey2) on page-2 slot 9. Four of these beside the
 reverb price a core at 2,751 cycles per sample against 3,120 usable (the
 pricer reads the reverb ~270 low, so ~3,020), which no hardware has run;
@@ -18,8 +18,8 @@ REMIX = Remix(
              "SPECTRUM", "CHARACTER TXTR", "MODULATION",
              "TEMPO SYNC", "CC MAP", "CC FEEDBACK", "MODE DEFAULTS", "RIG HOSTS", "TEMPO BUS",
              "USB MIDI", "USB AUDIO OUT MASTER",
-             "OCTAKIT", "SCENES KITS",
-             "SCENES P2", "SCENES P2 KITS", "PLOCKS P2",
+             "KITS",
+             "SCENES P2", "PLOCKS P2",
              "DELAY",
              "FX2 LOCK"),
     fallback="SEND",

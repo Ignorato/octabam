@@ -24,7 +24,7 @@ line `verify_dram_boot.py` does.
 
 | directory | what is in it | its doc |
 |---|---|---|
-| `tools/remix/` | **the toolkit**: the module schema, the registry, the ledger, the stock-effect list, the loader (`loader.S`), the DRAM platform (`platform_build.py`), the recipe runtime builder (`runtime_build.py`), the TUI (`app.py`), auditioning, the index and the selftest | [`tools/remix/README.md`](../../tools/remix/README.md) |
+| `tools/remix/` | **the toolkit**: the module schema, the registry, the ledger, the stock-effect list, the loader (`loader.S`), the DRAM platform (`platform_build.py`), the payload packer (`pack.py`), the TUI (`app.py`), auditioning, the index and the selftest | [`tools/remix/README.md`](../../tools/remix/README.md) |
 | `tools/build/` | **the build** (`build_bus.py`) and the tools that understand the OS layout: the DSP load map, disassembly, reachability, the ELUP/`.bin` codecs, label and formatter emitters, cycle pricing | section 4 below |
 | `tools/verify/` | **the gates**: one `verify_*.py` per property, run by `make verify` | [`TESTING.md`](TESTING.md) |
 | `tools/harness/` | **hearing and measuring the DSP side** locally: the emulator harness (`dsp_host/`), `send_probe`, `render_reverb`, `rig_render`, `pressure`, `stress_project` | [`tools/harness/README.md`](../../tools/harness/README.md) |
@@ -186,7 +186,8 @@ CI). The family, and what each proves:
 | `tools/verify/verify_slots.py` | static dead-store check on the reverb's r7 state block |
 | `tools/verify/verify_midi.py` | the note→PITCH interval path, locally, via a build override |
 | `tools/verify/verify_burn.py` | the cycle-burn probe is the shipping engine plus an inert knob |
-| `tools/verify/verify_octakit.py`, `verify_midiscenes.py`, `verify_dram_boot.py` | the two ports' oracles; every DRAM remix booted under the port and its window read back |
+| `tools/verify/verify_midiscenes.py`, `verify_dram_boot.py` | MIDI SCENES' oracle; every DRAM remix booted under the port and its window read back |
+| `tools/verify/verify_kits.py` | KITS under the port: staging, LOAD/SAVE KIT, the files, migration and Octakit import |
 | `tools/verify/verify_dirtystate.py`, `verify_initregs.py`, `verify_replaces.py`, `verify_labels.py`, `verify_modenames.py`, `verify_hidden.py`, `verify_grains.py`, `verify_twocore.py`, `verify_onebus.py`, the per-module render gates | every module silent from a garbage block; no init writes r1; no stock effect hijacked; selects print their words on the emulated firmware; the mode formatter renames; hidden engines; the grain lever; both cores; the bus |
 | `tools/remix/selftest.py` | the resource ledger catches every collision it claims to, and every shipped remix is clean (part of `make check`) |
 | `scripts/refhash.sh` | a change to the build (not a module) changed nothing: 24 configurations, artifacts and build reports, bit-identical; save a baseline on a tree you trust first |

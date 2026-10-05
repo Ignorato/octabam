@@ -8,7 +8,7 @@ A remix of Octatrack OS 1.40C, built from your own copy of it, that adds:
   edits the bus engines;
 - **USB MIDI** and **USB audio** (the master track into a computer) over the
   Octatrack's own USB port;
-- Em's **Octakit**: 256 Kits per project instead of 64 bank-tied Parts.
+- **KITS**: 256 Kits per project; each pattern plays its Kit.
 
 Named after the set it is built for. Runs on an MKII; see [Where it has
 run](#where-it-has-run). Each module has its own page with the technical
@@ -165,30 +165,32 @@ Plug the unit into a computer over its USB port.
 
 ## Kits
 
-Em's Octakit replaces the 64 bank-tied Parts with 256 named Kits per
-project. Any Kit loads on any pattern. Her README is the manual:
-[emuyia/ems-octakit](https://github.com/emuyia/ems-octakit). The short
-version, MKII keys:
+KITS keeps a library of 256 named Kits per project; each pattern plays the
+Kit assigned to it, through the stock Part slots. The keys follow Em's
+Octakit (in this remix until 6 Oct 2026). MKII keys:
 
 | do | press |
 |---|---|
 | load / save a Kit | PART / FUNC + PART |
+| quick save (the Kit under the cursor, its name kept) | FUNC + PART, then FUNC + YES |
 | reload the saved Kit | FUNC + CUE |
 | undo the last Kit load | LOAD KIT → UNDO KIT |
-| save a pasted pattern's Kit to the next free slot | FUNC + PASTE + PART |
-| save the Kit, copy it and the pattern to the next free slots, load the pair | PTN + FUNC + RIGHT |
+| copy / paste / clear a Kit in a list | FUNC + REC / STOP / PLAY (paste or clear again: undo) |
+| a pasted pattern plays a copy of its Kit in the next empty Kit | FUNC + PASTE + PART |
+| save the Kit, copy it and the pattern to the next empty ones, play the copy | PTN + FUNC + RIGHT |
+| copy / paste / clear an inactive pattern | hold PTN, FUNC and its TRIG; REC / STOP / PLAY |
 
-Old projects are migrated from Parts to Kits the first time they load.
-Module: [`octakit`](../../modules/octakit/README.md); the two bridge modules
-that let Octakit, CC MAP and the scene locks share the same hooks are
-[`scenes-kits`](../../modules/scenes-kits/README.md) and
-[`scenes-p2-kits`](../../modules/scenes-p2-kits/README.md).
+LOAD KIT's last two rows turn AUTOSAVE (a Part's edits into its Kit at a
+pattern change) and KEEP LEVELS (a Kit load keeps the track levels) on and
+off. The first load of a project writes `kits.work`: the Parts become Kits
+1–64, or Octakit's `kits3a/b.work` are imported. Module:
+[`kits`](../../modules/kits/README.md).
 
 ## What it costs
 
 | | stock | bottleservice |
 |---|---|---|
-| sample and recorder memory | 14,602 pages | 12,367 pages (Octakit's Kit store and the USB buffers take the rest) |
+| sample and recorder memory | 14,602 pages | 12,895 pages (the platform reserve: KITS's library, PLOCKS P2's table and every DRAM unit; Octakit's 528 pages more until 6 Oct 2026) |
 | DSP time per core | | worst case priced at 2,581 of 3,120 cycles: four MODULATION on tracks 5–8 beside the reverb. |
 
 On image 88 a fourth MODULATION beside the reverb overran the DSP and
@@ -213,6 +215,9 @@ leaves neutral. GRAIN's four grains per line are the largest lever:
   play, a fourth MODULATION overran the DSP. Which of the TEMPO window,
   Kit save and reload, USB audio and a page-2 scene lock were exercised
   on these images is not written down.
+- **KITS** (6 Oct 2026): `verify_kits` and `make check-remix
+  REMIX=bottleservice` under the emulator; not flashed. Everything below
+  this line that names Octakit is history from the images that carried it.
 - **Images 95 and 97 (3–4 Oct 2026, unreleased):** with USB AUDIO IN CD
   and USB CROSSBAR in the image and a computer on the USB port, PLAY in a
   new project halted the unit in Octakit's pattern-apply check
@@ -228,14 +233,9 @@ leaves neutral. GRAIN's four grains per line are the largest lever:
   `verify_plocksp2` passes on this remix under the emulator, power cycles
   included. OUT MASTER polls every 250 µs since 28 Sep 2026 (image 88
   polled every 1 ms).
-- **Under the ColdFire emulator:** `make check REMIX=bottleservice` with a
-  real project, every gate green; Kit save, FUNC + CUE reload, cross-Kit
-  load and LOAD KIT copy/paste keep values written by MODE DEFAULTS and CC
-  MAP. The SCENES P2 + Octakit page-2 turn, which halted until 28 Sep 2026,
-  runs whole.
-- **Not measured anywhere:** Octakit's unsaved-changes marking after a MODE
-  or CC write; UNDO KIT and pattern paste after one; whether `host` and
-  `stamp-defaults` survive the Parts → Kits migration.
+- **Not measured anywhere:** whether `host` and `stamp-defaults` written
+  before the first KITS load survive the migration (the migration copies
+  the working Parts as they are, so they should; not run).
 
 ## How to flash
 
@@ -251,8 +251,8 @@ install to the way back to stock. For this remix:
 
    Optional: `make emu-cf` then `make check REMIX=bottleservice` runs every
    gate and boots the image in the emulator first (about half an hour).
-2. **Back up the card.** Octakit migrates Parts into Kits on load and going
-   back to stock can lose Kit data.
+2. **Back up the card.** KITS writes `kits.work` into each project it
+   loads; a stock OS ignores it.
 3. **Old projects.** For a project made before this remix, on the card:
 
    ```bash

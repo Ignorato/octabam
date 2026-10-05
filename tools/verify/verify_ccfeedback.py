@@ -73,7 +73,7 @@ def part_addr(t, region, off, machine=0):
             2: base + PAGE2 + t * 30 + off}[region]
 # Any image without the DRAM platform boots under unicorn; the CC MAP fixture
 # is the one verify_ccmap builds, so the build memo serves it warm.
-FIXTURE_REMIX = registry.fixture("CC MAP", "REVERB SERVER", "DELAY SERVER", "CHARACTER", without_runtime=True)
+FIXTURE_REMIX = registry.fixture("CC MAP", "REVERB SERVER", "DELAY SERVER", "CHARACTER")
 
 
 def _build(remix):

@@ -12,8 +12,8 @@ built on your own computer from your own copy of Octatrack OS 1.40C.
 > Elektron's OS.
 
 Pick a remix from [the remix index](../../remixes/README.md). The commands below use `ok-ms`
-(Octakit + MIDI SCENES on the stock effects, the smallest remix that has
-run on a unit); substitute any remix name.
+(KITS + MIDI SCENES on the stock effects; with Octakit in KITS's place it
+was the smallest remix that has run on a unit); substitute any remix name.
 
 ## 0. What you need
 
@@ -47,7 +47,7 @@ make emu-setup
 ```
 
 `--recurse-submodules` fetches the module authors' repositories
-(`modules/octakit/upstream`, `modules/midi-scenes/upstream`, and
+(`modules/midi-scenes/upstream` and
 `timhastie/octatrick-modules` under `modules/synth`, `modules/quantizer`,
 `modules/direct-jump` and `modules/tuner`) at the pinned commits. If you cloned without
 it: `git submodule update --init`.
@@ -103,7 +103,7 @@ source $HOME/.local/bin/env
 
 **Not verified on this route since 9 Sep 2026.** The build now needs the
 m68k cross-toolchain (`m68k-elf-gcc`, `as`, `ld`, `objcopy`, `nm`): every
-remix with linked ColdFire units (Octakit, MIDI SCENES, the USB modules,
+remix with linked ColdFire units (KITS, MIDI SCENES, the USB modules,
 every DRAM module) refuses without it, and `scripts/setup.sh` adds
 `m68k-elf-gcc` to its Homebrew list when it is missing, so on a machine
 without Homebrew `make setup` stops at `brew: command not found`.
@@ -179,9 +179,9 @@ without a project in `OT_PROJECT` the set gates do too.
 ## 4. Back up
 
 Flashing the OS does not touch the CF card. Back it up anyway (USB DISK
-MODE, copy everything). Any remix carrying **Octakit** migrates Parts into
-Kits on project load; going back to stock can lose Kit data (Em's
-warning).
+MODE, copy everything). Any remix carrying **KITS** writes `kits.work`
+into each project it loads (the Parts become Kits); a stock OS ignores
+that file and plays the Parts as saved.
 
 ## 5. Flash from the card
 
