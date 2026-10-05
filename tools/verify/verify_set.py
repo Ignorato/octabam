@@ -346,7 +346,7 @@ def main():
               f"halfword 12 = {aux:#06x} (knob {aux >> 8}; the lane's slew takes ~30 frames)")
     else:
         # an unimplemented id runs the fallback, whose page publishes no slot 0
-        print(f"  [skip] midi: CC 40 -> T2 slot 0: the part's T2 FX2 id 0x{part['fx2'][1]:02x} "
+        print(f"  [SKIP] midi: CC 40 -> T2 slot 0: the part's T2 FX2 id 0x{part['fx2'][1]:02x} "
               f"is not a module of this remix")
     if ccmap:
         # the cave clamps to the slot's count from the descriptor: slot 6 is

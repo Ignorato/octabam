@@ -34,7 +34,7 @@ HOST = ROOT / "vendor/dsp56300/build/source/dsp_host/dsp_host"
 FRAMES, BLOCKS, TAIL = 15, 100, 300
 FLOOR_DB = -100.0
 FILLS = (0x7fffff, 0x800000, 0x400000, 0x5a5a5a)
-R7 = 0x6100                       # dsp_host: instance 0 with -r7 1 sits at X:0x6100 (it prints so)
+R7 = 0x6200                       # track 1 FX2 (dsp_host -r7 2): SEND's FX1 slots (0x6100, 0x6400, 0x6700, 0x6a00) return before touching state
 
 
 def mem_with_fill(base: pathlib.Path, fill: int, out: pathlib.Path) -> pathlib.Path:
@@ -47,8 +47,8 @@ def mem_with_fill(base: pathlib.Path, fill: int, out: pathlib.Path) -> pathlib.P
 def render(mem: pathlib.Path, init: int, proc: int, params, tmp: pathlib.Path):
     n = FRAMES * BLOCKS
     src = tmp / "in.raw"; src.write_bytes(b"\0" * (8 * n)); out = tmp / "out.raw"
-    cmd = [str(HOST), "-mem", str(mem), "-init", f"{init:x}", "-proc", f"{proc:x}", "-inst", "1", "-r7", "1",
-           "-alloc", "0", "-inmask", "1", "-stereo", "-frames", str(FRAMES), "-blocks", str(BLOCKS),
+    cmd = [str(HOST), "-mem", str(mem), "-init", f"{init:x}", "-proc", f"{proc:x}", "-inst", "1", "-r7", "2",
+           "-alloc", "1", "-inmask", "1", "-stereo", "-frames", str(FRAMES), "-blocks", str(BLOCKS),
            "-in", str(src), "-out", str(out), "-params", ",".join(str(x) for x in params)]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode:
@@ -73,9 +73,20 @@ def knob_sets(mod):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX"))
-    ap.add_argument("--image", default=str(ROOT / "out/mainos_bus.bin"))
+    ap.add_argument("--image", default=None,
+                    help="an image to read as it is; without it the remix is built first")
     a = ap.parse_args()
     remix = registry.remix(a.remix); mods = registry.modules()
+    if a.image is None:
+        # out/mainos_bus.bin is whatever built last (the selftest and
+        # verify_character leave their own); build this remix's.
+        env = dict(os.environ, REMIX=remix.name, XBUS="1", SPEC="1")
+        env.setdefault("BUILD", "0")
+        r = subprocess.run([sys.executable, str(ROOT / "tools/build/build_bus.py")], env=env,
+                           capture_output=True, text=True, cwd=ROOT)
+        if r.returncode:
+            sys.exit(f"verify_dirtystate: building {remix.name} failed:\n{(r.stdout + r.stderr)[-1500:]}")
+        a.image = str(ROOT / "out/mainos_bus.bin")
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="dirtystate_"))
     mems = {pl: send_probe.dump_mem(a.image, tmp / f"payload_{pl}.mem", pl) for pl in "AB"}
     send_id = registry.by_name("send").menu.fx2_id
@@ -93,7 +104,8 @@ def main():
         if ep == send_ep[pl] and fxid != send_id:
             pl = "B"; ep = send_probe.entry_points(mems[pl], fxid)
             if ep == send_ep[pl]:
-                print(f"  {mod.name:14s} not placed on either payload -- skipped"); continue
+                fails += 1
+                print(f"[FAIL] {mod.name:14s} not placed on either payload"); continue
         init, proc = ep
         for label, params in knob_sets(mod):
             worst = None
