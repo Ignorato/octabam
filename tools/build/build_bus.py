@@ -2200,6 +2200,7 @@ mkgo:""",
     _want = (1 if DEV or SPEC else 0) if os.environ.get("XBUS") == "1" else 1
     if delay_src is not None and ybase_lit.count(delay_src) != _want:
         sys.exit(f"expected exactly {_want} $30000 literal(s) in the DELAY source")
+    _delay_lit_want = _want
 
     dev_delay = None            # (words) for the .mem dump append, DEV only
     for tag, va, ln in PAYLOADS:
@@ -2605,7 +2606,7 @@ mkgo:""",
         def _ybase_check(m, src):
             if any(os.environ.get(k) for k in _VARIANT_FLAGS):
                 return None
-            return ybase_lit.check(m.key, src, _want if m.key == "DELAY SERVER" else None)
+            return ybase_lit.check(m.key, src, _delay_lit_want if m.key == "DELAY SERVER" else None)
 
         def _ybase(m, src):
             if DEV and m.dsp.dev_pin_ybase is not None:
