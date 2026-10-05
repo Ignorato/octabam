@@ -219,11 +219,13 @@ for _k, _n in HOST_SLOTS.items():
 # near-boolean, which is what hardware showed.
 PAGE2_COUNTS = {m.key: {i: p.count for i, p in enumerate(m.params)
                         if p.count is not None} for m in _CLONED}
-# Membership here also GATES the display-formatter pass below: a module with
-# no stepped slot keeps its donor's formatters untouched, which is what SEND
-# wants (FILTER's plain-numeric zeros, hardware-confirmed).
+# Membership here also GATES the all-slots formatter reset below: a module
+# with no stepped slot keeps its donor's formatters on every slot it does not
+# declare, which is what SEND wants (FILTER's plain-numeric zeros,
+# hardware-confirmed). A slot declared Formatter.PLAIN is zeroed either way.
 STEPPED_SLOTS = {m.key: m.stepped_slots for m in _CLONED if m.stepped_slots}
 BIPOLAR_SLOTS = {m.key: m.bipolar_slots for m in _CLONED if m.bipolar_slots}
+PLAIN_SLOTS = {m.key: m.plain_slots for m in _CLONED if m.plain_slots}
 _DEF_ASM = {m.key: m.dsp.asm for m in _CLONED}
 # DSP code reached from STOCK code rather than a chooser row
 # (schema.DspSection.hooks with no MenuEntry): placed like an effect, on
@@ -729,6 +731,11 @@ def main():
             wr32(clone_P + 0x0ca + bi_slot * 4, 0x4003c7a0)
             wr32(clone_P + 0x0fa + bi_slot * 4, 0)
             wr32(clone_P + 0x12a + bi_slot * 4, 0x400328e4)
+        # Formatter.PLAIN: the stock numeric dial, both formatter words zero,
+        # whatever the donor drew in that slot (verify_menu's KNOB check).
+        for pl_slot in PLAIN_SLOTS.get(name, ()):
+            wr32(clone_P + 0x0ca + pl_slot * 4, 0)
+            wr32(clone_P + 0x0fa + pl_slot * 4, 0)
         for idx, cnt in PAGE2_COUNTS.get(name, {}).items():
             wr32(clone_P + 0x9a + idx * 4, cnt)     # P+0x9a = value-count array
             wr32(clone_P + 0x6a + idx * 4, 0)       # min 0

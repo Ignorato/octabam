@@ -172,7 +172,10 @@ state things you might assume:
   formatter draws: an enumerated renderer with three labels asked to draw
   0..127 draws no knob at all; a bipolar pair draws a count-5 select as a
   balance dial. Declare `formatter=` per slot; `verify_menu` checks the
-  renderer against the count.
+  renderer against the count. `Formatter.PLAIN` zeroes both formatter
+  words on any module (since 5 Oct 2026; until then only a module with a
+  stepped slot had its clone's formatters reset, and CF METER's SRC on
+  FILTER's bipolar slot 3 drew as a balance dial).
 - **Four per-parameter arrays carry the drawing**, `P`-relative
   (`docs/firmware/PARAM_PAGES.md` section 2, section 7): `P+0x9a` count (drawn on a
   fixed 0–127 scale: count 16 = ⅛ of the travel), `P+0x0ca` formatter A,
