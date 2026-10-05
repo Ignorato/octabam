@@ -466,14 +466,27 @@ dsp=DspSection(
   blanket string replace over the whole source, comments included; a
   shared-window address that must not move to the other half cannot be
   spelled `$30000`, and the literal is censused.
-- **`ptable`**: a tuple of words the build parks in the stock curve bank
-  (X:0x4840) and points the source's `$fab1e0` literal at.
+- **`ptable`**: a tuple of words the build places and points the source's
+  `$fab1e0` literal at. It goes to the first of three places that fits:
+  1. the stock curve bank X:0x4840, when no stock reader of it is kept;
+  2. P, directly before the module's code, in one harvested run;
+  3. the X data that only a given-up stock effect addresses
+     (`stock.x_exclusive_runs`), when the table and the code together fit
+     no P run. SPRING REV's are X:0x89a4..0x8cef on A and
+     X:0x8464..0x87af on B, 844 words each.
+
+  In places 1 and 3 every `p:(` read in the code becomes `x:(`, so a
+  module with a table reads P for nothing else.
+- **`ptable2`**: a second block with its own `$fab2e0` literal. In places
+  1 and 2 it follows `ptable` directly. In place 3 each block goes whole
+  into the first run with room, so a table larger than any one run is
+  declared as two blocks.
 - **`subst`**: per-payload text substitutions applied to the source before
   the build's own rewrites, `{"A": {"@SBASE@": "$33e00"}, "B": {"@SBASE@":
   "$3be00"}}` (`dsp_asm` has no `equ` and no expressions). Both payloads name
   the same keys and exactly the section's `payloads`; every key must occur in
   the source; a key or value overlapping a marker the build substitutes
-  (`schema.SUBST_RESERVED`: `$30000`, `$facade`, `$fab1e0`, `; ROTLATCH`, ...)
+  (`schema.SUBST_RESERVED`: `$30000`, `$facade`, `$fab1e0`, `$fab2e0`, `; ROTLATCH`, ...)
   is refused. The build report prints each `SUBST` line.
 - **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
   label)`). The two stock words at `site` become `jsr >label` after

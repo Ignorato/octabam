@@ -424,9 +424,16 @@ class DspSection:
     # nothing; or, when a reader of that record survives in the image, in
     # P immediately BEFORE the module's code, out of its own budget, as it
     # always was (build_bus.py XTABLE; stock.CURVE_BANK for the scan and
-    # its limits). ⚠️ So a module with a table may read P for NOTHING
+    # its limits); or, when neither fits, in the exclusive X data of a
+    # stock effect on neither chooser (stock.x_exclusive_runs), read through
+    # `x:(` the same way. ⚠️ So a module with a table may read P for NOTHING
     # ELSE: every `p:(` in its code is the table.
     ptable: tuple[int, ...] = ()
+    # A SECOND table block with its own `$fab2e0` base literal. In P and in
+    # the curve bank it follows `ptable` directly; in a given-up effect's
+    # X data each block goes into the first run it fits, so a table larger
+    # than any one run is declared as two blocks. Requires `ptable`.
+    ptable2: tuple[int, ...] = ()
     # Entries into this section from STOCK code (schema.DspHook). A section
     # with hooks and no MenuEntry is placed on `payloads` only and takes no
     # dispatch entry; one with a menu may carry hooks as well.
@@ -440,6 +447,9 @@ class DspSection:
     subst: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
 
     def __post_init__(self):
+        if self.ptable2 and not self.ptable:
+            raise ValueError(f"{self.asm}: ptable2 without ptable -- the "
+                             f"second block follows the first")
         object.__setattr__(self, "subst", MappingProxyType(
             {pl: MappingProxyType(dict(kv)) for pl, kv in self.subst.items()}))
         for h in self.hooks:
@@ -483,7 +493,7 @@ class DspSection:
 # Text the build substitutes in DSP sources itself (build_bus.py), which a
 # DspSection.subst key or value may not overlap. AGENTS.md "build-time
 # markers and base literals count when they appear in COMMENTS".
-SUBST_RESERVED = ("$30000", "$facade", "$fab1e0", "; ROTLATCH", "; ROTINIT",
+SUBST_RESERVED = ("$30000", "$facade", "$fab1e0", "$fab2e0", "; ROTLATCH", "; ROTINIT",
                   "_OVERRIDE", "XBUS_GATE", "; HOSTGUARD",
                   "LFO lines 0-1: ROLLED TOO")
 
