@@ -38,8 +38,10 @@ The voice path under this priority (Bryan T's CF METER takes, 4 Oct 2026,
 `docs/firmware/ARCHITECTURE.md` "ColdFire time per frame on a unit"): each
 added FLEX voice costs the frame interrupt 16.6 µs with the USB cable out
 and 16.9 µs with a host streaming both directions, so USB DMA on the SDRAM
-slave does not stall the renderer measurably. The USB stack itself costs
-~14 µs of mean ISR per frame idle and ~24–26 µs once anything plays. The
+slave does not stall the renderer measurably. The USB stack itself (IN
+ABCD + OUT TRACKS MAIN CUE) costs ~14 µs of mean ISR per frame idle and
+~24–26 µs once anything plays; OUT MAIN CUE in its place reads 27–50 µs
+less (the OUT TRACKS MAIN CUE README, *On the unit*). The
 stock DELAY on T1–T4 with seven FLEX voices and USB streaming added
 nothing measurable to the ISR mean.
 
