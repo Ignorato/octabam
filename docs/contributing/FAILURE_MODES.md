@@ -303,6 +303,13 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 - **Fix:** open: where between T1's audio block after proc and the read-back words at `X:0x2600` the junk appears, and which part of the delay's per-block decodes or sample loop it needs. Branches `diag91`..`diag98`, `core1scratch99`, `nolock94`, `fix97`; captures `out/hw/v9*.wav` (machine-local). The "dead words at 0x360d3-5" (send_client.asm) are unexplained.
 - **Check:** `tools/harness/burst_census.py` with the aligned-copy check on a `tools/rec` take (T1 BAL hard left, T5 hard right). `tools/rec` needs the device name as its third argument (without it, it looks for EVO4 and exits).
 
+## A UAC2 host stops audio setup after reading the clock: SET CUR of the read-only rate unanswered ✅ measured, fixed
+
+- **Seen:** an Octatrack MKII with USB AUDIO on an Elektron Outbox 8 (allmyfriendsaresynths (@clickysteve)): the Outbox stays GREEN, "no device connected". macOS enumerates and streams the same image.
+- **Cause (measured with a USB request log on the unit):** the Outbox enumerates the unit, sets the configuration, reads GET RANGE and GET CUR of the clock (44100), then sends SET CUR of CS_SAM_FREQ_CONTROL with a 4-byte data stage, and its audio setup stops there. The clock declares the control read-only and the stock EP0 stack has no control OUT data stage: the request fell to the stock STALL tail, which stalls only EP0 IN. Under the port the data stage is never accepted and the host times out. The read-only clock is octemu's design (`custom/usb-audio.py`), carried here.
+- **Fix:** `usbaudio.s` `audio_ctrl_shim` takes the SET (44100 acknowledged, any other rate a status-stage STALL). On the unit, with the SET acknowledged (a build before the rate check), the Outbox completes audio setup and streams.
+- **Check:** `verify_usb`'s SET CUR checks (44100 ACK, 48000 status STALL, EP0 answering after each).
+
 ## USB audio: a burst of reordered samples in the first 1.5 s of every host stream, clean after 🔴 open
 
 - **Seen:** image 64, 25 Sep 2026, macOS recording all sixteen USB channels: four of five takes have one cluster of sample-step events 0.75-1.5 s after stream open, on several channels, none after 2 s (60 s, 60 s, 300 s, and 120 s under a 7,170-message/s USB-MIDI flood with panel work). Device counters (vendor request 0xc0/0x55): 0 underruns, 0 overruns, no bank-duplicate movement. Image 69 (24-bit, four packets queued at a 250 µs poll): still present, 0.51-0.76 s after open, only on the right channel of each pair, in runs 124-380 frames off phase.

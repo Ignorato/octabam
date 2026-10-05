@@ -18,7 +18,9 @@ Based on markandrus's proof of concept
 ([octemu](https://github.com/markandrus/octemu) `custom/usb-audio.py` +
 `custom/coldfire/usb-audio.s` at `6a9ff68`, MIT): the shims, producer,
 packet builder, rate servo and UAC2 replies are his. MAIN/CUE on 17–20 are
-Bryan T's (25 Sep 2026).
+Bryan T's (25 Sep 2026). The clock SET CUR handling (*UAC2 hosts that set the
+clock*, below) is allmyfriendsaresynths's (@clickysteve), and the same change
+is proposed to octemu, whose `audio_ctrl_shim` this one still is.
 
 ## Measured
 
@@ -146,6 +148,28 @@ paid with no host connected. Each voice also costs ~2.5 µs more under this
 layout; cache pressure from the 320 read-back words per block is the
 candidate, not measured.
 
+### UAC2 hosts that set the clock
+
+The clock is fixed at 44.1 kHz and declares its frequency control read-only,
+but a UAC2 host may still SET it to the rate it has just read. The Elektron
+Outbox 8 does, right after GET RANGE and GET CUR of the clock, and its audio
+setup stopped there: the request (SET CUR of CS_SAM_FREQ_CONTROL, a 4-byte
+data stage) fell to the stock "unknown request" tail, which stalls only EP0
+IN, and the stock EP0 stack has no control OUT data stage. Under the port's
+bench the data stage is never accepted and the host times out. macOS does not
+send the request to a read-only clock.
+
+`audio_ctrl_shim` now takes that SET: it primes the stock EP0 OUT dTD for the
+data stage, waits for it (bounded; `audio_isr_shim` finishes a slower host),
+acknowledges 44100 and STALLs the status stage for any other rate. The rate
+never changes and no other rate is offered.
+
+On the unit: with the SET acknowledged, an Octatrack MKII on an Outbox 8
+completes audio setup and streams. That was tested before the rate check was
+added (the build acknowledged any 4-byte SET CUR); the Outbox asks for 44100,
+which the check passes. Rejecting another rate is measured under the port
+only (`verify_usb`).
+
 ## Open
 
 - **A burst of reordered samples 0.5–1.5 s after a host opens the
@@ -155,7 +179,8 @@ candidate, not measured.
   stream start is not known. `docs/contributing/FAILURE_MODES.md` has the
   entry.
 - Not measured: Windows and Linux hosts; USB controller load from the
-  250 µs packet rate beyond the takes above.
+  250 µs packet rate beyond the takes above. The rejection of a SET CUR to
+  an unoffered rate on a unit (the port only).
 - The first-poll anchor on a unit: `anchor` over `usb_counters.py` after
   an open (expected about 460 on macOS), and the two rings' `lastfill` sum
   with USB AUDIO IN beside it (expected about 896, was about 1,355).
@@ -179,7 +204,9 @@ candidate, not measured.
 
 ## Gates
 
-- `verify_usb` (`make check REMIX=usb-out-tracks-main-cue`): the checks under *Measured*.
+- `verify_usb` (`make check REMIX=usb-out-tracks-main-cue`): the checks under *Measured*,
+  and SET CUR of the sample frequency: 44100 acknowledged, 48000 a status-stage STALL,
+  EP0 answering after each.
 - `tools/verify/verify_usb_align.py` (the manifest's gate): MAIN/CUE against the tracks.
 
 ## Variants
@@ -233,7 +260,8 @@ image is byte-identical to the one built before the variants (27 Sep 2026).
   and an AudioStreaming interface 4 (alt 0 idle, alt 1 streaming). USB
   MIDI's descriptor unit generates this configuration when this module is
   in the remix. The clock source's CUR/RANGE/validity requests are
-  answered by a shim on the stock "unknown request" STALL tail.
+  answered by a shim on the stock "unknown request" STALL tail, and a SET
+  CUR of its rate is taken there too (44100 acknowledged).
 - **DMA memory.** The USB controller does not snoop the data cache, so the
   four dTDs and four 960-byte packet buffers are read and written only
   through the uncached SDRAM alias (address + `0x08000000`,
