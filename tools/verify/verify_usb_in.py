@@ -235,9 +235,13 @@ def main():
         # The port holds device time for the bench's next IN (usb.h,
         # isoPoll), so every poll is one 250 us slot: state 7 runs at the
         # unit's 0.689 per poll however loaded the machine is.
-        check("state 7 runs once per 16-sample frame: 0.689 per 250 us poll (between the two reads)",
-              abs(rate - 0.689) < 0.01 and abs(c["frames"] - c["seconds"]) <= 1,
-              f"{rate:.4f} per poll; first {c['frames']} / second {c['seconds']} visits")
+        # Both reads fall inside the stream, so between them every frame
+        # transfers (the second visit); while the stream is closed the
+        # transfer stops after four zero blocks, so the lifetime counts differ.
+        check("state 7 runs once per 16-sample frame: 0.689 per 250 us poll, one transfer per frame (between the two reads)",
+              abs(rate - 0.689) < 0.01
+              and abs((s1["frames"] - s0["frames"]) - (s1["seconds"] - s0["seconds"])) <= 1,
+              f"{rate:.4f} per poll; first {s1['frames'] - s0['frames']} / second {s1['seconds'] - s0['seconds']} visits between the reads")
     else:
         check("two counter reads over EP0 during the stream (POLLS >= 4)", False, f"{len(r['snaps'])} read(s)")
     tgt = re.search(r"^\.set IN_TARGET,\s+(\d+)", (ROOT / "modules/usb-audio-in-ab/usbaudio_in.s").read_text(), re.M).group(1)

@@ -84,13 +84,10 @@ So `IN_TARGET` alone does not set the latency. Two levers, both in
   pairings have not been run since. `usb-io-tracks-main-cue-ab` pairs it with OUT TRACKS MAIN CUE.
 - Packet buffers in SDRAM through the alias with USB CROSSBAR on.
 - Latency lever 2 above, after the unit measurement.
-- The second eDMA transfer runs every frame while the stream is closed
-  (word 0 = 0, "use the jacks"), and the frame-IRQ unmask waits for its
-  completion. Writing word 0 = 0 once on close and skipping the transfer
-  would remove one interrupt pass per frame; whether the DSP inject
-  tolerates a missing block is not checked. (Bryan T, 4 Oct 2026, from
-  the CF METER takes: every take streamed, so the closed-stream cost is
-  not measured.)
+- The skipped closed-stream transfer (5 Oct 2026) on a unit: what it
+  saves per frame with no host (not measured; Bryan T's 4 Oct takes all
+  streamed), and that the jacks stay live across open/close. Port only so
+  far: `verify_usb_in`, `verify_set` with the IN remixes.
 
 ## Gates
 
@@ -132,7 +129,13 @@ So `IN_TARGET` alone does not set the latency. Two levers, both in
     sample[7:0].
 
   The stock frame-IRQ unmask runs on the second visit, our transfer's
-  completion.
+  completion. While the stream is closed the transfer runs until four
+  blocks with word 0 = 0 have completed (the DSP reads the block from its
+  working bank and the banks alternate per frame, so one zero block clears
+  one bank: `verify_usb_in` saw host words in every other block with a
+  single one), then is skipped and the first visit runs the stock state 7
+  itself (since 5 Oct 2026; before that every frame). `in_seconds` counts
+  transfers, so it stops rising while closed.
 - Cushion `IN_TARGET` = 384 frames (8.7 ms).
 - The **dTDs and packet buffers are in on-chip SRAM** at `0x80007c00`, and
   the EP0 reply buffer at `0x80007f80`, declared as `Claims.sram`; see
