@@ -108,7 +108,7 @@ starting values, on the panel and over MIDI
 | MODULATION | PHSR | ChowDSP ChowPhaser (Schulte Compact Phasing A) | BSD-3-Clause |
 | MODULATION | COMB | Mutable Instruments Rings `string.h` / `string.cc` | MIT |
 | REVERB | all | written here; the input diffuser's delay lengths are at Dattorro's scale | — |
-| DELAY | GRAIN | written here; voiced against Efx Fragments' "1 Bar Glimmers" by ear | — |
+| DELAY | GRAIN | Mutable Instruments Clouds: the grain readers (unity-rate grains, triangle windows, per-grain scatter) follow Clouds' published design, written here; voiced against Efx Fragments' "1 Bar Glimmers" by ear | MIT |
 | SEND | — | written here | — |
 | stock DELAY (T8) | — | Elektron, from your own 1.40C | — |
 
