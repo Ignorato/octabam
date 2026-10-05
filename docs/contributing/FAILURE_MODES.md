@@ -9,7 +9,8 @@ are not in that blob: "PLAY or a sample load halts the unit in Octakit's
 pattern-apply check", "Unattended halt in Octakit's Part-refresh wrapper",
 "A BCR2000 goes dark or deaf", "Octakit stranded for the session",
 "A bank file written by the unit that the firmware then rejects", "A UAC2
-host stops audio setup", and every entry after the line "Entries from here to the end of the file (5 Oct 2026)".
+host stops audio setup", "A track button pressed within about 250 ms of a pattern
+change halts in Octakit's Part-refresh wrapper", and every entry after the line "Entries from here to the end of the file (5 Oct 2026)".
 
 ## A track button pressed within about 250 ms of a pattern change halts in Octakit's Part-refresh wrapper (a chain or a single switch) ✅ measured under the port, open on hardware
 
