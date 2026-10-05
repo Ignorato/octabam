@@ -84,6 +84,7 @@ def main():
                                 "--watch-mem", f"{MIDI_FIFO_HEAD:#x},4"] + (["--frame"] if audio else []),
                                cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT)
     fails = []
+    stalls_expected = 0     # EP0 STALLs this gate elicits on purpose (SET CUR of an unoffered rate)
 
     def check(what, ok, detail=""):
         print(f"  [{'PASS' if ok else 'FAIL'}] {what}{'  ' + detail if detail else ''}")
@@ -166,6 +167,33 @@ def main():
             # the clock source answers its sample rate; SET_INTERFACE alt 1 brings EP3 up
             cur = b.ctrl_in(0xa1, 1, 0x0100, 0x1000 | 3, 4)
             check("USB AUDIO: CS_SAM_FREQ_CONTROL CUR = 44100", cur == (44100).to_bytes(4, "little"), cur.hex())
+            # SET CUR of the (fixed, read-only) rate: some UAC2 hosts send it
+            # with the rate they have just read and give the audio function up
+            # if it STALLs (the Elektron Outbox 8: modules/usb-audio-out-tracks-main-cue/README.md).
+            # 44100 is acknowledged; any other rate STALLs the status stage.
+            # Before the fix the stock handler STALLed only EP0 IN, so the
+            # data stage was never accepted and the host timed out.
+            def set_cur_freq(rate):
+                b.setup(0x21, 1, 0x0100, 0x1000 | 3, 4)
+                try:
+                    b.ep_out(0, rate.to_bytes(4, "little"), timeout=10.0)   # a data-stage STALL raises
+                except TimeoutError:
+                    return "data stage never accepted (timeout)"
+                try:
+                    b.ep_in(0, 64)                          # status stage
+                    return "ACK"
+                except usb_host.Stall:
+                    return "status STALL"
+            for rate, want in ((44100, "ACK"), (48000, "status STALL")):
+                stalls_expected += want == "status STALL"
+                try:
+                    got = set_cur_freq(rate)
+                except usb_host.Stall as e:
+                    got = f"data-stage STALL ({e})"
+                check(f"USB AUDIO: SET CUR sample frequency {rate} -> {want}", got == want, got)
+                cur = b.ctrl_in(0xa1, 1, 0x0100, 0x1000 | 3, 4)
+                check(f"USB AUDIO: EP0 answers after SET CUR {rate} (CUR = 44100)",
+                      cur == (44100).to_bytes(4, "little"), cur.hex())
             b.ctrl_nodata(0x01, 0x0b, 1, 4)
             alt = b.ctrl_in(0x81, 0x0a, 0, 4, 1)
             check("USB AUDIO: GET_INTERFACE reports alt 1", alt == b"\x01", alt.hex())
@@ -293,7 +321,8 @@ def main():
         s = summary[-1]
         print("  " + s)
         check("no uninitialised queue head was primed", "UNINITIALIZED" not in s)
-        check("no EP0 stall during enumeration", " 0 stall(s)" in s)
+        check("no EP0 stall during enumeration" + (f" (only the {stalls_expected} the gate asks for)" if stalls_expected else ""),
+              f" {stalls_expected} stall(s)" in s)
     print(f"verify_usb: {'OK' if not fails else str(len(fails)) + ' FAILED'} ({log})")
     return 1 if fails else 0
 
