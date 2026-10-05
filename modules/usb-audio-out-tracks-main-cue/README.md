@@ -162,20 +162,15 @@ candidate, not measured.
 - `minfill`/`maxfill` on a unit under a busy project and DISK MODE churn:
   the host poll jitter the OUT ring absorbs, which is the floor for a
   lower `AUD_TARGET`.
-- The producer runs every block whether or not a host is listening
-  (*How it works*): for this layout ~2,710 instructions and 320 read-back
-  words per block for nothing while the stream is closed; the packet
-  builder already runs only while the host polls. Gating the producer on
-  the stream being open, with the ring re-anchored when the host opens
-  alt 1 (the first-poll anchor already re-anchors once), is not measured;
-  whether the closed-stream producer is what keeps the ring aligned for a
-  clean start is the question. On the unit (*On the unit* above) 4 out
-  streaming sits 13–25 µs of frame interrupt below this layout with the
-  cable out, which is what gating would recover for anyone carrying it
-  without streaming; a producer that copies once into the packet buffers
-  instead of ring then packet is the lever while streaming. The voice
+- The gated producer (5 Oct 2026) on a unit: the 13–25 µs of frame
+  interrupt the always-on producer cost with the cable out (*On the unit*
+  above, Bryan T) should be gone with nothing streaming, and the stream
+  start should show no underruns on macOS (the anchor lands 460 frames
+  after alt 1). Port only so far: `verify_usb` and `verify_usb_align`.
+  While streaming the cost stands; a producer that copies once into the
+  packet buffers instead of ring then packet is the lever there. The voice
   path is memory-bound, so the 320 read-back words count more than the
-  2,710 instructions. (Bryan T, 4 Oct 2026.)
+  2,710 instructions.
 
 ## Gates
 
@@ -208,11 +203,18 @@ image is byte-identical to the one built before the variants (27 Sep 2026).
   `0x80005ee0` (CUE), 16 × (L,R) each. The stock recorder reads the same
   buffer for SRC3 = MAIN / CUE.
 - **Producer.** Runs from the frame interrupt's last instruction
-  (`0x4000d9a0`), every 16-sample block, whether or not a host is
-  listening. It reads the previous bank, keeps the top 24 bits of each
-  32-bit sample, and writes one 80-byte slot per frame (20 channels × 4
-  bytes) into a 1,024-frame ring, plus an 8-byte stereo sum into a second
-  ring for full speed.
+  (`0x4000d9a0`), every 16-sample block while the host asks for the stream
+  (alt 1 requested; since 5 Oct 2026, before that every block). It reads
+  the previous bank, keeps the top 24 bits of each 32-bit sample, and
+  writes one 80-byte slot per frame (20 channels × 4 bytes) into a
+  1,024-frame ring, plus an 8-byte stereo sum into a second ring for full
+  speed. At the first produced block after a closed spell the 64 slots the
+  stream will start from are zeroed, so the packets queued at bring-up
+  carry silence rather than the previous session's tail; the first-poll
+  anchor (below) then puts the cursor behind live audio. A host that polls
+  within 64 frames of alt 1 hears up to 64 frames of silence first. With
+  the cable out the bank record is still kept, so `bankdup` counts only
+  producing blocks.
 - **Endpoint.** EP3 IN, isochronous, asynchronous, bInterval 2 (250 µs).
   Packets carry 11 or 12 frames, at most 960 bytes, one high-speed
   transaction. A rate servo moves the packet size ±0.1 frame against a

@@ -29,6 +29,8 @@ Remixes
 - Removed: `bamsep26` (bottleservice is its superset), `mutables`, `nimbus`, `hello`, `hello-dram` (27 Sep).
 
 Modules
+- USB AUDIO OUT (every layout): the producer runs only while the host asks for the stream, with the 64-slot start cushion zeroed at the first produced block (5 Oct, port only); Bryan T measured the always-on producer at 13–25 µs of frame interrupt per frame with no host.
+- USB AUDIO IN (AB, CD, ABCD): the per-frame transfer to core 0 stops once a block with word 0 = 0 has landed while the stream is closed (5 Oct, port only).
 - USB AUDIO IN AB / CD / ABCD: host channels onto the inputs, the inject a placed DSP section behind a ledger-checked hook (`schema.DspHook`) (28 Sep).
 - USB CROSSBAR: the SCM/XBS setting that cured lost packet tails, written at USB controller init (28 Sep).
 - USB AUDIO OUT MAIN: MAIN L/R alone every 250 µs (28 Sep).
