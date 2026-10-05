@@ -616,7 +616,8 @@ is written. `kind="jmp"` for a stub that replays what it displaced and
 jumps on, `"jsr"` for a callable that returns, `"lea"` to rewrite the
 operand of a six-byte `lea abs.l,An`. `pad_to` nops the rest of a displaced
 span longer than six bytes; `target=` names a stock address instead of a
-symbol.
+symbol. The detour writes `pad_to` bytes (six when unset) and `expect` must
+cover all of them; the schema refuses a shorter `expect`.
 
 A **`Poke`** is a plain asserted rewrite. A **`Keep`** names stock bytes
 your module relies on and does not write: the ledger refuses any other

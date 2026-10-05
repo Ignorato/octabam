@@ -1186,6 +1186,9 @@ def main():
                          f"{len(_ref)} B) -- re-pin them in the manifest deliberately")
             if not _ref and not _lb:
                 sys.exit(f"{_c.label}: source produced no bytes")
+            if _c.reserve and len(_lb) > _c.reserve:
+                sys.exit(f"{_c.label}: linked {len(_lb)} B exceeds its declared "
+                         f"reserve of {_c.reserve} B")
             if _floating and _inside and _c.cave_addr + len(_lb) > cave_limit:
                 # A floating source cave that no longer fits the clone window
                 # (the ROM units come first since 15 Sep 2026) goes to the
@@ -1457,6 +1460,11 @@ def main():
             print(f"  {_m.key}: detour at 0x{_d.site:08x} bridged -- another module's stub "
                   f"stands in for it")
             continue
+        _n = _d.pad_to or 6
+        assert _n >= 6 and _n % 2 == 0, \
+            f"{_m.key} detour at 0x{_d.site:08x}: pad_to {_n} must be an even count >= 6"
+        assert len(_d.expect) >= _n, \
+            f"{_m.key} detour at 0x{_d.site:08x}: expect covers {len(_d.expect)} of the {_n} bytes written"
         _got = bytes(img[_d.site - BASE:_d.site - BASE + len(_d.expect)])
         if _got != _d.expect:
             sys.exit(f"{_m.key} detour {_d.note or _d.symbol} at 0x{_d.site:08x} finds "
@@ -1464,9 +1472,6 @@ def main():
         _target = _d.target if _d.target is not None else _sym[_d.unit][_d.symbol]
         _op = {"jmp": b"\x4e\xf9", "jsr": b"\x4e\xb9", "lea": _d.expect[:2]}[_d.kind]
         _w = _op + _target.to_bytes(4, "big")
-        _n = _d.pad_to or 6
-        assert _n >= 6 and _n % 2 == 0, \
-            f"{_m.key} detour at 0x{_d.site:08x}: pad_to {_n} must be an even count >= 6"
         img[_d.site - BASE:_d.site - BASE + _n] = _w + b"\x4e\x71" * ((_n - 6) // 2)
         _what = f"{_d.unit}:{_d.symbol}" if _d.target is None else "stock"
         print(f"  {_m.key}: {_d.kind} 0x{_d.site:08x} -> {_what} 0x{_target:08x}  {_d.note}")

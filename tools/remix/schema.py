@@ -581,6 +581,14 @@ class CavePatch:
     # address -- cc-map keeps its hand-patched legacy form for exactly this.
     # Checked on every build; a drift refuses.
     reference: object | None = None
+    # Bytes the cave may occupy when `pinned` is empty (its bytes come from
+    # the link at build time). The ledger sizes the claim by the larger of
+    # this and len(pinned); the build refuses a linked cave past it.
+    reserve: int = 0
+
+    @property
+    def claim_len(self) -> int:
+        return max(len(self.pinned), self.reserve)
 
 
 SHARED_WINDOW = (0x30000, 0x40000)      # Y:0x30000-0x3FFFF, both cores; X, Y and P alias
@@ -692,7 +700,10 @@ class Claims:
     # what). 32 KB at 0x80000000; stock's highest static use ends at
     # 0x80007874 (a 768-byte buffer at 0x80007574). USB AUDIO IN keeps its
     # dTDs and packet buffers in the top 1 KB. The ledger refuses an overlap
-    # between two modules; the stock extent is the author's census.
+    # between two modules; the stock extent is the author's census. The
+    # check is on address overlap, so a range in CS1 (battery SRAM at
+    # 0x10000000) is declared here too: PLOCKS P2 keeps the current bank's
+    # page 2 in 0x100f8600..0x100ffe00.
     sram: tuple[tuple[int, int, str], ...] = ()
     # DSP DATA a module writes outside its r7 block and the regions the
     # fields above cover (schema.DspRange): shared-window buffers, fixed X
@@ -929,6 +940,15 @@ class Detour:
     # part reload traps on any but the stock sites' (Runtime.pinned_returns)
     # -- and the ledger refuses the pair by name.
     subst_return: bool = False
+
+    def __post_init__(self):
+        written = self.pad_to or 6
+        if len(self.expect) < written:
+            raise ValueError(
+                f"Detour at 0x{self.site:08x} ({self.note or self.symbol}): "
+                f"expect is {len(self.expect)} bytes, the detour writes "
+                f"{written}; the build asserts only `expect`, so the other "
+                f"{written - len(self.expect)} would be overwritten unchecked")
 
 
 @dataclass(frozen=True)
@@ -1201,7 +1221,7 @@ class Module:
         placement and are the ledger's to evaluate."""
         for c in self.cf_patches:
             if c.cave_addr is not None:
-                yield "cave", c.cave_addr, len(c.pinned), c.label
+                yield "cave", c.cave_addr, c.claim_len, c.label
             if c.hook_addr is not None:
                 yield "hook", c.hook_addr, max(len(c.hook_stock), 6), c.label
         for d in self.detours:
@@ -1681,6 +1701,9 @@ class Remix:
         bad = [k for k in self.locked if k not in self.modules]
         if bad:
             raise ValueError(f"remix {self.name!r}: locked={bad} are not in the remix")
+        bad = [k for k in self.hidden if k not in self.modules]
+        if bad:
+            raise ValueError(f"remix {self.name!r}: hidden={bad} are not in the remix")
         bad = [k for k in self.named if k not in self.hidden]
         if bad:
             raise ValueError(
