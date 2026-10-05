@@ -71,6 +71,9 @@ class Bench:
     def reset(self):
         self.cmd("reset", "ok")
 
+    def unplug(self):
+        self.cmd("unplug", "ok")
+
     def speed(self, hs):
         self.cmd(f"speed {'hs' if hs else 'fs'}", "ok")
 

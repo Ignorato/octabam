@@ -101,6 +101,9 @@ namespace ot
 		//   out <ep> [<hex>]   OUT transfer (bytes, or a ZLP) to EP n    -> out <ep> <count>|stall
 		//   reset              bus reset (URI + PCI, address cleared)    -> ok, once the guest
 		//                      has acknowledged URI (its reset handling done)
+		//   unplug             B-session valid drops, BSVIS latches (the
+		//                      stock ISR's session-end path)             -> ok, once the guest
+		//                      has acknowledged BSVIS (session end handled)
 		//   speed hs|fs        the port speed PORTSC1 reports            -> ok
 		//   isohz <hz>         the isochronous poll rate the endpoint's
 		//                      bInterval sets (0: 4000 at high speed,
@@ -186,6 +189,8 @@ namespace ot
 		Write8 m_write8;
 		std::array<uint32_t, g_size / 4> m_regs = {};
 		uint32_t m_otgscIs = 0;				// the latched BSVIS
+		bool m_sessionEnded = false;			// unplug: OTGSC reports no B-session
+		bool m_unplugUnacked = false;			// unplug landed, BSVIS not yet acknowledged: the host's ok waits
 		bool m_speedHs = true;
 		double m_isoHz = 0;					// isohz: 0 = by speed
 		bool m_hwFaithful = true;
