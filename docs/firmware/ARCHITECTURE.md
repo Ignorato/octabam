@@ -423,6 +423,43 @@ USB; T1 ~148 or ~200 alternating (a trig in the window or not) unplugged,
   premium, plus ~24–26 µs for the USB stack while a host streams and
   anything plays.
 
+#### Third note: 4 in / 20 out against 4 in / 4 out ✅ (Bryan T, 4 Oct 2026)
+
+Two images from the same module set, differing only in the OUT layout:
+USB AUDIO OUT TRACKS MAIN CUE (eight track pairs + MAIN + CUE) against OUT
+MAIN CUE (MAIN + CUE), both beside USB AUDIO IN ABCD, USB MIDI, USB
+CROSSBAR, CF METER + CF METER IDLE and the stock effects. Same unit, same
+fresh-loaded projects, 20 s takes balanced over the alternating windows; the
+20-out takes through the analog CUE path (×0.994), the 4-out takes over USB
+(CUE on host channels 3/4); the two methods agreed where they overlapped.
+Repeat loads within ±0.5 µs.
+
+| fresh load | 20 out, unplugged | 20 out, streaming | 4 out, streaming | 20 out streaming − 4 out |
+|---|---|---|---|---|
+| no voices | 106.5 µs | 120.5 µs | 93.8 µs | 26.7 µs |
+| T1 | 121.1 µs | 144.8 µs | 110.3 µs | 34.5 µs |
+| T1–T7 | 220.1 µs | 245.5 µs | 195.3 µs | 50.2 µs |
+| per voice, T1 → T1–T7 | 16.5 µs | 16.8 µs | 14.2 µs | |
+
+Seven voices: 68 % of the frame in the ISR with 20 out, 54 % with 4 out.
+Worst frame per window: no voices ~201–209 µs (20 out) against ~114–121 (4
+out); seven voices ~282–314 against ~231–272.
+
+- **Most of the 20-out cost is paid with no host connected:** 4 out
+  streaming sits 13 µs below 20 out unplugged with no voices and 25 µs
+  below with seven. That is the OUT TRACKS MAIN CUE producer, which runs
+  every block whether or not a host listens (~2,710 instructions and 320
+  read-back words per block, against 64 words for MAIN CUE); packet
+  building is only part of it.
+- **20 out makes each voice dearer:** 16.5–16.8 µs per voice with it, cable
+  in or out, against 14.2 µs with 4 out. Cache pressure from the 320 words
+  per block is his candidate, not measured; a probe walking the same
+  footprint without USB would test it.
+- **The ~10 µs step at the first voice** in the follow-up above belongs to
+  the 20-out layout: no voices → T1 is +24.3 µs with 20 out streaming,
+  +14.6 unplugged, +16.5 with 4 out streaming.
+- Not measured: 4 out unplugged; recording; the ColdFire DELAY; one MKII.
+
 Method, port side: `verify_set` pokes a trig on T1 step 2 by default, so
 every port run has T1 playing; `--poke-trig 0` (since 5 Oct 2026) is the
 zero-voice run. The gate stages samples from the SAVED part of pattern 1 and
@@ -466,8 +503,10 @@ container), `string_func_map.py`, the `Ghidra*.java` headless scripts.
   cached SDRAM, the uncached alias (`+0x08000000`) and on-chip SRAM
   `0x80000000` (CF METER's MEM/SRC knobs, not yet run on a unit); DTIM3
   around the two HC polls and inside the level-6 handlers, for the nested
-  share; the ~10 µs USB step when anything starts playing; why tracks that
-  have played keep costing after they fall silent (a fresh no-voice
+  share; the ~10 µs USB step when anything starts playing (the 20-out
+  layout's, by the third note); whether 320 read-back words per block cost
+  the renderer cache lines (20 out: 16.5 µs per voice, 4 out: 14.2); why
+  tracks that have played keep costing after they fall silent (a fresh no-voice
   project, measure, a bar of T1, clear it, measure again); the alternating
   2 s windows (a 4 s period, the swing growing with voices); a recording
   take (the 8-recorder SOS project).

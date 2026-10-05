@@ -127,6 +127,25 @@ the master off the producer's words are unchanged and `verify_usb_align`
 reads 0. Toggling the master leaves up to 32 frames of stale CUE in the
 ring once.
 
+**What the layout costs the ColdFire (Bryan T's MKII, 4 Oct 2026,
+`docs/firmware/ARCHITECTURE.md` "ColdFire time per frame on a unit").**
+Against OUT MAIN CUE in an otherwise identical image (IN ABCD, USB MIDI,
+USB CROSSBAR, the stock effects), fresh-loaded FLEX projects, frame
+interrupt mean per frame:
+
+| | this layout, cable out | this layout, streaming | OUT MAIN CUE, streaming |
+|---|---|---|---|
+| no voices | 106.5 µs | 120.5 µs | 93.8 µs |
+| T1 playing | 121.1 µs | 144.8 µs | 110.3 µs |
+| T1–T7 playing | 220.1 µs | 245.5 µs | 195.3 µs |
+| per voice | 16.5 µs | 16.8 µs | 14.2 µs |
+
+The frame is 362.8 µs: ~27 µs more than MAIN CUE with nothing playing,
+~50 µs with seven voices (about three voices of headroom), most of it
+paid with no host connected. Each voice also costs ~2.5 µs more under this
+layout; cache pressure from the 320 read-back words per block is the
+candidate, not measured.
+
 ## Open
 
 - **A burst of reordered samples 0.5–1.5 s after a host opens the
@@ -150,10 +169,13 @@ ring once.
   the stream being open, with the ring re-anchored when the host opens
   alt 1 (the first-poll anchor already re-anchors once), is not measured;
   whether the closed-stream producer is what keeps the ring aligned for a
-  clean start is the question. On the unit the ColdFire's voice path is
-  memory-bound (`docs/firmware/ARCHITECTURE.md` "ColdFire time per frame
-  on a unit"), so the read-back words count more than the instructions.
-  (Bryan T, 4 Oct 2026.)
+  clean start is the question. On the unit (*On the unit* above) 4 out
+  streaming sits 13–25 µs of frame interrupt below this layout with the
+  cable out, which is what gating would recover for anyone carrying it
+  without streaming; a producer that copies once into the packet buffers
+  instead of ring then packet is the lever while streaming. The voice
+  path is memory-bound, so the 320 read-back words count more than the
+  2,710 instructions. (Bryan T, 4 Oct 2026.)
 
 ## Gates
 
