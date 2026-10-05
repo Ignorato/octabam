@@ -52,7 +52,7 @@
 ; State in the per-instance r7 block. The numbers below are raw slots; the
 ; code from `bus_mine:` to `dry:` spells them rebased -- r7 is moved $49
 ; into the block there so every access is the one-word displaced move, and
-; slot NN reads as x:(r7+(NN-$49)): $14 is x:(r7-$35), $88 is x:(r7+$3f).
+; slot NN reads as x:(r7+(NN-$49)): $15 is x:(r7-$34), $83 is x:(r7+$3a).
 ;   r7+$14              call flag stash (proc entry accumulator)
 ;   r7+$15              warm-up count stash
 ;   r7+$16              PITCH decode park (per block): f, then oct. Until
@@ -390,9 +390,9 @@ bus_claim:
 bus_mine:
 ; ---- r7 REBASE (14 Sep 2026): from here to `dry:` r7 points $49 INTO the
 ; state block. The one-word displaced move reaches -64..63 and the block
-; spans $14..$88, so with the raw r7 every slot from $40 up cost two words
+; spans $15..$83, so with the raw r7 every slot from $40 up cost two words
 ; (222 sites, most of them per sample). Slot NN is written x:(r7+(NN-$49))
-; from here on -- x:(r7-$35) is $14, x:(r7+$3f) is $88 -- and the header
+; from here on -- x:(r7-$34) is $15, x:(r7+$3a) is $83 -- and the header
 ; map and every comment keep the RAW numbers. Everything that compares or
 ; stores r7 ITSELF (the position-0 test, the role lock, the ROTLATCH /
 ; ROTINIT / HOSTGUARD bodies the build substitutes) runs ABOVE this point

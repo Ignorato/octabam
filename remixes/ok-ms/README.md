@@ -1,8 +1,8 @@
 # `ok-ms` — Octakit + MIDI SCENES
 
 The two ColdFire mods together on the stock effects, with the bridge that
-lets them share the Part reload. The first octabam image to run on
-hardware (OKMS1, 14 Sep 2026).
+lets them share the Part reload. OKMS1 (14 Sep 2026, on the unit of
+midisc's author) was the first image composed of Octakit and MIDI SCENES.
 
 ## What is in it
 

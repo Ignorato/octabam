@@ -7,9 +7,9 @@ The pipeline, left to right:
 
 ```
 acquire ──► unpack ──► understand ──► build ──► hear/measure ──► verify ──► flash ──► capture
-scripts/     scripts/    tools/build    tools/build tools/harness   tools/      docs/       tools/hw
-fetch-os     analyze     dsp_modmap     build_bus   dsp_host +      verify/*    remixer/    capture_hw
-                         disasm         make image  tools/emu       cycles      FLASHING    ot_midi …
+scripts/     scripts/    tools/build    tools/build tools/harness   tools/      docs/guide/ tools/hw
+fetch-os     analyze     dsp_modmap     build_bus   dsp_host +      verify/*    BUILDING.md capture_hw
+                         disasm         make image  tools/emu       cycles                  ot_midi …
 ```
 
 `make help` lists the entry points; almost everything below is behind a make

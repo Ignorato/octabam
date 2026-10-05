@@ -26,7 +26,7 @@ MODULE = Module(
     kind=Kind.CF_PATCH,
     category=Category.BUS, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.PORT, proof_note="verify_fx2lock under the port, 4 Oct 2026",
-    doc="The FX2 chooser cannot change a track's effect: its select handler always takes the 'same effect' exit.",
+    doc="The FX2 chooser cannot change a track's effect: YES's key-table entry points at NO's close handler, so the select handler never runs.",
     pokes=(
         Poke(0x400BC374, expect=H("40052474"), write=H("4003d440"),
              note="FX2 chooser key table: YES -> the NO (close) handler, not the select"),

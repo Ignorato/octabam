@@ -206,10 +206,13 @@ leaves neutral. GRAIN's four grains per line are the largest lever:
 
 ## Where it has run
 
-- **Hardware:** Sam's MKII, image 88 (built from main `d6867bd`, 27 Sep
-  2026). Load, play, TEMPO window, Kit save and reload, USB audio and a
-  page-2 scene lock are the things to try on it; which of them have been
-  tried is not written down yet.
+- **Hardware:** Sam's MKII, images A0–A3 (4 Oct 2026; A0 built from
+  `feb52f5f`, `CHANGELOG.md`): A0 boots into a re-hosted project and
+  pattern paste works. A0 carries PLOCKS P2 and the 250 µs OUT MASTER
+  poll. Earlier: image 88 (built from main `d6867bd`, 27 Sep 2026): load,
+  play, a fourth MODULATION overran the DSP. Which of the TEMPO window,
+  Kit save and reload, USB audio and a page-2 scene lock were exercised
+  on these images is not written down.
 - **Images 95 and 97 (3–4 Oct 2026, unreleased):** with USB AUDIO IN CD
   and USB CROSSBAR in the image and a computer on the USB port, PLAY in a
   new project halted the unit in Octakit's pattern-apply check
@@ -221,10 +224,10 @@ leaves neutral. GRAIN's four grains per line are the largest lever:
   every boot into that project then stranded Octakit (silent songs, a
   halt on pattern paste) -- `docs/contributing/FAILURE_MODES.md`, the two
   Octakit entries.
-- **Not flashed in this form:** OUT MASTER polling every 250 µs (image 88
-  polled every 1 ms) and PLOCKS P2 (page-2 parameter locks;
+- **PLOCKS P2** (page-2 parameter locks): in image A0 (`CHANGELOG.md`);
   `verify_plocksp2` passes on this remix under the emulator, power cycles
-  included).
+  included. OUT MASTER polls every 250 µs since 28 Sep 2026 (image 88
+  polled every 1 ms).
 - **Under the ColdFire emulator:** `make check REMIX=bottleservice` with a
   real project, every gate green; Kit save, FUNC + CUE reload, cross-Kit
   load and LOAD KIT copy/paste keep values written by MODE DEFAULTS and CC

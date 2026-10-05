@@ -21,9 +21,11 @@ time (`.incbin`, `make os`).
 | JClones TapeHead, DaTube, OInflator, AC1 (JSFX) | MIT | JClones | `modules/character` SAT (TAPE / TUBE / INFL), COMP / GLUE |
 | audiojs/filter `moogLadder`, `oberheim` (Zavalishin's zero-delay forms) | MIT | audiojs contributors | `modules/spectrum` LADR, LP / BP |
 | markandrus/octemu `custom/coldfire/usb-midi.s`, `custom/usb-midi.py` (descriptors) | MIT | markandrus | `modules/usb-midi` (his text; one ISA-B substitution, README) |
-| markandrus/octemu `custom/coldfire/usb-audio.s`, `custom/usb-audio.py` (descriptors) | MIT | markandrus | `modules/usb-audio-out-tracks-main-cue` (his shims, producer, packet builder and servo; the loader replaces his card payload machinery); `modules/usb-audio-out-tracks` and `modules/usb-audio-out-master` assemble the same source with fewer channels |
+| markandrus/octemu `custom/coldfire/usb-audio.s`, `custom/usb-audio.py` (descriptors) | MIT | markandrus | `modules/usb-audio-out-tracks-main-cue` (his shims, producer, packet builder and servo; the loader replaces his card payload machinery); `modules/usb-audio-out-tracks`, `modules/usb-audio-out-master`, `modules/usb-audio-out-main` and `modules/usb-audio-out-main-cue` assemble the same source with fewer channels or other layouts (their READMEs cite `usbaudio.s`, markandrus/octemu, MIT) |
 | markandrus/octemu `src/board/ot-board.c` USB packet bench (line protocol) | MIT | markandrus | `tools/emu/ot_emu/usb.h` speaks the same protocol so his `tests/usb-host.py` drives the port; the model is written here |
 | Airwindows Capacitor2 | MIT | Chris Johnson | `modules/spectrum` ISO (`capacitor2_ref.py`) |
+| [CHOMPI-Club/CHOMPI](https://github.com/CHOMPI-Club/CHOMPI) WAVE firmware at `a73d732` | MIT (`modules/wave/LICENSE-CHOMPI`, `modules/waveload/LICENSE-CHOMPI`); CHOMPI is CHOMPI Club's trademark (their `TRADEMARKS.md`): used to say where the code comes from; not affiliated with or endorsed by CHOMPI Club or Chase Bliss | CHOMPI Club | `modules/wave`, `modules/waveload` |
+| DJ-Mixer `fx-dsp/core/src/blocks/TapeEchoBlock.cpp` | licence not stated in the tree | not stated in the tree | `modules/tapeecho`: the behavioural reference for voicing and the 44.1 kHz native comparison (`modules/tapeecho/README.md`); multi-head geometry and the physical-cell write model are not copied |
 
 Retired transcriptions (in history only): jpcima `string-machine` (BSL-1.0,
 the Solina ensemble, removed 16 Sep 2026).
@@ -49,12 +51,17 @@ the laws (`modules/modulation/README.md` "Sources"):
 | `modules/octakit` (Octakit) | https://github.com/emuyia/ems-octakit | MIT, Copyright (c) 2026 June Kiff |
 | `tools/remix/loader.S` (the DRAM loader) | derived from Octakit's `runtime/loader.S` | MIT, Copyright (c) 2026 June Kiff |
 | `modules/synth`, `modules/quantizer`, `modules/direct-jump`, `modules/tuner` (SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP, TUNER) | https://github.com/timhastie/octatrick-modules (one submodule, four wrappers; pinned to `v2.9` = `525f4b1`) | MIT, Tim Hastie 2026 |
-| `modules/direct-jump-kyoti`, `modules/batch-bugfixes`, `modules/reload-from-project`, `modules/quantize-live-rec-toggle`, `modules/erase-empty-trigless-locks`, `modules/mute-modes` (DIRECT_JUMP_KYOTI, BATCH_BUGFIXES, RELOAD_FROM_PROJECT, QUANTIZE_LIVE_REC_TOGGLE, ERASE_EMPTY_TRIGLESS_LOCKS, MUTE_MODES) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (one repository, six submodules and wrappers; pinned to `77f132f`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
+| `modules/direct-jump-kyoti`, `modules/batch-bugfixes`, `modules/reload-from-project`, `modules/quantize-live-rec-toggle`, `modules/erase-empty-trigless-locks` (DIRECT_JUMP_KYOTI, BATCH_BUGFIXES, RELOAD_FROM_PROJECT, QUANTIZE_LIVE_REC_TOGGLE, ERASE_EMPTY_TRIGLESS_LOCKS) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (one repository; five of eight submodule mounts, pinned to `77f132f`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
+| `modules/mute-modes`, `modules/sidechain-compressor` (MUTE_MODES, SIDECHAIN_COMPRESSOR) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (two mounts, pinned to `d3e0801`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
+| `modules/rec-trig-mute` (REC_TRIG_MUTE) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (one mount, pinned to `0bc14c7`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
 
 `modules/kits-reload`, `modules/scenes-kits`, `modules/cc-map`,
-`modules/tempo-sync`, `modules/mode-defaults`, `modules/recorder-loop-fix`
-and `modules/lofi-amf-fix` are written here
-(sambanks; the LO-FI fix from Bryan T's finding) and carry `LICENSE`.
+`modules/tempo-sync`, `modules/mode-defaults` and `modules/recorder-loop-fix`
+have `sambanks` as author in their manifests; none of these module
+directories holds a `LICENSE` file, and the repository `LICENSE` (MIT) covers
+them. `modules/lofi-amf-fix` has `bryantysinger/octa-bt-pt` as author in its
+manifest and its README says it is ported from that repository; its licence
+is not stated in the tree.
 
 ## Emulator and panel from a fork of this repository
 
@@ -72,9 +79,11 @@ retracts something written here) and the author's name beside them. The
 ingest record with the notes exchanged verbatim is
 `git show 3ceba41:docs/history/EXTERNAL_INGEST.md`. All were derived from
 the officially distributed OS 1.40C (`section_3_MAIN_OS.bin` SHA-256
-`164f3122…`, base `0x40000400`). Modules that arrived as code (midisc,
-Octakit, octalab, REPITCH) are in the sections above and the README's
-module table.
+`164f3122…`, base `0x40000400`). Modules that arrived as code: midisc and Octakit are in the
+firmware-modification table above; REPITCH (repeat98, `modules/repitch`) is
+in the README's module table, and its licence is not stated in this file or
+in the module; no `modules/octalab` exists in the tree, and nordseele's
+octalab appears here as the `octalab-notes` rows below.
 
 | received | from | what | where it lives |
 |---|---|---|---|
@@ -101,8 +110,13 @@ module table.
 ## Analysis tooling
 
 Portions of the firmware analysis tooling originate from
-https://github.com/mxldyn/octamax, Copyright (c) 2025-2026 Maxolydian, MIT
-(`LICENSE`).
+https://github.com/mxldyn/octamax, Copyright (c) 2025-2026 Maxolydian. The
+repository `LICENSE` says "also under the MIT License".
+`modules/batch-bugfixes/upstream/CREDITS.md` says octamax ships no `LICENSE`
+file, that the setup scripts carried over (`fetch-os.sh`, `analyze.sh`,
+`setup.sh`, `tools/entropy.py`, `tools/bin_decode.py`) stay its author's, and
+that octamax's stance is educational use only with no binaries
+redistributed. The two statements are not reconciled in the tree.
 
 `tools/ghidra/processors/DSP56300/` (the DSP56300 processor module) and
 `tools/ghidra/patches/coldfire-emac.patch` (ColdFire ISA_C/EMAC in Ghidra's

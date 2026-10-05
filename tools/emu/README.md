@@ -46,7 +46,7 @@ Needs `make setup` and `make os && make recon` ([BUILDING.md sections 0–2](../
 
 ```sh
 make emu-cf                          # cmake into out/emu, then boots stock 1.40C to the RTOS handoff
-./out/emu/ot_emu --help              # every option, grouped
+./out/emu/ot_emu --help              # an unrecognised argument: prints the usage block (main.cpp, parseArgs) and exits 2
 make emu-setup                       # .venv via uv: unicorn, textual, sounddevice (Tier-0, the panel's audio)
 make emu-unicorn                     # the EMAC-fixed Unicorn for Tier-0
 ```
@@ -314,7 +314,7 @@ tools/harness/usb_host.py /tmp/ot-usb.sock audio 3 2.0 capture.pcm 4
 
 ## Port features
 
-Every option is in `./out/emu/ot_emu --help`. The `--interactive`
+Every option is in the usage block `./out/emu/ot_emu` prints for an argument it does not know (`--help` is not an option; exit status 2). The `--interactive`
 commands' reply formats are the header comment of `main.cpp`
 (`serveInteractive`). All but `--mkii` came from Tim Hastie's fork
 (O14i–O23, 11–13 Sep 2026; `THIRD_PARTY.md`).

@@ -55,7 +55,8 @@ flashing; downgrading to stock may lose Kit data** (her words).
 compiles and links her sources with her linker script, packs with her encoder
 (ported to Python), links again with the packed blob, and re-derives every
 identity the recipe pins; a mismatch stops the build with both digests. The
-411 Elektron routines her runtime carries are `.incbin`'d from the user's
+Elektron routines her runtime carries (459 distinct `stock/NNNN.bin`
+names in `upstream/runtime/*.S`; an earlier count was 411) are `.incbin`'d from the user's
 stock 1.40C at build time.
 
 In an octabam image her packed runtime is a payload of octabam's loader
@@ -137,8 +138,8 @@ its recorded offset, so a site edit is a same-length replacement and new
 code is a new unit listed LAST in the recipe's `sources`, in a
 `.runtime.*` section, after `persistence.c`.
 
-- `patches/0001-banks-load-error-applies-current-bank.patch` (5 Oct 2026,
-  unflashed): a stock bank load that returns an error (a bank file whose
+- `patches/0001-banks-load-error-applies-current-bank.patch` (5 Oct 2026;
+  on the unit in image A4, below): a stock bank load that returns an error (a bank file whose
   checksum fails, −51; a missing one, −12) returned from
   `gk_stock_banks_load_work` before the post step, so the lifecycle word
   stayed QUIESCED for the session: every paste halted at
