@@ -180,7 +180,7 @@ port-compare: ## One part under the firmware (ot_emu) and under rig_render on th
 	python3 tools/harness/port_compare.py --project $(PROJECT) --remix $(REMIX) $(if $(IMAGE),--image $(IMAGE)) $(PCARGS)
 
 .PHONY: reverb
-reverb: ## Render a wav through BusVerb: make reverb IN=loop.wav [ARGS='-p MIX=80']
+reverb: ## Render a wav through BusVerb: make reverb IN=loop.wav [ARGS='-p WET=80']
 	@test -n "$(IN)" || { echo "usage: make reverb IN=loop.wav [ARGS='--wet --mode all']"; exit 1; }
 	python3 tools/harness/render_reverb.py $(IN) $(ARGS)
 

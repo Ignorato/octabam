@@ -519,22 +519,16 @@ def main():
         print("  [PASS] a server with undeclared payload is refused")
 
     # ---- one knob-name universe -----------------------------------------
-    # The audition path drives render_reverb, whose PARAMS list predates the
-    # manifest and keeps two historical labels (MIX for IN, SPEED for SHMR).
-    # The bridge is positional -- manifest slot -> PARAMS[slot] -- so prove
-    # the two tables stay slot-for-slot aligned; a slot that moves in one and
-    # not the other is exactly the wrapper drift that has burned renders
-    # before (the harness-knob-drift rule).
+    # The audition path drives render_reverb: manifest slot -> PARAMS[slot]
+    # -> `-p NAME=`. render_reverb builds PARAMS from the manifest; this
+    # holds the name at every slot equal to the manifest's, so a hand-copied
+    # table cannot return (harness-knob-drift rule).
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401  (every tools/ dir on sys.path)
     import render_reverb
     cv = registry.by_key("REVERB SERVER")
     for name, slot in sorted(cv.knob_map().items(), key=lambda kv: kv[1]):
-        if name == "MODE":                               # goes via --mode
-            ok = render_reverb.PARAMS[slot][0] == "_C"   # (slot 6 since v7)
-        else:
-            rr_name = render_reverb.PARAMS[slot][0]
-            ok = rr_name in render_reverb.NAMES and \
-                render_reverb.NAMES[rr_name] == slot
+        rr_name = render_reverb.PARAMS[slot][0]
+        ok = rr_name == name and render_reverb.NAMES[name] == slot
         if not ok:
             bad += 1
             print(f"  [FAIL] busverb {name}@{slot} has no aligned "

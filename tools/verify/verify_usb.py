@@ -255,8 +255,8 @@ def main():
             first = [len(b.ep_in(3, 1024)) for _ in range(4)]
             c1 = usb_host.counters(b)
             gap = c1["produced"] - c0["produced"]
-            check(f"{audio}: a first poll {gap} frames after alt 1 re-anchors the cushion at {AUD_TARGET}: {c1['anchor']} frames skipped",
-                  480 <= c1["anchor"] <= gap + 32 and abs(c1["lastfill"] - AUD_TARGET) <= 64 and any(first),
+            check(f"{audio}: a first poll {gap} frames after alt 1 re-anchors the cushion at {AUD_TARGET}: {c1['anchor']} frames skipped, lastfill {c1['lastfill']}",
+                  480 <= c1["anchor"] <= gap + 32 and abs(c1["lastfill"] - AUD_TARGET) <= AUD_TARGET // 2 and any(first),
                   f"anchor {c1['anchor']} gap {gap} lastfill {c1['lastfill']} first polls {first}")
             for _ in range(400):
                 b.ep_in(3, 1024)
@@ -264,10 +264,11 @@ def main():
             # The floor only: a poll the bench host misses drains nothing, so
             # bench lag can only RAISE the fill (maxfill 678 and 698 with 106
             # and 351 missed polls, four shards, 28 Sep 2026). maxfill is printed.
-            # The proportional servo holds the target within a packet or two;
-            # 64 below it is a failure.
-            check(f"{audio}: 400 polls on, the fill held near the target: min {c2['minfill']} (floor {AUD_TARGET - 64}), max {c2['maxfill']}, no underrun",
-                  c2["underruns"] == 0 and c2["minfill"] >= AUD_TARGET - 64,
+            # Floor AUD_TARGET / 2. Measured under the port (usb-out-tracks-main-cue,
+            # AUD_TARGET 64, 5 Oct 2026, three runs): lastfill 79, 63, 63 (band
+            # 32..96); minfill 64, 53, 63 (floor 32).
+            check(f"{audio}: 400 polls on, the fill held near the target: min {c2['minfill']} (floor {AUD_TARGET // 2}), max {c2['maxfill']}, no underrun",
+                  c2["underruns"] == 0 and c2["minfill"] >= AUD_TARGET // 2,
                   f"minfill {c2['minfill']} maxfill {c2['maxfill']} underruns {c2['underruns']}")
             b.ctrl_nodata(0x01, 0x0b, 0, 4)
             # Full speed: the same device re-enumerated. The stereo sum of the

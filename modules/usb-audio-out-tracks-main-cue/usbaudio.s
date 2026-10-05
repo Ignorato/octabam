@@ -116,8 +116,8 @@
 | measured under the port at 16 samples on every tone that reaches MAIN
 | (tools/harness/usb_align.py, 28 Sep 2026; heard as MAIN lagging on Bryan
 | T's unit, 25 Sep). The producer writes the pair this many blocks behind
-| the tracks' slot; the consumer runs 512 frames behind, so that slot is
-| unread when it is written.
+| the tracks' slot; the consumer runs AUD_TARGET (64) frames behind, more
+| than one 16-frame block, so that slot is unread when it is written.
 .set MAIN_CUE_LAG_BLOCKS, 1
 | With MASTER TRACK on, CUE leads MAIN. The mixdown (payload A, P:0x257:
 | brset #$a on x:(X:$207+$7e)) takes the master path at P:0x292: the cue bus
