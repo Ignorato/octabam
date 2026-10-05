@@ -589,9 +589,9 @@ behind octabam's loader and depacked there at boot. The cost is 10 MB of
 the unit's 85.5 MB sample/recorder pool. `dram=False` places the unit in
 one of the OS image's free zero runs (~8 KB, shared with everyone). Prefer
 DRAM unless the code has to run before the loader, or you are matching an
-author's ROM layout byte for byte. A module whose DRAM is its own (a
-`Runtime` with its own window) declares the pages it takes with
-`ArenaReserve` so the build stacks everyone's reservations.
+author's ROM layout byte for byte. A unit's `.bss` (uninitialised; KITS's
+1.6 MB library, PLOCKS P2's 1.5 MB table) lands in the same reserve and
+must end below its ceiling.
 
 `Linked.include=fn` gives a unit data that depends on the REMIX: the build
 calls `fn(modules)` (the remix's modules by key), writes the text it
@@ -639,13 +639,10 @@ site stands in for another module's (`modules/scenes-kits/`).
 `conflicts=(("<KEY>", "<why>"),)` names a module yours must never share an
 image with although no claim overlaps.
 
-**`Runtime`** is the third form: a recipe (`firmware.json`) the build
-compiles, packs, identity-checks and appends as its own payload of the
-loader (Octakit's shape). One per image. `Runtime.patches` are unified
-diffs applied to a copy of the author's sources after her own build has
-reproduced her pins; the patched build has pins of its own
-(`Runtime.patched`) and the same refuse-on-drift rule
-(`modules/octakit/README.md` "Patches on her runtime").
+Until 6 Oct 2026 there was a third form, `Runtime`: a recipe
+(`firmware.json`) the build compiled, packed, identity-checked and
+appended as its own payload of the loader (Octakit's shape; `git show
+2063370f:tools/remix/runtime_build.py`).
 
 ### The oracle
 

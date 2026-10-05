@@ -48,8 +48,9 @@ the laws (`modules/modulation/README.md` "Sources"):
 | module | upstream | licence |
 |---|---|---|
 | `modules/midi-scenes` (MIDI SCENES) | https://github.com/bkkbrls-del/midisc | MIT (the repository's LICENSE file, added by its author 9 Sep 2026, carries octabam's copyright line verbatim) |
-| `modules/octakit` (Octakit) | https://github.com/emuyia/ems-octakit | MIT, Copyright (c) 2026 June Kiff |
+| `modules/octakit/upstream` (Octakit; built here until 6 Oct 2026, the submodule mount left in the tree) | https://github.com/emuyia/ems-octakit | MIT, Copyright (c) 2026 June Kiff |
 | `tools/remix/loader.S` (the DRAM loader) | derived from Octakit's `runtime/loader.S` | MIT, Copyright (c) 2026 June Kiff |
+| `tools/remix/pack.py` (the payload packer) | ported from Octakit's encoder (`patcher/src/lib.rs`) | MIT, Copyright (c) 2026 June Kiff |
 | `modules/synth`, `modules/quantizer`, `modules/direct-jump`, `modules/tuner` (SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP, TUNER) | https://github.com/timhastie/octatrick-modules (one submodule, four wrappers; pinned to `v2.9` = `525f4b1`) | MIT, Tim Hastie 2026 |
 | `modules/direct-jump-kyoti`, `modules/batch-bugfixes`, `modules/reload-from-project`, `modules/quantize-live-rec-toggle`, `modules/erase-empty-trigless-locks` (DIRECT_JUMP_KYOTI, BATCH_BUGFIXES, RELOAD_FROM_PROJECT, QUANTIZE_LIVE_REC_TOGGLE, ERASE_EMPTY_TRIGLESS_LOCKS) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (one repository; five of eight submodule mounts, pinned to `77f132f`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
 | `modules/mute-modes`, `modules/sidechain-compressor` (MUTE_MODES, SIDECHAIN_COMPRESSOR) | https://github.com/Zac-Kyoti/octatrack-kyoti-fw (two mounts, pinned to `d3e0801`) | MIT, Zac-Kyoti and the OT Kyoti FW contributors 2026 |
@@ -94,7 +95,7 @@ octalab appears here as the `octalab-notes` rows below.
 | 30 Aug 2026 | Bryan T | `objdump -m m68k:cfv4e` for EMAC regions; radare2 cannot decode this CPU | `docs/contributing/TOOLING.md` section 3 ✅ |
 | 2–6 Sep 2026 | Bryan T | the track recorders, five sessions: descriptor, storage tiers, length arithmetic, pool, write path, loop point | `docs/firmware/RECORDER.md` sections 1–2 ✅ bytes, 🟡 reading |
 | 4 Sep 2026 | Bryan T | `bryantysinger/octa-bt-pt` (stock-effect defaults patcher; its parameter registry) | `docs/firmware/PARAM_PAGES.md` section 5g |
-| 4 Sep 2026 | June Kiff | `emuyia/ems-octakit` (256 kits) | `modules/octakit`, a submodule (above) |
+| 4 Sep 2026 | June Kiff | `emuyia/ems-octakit` (256 kits) | `modules/octakit`, a submodule (above); replaced by `modules/kits` 6 Oct 2026, which follows its key map and reads its `kits3a/b.work` |
 | 6 Sep 2026 | Bryan T | *Sound-on-Sound Looping with the Octatrack* (PDF) and `octatrack_clickless_loops.xlsx`; not in this repo | `docs/firmware/RECORDER.md` section 3 |
 | 13 Sep 2026 | nordseele | [`octalab-notes`](https://github.com/nordseele/octalab-notes) at `40ffa53` (MIT, findings only), from an Octatrack MKI running our loader: FS layer, slot loading, Parts, the card's files, step records and lock stores, the input layer, menus, the platform reserve on hardware | `docs/firmware/STORAGE.md`; `docs/firmware/PARAM_PAGES.md` section 5g; `docs/firmware/PANEL.md` section 4b; `docs/firmware/MAINMENU.md` section 2, section 5; `docs/contributing/PLACEMENT.md`; `docs/firmware/MIDI.md` (PLAYBACK `machine*6`); `tools/hw/ot_project.py` (trig masks `0x40`/`0x48`) |
 | 14 Sep 2026 | Bryan T | absolute X addresses are payload-relative (his LOFI2 mistuned on tracks 1–4) | `docs/firmware/TABLES.md` "Payload-relative addresses" ✅; `docs/contributing/FAILURE_MODES.md` |

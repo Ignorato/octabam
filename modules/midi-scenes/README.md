@@ -82,10 +82,10 @@ by him on his own unit.
 ## Open
 
 - The apply_part entry (`0x40009094`) stays stock since his 1.40MSCN6 (his
-  earlier wrapper hung project load on hardware), so Octakit owns it alone
-  and nothing bridges the two. What his Part save/reload hooks mean against
-  her LOAD/SAVE KIT menus is not measured; the Kit write protocol
-  (`gk_workspace_*`, `modules/octakit/README.md`) is the remaining piece.
+  earlier wrapper hung project load on hardware). Beside KITS (since 6 Oct
+  2026) his Part save and reload hooks run on the stock routines; a LOAD
+  KIT calls the stock reload directly, so his post-reload restore does not
+  run for it (not measured).
 - His MIDI CONTROL tick rows, if wanted, need a menu-table mechanism.
 
 ## Gates

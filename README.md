@@ -93,12 +93,9 @@ from the card (section 5).
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| [**KITS RELOAD**](modules/kits-reload/README.md) | [sambanks](https://github.com/sambanks) | The bridge that lets MIDI SCENES' Part Reload run beside Octakit's kit reload (her caller check, his post-reload restore). | on hardware: `ok-ms`, 14 Sep 2026 |
+| [**KITS**](modules/kits/README.md) | [sambanks](https://github.com/sambanks) | 256 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI / FUNC+BANK); each pattern plays its Kit through the stock Part slots. | port-gated: `verify_kits` |
 | [**MIDI SCENES**](modules/midi-scenes/README.md) | [bkkbrls-del/midisc](https://github.com/bkkbrls-del/midisc) | MIDI-driven scene locks (hold/morph/save/reload/clear/copy/paste), built from bkkbrls-del/midisc as linker-placed units. | on hardware: `ok-ms` on his unit, 14 Sep 2026 |
-| [**OCTAKIT**](modules/octakit/README.md) | [emuyia/ems-octakit](https://github.com/emuyia/ems-octakit) | Em's Octakit: 256 Kits per Project instead of 64 Parts, built from her repo (submodule) as a loader-appended DRAM runtime. | on hardware: her build reproduced byte for byte; `ok-ms` on midisc's author's unit, 14 Sep 2026 |
-| [**SCENES KITS**](modules/scenes-kits/README.md) | [sambanks](https://github.com/sambanks) | The bridge that lets CC MAP and Octakit share the CC dispatch (MIDI SCENES needs no bridging since 1.40MSCN6). | port-gated: in `mods` and `bottleservice` |
 | [**SCENES P2**](modules/scenes-p2/README.md) | [sambanks](https://github.com/sambanks) | Scene locks and the crossfader on FX1/FX2 page 2 (hold a scene, turn a page-2 knob). | port-gated: 26 Sep 2026 |
-| [**SCENES P2 KITS**](modules/scenes-p2-kits/README.md) | [sambanks](https://github.com/sambanks) | The bridge that lets SCENES P2 and Octakit share the page-2 editor entries. | port-gated: 28 Sep 2026: `--call` and the panel under the port |
 
 ### MIDI and USB
 
@@ -147,14 +144,13 @@ tools/build/build_bus.py     the build: assembles, links, places, wires, verifie
 tools/verify/*               the gates: oracles, the boot under the ColdFire port, menu, cycles, identity
 ```
 
-A module's code lands in one of three places; the build decides which bytes
+A module's code lands in one of two places; the build decides which bytes
 go where, and a module declares what it is, not an address:
 
 | class | declared as | where |
 |---|---|---|
 | ROM cave | `CavePatch`: a `.s` source, or ratified hex | one of the OS image's free zero runs, ~8 KB total shared by everyone |
 | DRAM unit | `Linked(..., dram=True)`: a GNU-as unit | linked with every other DRAM unit in the remix into one runtime, packed, appended behind octabam's loader, depacked at boot into a 10 MB reserve carved off stock's 85.5 MB sample/recorder pool |
-| appended runtime | `Runtime`: a recipe (Octakit's `firmware.json`) | its own reserve of the same pool, as a second payload of the same loader |
 
 The OS-image edits every class needs (a detour at a stock instruction, a
 poke, a grown table) are `Detour`, `Poke`, `TableGrow`, wired by symbol and
@@ -162,11 +158,10 @@ asserted against stock before a byte is written. `docs/contributing/PLACEMENT.md
 is the map of what is free and what was measured.
 
 **A port is a proof.** The build re-links every unit at the author's own
-address and compares, rebuilds Octakit's runtime to the identities her
-recipe pins, and refuses on any drift.
+address and compares, and refuses on any drift.
 
 **Where a module's state lives.** An effect's twelve knobs are Part
-parameters and stay in the Part. Personal material (Octakit's Kits,
+parameters and stay in the Part. Personal material (KITS's library,
 octalab's grooves) is in files the module owns and formats. A module's
 settings (menu options, a USB profile) have no shared home yet; the shared
 settings store for all modules, OTX, is specified in
@@ -244,8 +239,10 @@ dsp/               shared DSP infrastructure: the null stub and the probes
 
 **Em** ([emuyia](https://github.com/emuyia)) designed Octakit and the
 loader-appended DRAM runtime octabam adopted as its large-payload placement;
-`tools/remix/loader.S` is derived from hers with attribution. Her repository
-invites use as a submodule to combine with other efforts.
+`tools/remix/loader.S` and the payload packer (`tools/remix/pack.py`) are
+derived from hers with attribution. Octakit was carried here as a
+submodule until 6 Oct 2026; KITS (`modules/kits`) follows its key map and
+reads its `kits3a/b.work` files.
 
 This began as a fork of [mxldyn/octamax](https://github.com/mxldyn/octamax)
 by Maxolydian, whose reverse engineering of the OS format, memory map and

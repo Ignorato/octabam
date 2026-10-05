@@ -180,8 +180,7 @@ and `kits-reload` (OKMS1 trapped on the first Part Reload: her
 replacement of the stock reload validated its caller's return address and
 midisc's `reload` stub substitutes it; the ledger carried the class as
 `Runtime.pinned_returns` against `Detour.subst_return`). KITS leaves the
-stock Part routines and the CC dispatch as stock, so none is needed (`git
-show 2063370f:modules/kits-reload/README.md`).
+stock Part routines and the CC dispatch as stock, so none is needed (`git show 2063370f:modules/kits-reload/README.md`).
 
 ## Open
 
