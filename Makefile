@@ -410,7 +410,8 @@ dsp-repatch: ## Re-apply tools/patches/dsp56300.patch to vendor/dsp56300 (revert
 	@echo "now rebuild the port against it: make emu-cf"
 
 .PHONY: check-asm
-check-asm: ## dsp_asm is the patched assembler: the one-word displaced move (0257de), a data-ALU op with an XY move (f4f9ea)
+check-asm: ## dsp_asm is the patched assembler: the one-word displaced move (0257de), a data-ALU op with an XY move (f4f9ea); prints the binaries' architecture
+	@echo "dsp_asm/dsp_host architecture: $$(file -b $(DSP_ASM) | sed 's/^Mach-O 64-bit executable //; s/^ELF 64-bit LSB [a-z ]*, //; s/,.*//') / $$(file -b $(dir $(DSP_ASM))dsp_host | sed 's/^Mach-O 64-bit executable //; s/^ELF 64-bit LSB [a-z ]*, //; s/,.*//'); host $$(if [ "$$(uname -s)" = Darwin ] && [ "$$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then echo arm64; else uname -m; fi)"
 	@t=$$(mktemp -d); printf '\tmove x:(r7+$$15),a\n' > $$t/m.asm; \
 	  if $(DSP_ASM) -in $$t/m.asm -org 0 -list | grep -q 0257de; then echo "dsp_asm: the one-word displaced move (0257de)"; \
 	  else echo "dsp_asm does not emit the one-word displaced move (0257de)"; rm -rf $$t; exit 1; fi; \
