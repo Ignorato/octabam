@@ -69,7 +69,7 @@ on which remix is selected, so a run over several remixes does it once:
 
 | step | proves | needs |
 |---|---|---|
-| `bus`, `cycles` | the image builds; static per-sample cycles of every module and the worst load one core can be asked for, against the measured wall | |
+| `bus`, `cycles` | the image builds; static per-sample cycles of every module and the worst load one core can be asked for, against the measured wall; an insert is priced at four copies, or at its declared `max_per_core` (declared, not enforced by the unit) | |
 | `verify_dirtystate` | each DSP module rendered from a garbage-filled instance block on silence is silent or identical to the zeroed render | `dsp_host` |
 | `verify_initregs` | no module's `init` writes r1/n1/m1 (the dispatcher keeps the effect id there) | |
 | `verify_dram_boot` | the image boots under the port; the loader runs once, its `fatal` never, every DRAM window reads back equal to the linked runtime | port |

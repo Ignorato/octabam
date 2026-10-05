@@ -445,8 +445,17 @@ class DspSection:
     # the same keys; every key occurs in the source (refused at build); no
     # key may overlap a marker the build substitutes itself (SUBST_RESERVED).
     subst: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+    # Declared ceiling on instances of this module per core, 1..4 (a core has
+    # four FX2 slots). None = unlimited: the cycle counter prices four copies.
+    # With a value, `tools/build/cycle_count.py` prices that many copies. The
+    # unit does not enforce it: nothing stops a fifth..third selection, so the
+    # remix README must state the ceiling.
+    max_per_core: int | None = None
 
     def __post_init__(self):
+        if self.max_per_core is not None and not 1 <= self.max_per_core <= 4:
+            raise ValueError(f"{self.asm}: max_per_core {self.max_per_core} "
+                             f"outside 1..4 (a core has four FX2 slots)")
         if self.ptable2 and not self.ptable:
             raise ValueError(f"{self.asm}: ptable2 without ptable -- the "
                              f"second block follows the first")

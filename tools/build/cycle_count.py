@@ -66,10 +66,13 @@ def bank_worst(rows, mods, fx1=(), stock_fx1_keys=()):
         legacy `reverb + delay + 2 sends` figure prices a core for two
         engines no core ever pays: a single-core floor rather than a real
         configuration.
-      * INSERTS ARE UNLIMITED. Nothing stops all four tracks selecting the
+      * INSERTS ARE UNLIMITED unless the module declares
+        `DspSection.max_per_core`. Nothing stops all four tracks selecting the
         same insert, so the worst case is four copies of the dearest one --
         the number that matters for a card of inserts, and the one no
-        previous version of this tool could produce.
+        previous version of this tool could produce. A declared ceiling
+        prices min(4, ceiling) copies of that module; the unit does not
+        enforce it.
 
     AND FX1 IS A SECOND SET OF FOUR SLOTS on the same four tracks. A module
     the remix lists on FX1 (Remix.fx1) can be selected there as well, on top
@@ -90,7 +93,10 @@ def bank_worst(rows, mods, fx1=(), stock_fx1_keys=()):
     if servers:
         picks.append(servers[0]["stem"])
     if others:
-        picks += [others[0]["stem"]] * (FX2_SLOTS - len(picks))
+        # A declared ceiling prices fewer copies; the unit does not enforce it.
+        cap = others[0].get("max_per_core")
+        n = FX2_SLOTS - len(picks)
+        picks += [others[0]["stem"]] * (min(n, cap) if cap else n)
     elif servers:
         # A remix of nothing but servers cannot fill the other slots with
         # anything of ours; those tracks run stock, which this tool does not
@@ -483,6 +489,7 @@ def main():
     mods = [dict(stem=pathlib.Path(m.dsp.asm).stem, key=m.key,
                  server=(m.dsp.bus_role is BusRole.SERVER),
                  fx1_only=(m.claims is not None and m.claims.fx1_only),
+                 max_per_core=m.dsp.max_per_core,
                  replaces=(m.menu.replaces if m.menu is not None else None))
             for m in registry.selected(remix) if m.dsp is not None and m.menu is not None
             and not m.menu.stock_dsp]   # stock's own code runs there; the section is hooks
@@ -519,6 +526,7 @@ def main():
             for lbl, alt, cyc in m.get("modes", []):
                 print(f"  {m['name']:16} {lbl:10} {alt:8} {cyc:>6}")
         return
+    ceilings = {m["stem"]: m["max_per_core"] for m in mods if m.get("max_per_core")}
     if "--json" in args:
         print(json.dumps(dict(remix=remix.name,
                               per_effect={m["name"]: m["cycles"] for m in rows},
@@ -533,6 +541,7 @@ def main():
                                   next(m["key"] for m in mods
                                        if m["stem"] == stem): n
                                   for stem, n in picks},
+                              declared_max_per_core=ceilings,
                               bank=bank, headroom=room,
                               # What OUR code may spend, per core. The
                               # remixer's budget row is read against this
@@ -549,6 +558,8 @@ def main():
     print(f"{'':{w}}  cycles/sample")
     for m in rows:
         extra = f"   [{m['inner']}]" if m["inner"] else ""
+        if m["name"] in ceilings:
+            extra += f"   (declared ceiling {ceilings[m['name']]} per core)"
         print(f"{m['name']:{w}}  {m['cycles']:>13}{extra}")
     stock_rows = [m.key for m in registry.selected(remix) if m.is_stock]
     if stock_rows:
@@ -567,7 +578,11 @@ def main():
         print(f"{'hook sections':{w}}  {'NOT COUNTED':>13}   "
               f"[{', '.join(hooked)}] -- reached by a DspHook; not in the figure below")
     print()
-    mix = " + ".join(f"{n}x {k}" for k, n in picks) or (
+    mix = " + ".join(
+        f"{n}x {k}" + (f" (declared ceiling {ceilings[k]} per core; the unit "
+                       f"allows {FX2_SLOTS})" if k in ceilings and n == ceilings[k]
+                       else "")
+        for k, n in picks) or (
         "(nothing of ours counted)" if hooked else "(nothing of ours)")
     print(f"{'WORST ONE CORE':{w}}  {worst:>13}   {mix}")
     print(f"{'':{w}}  {'':>13}   4 FX2 slots, at most one server (the design rule)")

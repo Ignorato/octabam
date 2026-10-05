@@ -1099,6 +1099,16 @@ on every FX1 base. FX1 bases are `0x1000 0x1c00 0x2800 0x3400`, only
 1,024-aligned on two of the four, so modulo addressing over more than 1,024
 words needs the linear-plus-mask idiom (`modules/modulation/`).
 
+#### Per-core instance ceiling
+
+`DspSection.max_per_core` (1..4, default None) declares how many copies of
+an insert one core can carry. `tools/build/cycle_count.py` prices an insert
+at min(4, `max_per_core`) copies instead of four, and prints the ceiling on
+the module's row and in the WORST ONE CORE line; `--json` carries it as
+`declared_max_per_core`. The unit does not enforce it: a user can still
+select the effect on every track of a core. The remix README states the
+ceiling and what a further instance costs.
+
 #### What is different about FX1
 
 For an eligible module: the slot size and the state block.
