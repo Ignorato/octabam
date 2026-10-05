@@ -43,6 +43,7 @@ FS_CHANNELS, FS_MAXPKT, FS_BINTERVAL = 2, 45 * 8, 1       # 44/45 stereo frames 
 # per audio module: (channels, max packet) at high speed; full speed is FS_*
 HS_LAYOUT = {"USB AUDIO OUT TRACKS MAIN CUE": (HS_CHANNELS, HS_MAXPKT),
              "USB AUDIO OUT TRACKS": (16, 12 * 64),                # 11/12 frames x 64 B (16 tracks) every 250 us
+             "USB AUDIO OUT TRACKS POST": (16, 12 * 64),           # the same sixteen channels, after each track's MAIN gain
              "USB AUDIO OUT MASTER": (2, 12 * 8),                # 11/12 frames x 8 B (T8) every 250 us (1 ms until 28 Sep 2026)
              "USB AUDIO OUT MAIN CUE": (4, 12 * 16),                   # 11/12 frames x 16 B (MAIN + CUE) every 250 us
              "USB AUDIO OUT MAIN": (2, 12 * 8)}                        # 11/12 frames x 8 B (MAIN) every 250 us

@@ -28,6 +28,7 @@ The full text before this rewrite: `git show 666b6154:CHANGELOG.md`.
 
 Remixes
 - KITS replaces OCTAKIT, SCENES KITS, SCENES P2 KITS and KITS RELOAD in bottleservice, ok-ms, mods and character-txtr; mods also carries DIRECT_JUMP_KYOTI and RELOAD_FROM_PROJECT; `remixes/test/octakit` removed, `remixes/test/kits` added (6 Oct, port only).
+- `usb-out-tracks-post`: stock + USB MIDI + USB AUDIO OUT TRACKS POST (5 Oct).
 - bottleservice takes the computer's stereo output onto inputs C/D (USB AUDIO IN CD + USB CROSSBAR); USB AUDIO OUT MASTER polls every 250 µs (28 Sep). Both IN modules out again on 4 Oct (#575, image A0 below).
 - bottleservice keeps the stock DELAY's FX2 chooser row; `BUILD` tags past 99 are a letter and a digit (`A0` = 100) (4 Oct, #576).
 - `stems`: STEM REC on the stock effects; STEMS1 listed STEM REC alone and drew a one-row FX2 chooser (1 Oct).
@@ -42,6 +43,7 @@ Modules
 - STEM REC, piece 5: every track after its fader (its share of MAIN, from core 0's own gain arithmetic redone in the frame hook), MAIN, CUE and the inputs AB/CD as sources (stereo or mono), 24-bit files, an 8 MiB ring; the menu's labels keep moving when the card falls behind (Yves Rosius, 1-4 Oct).
 - KITS (new): 256 Kits per project through the stock Part slots: each pattern's Kit is copied into a slot nothing plays before the pattern is scheduled; LOAD/SAVE KIT on the stock list menu with Octakit's key map, UNDO KIT, list copy/paste/clear/undo, AUTOSAVE and KEEP LEVELS, the pattern clipboard carrying the Kit, FUNC+PASTE+PART, PTN+FUNC+RIGHT, PTN+FUNC+TRIG; kits.work/kits.strd, migration of the stock Parts, import of Octakit's kits3a/b.work; no `illegal` (6 Oct, port: `verify_kits`, 89 checks; on the unit in image A6).
 - OCTAKIT, SCENES KITS, SCENES P2 KITS, KITS RELOAD removed, with the build's Runtime/ArenaReserve machinery (every other remix's image and report bit-identical; refhash 24/24); TEMPO BUS and MODE DEFAULTS no longer push Octakit's token (6 Oct).
+- USB AUDIO OUT TRACKS POST: the sixteen track channels after each track's own MAIN gain (LEVEL, mute, solo, XLV, core 0's 16-sample ramp; MAIN_LEVEL left out), `USB_LAYOUT = 5` of the shared source; every other layout byte-identical (5 Oct; on a MKII as P3, below; CPU cost estimated, not measured on a unit; MASTER TRACK checked under the port only).
 - OCTAKIT: patch 0002, a track button within ~250 ms of a queued pattern change ran her Part-refresh writer into its context fatal (BUSY during the handoff; ems-octakit#5's setting); on BUSY the writer now runs stock unwrapped (5 Oct, port-measured).
 - USB AUDIO OUT (every layout): the producer runs only while the host asks for the stream, with the 64-slot start cushion zeroed at the first produced block (5 Oct, port only); Bryan T measured the always-on producer at 13–25 µs of frame interrupt per frame with no host.
 - USB AUDIO IN (AB, CD, ABCD): the per-frame transfer to core 0 stops once a block with word 0 = 0 has landed while the stream is closed (5 Oct, port only).
@@ -76,6 +78,7 @@ Gates and tools
 - Port: LOAD PROJECT runs until the engine is idle, ATA latency 8 samples (28 Sep); follows a detoured idle park (28 Sep); `--step`, `--live-script`, `--midi-out` (28 Sep); `--scenario` forks one child per run from one load, DSP memory unshared per child (29 Sep).
 - Shards: image-stage gates on their own shard, long-pole remixes split into gate jobs; the cover 681 s → 530 s (29 Sep).
 - Tape Echo probe: glibc `random()` vectors on every host, oracle built `-fwrapv` (27 Sep).
+- `tools/verify/verify_usb_post.py` (USB AUDIO OUT TRACKS POST's stems against core 0's MAIN under the port, on the tone project) and `tools/harness/usb_post_model.py` (5 Oct).
 - `tools/hw/bcr2000.py` (28 Sep), `tools/hw/usb_probe.py` (Bryan T, 28 Sep), `tools/harness/usb_align.py` (28 Sep), `tools/ghidra` (roblg, #483, 28 Sep).
 - `verify_docs` exempts the dated plans and specs under `docs/superpowers/`, records like this file (1 Oct).
 - `verify_docs` checks every relative Markdown link; the remixer TUI draws again (30 Sep).
@@ -106,6 +109,19 @@ PTN+TRIG / PLAY with the Rytm as master (A5's halt), PROJECT STRAND's
 rejected bank file (A4's halt), power cycles saved and unsaved, SAVE
 PROJECT, SAVE KIT, quick save, UNDO KIT, FUNC+CUE (`modules/kits/README.md`
 "On the unit"). Not run: an unattended BCR2000 run.
+## P3 and P2 — 5 Oct 2026 (`usb-out-tracks-post`, allmyfriendsaresynths's builds)
+
+On allmyfriendsaresynths's (@clickysteve) MKII.
+- P3 (`usb-out-tracks-post` from this change's source; `OCTATRACK_OCTABAMP3.bin`
+  SHA-256 `85333db1…09a4`): smoke test. Boots and runs normally; the host
+  sees sixteen channels, each track on its own pair; LEVEL, mute/unmute,
+  solo and the scene/crossfader level follow in the stems; no instability
+  or audio fault heard.
+- P2 (a 20-channel diagnostic build, not in the tree: these sixteen stems
+  plus MAIN and CUE): a 196 s take nulled the stems against MAIN, 99.995%
+  of ~17.3 M samples within 0..7 LSB, no gain/block misalignment at
+  ~16,700 level edges (`modules/usb-audio-out-tracks-post/README.md`).
+- Not run on a unit: MASTER TRACK, CF METER, a soak.
 
 ## sos-capture BUILD=94 and BUILD=95 — 3 Oct 2026 (Bryan T's builds)
 

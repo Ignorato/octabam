@@ -215,7 +215,7 @@ only (`verify_usb`).
 
 ## Variants
 
-`usbaudio.s` is assembled three ways, one module each; a remix carries one
+`usbaudio.s` is assembled once per module, one layout each; a remix carries one
 (they take the same hook sites, and the build refuses two by name):
 
 | module | `USB_LAYOUT` | high speed | full speed |
@@ -223,6 +223,7 @@ only (`verify_usb`).
 | USB AUDIO OUT TRACKS MAIN CUE (this) | 0 | 20 channels: tracks 1–16, MAIN, CUE | the tracks' stereo sum |
 | [USB AUDIO OUT TRACKS](../usb-audio-out-tracks/README.md) | 1 | 16 channels: the tracks | the tracks' stereo sum |
 | [USB AUDIO OUT MASTER](../usb-audio-out-master/README.md) | 2 | 2 channels: track 8's L/R | track 8's L/R |
+| [USB AUDIO OUT TRACKS POST](../usb-audio-out-tracks-post/README.md) | 5 | 16 channels: the tracks after their own MAIN gain | the stems' stereo sum |
 
 The layout is a `.set` in the `remix.inc` each module's `Linked` unit
 writes. Every `USB_LAYOUT = 0` path is the source as it was; this module's
