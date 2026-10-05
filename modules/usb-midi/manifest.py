@@ -14,7 +14,7 @@ import importlib.util
 import pathlib
 
 from remix import schema
-from remix.schema import Category, Proof, Detour, Kind, Linked, Module, SymbolRef
+from remix.schema import Category, Proof, Detour, Gate, Kind, Linked, Module, SymbolRef
 
 # Manifests are executed from source, not imported as a package; the
 # descriptor generator beside this file is loaded by path.
@@ -35,17 +35,19 @@ MODULE = Module(
         # compares with his usb-midi.py's blob (1,124 B, from our stock bytes)
         Linked("usbmidi", "modules/usb-midi/usbmidi.s", cpu="54455", dram=True,
                reference=(0x400d24f0, "6291d91e923145be62719eee56c2ca823d36c2d71ae538550e70b5533d404e60")),
+        Linked("usbmidi_rx", "modules/usb-midi/usbmidi_rx.s", cpu="54455", dram=True),
         Linked("usbmidi_clamp", "modules/usb-midi/clamp.s", cpu="54455", dram=True),
         # the four configurations for THIS remix (124 B, or 250 B with USB
         # AUDIO's function added) and the absolute `cfg_len` the clamps read
         Linked("usbmidi_cfg", "modules/usb-midi/cfg.s", cpu="5475", dram=True,
                include=descriptors.remix_inc),
     ),
+    gates=(Gate("tools/verify/verify_usbmidi_rx.py", stage="image"),),
     detours=(
-        Detour(0x4001d9ca, H("4879400b9868"), "usbmidi", "usbmidi_setcfg_shim",
-               "SET_CONFIGURATION body: bring EP2 up, 512-byte packets at high speed"),
-        Detour(0x4001e606, H("2039fc0b01ac"), "usbmidi", "usbmidi_isr_shim",
-               "usb_isr UI path: EP2 completions -> decode / re-prime / kick"),
+        Detour(0x4001d9ca, H("4879400b9868"), "usbmidi_rx", "usbmidi_rx_setcfg_shim",
+               "SET_CONFIGURATION body: note the speed, then usbmidi's EP2 bring-up (512-byte packets at high speed)"),
+        Detour(0x4001e606, H("2039fc0b01ac"), "usbmidi_rx", "usbmidi_rx_isr_shim",
+               "usb_isr UI path: EP2 OUT completions -> decode with FIFO room / re-prime, then usbmidi's EP2 IN kick"),
         Detour(0x40010bc8, H("4fefffec48d7043c"), "usbmidi", "usbmidi_send_shim",
                "midi_send entry: queue the message for the USB encoder", pad_to=8),
         Detour(0x400108b0, H("2f02122f000b"), "usbmidi", "usbmidi_prio_shim",
