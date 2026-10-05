@@ -1,5 +1,6 @@
 """module_gates: once-per-run gates and the shared half's carrier choice;
 reach: the port stamp decides staleness by content."""
+import os
 import pathlib
 import sys
 import tempfile
@@ -62,7 +63,7 @@ class PortStamp(unittest.TestCase):
             d = pathlib.Path(d)
             src = d / "src"; src.mkdir(); (src / "a.cpp").write_text("x")
             exe = d / "ot_emu"; exe.write_bytes(b"\0")
-            (src / "a.cpp").touch()
+            os.utime(exe, (0, 0))                          # an old binary; a touch can land in the same tick (CI)
             self.assertTrue(reach.port_is_stale(exe, src, d / "no-stamp"))
 
 
