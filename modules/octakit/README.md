@@ -158,7 +158,9 @@ code is a new unit listed LAST in the recipe's `sources`, in a
   finds the bytes agreeing and skips it), activation clears the word, no
   fatal, a pattern paste completes; a clean project enters the fixup with
   d0 = 1 and skips it. Raw runtime 154,878 B (hers 154,766; her code
-  budget ends 770 B above it).
+  budget ends 770 B above it). A project name with no directory on the
+  card (stock −12 on every file) still strands: her work-pair create
+  returns −10 with nowhere to write (`docs/contributing/FAILURE_MODES.md`).
 
 ## Updating
 
