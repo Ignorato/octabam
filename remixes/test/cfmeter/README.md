@@ -35,6 +35,7 @@ the same selection without the loop, is the variant that passed before.
 | `synth8-v4` | 8 tracks, VOIC 4, CHRD OCT3 (four voices per track) |
 | `burnB` | the `synth8-v1` state, BURN = 20, 40, 60, … until the unit misbehaves (note the value and what happened) |
 | `dbrnD` | the `play` state, DBRN = 20, 40, 60, …: spin min must fall by 24 × D × 16 cycles per frame; the value at which spin max jumps by a frame's worth or TUE counts is core 0's wall |
+| `spanS` | the `play` and `synth8-v1` states, SPAN = 1, 2, 3: slot 7 is the HC polls' time, the eDMA handler's time inside the frame interrupt, and all of it, per frame; ISR mean less SPAN 1 and SPAN 2 is the interrupt's own work |
 | `memK-sS` | the `idle` state, SRC = S (0 cached SDRAM, 1 uncached alias, 2 SRAM), MEM = K (8, 16, 32, 64; 31 at most for S = 2), with and without a host stream open: slot 7 × 4 × 7.58 ns / (K × 64) is one line's cost in that memory (`modules/cfmeter/README.md` "Line fills") |
 
 Put BURN, MEM and DBRN back to 0 before saving or switching projects: they

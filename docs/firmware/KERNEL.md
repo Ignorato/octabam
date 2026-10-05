@@ -91,7 +91,7 @@ and sets ICRn at `+0x40+n`; a CIMR write must also clear IMRL's MASKALL bit.
 | `0x41` | INTC0 1 | `0x4000aad0` | `0x4001fc02` (main) | DSP frame (level 5) |
 | `0x47` | INTC0 7 | `0x4001fca0` | `0x4001f81c` | halt path (`SR 0x2700`, `bras .`) |
 | `0x48`/`0x49`/`0x4f` | INTC0 8/9/15 | `0x40004840` | `0x400097a6`/`0x400097b0`/`0x400097ba` | eDMA channels 0/1/7: the 7-state frame transfer, jump table `0x400ab61a` (`ARCHITECTURE.md` section 6) |
-| `0x56` | INTC0 22 | `0x400152a4` | `0x400160c6` (the ATA init) | ❓ |
+| `0x56` | INTC0 22 | `0x400152a4` | `0x400160c6` (the ATA init) | eDMA channel 14, the ATA sector DMA's completion: clears CINT 14, sectors done = (`0xfc0451d0` − buffer `0x4ecb8000`) ≫ 9 into `0x460bac04`, one kernel signal (`0x40000c3c`, `0x460bb3a0`) per new sector |
 | `0x5a` | INTC0 26 | `0x400106ec` | `0x400110ae` | UART0 RX, MIDI IN (`MIDI.md`) |
 | `0x5b` | INTC0 27 | `0x400109bc` | `0x40010faa` (UART init `0x40010efc`, 312,500 baud) | serial link `0xfc064000`, level 6 |
 | `0x5c` | INTC0 28 | `0x40010b88` | `0x40010d6e` | serial block `0xfc068000`, RX only |
@@ -112,11 +112,14 @@ Levels, from the ICR byte writes (✅ objdump, 5 Oct 2026):
 | 6 | `0x48`/`0x49`/`0x4f` eDMA frame transfer; `0x5a` UART0 MIDI IN; `0x5b` UART1 serial link |
 | 5 | `0x41` DSP frame; `0xb1`; `0xb6` ATA |
 | 4 | `0x5c` serial block; `0xaf` USB |
-| 3 | `0x56` |
+| 3 | `0x56` eDMA 14 (ATA sector DMA) |
 | 2 | `0xac` PIT1 |
 | 1 | `0xab` PIT0 time-slice |
 
-Level 6 nests inside the frame interrupt when it lands before the ISR's
+INTC0 sources 8 + n are eDMA channel n (channels 0, 1, 7 and 14 are
+used); `0xfc04401c` is the eDMA CINT register, written with the channel
+number by each of their handlers. Level 6 nests inside the frame interrupt
+when it lands before the ISR's
 `rte`; level 5 and below cannot (unless the ISR lowers SR mid-body, not
 checked). The frame ISR is measured from entry to the epilogue at
 `0x4000d9a6` by CF METER, so the eDMA chain and both UARTs can be inside

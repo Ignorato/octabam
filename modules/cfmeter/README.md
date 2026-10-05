@@ -17,7 +17,8 @@ read it.
 |---|---|---|---|---|
 | 1 | 0 | BURN | 0–127, default 0 | read on track 8 only: 2 µs of busy-wait per step at the start of every frame interrupt |
 | 1 | 1 | MEM | 0–127, default 0 | read on track 8 only: MEM KB read after the burn, one longword per 16-byte line, timed into slot 7 |
-| 1 | 3 | SRC | 0–127, default 0 | the region MEM walks: 0 the OS image in cached SDRAM (`0x40000400`), 1 the same through the uncached alias (`0x48000400`), 2 on-chip SRAM (`0x80000000`, 32 KB, MEM clamped to 31); other values read as 0 |
+| 1 | 5 | SRC | 0–127, default 0 | the region MEM walks: 0 the OS image in cached SDRAM (`0x40000400`), 1 the same through the uncached alias (`0x48000400`), 2 on-chip SRAM (`0x80000000`, 32 KB, MEM clamped to 31); other values read as 0 |
+| 1 | 4 | SPAN | 0–127, default 0 | what slot 7 prints: 0 BURN (or the walk when MEM is set); 1 the two HC poll loops' time per frame; 2 the level-6 eDMA handler's time landing inside the frame interrupt, per frame; 3 and above all of that handler's time per frame (each counts / 4, mean over the segment) |
 | 1 | 2 | DBRN | 0–127, default 0 | 24 × DBRN DSP cycles per sample, burnt by the insert before its sample loop (SEND's burn form) |
 
 ## Measured
@@ -126,6 +127,19 @@ MEM 8 mostly hits (the data cache is 16 KB), MEM 32 and 64 all misses; SRC
 saving the project (it is a Part knob); a freeze at a high MEM clears on a
 power-cycle. Not run on a unit.
 
+## The HC polls and the nested level-6 time
+
+SPAN splits the frame interrupt's span into what Bryan T's takes could
+not: its two true waits and the interrupt that nests inside it. The ISR
+polls the host port's HC bit twice per frame (`movew 0x20000004,%d0 /
+tstb / blt` at `0x4000ab26` and `0x4000a90c`); SPAN 1 prints their summed
+duration per frame. The level-6 eDMA handler `0x40004840` (channels 0, 1
+and 7: the 7-state frame transfer, `docs/firmware/KERNEL.md`) lands inside
+the frame interrupt whenever it fires before the `rte`; SPAN 2 prints the
+handler time that landed inside, per frame, SPAN 3 all of it. ISR mean −
+SPAN 1 − SPAN 2 is the ISR's own instructions and stalls. The two UART
+handlers (level 6 as well) are not timed. Not run on a unit.
+
 ## Open
 
 - Whether DTIM3 runs at 132 MHz on the unit (slot 5 answers it).
@@ -204,7 +218,7 @@ power-cycle. Not run on a unit.
 | 4 | frame interrupt, longest in the segment, counts / 4 |
 | 5 | frame period (segment / interrupts), counts / 4 |
 | 6 | the idle loop's shortest step, counts |
-| 7 | BURN, counts / 4; with MEM set, the walk's mean duration per frame, counts / 4 |
+| 7 | BURN, counts / 4; with MEM set, the walk's mean duration per frame; with SPAN set, the HC polls or the eDMA handler (SPAN above), counts / 4 |
 | 8 | core 0 spin count, min over the window (polls) |
 | 9 | core 0 spin count, max |
 | 10 | frames with ESAI TUE set |
