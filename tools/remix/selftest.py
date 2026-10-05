@@ -24,7 +24,10 @@ from remix.schema import (BusRole, CavePatch, Claims, Detour, DspHook, DspRange,
                           Poke, SymbolRef, TableGrow, YBase)
 
 
-def _effect(name, fx2_id, priority=0, reserved=(), buffers=False,
+_PRIORITY = iter(range(100, 1000))      # distinct unless a case sets one
+
+
+def _effect(name, fx2_id, priority=None, reserved=(), buffers=False,
             ybase=YBase.NEVER, ptable=(), asm="does/not/exist.asm"):
     return Module(
         name=name, key=name.upper(), kind=Kind.DSP_EFFECT,
@@ -35,7 +38,9 @@ def _effect(name, fx2_id, priority=0, reserved=(), buffers=False,
         # No asm path on disk, so the ledger's scan finds nothing and only
         # the reserved words below are claimed -- which is what lets these
         # fixtures test the claim path in isolation.
-        dsp=DspSection(asm=asm, priority=priority, ybase=ybase,
+        dsp=DspSection(asm=asm,
+                       priority=next(_PRIORITY) if priority is None else priority,
+                       ybase=ybase,
                        ptable=ptable),
         claims=Claims(reserved_private_y=reserved,
                       owns_fx2_buffers=buffers),
@@ -52,12 +57,14 @@ _HARD_ASM.write_text("        move    x:>$4a40,x0             ; curve 4's base\n
                      "        rts\n")
 
 
-def _hooked(name, site=0x88, payloads=frozenset({"A"}), sram=()):
+def _hooked(name, site=0x88, payloads=frozenset({"A"}), sram=(), priority=None):
     """A DSP section with no chooser row, reached by a jsr planted in stock
     P code (USB AUDIO IN's RX inject)."""
     return Module(
         name=name, key=name.upper(), kind=Kind.HYBRID, doc="fixture",
-        dsp=DspSection(asm="does/not/exist.asm", priority=20, payloads=payloads,
+        dsp=DspSection(asm="does/not/exist.asm",
+                       priority=next(_PRIORITY) if priority is None else priority,
+                       payloads=payloads,
                        hooks=(DspHook(site, (0x627000, 0x000204), "inject"),)),
         claims=Claims(sram=sram) if sram else None,
     )
@@ -102,6 +109,9 @@ def _ranged(name, *ranges, payloads=frozenset({"A"}), role=BusRole.NONE, buffers
 
 
 CASES = [
+    ("two DSP sections on one priority and one payload",
+     [_effect("alpha", 0x07, priority=15), _effect("beta", 0x1e, priority=15)],
+     "DSP priority"),
     ("two modules claiming one FX2 id",
      [_effect("alpha", 0x07), _effect("beta", 0x07)], "fx2 id"),
     ("two caves overlapping in memory",
@@ -150,6 +160,9 @@ CASES = [
     ("two plain pokes overlapping by one byte",
      [_cf("alpha", pokes=(_poke(0x4001f322, 4),)), _cf("beta", pokes=(_poke(0x4001f324, 2),))],
      "poke site"),
+    ("a linked cave's reserve over another's cave",
+     [_cf("alpha", cf_patches=(CavePatch("alpha cave", 0x400d7000, b"", reserve=96),)),
+      _cave("beta", 0x400d7040, 64)], "ColdFire cave"),
     ("a plain poke inside a pinned cave",
      [_cave("alpha", 0x400d7000, 64), _cf("beta", pokes=(_poke(0x400d7010),))], "ColdFire cave"),
     ("a plain poke inside a cave hook's span",
@@ -213,6 +226,9 @@ CLEAN = [_effect("alpha", 0x07, reserved=(0x0905,)),
          # keeps them apart -- that is what it is for).
          _stock("filter", 0x04, False),
          _stock("compressor", 0x18, False)]
+# One priority on disjoint payloads: the two are never sorted together.
+CLEAN_PRIORITY_PAIR = [_hooked("alpha", payloads=frozenset({"A"}), priority=15),
+                       _hooked("beta", payloads=frozenset({"B"}), priority=15)]
 CLEAN_STOCK_PAIR = [_stock("chorus", 0x12, True), _stock("comb", 0x13, True),
                     _effect("alpha", 0x07)]
 # One site, two payloads: no clash, each core has its own P.
@@ -308,6 +324,8 @@ def main():
     for label, mods in (("modules that do not collide", CLEAN),
                         ("two buffered stock effects + a zero-buffer insert",
                          CLEAN_STOCK_PAIR),
+                        ("two DSP sections on one priority on different payloads",
+                         CLEAN_PRIORITY_PAIR),
                         ("two DSP sections hooking one site on different payloads",
                          CLEAN_HOOK_PAIR),
                         ("adjacent pokes, agreeing keepers, ranges on different payloads",
@@ -1107,6 +1125,31 @@ def main():
         print("  [FAIL] Remix(fx1=...) accepted a duplicate key")
     except ValueError:
         print("  [PASS] Remix(fx1=...) refuses a duplicate key")
+    for _field in ("hidden", "locked"):
+        try:
+            schema.Remix(name="_x", doc="_", modules=("SPECTRUM",),
+                         fallback=schema.NO_FALLBACK, **{_field: ("ABSENT",)})
+            bad += 1
+            print(f"  [FAIL] Remix({_field}=...) accepted a key outside modules")
+        except ValueError:
+            print(f"  [PASS] Remix({_field}=...) refuses a key outside modules")
+    try:
+        schema.Remix(name="_x", doc="_", modules=("SPECTRUM",),
+                     fallback=schema.NO_FALLBACK, hidden=("SPECTRUM",))
+        print("  [PASS] Remix(hidden=...) accepts a key in modules")
+    except ValueError as e:
+        bad += 1
+        print(f"  [FAIL] Remix(hidden=...) refused a key in modules: {e}")
+    # A detour writes pad_to (or six) bytes; `expect` must cover them all.
+    for _kw, _n in (({}, 4), ({"pad_to": 10}, 8)):
+        try:
+            Detour(0x40100000, b"\x00" * _n, "u", "s", **_kw)
+            bad += 1
+            print(f"  [FAIL] Detour({_kw}) accepted {_n} expected bytes")
+        except ValueError:
+            print(f"  [PASS] Detour({_kw}) refuses {_n} expected bytes")
+    Detour(0x40100000, b"\x00" * 10, "u", "s", pad_to=8)
+    print("  [PASS] Detour asserting more bytes than it writes is accepted")
     # A STOCK effect may be on the FX1 list without an FX2 row -- the two
     # lists are independent -- so the schema deliberately does NOT require
     # every fx1 key to be in `modules`. Pinned, because it was required for

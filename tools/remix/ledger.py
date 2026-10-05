@@ -5,6 +5,9 @@ resource, and says which two.
 
 Checked, and how it knows:
 
+  DSP priority       declared (DspSection.priority). Two sections on one
+                     priority and one payload are packed in the remix's
+                     module order; the number must say it.
   fx2 ids            declared. Two modules on one id would overwrite each
                      other's descriptor and dispatch.
   declared conflicts declared (Module.conflicts). Two modules that touch no
@@ -152,6 +155,17 @@ def check(selected) -> list[str]:
                   f"0x{m.menu.fx2_id:02x}")
         ids[m.menu.fx2_id] = m.name
 
+    # ---- DSP priority (DspSection.priority) -------------------------------
+    # The build packs each payload's sections in priority order with a stable
+    # sort, so a tie falls back to the remix's module order.
+    dsp_mods = [m for m in selected if getattr(m, "dsp", None) is not None]
+    for i, a in enumerate(dsp_mods):
+        for b in dsp_mods[i + 1:]:
+            if a.dsp.priority == b.dsp.priority and a.dsp.payloads & b.dsp.payloads:
+                clash("DSP priority", a.name, b.name,
+                      f"priority {a.dsp.priority} on payload "
+                      f"{'/'.join(sorted(a.dsp.payloads & b.dsp.payloads))}")
+
     # ---- bridges: what they stand in for must be there ---------------------
     keys = {m.key for m in selected}
     for m in selected:
@@ -215,11 +229,11 @@ def check(selected) -> list[str]:
             if c.cave_addr is None:      # floating: the build allocates
                 continue                 # it after everything pinned
             for start, length, owner, label in caves:
-                if _overlap(start, length, c.cave_addr, len(c.pinned)):
+                if _overlap(start, length, c.cave_addr, c.claim_len):
                     clash("ColdFire cave", f"{owner}'s {label}",
                           f"{m.name}'s {c.label}",
                           f"0x{max(start, c.cave_addr):08x}")
-            caves.append((c.cave_addr, len(c.pinned), m.name, c.label))
+            caves.append((c.cave_addr, c.claim_len, m.name, c.label))
             if c.hook_addr is not None:
                 if c.hook_addr in hooks:
                     clash("hook site", hooks[c.hook_addr], m.name,
