@@ -502,6 +502,7 @@ _RT_LABEL = re.compile(r"^[a-z][a-z0-9]*_[a-z0-9_]+$")
 MPYSU_AUDITED = {
     "REVERB SERVER": {"x0,y0,a": 12, "x0,x1,a": 9, "x1,y1,a": 4},
     "CHARACTER":     {"x1,y1,b": 1},
+    "CHARACTER TXTR": {"x1,y1,b": 1},   # the same chtube site, in its copy of the source
     "SPECTRUM":      {"x1,y1,b": 1},
 }
 # These flags substitute or excise module source (probes, the shimmer

@@ -8,6 +8,7 @@
 ;
 ; ---- the chain, fixed order ----------------------------------------------
 ;   f     = fold(x * gain) / gain                       FOLD (held level)
+;   p     = pockey2(f; TXTR)                             TXTR (0 = skip)
 ;   s     = TAPE: TapeHead(f; DRV) | TUBE | INFL          DRV, SAT (held level)
 ;   t     = tilt(s; TONE)                                TONE (64 = flat)
 ;   c     = t * gain(env)                                COMP (GLUE on the master)
@@ -64,7 +65,12 @@
 ;   a makeup m (per block), whose run values are their main-ring words
 ;   $15 T1's counter last seen, $16 blocks since it moved (both zeroed at
 ;     init), $17 the KEY word (per block: -1 SELF, else T1's level)
-; free: $2c, $34..$36, $3c/$3d, $46/$47, $49..$4b, $5c..$5f
+;   TXTR (Pockey2): $03 the knob (0 = skip), $04 the hold countdown
+;     (shared by both channels, zeroed at init), $05 the hold length; r2
+;     walks $06..$11 per sample: RS mask inv 0.618 hL lastL, then the same
+;     six for R (hL lastL hR lastR zeroed at init)
+; free: $00..$02, $12..$14, $2c, $34..$36, $3c/$3d, $46/$47, $49..$4b,
+;   $5c..$5f
 ;
 ; ---- the master, by position ---------------------------------------------
 ; On the master (dispatch position 3 on payload A, track 8) COMP runs the
@@ -122,6 +128,11 @@ init:
         move    a,x:(r7+$55)            ; the ramps at their targets
         move    a,x:(r7+$15)            ; KEY's counter last seen and the
         move    a,x:(r7+$16)            ; blocks since it moved
+        move    a,x:(r7+$04)            ; TXTR's hold countdown and its
+        move    a,x:(r7+$0a)            ; held and last samples, L then R
+        move    a,x:(r7+$0b)
+        move    a,x:(r7+$10)
+        move    a,x:(r7+$11)
         rts
 
 proc:
@@ -407,6 +418,63 @@ ch_kset:
         mpy     x0,y1,a
         asl     #$1,a,a
         move    a,x:(r7+$31)            ; k3mag (< 0.98)
+; ---- TXTR: Airwindows Pockey2 (Chris Johnson, MIT, 2022), page-2 slot 9
+; (r6+$d bits 8-15). One knob drives both of Pockey2's sliders: A = B' =
+; k/128 with B = 1 - k/128, so the hold is floor((k/128)^3 * 32) samples
+; and the resolution 2^(16 - 12k/128) steps over the mu-law domain. R =
+; floor(2^rez) is kept as RS = R << s, s = 21 - floor(rez), so RS sits in
+; [2^21, 2^22): RS = T[j] with the low s bits cleared, T[j] =
+; floor(2^(21 + j/32)) and j = -3k mod 32 (the P table after DEC). The
+; sample floors y RS to the 2^s grid and multiplies by inv = 2^44/RS
+; (computed as (2^21 - 1)/2^23 over RS/2^23: below 1 even at RS = 2^21).
+        move    x:(r6+$d),a             ; TXTR, the companion byte
+        and     #>$007f00,a
+        move    a1,x:(r7+$03)           ; 0 = skip
+        asr     #$8,a,a
+        move    a1,x0                   ; k
+        mpy     x0,x0,a                 ; 2 k^2, an integer in a0
+        asr     a
+        move    a0,x1                   ; k^2
+        mpy     x1,x0,a                 ; 2 k^3 in a0 (< 2^23)
+        asr     #$11,a,a                ; k^3 / 2^16
+        move    a0,x1
+        move    x1,x:(r7+$05)           ; the hold length
+        move    x0,a
+        asl     a
+        add     x0,a                    ; 3k
+        move    a1,y0
+        neg     a
+        and     #>$1f,a                 ; j = -3k mod 32
+        add     #>$235,a                ; T follows ENC and DEC: 51 + 514
+        move    a1,n1
+        move    y0,a
+        add     #>$1f,a
+        asr     #$5,a,a                 ; ceil(3k/32) = 16 - floor(rez)
+        add     #>$5,a                  ; s = 21 - floor(rez), 5..17
+        move    a1,n2
+        move    p:(r1+n1),x1            ; T[j]
+        move    #>$ffffff,a             ; a2 = $ff: the mask shifts in zeros
+        do      n2,>ch_txm
+        asl     a
+ch_txm:
+        move    a1,x0                   ; mask = -(2^s)
+        move    x0,x:(r7+$07)
+        move    x0,x:(r7+$0d)
+        move    x1,a
+        and     x0,a
+        move    a1,x0                   ; RS
+        move    x0,x:(r7+$06)
+        move    x0,x:(r7+$0c)
+        move    #>$1fffff,a             ; (2^21 - 1)/2^23: a clean load, a0 = 0
+        andi    #$fe,ccr
+        rep     #$18
+        div     x0,a
+        move    a0,x0                   ; inv = 2^44 / RS, under 2^23
+        move    x0,x:(r7+$08)
+        move    x0,x:(r7+$0e)
+        move    #>$4f1bbd,x0            ; the blur's 0.618034, a ring word
+        move    x0,x:(r7+$09)
+        move    x0,x:(r7+$0f)
 ; WDTH -> mid and side gains. 64 = (1, 1); 0 = (1, 0) mono; 127 = (1, ~2).
 ; side gain = WDTH/64, mid stays 1 -- widening only touches the difference,
 ; so a mono source is untouched at every setting.
@@ -430,6 +498,9 @@ ch_kset:
         tst     a
         bne     ch_live
         move    x:(r7+$51),a             ; COMP
+        tst     a
+        bne     ch_live
+        move    x:(r7+$03),a            ; TXTR
         tst     a
         bne     ch_live
         move    x:(r7+$2b),a            ; side gain/2: 64 -> exactly 0.5
@@ -696,13 +767,39 @@ ch_rdone:
         asl     a
         move    a,x0
         mpy     y0,x0,a
-        asl     a           x:(r5)+,b   ; the SAT word
+        asl     a
+        move    a,x:(r4)-               ; wet R
+; ---- TXTR: Airwindows Pockey2 (Chris Johnson, MIT, 2022), both channels,
+; in place on wet L/R: mu-law encode (the 257-point ENC table), quantise to
+; R steps (floor toward zero), decode (DEC), a hold of the block's length
+; with one countdown for both channels, and the blur: out = hp + blur (h -
+; hp), blur = 0.618 - |coded - the previous dry| floored at 0. r1 is moved
+; onto ENC and r2 onto TXTR's words, and both put back for chtube.
+        move    x:(r7+$03),a            ; TXTR 0: skip
+        tst     a
+        beq     ch_notx
+        lua     (r1+$33),r1             ; ENC: after TUBE_UP's 34 and TAPE_D8's 17
+        lua     (r7+$06),r2
+        bsr     chtx2                   ; L
+        move    a,x:(r4)+               ; wet L, and r4 on wet R
+        bsr     chtx2                   ; R
+        move    a,x:(r4)-               ; wet R, and r4 back on wet L
+        move    x:(r7+$04),a            ; the countdown: reload at 0, then - 1
+        move    x:(r7+$05),x0
+        tst     a
+        tle     x0,a
+        sub     #>$1,a
+        move    a,x:(r7+$04)
+        lua     (r1-$33),r1             ; TUBE_UP again
+        lua     (r1+$11),r2             ; its slopes
+ch_notx:
+        move    x:(r5)+,b               ; the SAT word
 ; ---- SATURATE: the character. TAPE is
 ; TapeHead, TUBE is DaTube, INFL is OInflator: one straight-line callee per
 ; mode per channel (a = the sample in, the caller's LIMITING move the hard
 ; clip). Skipped whole when DRV is 0 (the SAT word is -1). The three
 ; alternatives are a MODEFORK so the pricer charges the worst, not all.
-        tst     b           a,x:(r4)-   ; wet R
+        tst     b
         blt     ch_nosat                ; DRV 0: skip the saturator
 ; MODEFORK_BEGIN -- cycle_count.py: the dispatch, the tst above's flags
         beq     ch_tape
@@ -961,6 +1058,74 @@ ch_rset:
         rts
 
 ; ---------------------------------------------------------------------------
+; chtx2 -- Pockey2 per channel (Airwindows, MIT): x:(r4) = the dry in, a =
+; out; r1 on ENC (DEC 257 words on), r2 on the channel's six words (RS mask
+; inv 0.618 h last), left past them. STRAIGHT-LINE (cycle_count.py charges
+; the span at each call). Clobbers x0, x1, y0, y1, a, b, n1.
+chtx2:
+        move    x:(r4),a                ; the dry (Pockey2's input)
+        abs     a
+        move    a,b                     ; u = |dry|: a clean copy (b0 = 0) for the fraction
+        asr     #$f,a,a                 ; idx = u >> 15
+        move    a1,n1
+        and     #>$7fff,b
+        asl     #$8,b,b
+        move    b,x0                    ; frac
+        move    p:(r1+n1),y0            ; ENC[idx]
+        move    (r1)+
+        move    p:(r1+n1),b             ; ENC[idx+1]
+        move    (r1)-
+        sub     y0,b
+        move    b,y1
+        mpy     x0,y1,a
+        add     y0,a        x:(r2)+,y1  ; y = enc(u) ; RS
+        move    a,x0
+        mpy     x0,y1,a     x:(r2)+,x0  ; a1 = y RS ; mask
+        and     x0,a        x:(r2)+,y1  ; floor(y R) 2^s (a1 read alone) ; inv
+        move    a1,x0
+        mpy     x0,y1,a
+        asl     #$2,a,a                 ; q = floor(y R) / R
+        move    a,b                     ; q, limited and clean, for the fraction
+        asr     #$f,a,a                 ; (a0's product bits shift down, not up)
+        add     #>$101,a                ; DEC follows ENC's 257 points
+        move    a1,n1
+        and     #>$7fff,b
+        asl     #$8,b,b
+        move    b,x0
+        move    p:(r1+n1),y0            ; DEC[idx]
+        move    (r1)+
+        move    p:(r1+n1),b             ; DEC[idx+1]
+        move    (r1)-
+        sub     y0,b
+        move    b,y1
+        mpy     x0,y1,a
+        add     y0,a                    ; |coded| = dec(q)
+        neg     a           a,x0
+        move    x:(r4),b
+        tst     b
+        tpl     x0,a                    ; coded, with the dry's sign
+        move    x:(r2)+,x1  a,y0        ; 0.618034 ; coded
+        move    x:(r2)+,b               ; hp, the held sample
+        move    x:(r2)-,x0              ; the previous dry
+        sub     x0,a
+        abs     a
+        neg     a
+        add     x1,a                    ; blur = 0.618 - |coded - last dry|
+        move    #0,x1                   ; (a plain immediate move keeps the flags)
+        tmi     x1,a                    ; floored at 0
+        move    a,y1                    ; blur
+        move    x:(r7+$04),a            ; the countdown
+        tst     a
+        move    b,a                     ; h = hp ...
+        tle     y0,a                    ; ... or coded when it has run out
+        sub     b,a         a,x:(r2)+   ; h - hp ; h
+        asr     #$1,a,a
+        move    a,x0
+        mpy     x0,y1,a     x:(r4),x0   ; ; the dry
+        asl     #$1,a,a
+        add     b,a         x0,x:(r2)+  ; hp + blur (h - hp) ; last dry
+        rts
+
 ; chtube -- DaTube per channel (JClones_DaTube.jsfx, MIT).
 ; In: a = x, y1 = (0.5+d)/2, r3 -> the DC blocker's x1 (y1 the word above),
 ; r6 -> the ring (d, d/2, comp/2, k = 1.0, R, the output scale). Out: a (the caller
