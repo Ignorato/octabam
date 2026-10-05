@@ -504,6 +504,8 @@ def main():
                 sys.exit("marker changed codegen -- the count is not trustworthy")
 
     worst, picks = bank_worst(rows, mods, remix.fx1, _stock_fx1)
+    global OVER
+    OVER = worst > USABLE
     legacy = ({m["name"]: m["cycles"] for m in rows}
               if all(k in {r["name"] for r in rows} for k in BANK) else None)
     bank = sum(legacy[k] * n for k, n in BANK.items()) if legacy else None
@@ -614,5 +616,10 @@ def main():
         print(f"  not {BURN_SPARE}. Only a re-run of the burn sweep can re-measure this.")
 
 
+OVER = False        # set by main(): worst core above USABLE
+
 if __name__ == "__main__":
     main()
+    # --json exits 0: its callers (acceptance.budget_result) judge the figures.
+    if OVER and "--json" not in sys.argv[1:]:
+        sys.exit(f"cycle_count: worst core is over the {USABLE}-cycle usable budget")

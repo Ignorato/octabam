@@ -241,9 +241,10 @@ verify-shared: ## The gates that do not depend on the remix: ledger selftest, sl
 .PHONY: verify-remix
 verify-remix: ## The selected remix's own gates: dirty state, init regs, DRAM boot, labels, its module gates, menu, the set under the port, USB
 	$(need-remix)
-	@# FIRST, before anything rebuilds over out/mainos_bus.bin (the
-	@# boot-verifier trap, AGENTS.md): a module started from a garbage
-	@# instance block must be silent on silence -- the unit's RAM is not zeroed.
+	@# verify_dirtystate builds the remix's image itself (verify-shared and
+	@# verify_character leave theirs at out/mainos_bus.bin): a module started
+	@# from a garbage instance block must be silent on silence -- the unit's
+	@# RAM is not zeroed.
 	python3 tools/verify/verify_dirtystate.py $(REMIX)
 	python3 tools/verify/verify_initregs.py $(REMIX)
 	REMIX=$(REMIX) python3 tools/verify/verify_dram_boot.py
