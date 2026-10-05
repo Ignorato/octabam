@@ -38,6 +38,15 @@ Under the port, 26 Sep 2026 (`tools/verify/verify_scenesp2.py`):
   remove a lock instead.
 - The pool holds 47 locks a part.
 
+- **Pool store order.** The frame pass (inside the frame ISR) walks the
+  pool without a lock. `pappend` writes the entry's three bytes (track,
+  slot, value) and then the count; `premove` moves the tail down and then
+  drops the count. An ISR between two stores sees the old count, a whole
+  new entry, or a duplicated entry; it does not see an unwritten one. The
+  order is by reading the code; the port is lock-step and cannot interleave
+  the ISR with the task, so it is not measured on the port or the unit. The
+  store order is checked under the port with `--watch-mem`.
+
 ## Gates
 
 - `tools/verify/verify_scenesp2.py`.

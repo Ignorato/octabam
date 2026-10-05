@@ -51,6 +51,25 @@ Not flashed.
   makes a lock trig from a page-1 lock; not mirrored).
 - On the unit.
 
+## CS1 writer ordering
+
+`nv_save` is called from the UI task (priority 3) and the engine task
+(priority 1, `plk_loadall`, `plk_loadmask`, `plk_tocs1`); the UI task
+preempts the engine task at any instruction. Each call takes a ticket
+(`NVGEN` incremented and `NVBANK` stored under SR `0x2700`). The entry loop
+compares its ticket with `NVGEN` every four bytes, and the commit (count,
+sum, magic) runs under `0x2700` after the same compare. A call that finds a
+newer ticket starts over from `NVBANK`. The mask covers a few instructions;
+the scan of up to 98,304 bytes runs unmasked, because a mask held for the
+scan would delay the frame ISR (about 24,600 long compares on an empty bank:
+inferred from the instruction count, not measured). A spin on a flag was
+not used: the engine task spinning on the UI task's flag cannot make
+progress if the UI task is the one preempting it. The ordering is by reading
+the code; the port is lock-step and cannot interleave tasks, so it is not
+measured on the port or the unit.
+
+`read_bank` rejects a `p2lkNN` header whose version is not 1 as no locks.
+
 ## Gates
 
 - `tools/verify/verify_plocksp2.py`.
