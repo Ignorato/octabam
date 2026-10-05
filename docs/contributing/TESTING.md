@@ -555,6 +555,11 @@ their results go in the PR body.
   overruns and underruns against a scripted host; with shards and another
   run on the machine the host falls behind and a remix fails that passes
   alone. Rerun a USB red alone before believing it.
+- **The USB stream's timing on a unit.** The port runs the frame
+  interrupt and the eDMA in lock-step, so `verify_usb_align` and
+  `usb_align.py` give the alignment the producer's code makes, not the
+  unit's. On a unit: a click on one track, a `tools/rec` take, and
+  `tools/hw/usb_offset.py` for the offset between its channel and MAIN's.
 - **Whatever the metric cannot represent.** A harmonic metric cannot see
   an inharmonic block-rate step; an AC-coupled capture cannot see DC; a
   reverb smears a per-sample fault. Ask what the instrument cannot see

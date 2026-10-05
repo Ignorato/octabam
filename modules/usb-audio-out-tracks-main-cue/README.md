@@ -79,6 +79,8 @@ behind the tracks' slot (the consumer runs `AUD_TARGET` = 64 frames behind (512 
 2026), which is more than one 16-frame block, so the slot is
 unread), and `verify_usb_align` reads 0 under the port. The size of the lag
 on hardware is inferred from the port's structure, not measured on a unit.
+To measure it: a click on T1, a twenty-channel `tools/rec` take and
+`tools/hw/usb_offset.py take.wav --ref 1 --ch 17`.
 
 ## On the unit
 
