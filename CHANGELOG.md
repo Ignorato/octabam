@@ -4,8 +4,15 @@ One entry per image that reached a unit, newest first; `Unreleased` is what
 main carries that no flashed image has yet. The version the panel shows is
 `BUILD` (`make image BUILD=N`); git tags exist for images 28, 29, 38, 42
 and 43 (`OCTABAM<N>`, the commit the image was built from). Image numbers
-repeat: the 22–25 Sep diagnostic run wrapped past 108 to 19, and 64, 88 and
-90 name two images each; each heading gives the date and remix.
+repeat: 43 has two entries (21 Sep `OCTABAM43`; 25 Sep `padfix`), 94 has two
+(`OCTABAM94`, 26-27 Sep; `sos-capture` BUILD=94, 3 Oct), and 95 names
+`sos-capture` BUILD=95 (3 Oct) and, in the image A0 entry, one of the
+3-4 Oct bottleservice images 95-99. The 22-25 Sep diagnostic run wrapped
+past 108 to 19, so its numbers (81-99, 100-108, 19-42, in the
+"Images 55-108 and 19-42" entry) overlap the numbered entries around it,
+including Image 90 (`usb-lean`). Other documents cite 94, 96 and 99 for
+13 Sep builds that have no entry here (`docs/contributing/FAILURE_MODES.md`,
+`modules/cc-map/manifest.py`). Each heading gives the date and remix.
 
 The full text before this rewrite: `git show 666b6154:CHANGELOG.md`.
 
@@ -41,6 +48,9 @@ Modules
 - SCENES P2: the page-2 editor-entry detours displace eight bytes; at twelve every page-2 turn under Octakit halted (28 Sep, port).
 - Character: KEY (SELF / T1) and KLVL on page 2, the compressor keyed from T1's level (29 Sep, #521); 355 → 241 static cycles/sample, bit-identical (27 Sep).
 - Spectrum: MODE is LADR SEM ISO VOWL; SEM's SHPE sweeps LP → BP → HP; saved parts: `ot_project.py remap-slot <project> SPECTRUM MODE 2:1,3:2,4:3` (27 Sep).
+- BusVerb: tank loop stores each line's output into its Hadamard slot through r4, 1,090 → 1,064 static cycles/sample, bit-identical (commit `7e0a236a`, `modules/busverb/README.md`; 5 Oct).
+- FX2 LOCK: the FX2 chooser cannot change a track's effect; YES's key-table entry points at NO's handler (bottleservice; 4 Oct, #579; image A1).
+- Character, Spectrum: the per-block decode is skipped for inactive modes; the static per-sample cycle count is unchanged (5 Oct, #607).
 - BusVerb: wet feedback limiter at −2 dBFS (0 railed samples at a 0 dBFS send, was 7,463 / 11,762); slot pass and parallel-move folding, 1,166 → 1,090 static cycles/sample (27 Sep).
 - Modulation: LINE 404 → 354, PHSR 394 → 298, COMB 339 → 329 words/sample; four beside the reverb priced inside the budget (27 Sep).
 - PLOCKS P2: parameter locks on FX1/FX2 page 2, held trigs + a knob on the SETUP page; trig and pattern operations carry them, `p2lkNN.work` / `.strd` save them, a sparse copy in CS1 keeps the current bank's over a power-off (2–3 Oct, #549, #550, port-gated). `ot_emu --cs1-in` / `--no-post` model a power cycle (#550).
@@ -86,6 +96,49 @@ captured sample-exact over USB AUDIO OUT TRACKS.
 - Not run: STOP/PLAY on BUILD=94. The repeated sample is recorded into the
   buffer and replays until the next pair (RLEN 4: 35.2 % of tone rms at the
   stored seam, 18.8 % at the skip).
+
+## Image A4 (104) — 5 Oct 2026
+
+Entry built from the citing documents; the commit the image was built
+from is not recorded in the tree. On the unit (Sam's MKII), per
+`modules/octakit/README.md` ("Patches on her runtime") and
+`docs/contributing/FAILURE_MODES.md` (the Octakit stranded-session entry):
+the rejected `bank01.work` staged as `PROJECT STRAND`; the load reports
+PARSE ERROR, then PLAY halts at
+`gk_stock_audio_pattern_primary_begin_report_fatal` (VEC:04, D0 = −1). The
+patch `modules/octakit/patches/0001-banks-load-error-applies-current-bank.patch`
+(#595, merged 5 Oct) is the one those two documents describe on the unit;
+the other contents of A4 are not stated.
+
+## Image A3 (103) — 4 Oct 2026
+
+Entry built from `modules/cc-feedback/README.md` ("On the unit") and
+`docs/contributing/FAILURE_MODES.md` (the BCR2000 entry). CC FEEDBACK
+paced to one message per UI tick (#584, commit `41765855`); the cc-feedback
+README names A3 as the image that carried it. The BCR2000 dark/deaf cases
+(A02, B1) were seen on images A0-A3 and attributed to the OT's Program
+Change on pattern change (PROG CH SEND), not to this module.
+
+## Image A2 (102) — 4 Oct 2026
+
+Entry built from `modules/cc-feedback/README.md` and
+`modules/cc-feedback/cc_feedback.s`. CC FEEDBACK sweeping the Part's knob
+bytes, unpaced (#583, commit `f87bc580`). On Sam's MKII with a BCR2000: no
+stream while B1 played untouched (a Midihub export held only the knob
+turns, CC 22 and CC 46); the BCR2000 locked up the moment the bank changed,
+on a dump of up to 336 messages in about a second.
+
+## Image A1 (101) — 4 Oct 2026
+
+Entry built from `remixes/bottleservice/remix.py` and
+`modules/cc-feedback/cc_feedback.s`. bottleservice with FX2 LOCK (#579,
+commit `dc1d2938`, 18:16 on 4 Oct) and CC FEEDBACK's lane-watching sweep.
+On Sam's MKII, with a Midihub capture of the OT's output: the sweep
+streamed 60 CCs a second on a pattern with locks on two of T1's knobs until
+the BCR2000 locked up, each CC went out twice (AMP and LFO blocks swapped
+in the map), and the lane rewrites overwrote incoming CCs
+(`modules/cc-feedback/README.md`, "On the unit"). FX2 LOCK itself: the
+cited documents record no hardware result for it.
 
 ## Image A0 (100) — 4 Oct 2026 (`bottleservice` at `feb52f5f`)
 

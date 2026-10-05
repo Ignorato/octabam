@@ -9,15 +9,17 @@ etiquette for building from somebody else's repository.
 either, not in a commit and not attached to an issue or PR. Describe it,
 hash it, or name the commit that built it. Anything a module needs from
 the stock firmware is taken from the user's copy at build time (Octakit
-`.incbin`s 411 stock routines that way). `.gitignore` refuses `*.bin`,
+`.incbin`s 459 distinct `stock/NNNN.bin` files that way: the unique names in `modules/octakit/upstream/runtime/*.S`; an earlier count was 411). `.gitignore` refuses `*.bin`,
 `*.syx`, `downloads/` and `out/`.
 
 What the rule does not cover (decided 16 Sep 2026): the few displaced
 instructions at a cave's hook site. A `CfPatch.hook_stock` is the six to
 ten bytes the installer overwrites with its `jsr` and the cave replays; the
 build refuses an image that does not hold them, which is the check that
-keeps a cave off the wrong OS. Those opcodes (four sites, 30 bytes in all,
-across `tempo-sync` and `recorder-loop-fix`) are an
+keeps a cave off the wrong OS. Those opcodes (ten sites, 70 bytes in all: `recorder-loop-fix` eight
+sites and 54 bytes, `tempo-sync` one site and 10 bytes, `rlen-plen` one
+site and 6 bytes; the Kyoti upstream's `TS_HOOK_STOCK` in
+`batch-bugfixes` is a further 18) are an
 instruction, not a firmware, and every ColdFire module carries its own
 the same way. Keep a hook to whole instructions and the minimum span; data
 tables, routines and anything longer than the displaced instructions come

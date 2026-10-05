@@ -4,8 +4,8 @@ Parts, built from her repository (emuyia/ems-octakit, submodule `upstream/`).
 `upstream/runtime/firmware.json` is the recipe; the build compiles, links,
 packs and appends her runtime itself (tools/remix/runtime_build.py),
 re-deriving every identity the recipe pins and refusing on a mismatch.
-Nothing of hers is vendored or rewritten; the 411 stock routines her runtime
-carries are sliced out of the user's 1.40C at build time.
+Nothing of hers is vendored or rewritten; the stock routines her runtime carries
+(459 distinct stock/NNNN.bin names in her sources; an earlier count was 411) are sliced out of the user's 1.40C at build time.
 
 What it changes on the unit (her README): 64 Parts become 256 Kits
 untethered from Banks (3.6 % of the flex pool); old Projects migrate their

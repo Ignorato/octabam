@@ -37,7 +37,7 @@ The fourteen stock FX2 effects are listed, so the chooser is stock's.
   `ok-ms` (midisc's author's unit, 14 Sep 2026); RECORDER LOOP FIX's
   self-loop caves as OCTABAM83/84 (Sam's MKII, 12 Sep 2026) and all of it
   as Bryan T's sos-capture BUILD=95 (3 Oct 2026); RLEN PLEN port-gated
-  only; REPITCH as OCTABAM81 (repeat98's MKII, 16 Sep 2026);
+  only; REPITCH as OCTABAM81 (MKII, unit undetermined, 16 Sep 2026);
   USB AUDIO as image 64 (Sam's MKII, 25 Sep 2026).
 - **Not flashed as a whole.** Not measured: MIDI CCs through the chained
   dispatch on hardware; midisc's Part save/reload menu hooks against

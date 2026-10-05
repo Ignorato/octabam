@@ -26,7 +26,8 @@
 ;   $1f $20 $21  c4, g2 (this block's target), R
 ;   $22       CAP's rotation count (persistent)
 ;   $23 $24 $25  kLP kBP kHP (SHPE's crossfade, per block)
-;   $26 $27   CAP lpBase (persistent chase), $27 free
+;   $26       CAP lpBase (persistent chase)
+;   $27       no reader; the MODE-change clear stores 0 here beside $26
 ;   $2c       WDTH's side gain / 2
 ;   $2d       the mode flag: 0 SVF 1 VOWL 2 LADR 3 CAP
 ;   $2e $2f   g2run (the cutoff ramp, persistent) and dg
@@ -48,7 +49,7 @@
 ;   $39..$3b  CAP's per-sample steps (gn/16 lpBase trim/2); $76..$7f the
 ;             other modes' per-sample steps (per block, fs_rbase), CAP's
 ;             gn/16 and trim/2 targets at $76/$77
-;   free: $19..$1d, $27..$2a, $3c..$3f, $4a..$4d
+;   free: $19..$1d, $27 (written 0 on a MODE change, never read), $28..$2a, $3c..$3f, $4a..$4d
 ; ---------------------------------------------------------------------------
 
 init:

@@ -59,7 +59,8 @@ on which remix is selected, so a run over several remixes does it once:
 | `tools/remix/selftest.py` | the ledger refuses every collision it claims to (FX2 id, declared conflict, cave, hook and detour span, poke, table and symbol ref, runtime write, kept bytes, grown table, private Y word, FX2 buffer region, DSP data range, DSP hook site), every shipped remix is clean, the placer fills non-contiguous runs in both payloads |
 | `verify_slots` | no dead store in BusVerb's per-instance state block |
 | `verify_replaces --static` | a declared replacement names a real stock effect and carries its id (the registry only) |
-| `verify_docs` | the README module table and the remix index match the manifests and selections (`make docs`); every remix has a README |
+| `verify_docs` | the README module table and the remix index match the manifests and selections (`make docs`); every remix has a README; every relative Markdown link and anchor, and every `docs/…`, `tools/…`, `modules/…` or `remixes/….md` path written in a tracked text file, resolves (`tools/verify/doclinks.py`); no section sign in a `.md` |
+| `verify_remixer` (`Makefile` verify-shared) | the remixer (`make remix`) opens and draws headless under Textual's test pilot for stock and every remix (three panes, cursor in each); `k` moves the cursor up in AVAILABLE and `K` resets to stock. SKIPs without textual |
 | `tools/build/label_fmt.py` | the select formatter caves re-derive from their sources (with `m68k-elf-as` on PATH) |
 | `verify_knob_clicks` | the knob census: every continuous knob of the fixture remix's DSP modules moved mid-render, the block-rate step in dBFS; a garbage start stays quiet |
 | `module_gates.py --shared` | every manifest gate declared `remix_arg=False` by a module in the selection, once for the union |
@@ -112,6 +113,21 @@ The two tables above.
 | `verify_midiscenes`, `verify_octakit` | MIDI SCENES, OCTAKIT | shared | the two port oracles: the author's own build reproduced byte for byte | submodule, m68k toolchain |
 | `verify_usb_in` | USB AUDIO IN AB, CD, ABCD | image | the host's channels land bit-exact on their RX slots, the others stay the jacks', the recorder ring fills, the jacks return at alt 0 | port, `.venv` |
 | `verify_usb_align` | USB AUDIO OUT TRACKS MAIN CUE | image | MAIN and CUE are in phase with the tracks in the twenty-channel stream (lag 0) | port, `.venv` |
+| `verify_cfmeter` | CF METER | per remix | the DSP meter under the port with T8's FX2 = CF METER: frames counted within 8 of the frames run; spin min <= max and > 0; period min <= max and > 0; DBRN 40 lowers the spin minimum with the period maximum unchanged (within 10 %); DBRN 127 raises the period maximum past 1.5 x run 1's. Cannot see: the unit's cycle costs (the port prices each instruction at one step) and the ESAI's real underrun behaviour | `.venv`, port, project |
+| `verify_charkey` | CHARACTER | shared | KEY = T1 on both cores: a host-fed T3 (core 1) and T6 (core 0, also under four skews) duck in a burst; KEY = T1 with the host unfed holds no gain reduction; no host holds none; SELF is bit-identical fed or not; the master at KEY = T1 equals KEY = SELF; the host's own output is unchanged by Characters reading it. Cannot see: the chip's timing, anything the ColdFire does (knobs are poked into r6) | `dsp_host` |
+| `verify_character_txtr`, `verify_charkey_txtr` (`modules/character-txtr/`) | CHARACTER TXTR | shared | `verify_character` and `verify_charkey` run on the TXTR module (a `Gate` takes no arguments, so each names the module) | `dsp_host` |
+| `verify_fx2lock` | FX2 LOCK | image | T2, FX2 twice, DOWN, YES leaves the live FX2 ids (`0x80000ec4`) as a run that pressed nothing; with the poke undone in RAM the ids change; the poke is in the image. Without the module the same sequence turns T2's SEND into the stock DELAY | `.venv`, port, project |
+| `verify_plocksp2` | PLOCKS P2 | per remix | under the port: page-2 locks recorded from the panel (record, copy and paste, clear, pattern copy / paste / clear, undo), played on trigs, saved to the card (`p2lkNN.work`, `.strd`) and loaded back, including a power-up load from CS1 (`--cs1-in`, `--no-post`). Cannot see: the dial draw (the LCD is not decoded), the hardware, a slide trig | port, project |
+| `verify_testgen` | TESTGEN | shared | SINE against `sin(2 pi n inc / 2^24)` within 4 LSB, frequency within 0.003 Hz, FINE within 1 ppm, THD below −120 dB, LEVL steps of 0.5 dB within 0.01 dB, CHAN; SWEEP, WHITE, PINK, IMPULSE, NEEDLE and DC against `testgen_ref.py`; silent at LEVL 0; an invalid MODE byte is SINE | `dsp_host` |
+| `verify_transient` | TRANSIENT | shared | defaults and MIX 0 bit-exact passthrough; a negated input gives the negated output within 4 LSB; the per-sample gain matches the float reference within 0.1 dB across ATCK and SUST extremes and three levels; SUST +63 raises no onset peak and steps under 0.5 dB between samples on a decaying tail; a steady 1 kHz tone moves under 0.25 dB | `dsp_host` |
+| `verify_wave` | WAVE | image | pitch from the carrier, the chord, a pitch step, the envelope, silence, eight instances and the instruction bound, on the remix's own image, both payloads. Counts executed instructions, not hardware cycles | `dsp_host` |
+| `verify_analog_bassdrum` | ANALOG BD | shared | the generated descriptor helpers | |
+| `bd909.py`, `bd808.py` (`tools/harness/`) | ANALOG BD | shared | the 909 engine in `bd909_host` against `dsp909.Voice` (a mismatch is a DSP bug; a mismatch with Drumazon is a model limit); the 808 reference, retrigger, automation and desk stability | `bd909_host` built into `out/bd909` |
+| `verify_analog_bd_exact.py`, `verify_analog_bd_levels.py` (`tools/harness/`) | ANALOG BD | shared | the original DSP output and state pinned by hash (all trigger offsets, rapid retriggers, long tails, control extremes, random block-rate automation) with both post-desk output gains verified; the shipped 808/909 defaults compared by fixed-window hit RMS | `dsp_host` |
+| `verify_analog_bd_reverbs.py` (`tools/harness/`) | ANALOG BD | image | PLATE and DARK stay bit-identical to stock after SPRING is harvested, on both cores, with fixed and moving controls, at the hardware audio address X:0 | `dsp_host` |
+| `verify_analog_bassdrum_cf` | ANALOG BD | image | the built ColdFire control transport and source setup ABI. Instruction counts are diagnostics, not hardware timing | `.venv` |
+| `verify_analog_bassdrum_port` | ANALOG BD | image | the real source transport and main output, 808 on T1 and 909 on T5, with no audio sample staged: integration, not 808/909 timbre | port |
+| `verify_analog_bassdrum_ui` | ANALOG BD | image | choosing Analog Bassdrum and selecting its engine with actual stock panel events | port |
 
 `verify_repitch_ui` is called by `verify_repitch`; `verify_repitch_reference`
 is an offline specification test nothing runs.
@@ -464,8 +480,9 @@ A new module's gates, `dear` and behavioral tests belong in that same PR.
   `remixes/test/bus` (the shipping flags, the plain build, the DEV hatch,
   the probes, the overrides); every artifact and every build report
   hashed. Save on main, check on the branch. A path in the report is part
-  of the report. Two cases (`plain`, `marker`) refuse to build and the
-  refusal is pinned the same way.
+  of the report. Three cases (`probe`, `xprobe`, `tprobe`: the probes in a plain
+  layout, where the real delay overruns the region) refuse to build and the
+  refusal is pinned the same way (`scripts/refhash.sh`).
 - **`make identity`**: every remix, base against head.
 - **`make verify-bus`, `verify-ident`, `verify-roll`, `verify-delay`,
   `verify-spectrum-ident`**: a rewrite against a saved reference.
