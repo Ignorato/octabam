@@ -1,6 +1,6 @@
 # `vocoder` -- VOCODER
 
-VOCODER beside the stock effects (all but PLATE REV, whose words it takes, and DJ EQ, so its tables sit in X memory). VOCODER runs on FX2 of tracks 1, 2, 5 and 6 only (two per DSP core) and passes audio elsewhere.
+VOCODER beside the stock effects (all but PLATE REV, whose words it takes, and DJ EQ, so its tables sit in X memory). VOCODER runs on FX2 of tracks 2, 3, 6 and 7 only (two per DSP core, not a core's first track) and passes audio elsewhere.
 
 ## What is in it
 

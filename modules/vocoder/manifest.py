@@ -40,8 +40,8 @@ MODULE = Module(
     key="VOCODER",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, OCTABAM12 (remix vocoder), 4 Oct 2026: on FX2 of all eight tracks, T1 T2 T5 T6 vocode, the rest dry, stable; by ear",
-    doc="Ten-band vocoder after the Roland VP-330: the track's voice, a built-in carrier at NOTE or input B. FX2 of tracks 1, 2, 5 and 6 only.",
+    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, 4-5 Oct 2026, by ear: OCTABAM12 at T1 T2 T5 T6 stable on all eight tracks; the move to T2 T3 T6 T7 (T1 clicked) heard clean on the 0.2 code (OCTABAM20), not on this build",
+    doc="Ten-band vocoder after the Roland VP-330: the track's voice, a built-in carrier at NOTE or input B. FX2 of tracks 2, 3, 6 and 7 only.",
     menu=MenuEntry(
         fx2_id=0x1a,
         donor_desc=0x400d58b8,        # DARK REV

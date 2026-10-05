@@ -6,7 +6,7 @@
 ; Insert contract: frames in place at x:(r0)/x:(r0+n0), knobs from r6,
 ; state in this instance's r7 block. No bus, no buffers, no shared window.
 ; Uses r4, r5 (m5 linear); r1 is left alone.
-; Runs on FX2 of tracks 1, 2, 5 and 6 only (r7 0x6200 or 0x6500): at most two
+; Runs on FX2 of tracks 2, 3, 6 and 7 only (r7 0x6500 or 0x6800): at most two
 ; per DSP core, which the MKII carries; a dry pass on every other slot.
 ;
 ; ---- the law ------------------------------------------------------------------
@@ -56,20 +56,24 @@ init:
         rts
 
 proc:
-; ---- TWO PER CORE, BUILT IN: FX2 positions 0 and 1 only --------------------------
+; ---- TWO PER CORE, BUILT IN: FX2 positions 1 and 2 only --------------------------
 ; Three VOCODERs on one DSP core overran Ignorato's MKII (a glitch, then a stall
-; until a reboot; two ran safely). So it runs only at r7 = 0x6200 and 0x6500,
-; the FX2 state blocks of a core's first two tracks (T1, T2 on core 1; T5, T6
-; on core 0), and is an exact dry pass everywhere else: on T3, T4, T7, T8 and
-; on any FX1 slot (0x6100 + 0x300 pos). r7 per slot measured under the port:
-; modules/send/README.md, "An FX1 slot is not a client".
+; until a reboot; two ran safely), so it runs at two positions per core and is an
+; exact dry pass everywhere else. Not position 0 (T1, T5): there the ColdFire's pull
+; of the previous frame's read-back must finish before T1's FX2 output is copied
+; over it, and reaches T1's words ~4.5 samples after T1's entry, jittering with the
+; pattern (docs/contributing/FAILURE_MODES.md, "Junk on main R ... T1 with BusDelay").
+; On Ignorato's MKII VOCODER on T1 put left-only click bursts into the main out at
+; one phase of the pattern, worst at trigs; on T2 and T3 it ran clean (5 Oct 2026).
+; So it runs at r7 = 0x6500 and 0x6800 (T2, T3 on core 1; T6, T7 on core 0). r7 per
+; slot measured under the port: modules/send/README.md, "An FX1 slot is not a client".
         move    r7,a
-        move    #>$6200,x0
-        cmp     x0,a
-        beq     vc_run
         move    #>$6500,x0
         cmp     x0,a
-        bne     vc_end                  ; not T1/T2/T5/T6's FX2: dry, nothing written
+        beq     vc_run
+        move    #>$6800,x0
+        cmp     x0,a
+        bne     vc_end                  ; not T2/T3/T6/T7's FX2: dry, nothing written
 vc_run:
 ; ---- per block: the knobs ---------------------------------------------------------
         move    #>$ffffff,m5
