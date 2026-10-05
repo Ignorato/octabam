@@ -115,13 +115,14 @@
         .set    CS1MAGIC,   0x4b435331      | 'KCS1'
         .set    V3_REC,     0x1a00          | Em's v3 record
         .set    V3_RECS,    0x600
+        .include "remix.inc"            | PWSKIP_LO / PWSKIP_HI (manifest.kits_inc)
 
         .text
         .globl  kits_sched, kits_chain, kits_loadall, kits_loadmask, kits_newproj
         .globl  kits_bankw, kits_pstore, kits_preload, kits_saved, kits_clear
         .globl  kits_partkey, kits_savekey, kits_mkisave, kits_funcyes
         .globl  kits_lcopy, kits_lpaste, kits_lclear, kits_pcopy, kits_psnap, kits_pstore_ptn
-        .globl  kits_fright, kits_ptrig
+        .globl  kits_fright, kits_ptrig, kits_status
         .globl  KIMG, KSTATE, kits_stage, kits_load_current, kits_save_current
 
 | ============================================================ the hooks ====
@@ -1220,6 +1221,28 @@ inactive_op:
 8:      moveq   #0,%d0
         rts
 
+| 0x4004c146: the status line's Part field, after stock formatted
+| "Pt:%d %.6s" into d2's buffer: with a Kit in the current Part's slot,
+| "NNN name" (Octakit's form; eleven characters at most, as stock's).
+kits_status:
+        tstl    READY
+        beq.s   9f
+        bsr.w   cur_kit
+        cmpil   #NKITS,%d0
+        bcc.s   9f
+        movel   %d0,%sp@-
+        bsr.w   kit_at
+        movel   %sp@+,%d0
+        movel   %a0,%sp@-               | (buf, fmt, number, name)
+        addql   #1,%d0
+        movel   %d0,%sp@-
+        pea     F_STATUS
+        movel   %d2,%sp@-
+        jsr     SPRINTF
+        lea     %sp@(16),%sp
+9:      lea     0x400a7230,%a0          | displaced
+        jmp     0x4004c14c
+
 | ============================================================ staging ======
 
 | stage_req: d0 = bank, d1 = pattern. In task context only.
@@ -1480,22 +1503,51 @@ slot_equal:
         movel   #PARTSZ,%d0
         mulu.l  %d1,%d0
         addal   %d0,%a0
-        movel   #PARTSZ/4,%d2           | long words (both word aligned), then
-2:      movel   %a0@+,%d0               | the last two bytes
-        cmpl    %a2@+,%d0
-        bne.s   3f
-        subql   #1,%d2
-        bne.s   2b
-        mvzw    %a0@,%d0
-        mvzw    %a2@,%d1
-        cmpl    %d1,%d0
-        bne.s   3f
-        moveq   #1,%d0
+        bsr.w   part_eq
         bra.s   4f
 3:      moveq   #0,%d0
 4:      movem.l %sp@,%d1-%d2/%a1-%a2
         lea     %sp@(16),%sp
         rts
+| part_eq: a0 = a working Part, a2 = a Kit's Part -> d0 = 1 when they are
+| equal outside PWSKIP_LO..PWSKIP_HI: the Part-window bytes MIDI SCENES
+| mirrors its own table into (its Claims.part_window; it rewrites them in
+| the current Part after a project load, measured under ok-ms). 0..0 when
+| MIDI SCENES is not in the remix. Clobbers d0/d1/a0/a2.
+part_eq:
+        movel   %d2,%sp@-
+        movel   #PWSKIP_LO,%d2
+        bsr.s   pe_run
+        bne.s   8f
+        movel   #PWSKIP_HI-PWSKIP_LO,%d0
+        addal   %d0,%a0
+        addal   %d0,%a2
+        movel   #PARTSZ-PWSKIP_HI,%d2
+        bsr.s   pe_run
+        bne.s   8f
+        moveq   #1,%d0
+        bra.s   9f
+8:      moveq   #0,%d0
+9:      movel   %sp@+,%d2
+        rts
+| pe_run: d2 = an even length: a0 against a2 -> Z set when equal
+pe_run: cmpil   #4,%d2
+        bcs.s   2f
+1:      movel   %a0@+,%d0
+        cmpl    %a2@+,%d0
+        bne.s   3f
+        subql   #4,%d2
+        cmpil   #4,%d2
+        bcc.s   1b
+2:      tstl    %d2
+        beq.s   4f
+        mvzw    %a0@+,%d0
+        mvzw    %a2@+,%d1
+        cmpl    %d1,%d0
+3:      rts
+4:      moveq   #0,%d0                  | Z set: equal
+        rts
+
 | slot_ok_named: d4 = bank, d1 = slot -> d0 = 1 when no engine track
 | names it (while the transport runs) and no queued or chained pattern's
 | Part byte does. Keeps d1-d7/a1-a6.
@@ -2701,14 +2753,13 @@ infer_resid:
         movel   %d5,%d0
         bsr.w   kit_at
         lea     %a0@(R_PAY),%a3
-        moveal  %a2,%a4
-        movel   #PARTSZ/2,%d0
-3:      movew   %a4@+,%d1
-        cmpw    %a3@+,%d1
-        bne.s   4f
-        subql   #1,%d0
-        bne.s   3b
-        bra.s   6f                      | equal: d5 is the slot's Kit
+        movel   %a2,%sp@-
+        moveal  %a2,%a0
+        moveal  %a3,%a2
+        bsr.w   part_eq
+        moveal  %sp@+,%a2
+        tstl    %d0
+        bne.s   6f                      | equal: d5 is the slot's Kit
 4:      addql   #1,%d5
         cmpil   #NKITS,%d5
         bne.s   2b
@@ -2942,6 +2993,7 @@ MODE_R:    .asciz  "r"
 MODE_W:    .asciz  "w"
 F_ROW:     .asciz  "%03d %s%s"
 F_EMPTY:   .asciz  "%03d ---"
+F_STATUS:  .asciz  "%03d %.7s"
 T_SPACE:   .asciz  ""
 T_STAR:    .asciz  " *"
 T_UNDO:    .asciz  "UNDO KIT"

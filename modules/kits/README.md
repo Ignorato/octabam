@@ -2,7 +2,7 @@
 
 256 Kits per project. A Kit is a saved Part; each pattern plays the Kit
 assigned to it, through the stock Part slots. `Kind.CF_PATCH`: one DRAM
-unit (`kits.s`), 22 detours, nothing on the DSP. The firmware facts it
+unit (`kits.s`), 23 detours, nothing on the DSP. The firmware facts it
 stands on are [`docs/firmware/PARTS.md`](../../docs/firmware/PARTS.md).
 Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 
@@ -35,8 +35,10 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 - **KEEP LEVELS**: a Kit loaded into a slot keeps the slot's eight track
   levels (Part `+0x12 + 2t`, the bytes CC 7 writes, measured; the cue
   levels at `+0x13 + 2t` come from the Kit) (ems-octakit discussion #3).
-- The current Part's name is the Kit's first six characters (the stock
-  Part name field is seven bytes).
+- The status line's Part field shows the current slot's Kit as `NNN
+  name` (Octakit's form; measured on the port's LCD: `009 ONE`). The
+  stock Part name is the Kit's first six characters (its field is seven
+  bytes).
 
 ## How it works
 
@@ -47,7 +49,10 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
   switch reads the Part byte then (PARTS.md section 3). A slot is free when
   no engine track names it while the transport runs, no queued or
   chained pattern's Part byte names it, and its working Part is byte for
-  byte the Kit KITS recorded there. A slot whose content is in no Kit is
+  byte the Kit KITS recorded there (outside MIDI SCENES' Part-window
+  bytes when it is in the remix: his code rewrites them in the current
+  Part from his own table after a project load, measured in ok-ms). A
+  slot whose content is in no Kit is
   never copied over. With no free slot, or a request with an interrupt
   level set (the arranger and repeat publish from the tick), the pattern
   plays what is resident and the request is counted.
@@ -101,7 +106,8 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
   and a three-pattern chain each stage their Kits, repointing Part bytes
   off the playing slot; the engine plays the staged slot after the switch.
 - ✅ The chain with a track key every 25 ms for 3 s across the first
-  switch (ems-octakit #5), 250 track presses at 180 ms over the chain, and
+  switch (ems-octakit #5), the same sweep across a single PTN+TRIG
+  switch, 250 track presses at 180 ms over the chain, and
   a CC 7 every frame for 3,000 frames: no halt, every counter zero.
 - ✅ LOAD KIT, UNDO KIT, SAVE KIT with the name editor, quick save, the list
   copy / paste / clear and their undos, the AUTOSAVE and KEEP LEVELS rows
@@ -138,13 +144,13 @@ Not flashed.
 - PTN+FUNC+TRIG covers the current bank; Octakit's BANK+TRIG > BANK+FUNC+
   TRIG for other banks is not carried. Its clear clears the eight audio
   tracks' steps and locks (`0x40039df4`), not the MIDI tracks.
-- The status bar shows the stock `Pt:N name`, the Kit's first six
-  characters; Octakit's `NNN name` is not drawn.
 - `kits.work` is written whole (1.6 MB) when anything changed; Octakit's
   per-record writes are not carried.
 - MIDI SCENES' own Part reload hooks are on the stock call sites; LOAD
   KIT calls the reload directly, so his post-reload restore does not run
-  for a Kit load (FUNC+CUE goes through his hooks as on stock).
+  for a Kit load (FUNC+CUE goes through his hooks as on stock). A staged
+  Kit carries the MIDI scene locks it was saved with in his Part-window
+  bytes; whether his table follows a staged slot is not measured.
 - Whether the CS1 range holds over a power-off on the unit is read from
   stock's use of CS1 (as PLOCKS P2), not measured.
 

@@ -28,6 +28,7 @@ pattern content beyond pattern 1 playing.
             chained: each in its own slot, the chain cycles.
   trackbtn  the chain, and track keys every 25 ms for 3 s across its
             first switch (ems-octakit#5).
+  trackbtn1 the same sweep across a single PTN+TRIG 2 switch.
   presses   the chain, 250 track presses at 180 ms.
   cc        a CC every frame for 3,000 frames with a program change.
   load      PART, UP UP, YES (MKII): the current pattern plays the Kit
@@ -292,6 +293,8 @@ def main():
             s.send(f"key {0x10 + i % 8:#x} down", 12); s.send(f"key {0x10 + i % 8:#x} up", 13)
         s.wait(3000)
     s = Script(); chain(s, sweep); add("trackbtn", s, cpokes)
+    s = Script(); s.tap("no"); s.tap("play", 2000); s.hold("ptn", 1); sweep(s)
+    add("trackbtn1", s, [(pa(1), 0), (pb(1), 0)])
 
     def presses(s):
         for i in range(250):
@@ -416,8 +419,18 @@ def main():
         kw = next((v for k, v in files.items() if k.lower().endswith("/kits/kits.work")), b"")
         check(f"base: kits.work on the card ({len(kw)} B), CRC-32 holds",
               len(kw) == IMG_LEN and struct.unpack(">I", kw[12:16])[0] == zlib.crc32(kw[64:]))
-        ok = all(kit(im, BANK * 4 + p) == slot(b, p) for p in range(4))
-        check("base: Kits 9-12 are bank 3's working Parts", ok)
+        # MIDI SCENES rewrites its Part-window bytes in the current Part after
+        # the load (KITS's equality leaves them out the same way)
+        lo, hi = 0, 0
+        if "MIDI SCENES" in remix.modules:
+            pw = registry.modules()["MIDI SCENES"].claims.part_window
+            lo, hi = min(o for o, _l, _w in pw) - WORK, max(o + l for o, l, _w in pw) - WORK
+
+        def eq(x, y):
+            return x[:lo] == y[:lo] and x[hi:] == y[hi:]
+        ok = all(eq(kit(im, BANK * 4 + p), slot(b, p)) for p in range(4))
+        check("base: Kits 9-12 are bank 3's working Parts"
+              + (f" (outside MIDI SCENES' +{lo:#x}..+{hi:#x})" if hi else ""), ok)
         names = [im[O_LIB + (BANK * 4 + p) * REC:O_LIB + (BANK * 4 + p) * REC + 7].split(b"\0")[0] for p in range(4)]
         stock = [b[PNAMES + 7 * p:PNAMES + 7 * p + 7].split(b"\0")[0] for p in range(4)]
         check(f"base: their names are the Parts' ({names})", names == stock)
@@ -439,7 +452,7 @@ def main():
         trk = (OUT / f"{tag}_trk.bin").read_bytes()
         return s, slot(b, s) == kit(im, k), trk
 
-    for tag in ("free", "repoint", "stopped", "progchg"):
+    for tag in ("free", "repoint", "stopped", "progchg", "trackbtn1"):
         if not exists(tag):
             continue
         s = clean(tag)
@@ -451,7 +464,7 @@ def main():
               ok and eng[0] == BANK and eng[1] == sl and engine <= {sl})
         if tag == "free":
             check("free: the pattern's own slot (2), nothing repointed", sl == 1 and s["REPOINT"] == 0)
-        if tag in ("repoint", "stopped", "progchg"):
+        if tag in ("repoint", "stopped", "progchg", "trackbtn1"):
             check(f"{tag}: the Part byte repointed off the playing slot ({sl + 1})", sl != 0 or tag == "stopped")
 
     for tag in ("chain", "trackbtn", "presses"):
