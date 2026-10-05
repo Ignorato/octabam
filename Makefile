@@ -38,6 +38,9 @@ export OT_PROJECT
 # `.venv` (the `emu` extra). Prefer that venv when present, else bare python3 —
 # where the emulator view degrades to "unavailable" and everything else works.
 PY := $(shell [ -x .venv/bin/python3 ] && echo .venv/bin/python3 || echo python3)
+# The machine's own architecture (Darwin: the kernel's answer, the same
+# under Rosetta; elsewhere uname). check_shards.host_arch() is the same probe.
+HOST_ARCH := $(shell if [ "$$(uname -s)" = Darwin ] && [ "$$(sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then echo arm64; else uname -m; fi)
 
 .DEFAULT_GOAL := help
 
@@ -152,8 +155,11 @@ emu-cf: ## Build and run the headless ColdFire machine (tools/emu/ot_emu) -- boo
 	@# The host's own architecture, explicitly: an Intel-Homebrew cmake
 	@# (/usr/local/bin) configures x86_64 and the port then runs under
 	@# Rosetta -- 4.19 s to the handoff against 3.55 s native (17 Sep 2026).
-	cmake --fresh -B out/emu -S tools/emu/ot_emu -DCMAKE_OSX_ARCHITECTURES=$$(uname -m) >/dev/null
+	@# HOST_ARCH asks the kernel: under an Intel-Homebrew python3 `uname -m`
+	@# itself says x86_64 (6 Oct 2026, every shard of a reach run).
+	cmake --fresh -B out/emu -S tools/emu/ot_emu -DCMAKE_OSX_ARCHITECTURES=$(HOST_ARCH) >/dev/null
 	cmake --build out/emu -j8 >/dev/null
+	$(PY) tools/verify/reach.py --stamp-port
 	./out/emu/ot_emu --image $(if $(IMAGE),$(IMAGE),out/raw/section_3_MAIN_OS.bin)
 
 .PHONY: verify-onebus
@@ -334,12 +340,12 @@ burn-image: burn ## Repack the RIG BURN build into a card-flashable .bin (BUILD=
 .PHONY: check-remixes
 check-remixes: ## The per-remix half for REMIXES="a b c", JOBS=4 worktrees at a time (out/shards/<i>, each its own port build; logs in out/check_shards/)
 	@test -n "$(REMIXES)" || { echo "REMIXES is unset: make $@ REMIXES=\"<name> ...\"   (make modules lists them)"; exit 2; }
-	BUILD=$(BUILD) python3 tools/verify/check_shards.py --jobs $(or $(JOBS),4) $(REMIXES)
+	BUILD=$(BUILD) $(PY) tools/verify/check_shards.py --jobs $(or $(JOBS),4) $(REMIXES)
 
 .PHONY: check-remix-gates
 check-remix-gates: ## One remix's per-remix half, one gate per job over JOBS=4 worktrees (the wall is the longest gate, not the list; OT_PROJECT as for check-remix)
 	$(need-remix)
-	BUILD=$(BUILD) python3 tools/verify/check_shards.py --by-gate --jobs $(or $(JOBS),4) $(REMIX)
+	BUILD=$(BUILD) $(PY) tools/verify/check_shards.py --by-gate --jobs $(or $(JOBS),4) $(REMIX)
 
 check: bus cycles verify ## Everything that can be checked without hardware (the set gates run under the port when OT_PROJECT or ~/.octabam_project names a project)
 	@# verify_burn.py shells out to build_bus.py twice -- with and without
@@ -383,7 +389,7 @@ identity: ## Which remixes' images this branch moved: every remix built from BAS
 	python3 tools/verify/image_identity.py --base $(BASE)
 .PHONY: reach
 reach: ## The gates this branch's changes reach (the diff against BASE=origin/main), QUICK by default (the carrying remixes, no identity or accept, 2 shards, nice 10); FULL=1 every gate at full speed; TESTS=1 includes remixes/test/; RUN=1 runs them, KEEP=1 every one then a table, JOBS=n the per-remix work over n worktrees
-	python3 tools/verify/reach.py --base $(BASE) $(if $(FULL),--full,) $(if $(TESTS),--tests,) $(if $(RUN),--run,) $(if $(KEEP),--keep-going,) $(if $(JOBS),--jobs $(JOBS),) $(REACHARGS)
+	$(PY) tools/verify/reach.py --base $(BASE) $(if $(FULL),--full,) $(if $(TESTS),--tests,) $(if $(RUN),--run,) $(if $(KEEP),--keep-going,) $(if $(JOBS),--jobs $(JOBS),) $(REACHARGS)
 
 .PHONY: modules
 modules: ## List the module index and the available remixes

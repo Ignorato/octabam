@@ -717,6 +717,17 @@ copies each backing object into a private one after the fork. Anything
 new the port maps shared (a window, a ring for the host) needs the same
 treatment, or the children interfere and the failure moves between runs.
 
+**THE PORT RAN UNDER ROSETTA IN EVERY SHARD, AND NOTHING SAID SO.** `make
+reach` and `check_shards.py` run under `python3`; on this machine that is
+Intel Homebrew's (`/usr/local/bin`), and under it `uname -m` and
+`os.uname().machine` both say `x86_64`, so cmake built an x86_64 `ot_emu`
+that ran translated: 1.27x slower to the handoff, 1.75x on DSP frames
+(6 Oct 2026, both binaries side by side under the same load). The
+Makefile's `HOST_ARCH` and `check_shards.host_arch()` ask the kernel
+(`sysctl -n hw.optional.arm64`, the same answer under Rosetta; Linux keeps
+`uname -m`). `file out/emu/ot_emu` is the check; `make check-asm` prints
+the binaries' architecture.
+
 **The report is API, and it prints paths.** Moving a tool changed the build
 report (the hints name `tools/harness/send_probe.py`), which refhash
 correctly flagged with every artifact identical. Re-save only after proving

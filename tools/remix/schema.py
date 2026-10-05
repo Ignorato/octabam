@@ -773,16 +773,27 @@ class Gate:
     `make bus REMIX=<name>` and the shared set gates (a gate that needs
     verify_set's staged card is an image gate). The runner exports REMIX
     and BUILD to every gate.
+
+    `once` is for a gate whose subject is the module's own code, the same
+    in every carrier (a ColdFire module's panel scenarios under the port):
+    it takes a remix name but runs once per run, in the shared half, on
+    the named remix with the fewest modules that carries the module,
+    instead of once per carrying remix (KITS: 29 port scenarios, 371 s
+    emulated, on bottleservice AND ok-ms, 6 Oct 2026).
     """
 
     script: str                      # repo-relative
     remix_arg: bool = True           # pass the remix name as argv[1]
     venv: bool = False               # prefer .venv/bin/python3 (the port's python) when present
     stage: str = "isolated"          # "isolated" | "image"
+    once: bool = False               # once per run, on one carrying remix of the selection (the shared half)
 
     def __post_init__(self):
         if self.stage not in ("isolated", "image"):
             raise ValueError(f"Gate({self.script!r}): stage must be 'isolated' or 'image', not {self.stage!r}")
+        if self.once and (not self.remix_arg or self.stage != "isolated"):
+            raise ValueError(f"Gate({self.script!r}): once=True needs remix_arg=True and the isolated stage "
+                             "(it runs in the shared half, which has no image)")
         if not self.script.startswith("tools/") and not self.script.startswith("modules/"):
             raise ValueError(f"Gate({self.script!r}): a repo-relative path under tools/ or modules/")
 

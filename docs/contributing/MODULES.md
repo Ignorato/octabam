@@ -101,7 +101,10 @@ settings:
 `tools/verify/module_gates.py` collects the selection's gates, runs each
 script once (two modules naming one gate share it) with `REMIX` and
 `BUILD` exported, the remix name as `argv[1]` when `remix_arg` is set,
-and `.venv/bin/python3` when `venv` is set and the venv exists. An
+and `.venv/bin/python3` when `venv` is set and the venv exists. A gate
+with `once=True` checks the module's own code and runs once per run on
+the smallest carrying remix of the selection instead of once per carrying
+remix (a ColdFire module's port scenarios). An
 `"isolated"` gate (the default) builds its own scratch image or none and
 runs before the selected image is restored; an `"image"` gate reads
 `out/mainos_bus.bin` and runs after `make bus` and the shared set gates
