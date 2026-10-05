@@ -613,7 +613,7 @@ def port_is_stale(exe=None, src=None, stamp=None):
     (6 Oct 2026)."""
     exe = exe or ROOT / "out/emu/ot_emu"
     src = src or ROOT / "tools/emu/ot_emu"
-    stamp = stamp or ROOT / PORT_STAMP
+    stamp = stamp or exe.parent / pathlib.Path(PORT_STAMP).name     # beside the binary it describes
     if not exe.is_file() or not src.is_dir():
         return False
     if stamp.is_file():
