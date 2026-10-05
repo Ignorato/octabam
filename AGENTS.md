@@ -271,7 +271,9 @@ occurrence, and on 21 Sep 2026 a housekeeping comment that said "the
 ROTLATCH check" took the tracker body while the real marker stayed a
 comment -- no client on either payload resolved its write offset, and
 `verify-bus` read it as every server's client count changing.
-`_marker_once` refuses a second occurrence now.
+`_marker_once` refuses a second occurrence of `; ROTLATCH`, `; ROTINIT` and
+`; XBUS_GATE`; the `; HOSTGUARD`, mode-override and delay-override markers are
+counted to exactly one before they are replaced.
 
 **AN INSTRUCTION FORM THE CHIP HAS NEVER RUN IS NOT PROVEN BY THE PORT.**
 The assembler encodes it, the vendored emulator decodes it the same way, and
