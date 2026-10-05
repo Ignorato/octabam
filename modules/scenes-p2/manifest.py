@@ -11,7 +11,7 @@ with the stock weight table; a select snaps at the fader's midpoint. A
 page-2 knob turned while a scene is held edits that scene's lock instead
 of the Part (both page-2 editors detoured at entry). The pool travels with
 the Part: Part Save / Reload and Project Save copy the window whole, and
-Octakit's Kits keep the Part layout.
+a KITS Kit is a whole Part.
 
 Sites: the frame builder's join after the morph (0x4000cf40), the FX2
 page-2 editor (0x4003a9dc) and FX1's (0x4003abe4), all at instruction

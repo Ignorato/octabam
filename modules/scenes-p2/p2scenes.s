@@ -282,17 +282,13 @@ udone:  rts
 
 | --------------------------------------------------------------- editors ----
 | Entry state of the stock editors: sp@ = return, sp@(4) = slot2, sp@(8) = ticks.
-| No scene held: on to P2_NEXT2 / P2_NEXT1 with the entry state untouched.
-| Without Octakit `remix.inc` sets them to fx2_stock / fx1_stock (the
-| displaced prologue, then the stock body); with her, the SCENES P2 KITS
-| bridge overrides her writes at the two entries and the build defines
-| the symbols as her wrappers, so her editor protocol runs whole.
-| The detours displace EIGHT bytes (lea + movem), the span her own entry
-| write takes: her trampoline replays those eight and continues at
-| entry+8, where the stock `moveal %sp@(32),%a2` must still be. Padded
-| to twelve (until 28 Sep 2026) that instruction was a nop under her,
-| the body read a garbage slot, skipped its store, and her marker check
-| halted the unit on every page-2 turn (rig-kits, bottleservice).
+| No scene held: on to P2_NEXT2 / P2_NEXT1 with the entry state untouched;
+| `remix.inc` sets them to fx2_stock / fx1_stock (the displaced prologue,
+| then the stock body). The detours displace EIGHT bytes (lea + movem):
+| fx2_stock / fx1_stock continue at entry+8, where the stock
+| `moveal %sp@(32),%a2` must still be (padded to twelve until 28 Sep 2026,
+| that instruction was a nop, and under Octakit's trampoline the body
+| read a garbage slot: every page-2 turn halted, rig-kits, bottleservice).
         .include "remix.inc"
 fx2_edit_hook:
         tstl    SCENE_HELD
