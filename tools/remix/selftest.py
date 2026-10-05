@@ -255,9 +255,9 @@ def _submodule_preflight() -> int:
 
     `make check` runs EVERY remix, so a clone without submodules fails on
     somebody else's module even when the remix under test has nothing to do
-    with it -- and it failed as a bare FileNotFoundError traceback out of
-    ledger.runtime_write_spans (octakit's firmware.json) or as an assembler
-    "can't open" from midi-scenes' sources. Measured on a fresh
+    with it -- and it failed as a bare FileNotFoundError traceback (Octakit's
+    firmware.json, until 6 Oct 2026) or as an assembler "can't open" from
+    midi-scenes' sources. Measured on a fresh
     clone: `make bus REMIX=recfix` succeeds, `make check REMIX=recfix` dies.
     That is a wall in front of the first thing an outside contributor is
     asked to run, so it gets a message instead of a traceback.

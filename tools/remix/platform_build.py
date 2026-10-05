@@ -1,11 +1,10 @@
 """octabam's platform runtime: every DRAM unit in the remix, linked as one
 image, packed, and appended after the OS behind the loader (loader.S)
-together with any other payload -- Em's Kit runtime -- as equals.
+together with any other payload as equals.
 
 One link for all DRAM units means cross-unit symbols resolve without any
---defsym; other payloads' symbols (her gk_*), the units' resolved
-Linked.defsyms and a bridge's continuation targets are offered as
-defsyms, and each unit's own Linked.defsyms also go to its assembly. The
+--defsym; other payloads' symbols and the units' resolved
+Linked.defsyms are offered as defsyms, and each unit's own Linked.defsyms also go to its assembly. The
 loader itself is assembled here with the payload table and blobs
 `.incbin`'d after it, so every address in the append is the assembler's,
 not arithmetic in Python.
@@ -17,7 +16,7 @@ import pathlib
 import subprocess
 import sys
 
-from remix import runtime_build
+from remix import pack
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 LOADER_AT = 0x4010FDF0          # the byte after the stock OS image
@@ -133,7 +132,7 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
           unit_defs=None):
     """units: [(module key, Linked)] with dram=True, in link order.
     payloads: [dict(name, blob, stage, dst, rawlen, rhash, backup)] for
-    payloads built elsewhere (Octakit): `blob` = signature + GKA3 stream.
+    payloads built elsewhere: `blob` = signature + GKA3 stream.
     reserve: (base, size) of the arena reserve the runtime lives in;
     required when there are units. defsyms: extra {name: value} for the
     link (a bridge's continuation targets, schema.Override). preboot:
@@ -159,8 +158,8 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
             defs.update(p.get("symbols", {}))
         defs.update(defsyms or {})
         raw, symbols = link_runtime(units, work / "runtime", defs, base, includes, unit_defs)
-        packed = runtime_build.PACKED_MAGIC + len(raw).to_bytes(4, "big") + \
-            runtime_build.pack(raw, MAX_CANDIDATES)
+        packed = pack.PACKED_MAGIC + len(raw).to_bytes(4, "big") + \
+            pack.pack(raw, MAX_CANDIDATES)
         stage = (base + len(raw) + STAGE_ALIGN - 1) & ~(STAGE_ALIGN - 1)
         stage_end = stage + 4 + len(packed)
         if stage_end > ceiling:

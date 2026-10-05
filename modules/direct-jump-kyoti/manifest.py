@@ -21,7 +21,8 @@ _UPSTREAM = pathlib.Path(__file__).resolve().parent / "upstream" / "octabam-modu
 
 MODULE = runpy.run_path(str(_UPSTREAM), run_name="remix_manifest_direct_jump_kyoti")["MODULE"]
 # The module table's fields are octabam's (README.md, `make docs`), so they
-# are added here rather than in his manifest.
+# are added here rather than in his manifest. His conflict with OCTAKIT is
+# dropped: Octakit is not in octabam since 6 Oct 2026 (KITS replaces it).
 MODULE = dataclasses.replace(
-    MODULE, category=Category.MACHINES, author="Zac-Kyoti/octatrack-kyoti-fw", author_url="https://github.com/Zac-Kyoti/octatrack-kyoti-fw",
+    MODULE, conflicts=tuple(c for c in MODULE.conflicts if c[0] != "OCTAKIT"), category=Category.MACHINES, author="Zac-Kyoti/octatrack-kyoti-fw", author_url="https://github.com/Zac-Kyoti/octatrack-kyoti-fw",
     proof=Proof.HARDWARE, proof_note="the author's MKI, 27-28 Sep 2026 (standalone 140C_KDJ7 and the KYOTI V1.0 combined image) and 1 Oct 2026 from DRAM (an octabam image with all six KYOTI modules); Program Change re-cues, MIDI tracks, START SILENT and the trig-condition reset emulator-verified")

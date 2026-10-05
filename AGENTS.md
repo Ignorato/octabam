@@ -21,7 +21,7 @@ core-private Y word, per-core FX2 buffer region or DSP data range
 
 **Modules come in kinds, and the traps below say which they belong to.** A
 **ColdFire module** (linked GNU-as units, detours by symbol, a runtime in
-DRAM: midisc, Octakit, octalab, REPITCH) never touches the DSP and none of the DSP traps
+DRAM: midisc, KITS, octalab, REPITCH) never touches the DSP and none of the DSP traps
 apply to it; its own traps are in the last section. On the DSP side an
 insert has no bus role, no shared-window claim, sits in both payloads and
 runs on any track; a **server** pays for the rotation, the housekeeping
@@ -29,8 +29,8 @@ election, the auto-gain and the payload asymmetry, and most of the DSP
 traps are a server's.
 
 **A port is a proof.** The author's own build is the oracle: `pinned`,
-`reference(addr)`, `Linked.reference` and a `Runtime` recipe's identities
-are four forms of one rule, and the build refuses on drift. Never "port" by
+`reference(addr)` and `Linked.reference` are three forms of one rule, and
+the build refuses on drift. Never "port" by
 rewriting; run their build against the shared stock image first.
 
 **If you change the BUILD rather than a module, prove it changed nothing:**
@@ -88,7 +88,7 @@ so `cmake --build` there compiles THEIR `tools/emu/ot_emu`, not yours
 (14 Sep 2026: a port edit "built" fine and the binary did not have it).
 Build the port into the worktree: `make emu-cf` (a fresh cache, ~1 min).
 `out/cache/` is the build's memo (the packed runtimes, keyed by the sha256
-of their inputs; `tools/remix/runtime_build.py`), per worktree and safe to
+of their inputs; `tools/remix/pack.py`), per worktree and safe to
 delete; `OCTABAM_NO_CACHE=1` builds cold when a build result is in doubt.
 **The same holds for `dsp_host` and `dsp_asm`:** `scripts/setup.sh` builds
 them from a COPY staged into `vendor/dsp56300/source/dsp_host/`, so in a
@@ -692,20 +692,15 @@ too. Found by a peer session. Scratch is `tempfile.mkdtemp` per process now
 is a shared-scratch race before it is anything else; and a `make check`
 result taken while another build was running is not a result.
 
-**A STOCK ROUTINE OCTAKIT WRAPS CHECKS ITS CALLER, AND A MODULE THAT
-CALLS IT BARE HALTS THE UNIT.** Her recipe repoints the three stock calls
-to the page-1 writer `0x40054cd8` at her wrapper and rewrites the writer's
-dirty store to check a token long 12 bytes above the arguments; the wrapper
-accepts only the three stock return addresses. TEMPO BUS and MODE DEFAULTS
-called the writer bare, so `bottleservice` (the bus, the FX1 stations, USB and Octakit) halted
-under the port at frame 40 of `verify_set` on the first CC 68 (26 Sep 2026;
-never flashed). Both push the token now (`P1TOKEN`, read back from her
-`abi.inc` by `modules/octakit/manifest.py`), and the Kit save / reload /
-copy paths were measured intact after it (`modules/octakit/README.md`).
-Before calling a stock routine from a module in a remix that carries a
-`Runtime`, diff the routine and its callers against stock in the built
-image (`tools/build/where.py`, or the recipe's writes): the same family as
-KITS RELOAD's return-address check, found the same way.
+**A MODULE THAT REPLACES A STOCK ROUTINE CAN MAKE EVERY OTHER CALLER
+OF IT A HALT.** Em's Octakit (in octabam until 6 Oct 2026) repointed the
+three stock calls to the page-1 writer `0x40054cd8` at her wrapper and
+made the writer's dirty store check a token above its arguments; TEMPO
+BUS and MODE DEFAULTS called the writer bare, so `bottleservice` halted
+under the port at frame 40 of `verify_set` on the first CC 68 (26 Sep
+2026; never flashed). Before calling a stock routine from a module, diff
+the routine and its callers against stock in the built image
+(`tools/build/where.py`): another module may own it.
 
 **A FORKED PORT SHARES ITS DSP MEMORY WITH ITS SIBLINGS UNLESS IT IS
 UNSHARED.** The vendored DSP memory is a `shm` object mapped `MAP_SHARED`

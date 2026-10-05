@@ -11,7 +11,7 @@ stock DELAY (measured 4 Oct 2026, bottleservice: 09 -> 08); with it the
 ids are the same in both runs; a third run with the poke undone in RAM
 (`--poke`) must change T2's. Also asserts the poke is in the image. The
 lock is the chooser's YES key entry (0x400bc374) pointed at the NO
-handler, before Octakit's wrapper of the select handler.
+handler.
 
 SKIPs without a project (OT_PROJECT, --project or ~/.octabam_project),
 without the port, or for a remix without FX2 LOCK.

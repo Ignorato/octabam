@@ -2,7 +2,7 @@
 
 256 Kits per project. A Kit is a saved Part; each pattern plays the Kit
 assigned to it, through the stock Part slots. `Kind.CF_PATCH`: one DRAM
-unit (`kits.s`), 23 detours, nothing on the DSP. The firmware facts it
+unit (`kits.s`), 22 detours, nothing on the DSP. The firmware facts it
 stands on are [`docs/firmware/PARTS.md`](../../docs/firmware/PARTS.md).
 Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 

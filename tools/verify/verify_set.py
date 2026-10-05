@@ -528,11 +528,11 @@ def main():
     import json
     cd = json.loads(r.stdout)
     rewritten = [k for k in cd["changed"] if not k.startswith("LOG ")]
-    if "OCTAKIT" in mods:
-        # Octakit's load migrates Parts into kits*.strd/.work files (modules/octakit)
-        kits = [k for k in rewritten if pathlib.Path(k).name.startswith("kits")]
+    if "KITS" in mods:
+        # KITS writes kits.work at a project's first load (the migration, modules/kits)
+        kits = [k for k in rewritten if pathlib.Path(k).name in ("kits.work", "kits.strd")]
         rewritten = [k for k in rewritten if k not in kits]
-        check("card: with Octakit the load rewrote only kits files", not rewritten,
+        check("card: with KITS the load wrote only kits.work", not rewritten,
               f"{n_writes} WRITE command(s); kits: {', '.join(kits) or 'none'}"
               + (f"; other: {', '.join(rewritten)}" if rewritten else ""))
     else:

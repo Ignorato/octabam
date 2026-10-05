@@ -32,10 +32,10 @@ the other remixes' whole halves, longest first, so it no longer takes one
 shard for the whole run while the others idle. Which remixes: `--split
 auto` (the default) splits a remix whose last recorded time
 (out/check_shards/times.json, written after every run) exceeds both 300 s
-and the run's total over the shard count; with no record, the remixes that
-carry OCTAKIT (every project load under it is ~32 s emulated; bottleservice
-and mods were the floor of every run on 28-29 Sep 2026). `--split none`
-runs every remix whole; `--split a,b` names them.
+and the run's total over the shard count; with no record, none (until 6
+Oct 2026 the remixes that carried Octakit, whose project load took ~32 s
+emulated). `--split none` runs every remix whole; `--split a,b` names
+them.
 
 `--by-gate` shards ONE remix's per-remix half by gate instead: every gate
 of `make verify-remix` (plus `make cycles`) is its own job, each shard
@@ -155,7 +155,7 @@ def clean_env():
     env = dict(os.environ)
     for var in ("MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES"):
         env.pop(var, None)
-    # every shard builds from this tree's memo (tools/remix/runtime_build.CACHE)
+    # every shard builds from this tree's memo (tools/remix/pack.CACHE)
     env.setdefault("OCTABAM_CACHE", str(ROOT / "out/cache"))
     return env
 
@@ -220,8 +220,7 @@ def remix_jobs(remix_name, shard):
 
 def choose_split(remixes, spec, times, jobs):
     """The remixes to run as gate jobs: named, none, or (auto) those whose
-    last recorded time would set the wall time; with no record, those that
-    carry OCTAKIT."""
+    last recorded time would set the wall time; with no record, none."""
     if spec == "none":
         return set()
     if spec != "auto":
@@ -230,9 +229,7 @@ def choose_split(remixes, spec, times, jobs):
     if len(known) == len(remixes):
         floor = max(300.0, sum(known.values()) / jobs)
         return {r for r, s in known.items() if s > floor}
-    sys.path.insert(0, str(ROOT / "tools")); import toolpath  # noqa: E402,F401
-    from remix import registry  # noqa: E402
-    return {r for r in remixes if "OCTAKIT" in registry.remix(r).modules}
+    return set()
 
 
 def check_recipe(jobs):

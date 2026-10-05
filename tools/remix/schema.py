@@ -898,8 +898,7 @@ class Linked:
     include: object | None = None
     # (name, value) pairs passed to both `m68k-elf-as --defsym` (so
     # `.ifdef NAME` sees them) and `m68k-elf-ld --defsym`, as
-    # CavePatch.defsyms. Each value resolves to a bridge's continuation
-    # target (Override.defsym) first, then a global of a unit or cave
+    # CavePatch.defsyms. Each value resolves to a global of a unit or cave
     # linked before this one, else the declared value; the `reference`
     # oracle uses the declared values. A name the source itself defines is
     # refused. DRAM units share one link, so two declaring one name must
@@ -953,13 +952,6 @@ class Detour:
     kind: str = "jmp"
     target: int | None = None
     pad_to: int | None = None
-    # The stub reaches the stock callee with a return address of its OWN
-    # on the stack (midisc's `reload`, `apply_bridge`: the site's return
-    # parked in apply_ret, the stub's continuation in its place). A callee
-    # another module replaces may validate that address -- Octakit's
-    # part reload traps on any but the stock sites' (Runtime.pinned_returns)
-    # -- and the ledger refuses the pair by name.
-    subst_return: bool = False
 
     def __post_init__(self):
         written = self.pad_to or 6
@@ -1052,103 +1044,19 @@ class SymbolRef:
 
 
 @dataclass(frozen=True)
-class Runtime:
-    """A loader-appended runtime: code and state that live in DRAM, not in
-    the OS image's free zero runs.
-
-    The third placement class, after ColdFire caves and DSP payload words,
-    and the only one that scales past a few kilobytes. The OS image grows
-    by an APPEND (a small early loader, a stage anchor and the runtime,
-    packed with the firmware's own aPLib variant); one of the recipe's
-    sparse writes detours the boot path into the loader, which depacks the
-    runtime into a reserved DRAM window and installs its hooks from there.
-    Everything the runtime needs from Elektron's own code is `.incbin`'d
-    out of the USER'S stock image at build time (copied or PC-relative-
-    relocated per the recipe), so the repo carries none of it.
-
-    This is Em's design (emuyia/ems-octakit) adopted whole:
-    `recipe` is her `firmware.json` (interface_version 1) and `sources` her
-    `runtime/` -- both live in a git SUBMODULE so she keeps developing in
-    her own repo and octabam builds from it. The build re-derives every
-    identity the recipe pins (rebuilt runtime, packed runtime, append, the
-    combined OS) and refuses on any mismatch; that identity check, not a
-    compiler-version string, is what proves the toolchain reproduced her
-    bytes (gcc 16.2.0 does, measured against her 16.1.0 pin).
-    """
-
-    recipe: str        # firmware.json, repo-relative
-    sources: str       # directory holding the .S/.c sources it names
-    report_note: str = ""
-    # Return addresses the runtime's replacement routines validate: they
-    # compare the caller's return address on the stack against these and
-    # trap (`illegal`, VEC:04) on any other. A detour of the `jsr` that
-    # pushes one of them, whose stub returns the callee through its own
-    # continuation (Detour.subst_return), reaches that trap on the unit
-    # -- OKMS1's Part Reload, 14 Sep 2026. Derived from the sources
-    # (Octakit: abi.inc's *_RETURN equates), never typed.
-    pinned_returns: tuple[int, ...] = ()
-    # Unified diffs (repo-relative, `patch -p1` against `sources`) the build
-    # applies to a COPY of the author's sources before compiling, and the
-    # identities (raw, packed, append: size + sha256) the patched build must
-    # reproduce -- the same refuse-on-drift rule as the recipe's own pins.
-    # The author's own sources are still built first and proved against her
-    # pins, so a patch is a visible, pinned delta on a proven base.
-    patches: tuple[str, ...] = ()
-    patched: dict | None = None
-
-
-@dataclass(frozen=True)
-class ArenaReserve:
-    """Pages of stock's audio page arena taken for this module's DRAM.
-
-    The arena (tools/remix/arena.py) is the 85.5 MB stock shares between
-    Flex samples and the track recorders, and shrinking it is the one DRAM
-    placement with a hardware record: Octakit takes its top 528 pages,
-    octamax 2.0 its bottom 64. The build stacks every reservation in the
-    remix -- `where="bottom"` from the stock base upward (the base literal
-    moves), `where="top"` from the end downward (the count shrinks) -- and
-    computes the four geometry literals from the total, so two modules
-    that each take pages compose instead of both rewriting the same words.
-
-    `recipe_writes` names the writes in a Runtime recipe that ARE those
-    geometry literals (Octakit's four): the build skips them and computes
-    the combined values, which for her alone are byte-identical to hers.
-    """
-
-    pages: int
-    where: str = "top"                   # "top" | "bottom"
-    recipe_writes: tuple[str, ...] = ()
-
-    def __post_init__(self):
-        if self.where not in ("top", "bottom"):
-            raise ValueError(f"ArenaReserve.where must be 'top' or 'bottom', not {self.where!r}")
-        if self.pages <= 0:
-            raise ValueError("ArenaReserve.pages must be positive")
-
-
-@dataclass(frozen=True)
 class Override:
-    """This module's own claim at `site` stands in for another module's --
-    the way two mods that hook one stock instruction get to share it.
-
-    A BRIDGE module (modules/scenes-kits is the first) carries a stub that
-    does what both hooks did, in an order that respects each one's
-    protocol, and declares an Override per claim it replaces: `module` is
-    the other module's key, `write` the name of its Runtime recipe write
-    at that site (None for a Detour). The build then skips the overridden
-    detour or write and, when `defsym` is given, defines that symbol as the
-    overridden claim's TARGET -- the address a `jmp abs.l` write jumped
-    to, or the pointer a 4-byte table write installed -- so the stub knows
-    where to continue: for every DRAM unit (one link), and for each ROM
-    unit or cave that declares the name in its `defsyms`. The ledger
-    treats the site as the bridge's; the overridden module must be in the
-    remix, or the override is refused.
+    """This module's own claim at `site` stands in for another module's
+    Detour there -- the way two mods that hook one stock instruction get to
+    share it. A BRIDGE module carries a stub that does what both hooks did,
+    in an order that respects each one's protocol, and declares an
+    Override per detour it replaces: `module` is the other module's key.
+    The build skips the overridden detour; the ledger treats the site as
+    the bridge's; the overridden module must be in the remix, or the
+    override is refused.
     """
 
     site: int
     module: str
-    write: str | None = None
-    defsym: str | None = None
 
 
 @dataclass(frozen=True)
@@ -1168,10 +1076,6 @@ class Module:
     cf_patches: tuple[CavePatch, ...] = ()
     claims: Claims | None = None
     harness: Harness | None = None
-    # A loader-appended DRAM runtime (schema.Runtime). At most one per image
-    # today: the append sits at the end of the OS and the loader owns one
-    # DRAM window; the ledger refuses a second.
-    runtime: Runtime | None = None
     # Linker-backed ColdFire code (schema.Linked): units the build assembles
     # and links where it places them, wired in by symbol (Detour), plus
     # relocated-and-grown stock tables and plain asserted pokes.
@@ -1182,10 +1086,6 @@ class Module:
     pokes: tuple[Poke, ...] = ()
     # Stock bytes this module relies on and does not write (schema.Keep).
     keeps: tuple[Keep, ...] = ()
-    # Pages of the audio page arena this module's DRAM lives in
-    # (schema.ArenaReserve). DRAM units need none: the platform reserves
-    # its own (arena.PLATFORM_PAGES) whenever a remix carries any.
-    arena: ArenaReserve | None = None
     # Claims of OTHER modules this module's own stand in for
     # (schema.Override) -- a bridge chaining two mods' hooks at one site.
     overrides: tuple[Override, ...] = ()

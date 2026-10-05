@@ -15,8 +15,8 @@ Checked, and how it knows:
   fixed-address      declared. Every byte span a module rewrites at a fixed
   writes             address -- pinned caves, cave hooks and detours (their
                      whole written span: hook_stock, pad_to), table refs,
-                     symbol refs, plain pokes, emit() pokes and a runtime's
-                     recipe writes -- against every other module's. Two
+                     symbol refs, plain pokes and emit() pokes -- against
+                     every other module's. Two
                      hooks on one instruction: the second jsr overwrites the
                      first and the first never runs; two pokes on one word:
                      the build's second expect assert fails.
@@ -55,9 +55,7 @@ Checked, and how it knows:
                      0x37F00-0x37F0F. verify_set measures the shared
                      window's writes under the port and holds them to these
                      (tools/remix/dsp_ranges.py).
-  appended runtimes  one per image (the end of the OS and the loader's
-                     window).
-  arena reserves     the total must leave the unit sample memory.
+  arena reserve      the platform's pages must leave the unit sample memory.
 
 Derived beats declared where possible: a scan cannot go stale. Its limit is
 that it sees only what the code references, so a word a module means to
@@ -125,17 +123,6 @@ def curve_bank_claims(selected) -> tuple[list[str], list[str]]:
 
 def _overlap(a_start, a_len, b_start, b_len) -> bool:
     return a_start < b_start + b_len and b_start < a_start + a_len
-
-
-def runtime_write_spans(m) -> list[tuple[int, int, str]]:
-    """(vaddr, length, patch name) for every sparse write a runtime's recipe
-    makes into the OS image -- its fixed-address claims, read from the
-    recipe itself so a claim cannot drift from what the build writes."""
-    import json
-    spec = json.loads((ROOT / m.runtime.recipe).read_text())
-    base = spec["format"]["os_load_address"]
-    return [(base + w["offset"], len(bytes.fromhex(w["data"])), p["name"])
-            for p in spec["patches"] for w in p["writes"]]
 
 
 def check(selected) -> list[str]:
@@ -254,17 +241,13 @@ def check(selected) -> list[str]:
     # the remix does not carry is refused: there is nothing to bridge.
     keys = {m.key for m in selected}
     overridden_detours: set[tuple[int, str]] = set()      # (site, module key)
-    overridden_writes: set[tuple[str, str]] = set()       # (module key, write name)
     for m in selected:
         for o in getattr(m, "overrides", ()):
             if o.module not in keys:
                 clash("override", m.name, f"(no {o.module})",
                       f"0x{o.site:08x} -- it bridges {o.module}, which this remix "
                       f"does not carry")
-            if o.write is None:
-                overridden_detours.add((o.site, o.module))
-            else:
-                overridden_writes.add((o.module, o.write))
+            overridden_detours.add((o.site, o.module))
 
     for m in selected:
         for u in getattr(m, "linked", ()):
@@ -295,8 +278,7 @@ def check(selected) -> list[str]:
             pokes.append((p.addr, len(p.expect), m.name, f"poke {p.note or hex(p.addr)}"))
     # A FLOATING emit cave's poke ADDRESSES do not depend on where the cave
     # lands -- only the values written do -- so it is evaluated at a probe
-    # address purely to learn its sites (Octakit and CC MAP both rewrite
-    # the MIDI control-parameter dispatch entry at 0x400d64a0).
+    # address purely to learn its sites.
     PROBE_ADDR = 0x400D7000
     emit_spans: list[tuple[str, int, int, str, str]] = []   # (kind, start, length, owner, label)
     for m in selected:
@@ -322,55 +304,12 @@ def check(selected) -> list[str]:
                               f"0x{max(ostart, pa):08x} -- both rewrite the same bytes")
                 pokes.append(span)
 
-    # ---- pinned return addresses (schema.Runtime.pinned_returns) ----------
-    # A runtime's replacement routine may validate its CALLER: Octakit's
-    # part reload reads the return address off the stack and traps on any
-    # but the two stock sites' own. A detour of that `jsr` whose stub
-    # returns the callee through its own continuation (Detour.subst_return
-    # -- midisc's `reload`) trips it, and no byte overlaps: OKMS1 ran until
-    # the first Part Reload (14 Sep 2026, VEC:04 in her report_fatal with
-    # D0 = his rel_after). Refused by name unless a bridge overrides the
-    # detour (modules/kits-reload).
-    for r in selected:
-        pins = getattr(getattr(r, "runtime", None), "pinned_returns", ())
-        if not pins:
-            continue
-        for m in selected:
-            if m is r:
-                continue
-            for d in getattr(m, "detours", ()):
-                if not d.subst_return or (d.site, m.key) in overridden_detours:
-                    continue
-                span = d.pad_to or len(d.expect)
-                for ret in pins:
-                    if d.site < ret <= d.site + span:
-                        clash("pinned return", r.name, m.name,
-                              f"0x{ret:08x} -- {r.name}'s callee validates the return "
-                              f"address of the jsr at 0x{d.site:08x} and traps on any "
-                              f"other; {m.name}'s stub ({d.note or d.symbol}) returns it "
-                              f"through its own -- bridge the site")
-
-    # ---- loader-appended runtimes (schema.Runtime) ------------------------
-    # The append sits at the end of the OS image and its loader owns one
-    # DRAM window, so an image carries at most one. Its recipe's sparse
-    # writes are fixed-address byte claims like any pinned cave, so they are
-    # checked against every pinned cave, hook site and emit poke above --
-    # the apply_part entry (0x40009094) is a real three-way conflict between
-    # midi-scenes, octamax and octakit, and this is where it is refused.
-    runtimes = [m for m in selected if getattr(m, "runtime", None) is not None]
-    hosts = {m.key for m in runtimes}
-    for i, a in enumerate(runtimes):
-        for b in runtimes[i + 1:]:
-            clash("appended runtime", a.name, b.name,
-                  "the end of the OS image and the loader's DRAM window -- "
-                  "one runtime per image")
-    # ---- the audio page arena (schema.ArenaReserve) -----------------------
-    # Every reservation is stacked by the build; the one thing to refuse
-    # here is a total that leaves the unit too little for samples and
-    # recorders. The platform's own pages count whenever DRAM units exist.
+    # ---- the audio page arena ---------------------------------------------
+    # The one thing to refuse here is a reservation that leaves the unit
+    # too little for samples and recorders. The platform's pages count
+    # whenever DRAM units exist.
     from remix import arena
-    reservations = [(m.name, m.arena.where, m.arena.pages)
-                    for m in selected if getattr(m, "arena", None) is not None]
+    reservations = []
     if any(u.dram for m in selected for u in getattr(m, "linked", ())):
         reservations.append(("octabam platform", "bottom", arena.PLATFORM_PAGES))
     if reservations:
@@ -379,29 +318,8 @@ def check(selected) -> list[str]:
         except SystemExit as e:
             problems.append(str(e))
 
-    for m in runtimes:
-        skip = set(getattr(getattr(m, "arena", None), "recipe_writes", ()))
-        skip |= {w for k, w in overridden_writes if k == m.key}
-        for start, length, label in runtime_write_spans(m):
-            if label in skip:
-                continue                 # computed by the build (arena geometry), or bridged
-            for cstart, clength, owner, clabel in caves:
-                if _overlap(cstart, clength, start, length):
-                    clash("ColdFire cave", f"{owner}'s {clabel}",
-                          f"{m.name}'s runtime write {label}",
-                          f"0x{max(cstart, start):08x}")
-            for haddr, owner in hooks.items():
-                if _overlap(haddr, 6, start, length):
-                    clash("hook site", owner, f"{m.name} (runtime write {label})",
-                          f"0x{haddr:08x} -- both rewrite the same instruction")
-            for pstart, plength, powner, plabel in pokes:
-                if _overlap(pstart, plength, start, length):
-                    clash("poke site", f"{powner} ({plabel})",
-                          f"{m.name} (runtime write {label})",
-                          f"0x{max(pstart, start):08x} -- both rewrite the same bytes")
-
     # ---- every fixed-address span against every other module's -------------
-    # The passes above compare emit pokes and runtime writes with everything,
+    # The passes above compare emit pokes with everything,
     # caves with caves and hooks by their first address. This one compares
     # the rest by the bytes each claim actually writes: plain pokes, table
     # and symbol refs against each other and against caves and hooks, and
@@ -417,11 +335,6 @@ def check(selected) -> list[str]:
             if u.cave_addr is not None:
                 spans.append(("cave", u.cave_addr, 6, m.name, f"linked unit {u.label}"))
     spans += emit_spans
-    for m in runtimes:
-        skip = set(getattr(getattr(m, "arena", None), "recipe_writes", ()))
-        skip |= {w for k, w in overridden_writes if k == m.key}
-        spans += [("runtime write", start, length, m.name, label)
-                  for start, length, label in runtime_write_spans(m) if label not in skip]
 
     _HOOKS = ("hook", "detour")
     _POKES = ("poke", "table ref", "symbol ref", "emit poke")
@@ -434,8 +347,8 @@ def check(selected) -> list[str]:
         if ka in _HOOKS and kb in _HOOKS and a[1] == b[1]:
             return True
         for x, y in ((a, b), (b, a)):
-            if x[0] in ("emit poke", "runtime write"):
-                if y[0] == "cave" or y[0] in _POKES or y[0] == "runtime write":
+            if x[0] == "emit poke":
+                if y[0] == "cave" or y[0] in _POKES:
                     return True
                 if y[0] in _HOOKS:
                     return _overlap(y[1], 6, x[1], x[2])
