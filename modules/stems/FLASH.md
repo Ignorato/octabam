@@ -1,4 +1,136 @@
-# STEM REC: flashes A and B, and crosscheck's flash plan as a record
+# STEM REC: flashes A, B and C, and crosscheck's flash plan as a record
+
+## Flash C — `stems`: stems after the fader, the buses and 24 bits (staged 5 Oct 2026)
+
+Piece 5 (`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`),
+on Yves's MKII. A track's file is now its share of MAIN, after its fader.
+MAIN, CUE and the inputs are sources of their own, the input pairs can be
+stereo or mono, and 24 BIT switches the files to 24 bits. The ring is
+8 MiB. Flash C checks all of that on the unit, and how the unit copes with
+the extra work in its audio interrupt.
+
+**The image.** Built 5 Oct 2026 from branch `stem-rec-p5` at `fc7baad`
+(a clean tree; it differs from the gated `3780665` in docs only), with the
+bare-metal `m68k-elf` toolchain: `make image REMIX=stems BUILD=3
+VERSION=STEMS3`. The unit's OS version reads `STEMS3`.
+
+| file | path | bytes | sha256 |
+|---|---|---|---|
+| card image | `out/OCTATRACK_STEMS3.bin` | 450,676 | `96b3e5d1348508a04af9f67e64d0758348ca272929a445e1b20601e7a5a0236a` |
+| MIDI image | `out/OCTATRACK_OS1.40C_STEMS3.syx` | 629,523 | `13cb5a6438eba058a14013767b88eecd536a55cb18857190a728d4fe3c0b4a9f` |
+
+Both are built from your own 1.40C and never enter the repository. Copies
+are in `/home/yvez/xcheck/stems3`. Every gate passed on that code:
+`make check-remix REMIX=stems` 317 PASS, 0 FAIL, the only SKIP
+`verify_set`'s, which needs a project; the menu gate's walks on the MKII
+and the MKI are in it. `verify_stems --long` 363 PASS, `--fat32` 95,
+the unit tests 54 and 12, all 0 FAIL (`docs/firmware/STEM_REC.md` 18.9;
+`/home/yvez/xcheck/v5-p5-big2.log`, `v5-p5-big2-long.log`). Never
+flashed. The card path is flash A's.
+
+**What's new for the unit: more work every frame.** The frame hook runs
+inside the audio interrupt. It now redoes core 0's gain arithmetic every
+frame (1,001 instructions per frame while nothing records, against 2
+before) and multiplies every sample it records by its gain (5,579
+instructions per frame at eight tracks and 16 bits, 7,415 with everything
+on at 24 bits, against 743 for STEMS2's eight tracks). Its time on the unit
+isn't measured. Sam Banks's CF METER takes on Bryan T's MKII (4 Oct 2026)
+give the room it has: the frame interrupt takes 244 to 285 µs of the
+362.8 µs frame with seven voices playing, 291 to 335 µs in its worst
+frames, and about 17 µs more for each voice that plays. At one to three
+cycles an instruction, the hook adds roughly 6 to 11 µs always, 31 to
+63 µs recording eight tracks at 16 bits, and 42 to 84 µs with everything at
+24 bits. That's an estimate, not a measurement, but it's the size of the
+worst frames' slack on a busy project. So tests 8 and 9 load the unit on
+purpose. What running out of time would look like: clicks in what you
+hear or in the files, a slow screen, the sequencer or MIDI drifting, at
+worst a hang. None of it touches the Startup Menu, so recovery is always
+flash A's step 1.
+
+**Before you flash.** As flash A: the stock `.syx` and a MIDI interface at
+hand, the card backed up. Once REC has been pressed since power-on, don't
+run an OS upgrade without a power cycle first (STEM_REC.md 4.7). For the
+null tests, a DAW that can invert a file's polarity and sum files.
+
+**The tests, in order.** Photograph the screen where a test says so.
+
+1. **The first boot.** Before you power-cycle: does the unit play audio?
+   **Report** yes or no, and whether you loaded a saved project or made a
+   new one first. Then power-cycle anyway. STEMS1's first boot was silent;
+   STEMS2's played (STEM_REC.md 17.1, 17.2).
+2. **The menu.** Open STEMS. **Report, with a photo:** REC, READY,
+   `T1 [X]` to `T8 [X]`, `MAIN [ ]`, `CUE [ ]`, `AB [ ]`, `CD [ ]`,
+   `AB STEREO [X]`, `CD STEREO [X]`, `24 BIT [ ]`, and PEAK at the bottom
+   (scroll down). Turn every source off: the last one stays on. Turn the
+   eight tracks back on.
+3. **After the fader, one track.** T1 alone playing a steady sample, every
+   other track muted, the mixer's DIR AB and DIR CD at 0, MAIN on. Record
+   30 s and move T1's LEVEL during it. **Report:** `T1.wav` follows the
+   fader. In the DAW, `T1.wav` with its polarity inverted, summed with
+   `MAIN.wav`: silence, or how loud the rest is. Under the port the two
+   are equal sample for sample.
+4. **After the fader, every track.** All eight tracks playing, MAIN on,
+   DIR AB and DIR CD at 0, MASTER TRACK off, 60 s. **Report:** the eight
+   track files summed, inverted, against `MAIN.wav`: how loud the rest is.
+   Under the port it's 0 to 7 steps of 16 bits, except where MAIN itself
+   clips. Then the level by ear: does each stem sound as loud as its track
+   does in the mix?
+5. **The inputs.** A stereo source into A and B (a synth, say). AB on, the
+   tracks off except T1: a take with AB STEREO on, then one with it off.
+   **Report:** `AB.wav` is stereo and `A.wav` and `B.wav` are mono, each
+   the input as it went in, and their level against the stock recorder's
+   INAB of the same input. Then the same for C and D, if you have a
+   source for them.
+6. **24 bits.** 24 BIT on, T1 and MAIN, 30 s. **Report:** the DAW reads
+   both files as 24-bit, they play, and their level matches a 16-bit take
+   of the same pattern.
+7. **The card's speed.** First one take of 5 minutes, eight tracks at
+   16 bits, the sequencer playing. Under the port the writer falls a
+   little behind at this rate: the ring fills by about 1% every 2 s and
+   `RING FULL` ends the take near 2:40 (STEM_REC.md 18.9). Your card
+   takes a path the port doesn't run, so it may keep up. **Report:** how
+   long the take ran, PEAK after it, and any `RING FULL`. Then takes of
+   60 s: eight tracks at 24 bits (2.12 MB/s), everything at 16 bits
+   (2.12 MB/s), and everything at 24 bits (3.18 MB/s). Everything means
+   the eight tracks, MAIN, CUE, AB and CD. **Report:** PEAK after each,
+   and any `RING FULL`. The ring rides out a stall of 4.0 s, 4.0 s and
+   2.6 s at those rates.
+8. **The load, while recording.** A busy project: seven or more tracks
+   playing samples at once, the sequencer running. First without a take,
+   to know how it sounds and feels. Then the same with a take of eight
+   tracks at 16 bits, then everything at 24 bits, 2 minutes each. During
+   each take, listen and touch:
+   - clicks or dropouts in what you hear;
+   - the screen: turn knobs, change pages, open and close menus. Is it
+     slower than without the take?
+   - timing: a MIDI device clocked from the unit, or the metronome. Does
+     it drift or stutter?
+
+   **Report** each, per take, and then clicks in the files themselves. If
+   static machines are at hand, run one take with seven static tracks too:
+   the CF METER takes saw static machines add the largest worst-frame
+   spikes.
+9. **The load, not recording.** The gain mirror runs every frame, even
+   without a take. On the busy project of test 8 with no take: anything
+   different from STEMS2 on the same project? Only if you notice
+   something in test 8 that you didn't on STEMS2.
+10. **Stock saves.** After the takes: save the project, save a sample,
+    power cycle, and load both. **Report:** both save and both load.
+    Flash A's test 7, not reported yet.
+
+**Stop conditions.** Flash A's, and:
+
+- **Clicks or a slow screen in test 8** aren't a reason to stop the
+  session. Stop the take, note how many tracks were playing and which
+  sources and width were on, and go on with fewer.
+- **A hang during a take:** power cycle, stop the session, and report the
+  project's voice count and the sources and width.
+
+**After the flash.** Every result goes into `docs/firmware/STEM_REC.md`
+(section 17.3), any new failure into
+`docs/contributing/FAILURE_MODES.md`, and the image into `CHANGELOG.md`.
+If test 8 shows strain, the next steps are a timer probe that reports the
+hook's time on the unit, and a cheaper hook (spec section 4.6).
 
 ## Flash B — `stems`: the stock effects back (staged 1 Oct 2026)
 
