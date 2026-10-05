@@ -83,14 +83,20 @@ SR = 44100
 FRAMES = 16              # the firmware's frame; dsp_host caps a block at 16 (-frames 16 seeds the split nibble as 0 = whole block)
 WARMUP_BLOCKS = 260      # the engine stays dry for 256 CALLS; pad past it and trim
 
+HARNESS_REV = 64      # REV is the send that feeds the engine (x:(r6+1))
+
+
 def _manifest_params():
-    """(name, default) per slot, from the REVERB SERVER manifest. MODE's slot
-    stays 0: --mode builds the image with the character assembled in."""
+    """(name, default) per slot, from the REVERB SERVER manifest, with two
+    harness settings: MODE's slot stays 0 (--mode builds the image with the
+    character assembled in), and REV is HARNESS_REV (the manifest's 0 is a
+    return track with no send, which renders dry here)."""
     m = registry.by_key("REVERB SERVER")
     out = []
     for i, p in enumerate(m.params):
         name = p.name.decode() if p.name else f"_{i}"
-        out.append((name, 0 if name == "MODE" else (p.default or 0) & 0x7f))
+        out.append((name, 0 if name == "MODE" else HARNESS_REV if name == "REV"
+                    else (p.default or 0) & 0x7f))
     return out
 
 
@@ -106,8 +112,9 @@ def knob_slot(k):
     """-> slot for a -p / --sweep name, or die. MODE is --mode's."""
     k = k.strip().upper()
     if k not in KNOB_SLOTS or k == "MODE":
+        alias = sorted(set(KNOB_SLOTS) - set(NAMES))
         die(f"unknown knob {k!r}; known: {KNOBS}"
-            f" (aliases: {', '.join(sorted(set(KNOB_SLOTS) - set(NAMES)))})")
+            + (f" (MODE-view aliases: {', '.join(alias)})" if alias else ""))
     return KNOB_SLOTS[k]
 
 
