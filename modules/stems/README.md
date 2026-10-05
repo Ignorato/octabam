@@ -202,9 +202,12 @@ The error names: `RING FULL` (the card fell behind; the files still play),
   stereo file at 16 bits, 264,600 at 24 bits, a mono file half that.
   Eight tracks at 16 bits need 1.41 MB/s, eight at 24 bits 2.12 MB/s, and
   everything at 24 bits 3.18 MB/s. The ring rides out a stall of 5.9 s,
-  4.0 s and 2.6 s at those three. Under the port's card model, fourteen
-  files at 16 bits already fall behind. A real card's speed is measured
-  on the unit (STEM_REC.md 15.4; flash C's test 7).
+  4.0 s and 2.6 s at those three. Under the port's card model, eight
+  tracks at 16 bits already fall slightly behind: the frame interrupt,
+  longer with this piece's hook, leaves the emulated card one sector a
+  frame, and the ring would fill in about 160 s (STEM_REC.md 18.9). A
+  real card's speed is measured on the unit (STEM_REC.md 15.4; flash C's
+  test 7).
 - A power cut or a card pull before the end loses the take: each file is
   left at 0 bytes, because its length is set only at the end
   (STEM_REC.md 12.3).

@@ -7524,3 +7524,153 @@ the level it would have in MAIN through a T8 that passed it unchanged.
 T8's stem holds T1-T7 again, through T8's effects, so in this mode the
 stems don't sum to MAIN. `verify_stems`' `master` check confirms only that
 the take is whole and aligned.
+
+### 18.9 The gates ✅ under the port
+
+Every gate of the spec's section 6
+(`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`), run on
+branch `stem-rec-p5` at `3780665` (dirty 0), 5 Oct 2026: `make check-remix
+REMIX=stems` (317 PASS, 0 FAIL, the only SKIP `verify_set`'s, which needs a project; `/home/yvez/xcheck/v5-p5-big2.log`), then
+`verify_stems.py stems --long` (363 PASS, 0 FAIL, 0 SKIP; `v5-p5-big2-long.log`),
+then `--fat32` (95 PASS, 0 FAIL; `v5-p5-fat32.log`). The fixtures are the
+one-THRU card (T1 alone sounds, fed a four-channel noise WAV on inputs A
+to D) and the eight-track THRU card (`stems_fixture.py --thru1`,
+`--thru`).
+
+1. **The gains are exact.** `gains` and `gainsdirty`: T1's LEVEL stepped
+   four times and the MAIN level once. At the run's end the hook's ramp
+   state equals core 0's `X:0x3dd + 5k` in all eight slots (the hook's
+   last frame or the one before; T1 `[0, 0, 0x4cdd80]`), from a clean
+   boot and from DSP RAM filled with garbage (`--dsp-dirty 7`); the sent
+   page's index never jumped. In Unicorn (`verify_stems_units.py`):
+   `stems_mirror` against the model through 4,000 random pages, with the
+   arithmetic's edges, a target-cache mark that collides with a real
+   page, and the transient index 4 (`mirror`, `mirror_cache_mark`,
+   `mirror_idx4`). The spec also named a crossfader sweep and a scene
+   change: on the fixture, CC 48 moved no level word (the template's
+   scenes lock none, or the port didn't take the CC; not told apart).
+   Both reach core 0 only through the level words the LEVEL steps move
+   (18.1), so the steps stand in. The checks compare the state at the
+   run's end; gates 2 and 3 compare every sample, which a wrong gain in
+   any frame would fail.
+2. **The stems sum to MAIN.** `postfader`: T1 alone, its LEVEL stepped
+   four times during the take; every sample of `T1.wav` equals MAIN's top
+   16 bits (6,624 samples), the ramps included. `all14` (16 bits)
+   and `all14w` (24 bits), every source on with the inputs mono, on the
+   eight-track THRU card: off MAIN's rails, MAIN minus the sum of the
+   eight stems is 0 to 7 steps at every sample (54,792 at 16 bits); on
+   them (599 and 602 samples) the sum lies beyond the rail. Eight tracks
+   of noise clip MAIN there. Eight floored products against one floored
+   sum allow 0 to 7 (the spec allowed one step a track, plus one).
+3. **The alignment.** `postfader` holds every LEVEL step on the same
+   sample as MAIN. `postmove`: a take started while playing (REC at
+   frame 58), two frames before the first step, equals MAIN from its
+   first frame (3,872 samples).
+   `clip`: T1 at LEVEL 127 with AMP VOL 127 and MAIN at 127 on a
+   full-scale input reaches 32,253 of 32,767 and still equals MAIN at
+   every sample. The port can't drive one track to MAIN's rails (18.7),
+   so the rails are tested in Unicorn: `track16_rails`, 2,850 rail
+   samples against MAIN's own formula.
+4. **The sources.** `sources`: T1, MAIN, CUE and AB on, T1 cued.
+   `MAIN.wav` equals `T1.wav` at every sample (only T1 reaches MAIN);
+   `CUE.wav` equals the cue bus the port captured, at one offset;
+   `AB.wav`'s left and right channels equal inputs A and B of the fed WAV
+   at every sample, at one offset (614) for both. `mono`: `A.wav` and
+   `B.wav` are one channel each and equal `AB.wav`'s left and right. The
+   spec asked for the stock recorder's INAB as the reference: the input
+   ring the hook reads is the one the stock recorder records from, and it
+   holds the fed samples exactly (18.7), so the WAV is that reference.
+5. **The formats.** `w24`: a 24-bit take's `T1.wav` (`(2, 264600, 6,
+   24)`) equals MAIN's 24 bits at every sample. `w16v24`: the same run at
+   16 bits is the 24-bit take's top 16 bits at every sample. Every
+   header in `all14` and `all14w` matches its data, mono files one
+   channel. `layout`, eight cases: the file table the hook latches (the
+   files in order, the ring frame from 64 to 1,152 bytes, the capacity
+   and its wrap); in Unicorn, `layout` over all 32,768 source and format
+   words and `header` over four.
+6. **The menu.** `verify_stems_menu.py`, 16 checks on the MKII and 16 on the MKI, all PASS: the eighteen rows
+   at their boot defaults, DOWN stopping on `24 BIT` and never on PEAK,
+   the last source kept on (every track off leaves T8; with MAIN on, T8
+   goes off and MAIN stays), the three switches, the rows locked while
+   it records, a take of seven tracks and MAIN, every text inside the
+   pane (clip 118).
+7. **The cost.** `cost`, with the port's `--coverage` (10.0): everything
+   on at 24 bits, 7,415 instructions a frame over 400 frames:
+   `stems_track24` 4,000, `stems_bus24` 1,022, `stems_mirror` 959,
+   `stems_tdelay_step` 853, `stems_copy_frame` 259, `stems_track_gains`
+   96, `stems_bus_src` 72, the rest 154. Not recording: 1,001
+   (`stems_mirror` 959). Eight tracks: 5,579 at 16 bits, 6,219 at 24
+   (`v5-p5-cost8.log`). Piece 3's eight tracks cost 743. The ceiling is
+   the measured 7,415 (the spec's 4.6, amended 4 Oct 2026).
+8. **Nothing that passed breaks.** The piece 1 to 3 checks in the same
+   runs: the THRU mask takes, the 20-second take equal to the ring byte
+   for byte, the wrap at eight tracks, the overflows, the slow card, the
+   labels, `NO CARD`, `SAME MINUTE`, the card that refuses a write, the
+   take cut off, the 60-minute cap. On a FAT32 card the mount, the take checks and the overflow pass
+   again, the take above cluster 65,535 (at 86,235). The sweep at eight
+   tracks runs, and shows the finding below.
+
+**Eight tracks against the port's card** 🟡. `stems_sweep.py --counts 8
+--latencies 8,16,24,32` (`v5-p5-sweep.log`): at the port's default card
+(latency 8) the fill after each of the writer's rounds rises from 23 to
+489 frames in 5 s, +96 frames a second, where piece 2's stayed flat
+(15.4). At that rate the 8 MiB ring fills in about 160 s. Measured with a
+write watch on the stream buffers (`v5-p5-round.log`): a round is the
+copy, 17 to 18 frames with the CPU at its full budget, then eight
+flushes of 64 sectors at exactly 64.0 frames each, one sector a frame,
+529 to 531 frames for 512 frames of audio. During the flushes the CPU
+runs about 58% of the port's 63,840 instructions a frame: the writer
+waits, it doesn't compute. Two and four tracks flush at 64.0 frames a
+file too. Piece 3's image on the same port binary flushes in 48.5 to 55
+frames a file (1.24 sectors a frame), and its rounds take 424 frames
+(`v3-p3-round8.log`). So the image, not the port, slows the card path.
+Inferred, not measured: a PIO sector's interrupt waits while the frame
+interrupt runs, piece 3's frame interrupt left room for a second sector
+in some frames, and piece 5's hook (its gain mirror alone runs about
+1,000 instructions a frame) leaves none. The card path then carries 512
+bytes a frame, exactly what eight 16-bit tracks make, and the copy tips
+each round over. The falsifier is the frame interrupt's length against
+the card's 8 samples. The port models a PIO card; Yves's card reports
+DMA (flash A), a path the port doesn't run, so flash C's card test
+decides it on the unit. A cheaper hook would restore the port's margin.
+
+**Found by the big pass, all in the checks.** The first pass at
+`8188bef` (`v5-p5-big.log`, `v5-p5-big-long.log`) failed five checks the
+8 MiB ring had outgrown: `overflow` poked a 65,536-frame ring and never
+tripped the guard; `overflow8`'s run ended while the task still wrote
+the ring out; `slow8`'s 5 s take filled 7,573 of 16,384 frames; `wrap8`
+stopped at 9,030 frames and passed without a wrap; and `overflow24`, new
+in this piece, ended at 6,000 frames mid-take, at a card latency where
+writing the full ring out would take about 42,000 frames more
+(estimated). Each was fixed in its own commit, failing first and then passing
+alone (`v5-p5-fix1.log`, `v5-p5-fix2.log`). Measured on the way:
+everything at 24 bits outruns the port's own card, about 475 bytes a
+frame against 1,152 while recording, and the take stops with `RING
+FULL` 12,402 frames in, every file whole; at eight tracks and half the
+card's speed the ring peaks at 14,682 of 16,384 frames in 10 s.
+
+**Also found during the piece and fixed** (the ledger has each): the
+hook's EMAC entry left ACC0 and ACC1 dirty for the interrupted task; the
+target cache's empty mark could equal a real page; the half core 0 mixes
+carries `0xff` in its low byte on positive samples, which the multiply
+must drop; and with the card behind, the writer looped on chunks and the
+menu's time and PEAK froze for the whole take (`labelsbehind`: with the
+writer 2,446 frames behind, the seconds rise).
+
+**What the port can't see** 🟡, for flash C (`modules/stems/FLASH.md`):
+
+- **The hook's time.** The port counts instructions, not cycles or memory
+  waits. Sam Banks's CF METER takes on Bryan T's MKII (4 Oct 2026) put
+  the frame interrupt at 244 to 285 µs of the 362.8 µs frame with seven
+  voices playing, 291 to 335 µs in its worst frames, about 17 µs a voice.
+  At one to three cycles an instruction the hook adds about 6 to 11 µs
+  always, 31 to 63 µs recording eight tracks at 16 bits, and 42 to 84 µs
+  with everything at 24 bits: estimated, the size of a busy project's
+  worst-frame slack. Untested on the unit.
+- **The card's speed with more files.** The port's card has one fixed
+  delay; a real card stalls (15.4).
+- **A null test on the unit**, the stems against the stock recorder's
+  MAIN, and real inputs, mono and stereo.
+- **The ramp's start on a unit.** `gainsdirty` covers dirty DSP RAM, but
+  the port's boot order isn't the unit's (18.3).
+- **MASTER TRACK's stems** are whole and aligned only (18.8).
