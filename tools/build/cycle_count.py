@@ -556,8 +556,17 @@ def main():
         # on all four tracks of a core, so its cost is paid x4 at worst.
         print(f"{'stock rows':{w}}  {'NOT COUNTED':>13}   "
               f"[{', '.join(stock_rows)}] -- stock code; FILTER measured 192")
+    # Code reached only by a DspHook (no chooser row of its own, or a row
+    # that runs stock code) has no sample loop this tool can find, and a
+    # hook kernel branches, so it is named here and left out of the figure.
+    hooked = [m.key for m in registry.selected(remix) if m.dsp is not None and not m.is_stock
+              and (m.menu is None or m.menu.stock_dsp)]
+    if hooked:
+        print(f"{'hook sections':{w}}  {'NOT COUNTED':>13}   "
+              f"[{', '.join(hooked)}] -- reached by a DspHook; not in the figure below")
     print()
-    mix = " + ".join(f"{n}x {k}" for k, n in picks) or "(nothing of ours)"
+    mix = " + ".join(f"{n}x {k}" for k, n in picks) or (
+        "(nothing of ours counted)" if hooked else "(nothing of ours)")
     print(f"{'WORST ONE CORE':{w}}  {worst:>13}   {mix}")
     print(f"{'':{w}}  {'':>13}   4 FX2 slots, at most one server (the design rule)")
     # ⚠️ ONLY THE ONES PRICED. remix.fx1 is the whole FX1 chooser, stock
