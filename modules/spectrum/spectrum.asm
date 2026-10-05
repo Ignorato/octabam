@@ -100,19 +100,6 @@ proc:
         bne     fs_end
 ; ===========================================================================
 ; PER-BLOCK KNOB DECODE
-        move    x:(r6+$1),x0
-        move    #>$4b2350,y1            ; 0.587
-        mpy     x0,y1,a
-        neg     a
-        add     #>$7fbe77,a             ; base = 0.998 - RES * 0.587  (>= 0.416)
-        move    a,x0
-        move    a,y1
-        mpy     x0,y1,a                 ; base^2
-        move    a,x0
-        move    a,y1
-        mpy     x0,y1,a                 ; base^4 = damp, the Chamberlin form's 1/Q
-        asr     #$1,a,a                 ; R = damp/2: the SEM core's damping is 2R
-        move    a,x:(r7+$21)
         move    x:(r6+$4),a             ; a knob word: bit 23 clear, a2 = 0
         and     #>$7f0000,a
         move    a1,x0                   ; (no clean reload: the input was positive)
@@ -211,11 +198,34 @@ proc:
         lua     (r7+$2e),r1             ; dg ($2f), fs_rset's law (the post-
         lua     (r7+$2f),r3             ; increments' results are not used, so
         bsr     fs_rset                 ; m1/m3 do not matter here)
-; ---- the SEM core's per-block words: c4 = (R + g2)/2 (so 4*c4 = 2R + g),
-; d = 1/(1 + 2Rg + g^2) = (1/8) / (1/8 + R*g2/2 + g2^2/2) -- the one real
-; division per block; den/8 <= 0.86 at every knob, d <= 1. Both frozen for
-; the block: FM and the ramp move g under a fixed d, an approximation that
-; is exact at the block's target and a fraction of a percent off beside it.
+; ---- SEM-only coefficients. Other MODEs never read R, c4 or d; keep their
+; per-block work off the LADR/ISO/VOWL paths. Unknown mode bytes still take
+; the existing SEM fallback below.
+        move    x:(r6+$c),a
+        and     #>$ff0000,a
+        move    a1,x0
+        move    x0,a                    ; clean A2 after the mask before signed branches
+        cmp     #>$30000,a
+        bgt     fs_sem_coeffs
+        cmp     #>$10000,a
+        bne     fs_skip_sem_coeffs
+fs_sem_coeffs:
+        move    x:(r6+$1),x0
+        move    #>$4b2350,y1            ; 0.587
+        mpy     x0,y1,a
+        neg     a
+        add     #>$7fbe77,a             ; base = 0.998 - RES * 0.587  (>= 0.416)
+        move    a,x0
+        move    a,y1
+        mpy     x0,y1,a                 ; base^2
+        move    a,x0
+        move    a,y1
+        mpy     x0,y1,a                 ; base^4 = damp, the Chamberlin form's 1/Q
+        asr     #$1,a,a                 ; R = damp/2: the SEM core's damping is 2R
+        move    a,x:(r7+$21)
+; c4 = (R + g2)/2 (so 4*c4 = 2R + g), d = 1/(1 + 2Rg + g^2) =
+; (1/8) / (1/8 + R*g2/2 + g2^2/2) -- the one real division per block;
+; den/8 <= 0.86 at every knob, d <= 1. Both are frozen for the block.
         move    x:(r7+$20),a
         move    x:(r7+$21),x0           ; R
         add     x0,a
@@ -236,6 +246,7 @@ proc:
         div     x0,a                    ; 24 quotient bits land in a0
         move    a0,x0
         move    x0,x:(r7+$33)           ; d
+fs_skip_sem_coeffs:
 
 ; ---- MODE (slot 6 select of r6+$c, the knob field): tap coefficients; VOWL runs the bank ---
         move    x:(r6+$c),a
