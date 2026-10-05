@@ -12,6 +12,7 @@ discipline are all under test), and compares.
 SKIPs, rather than fails, when the toolchain or the submodule is absent:
 `make verify` runs on machines that never asked for Octakit.
 """
+import dataclasses
 import hashlib
 import pathlib
 import shutil
@@ -35,8 +36,10 @@ if any(shutil.which(t) is None for t in runtime_build.TOOLS):
     sys.exit(0)
 
 stock = (ROOT / "out/raw/section_3_MAIN_OS.bin").read_bytes()
-writes, append, info = runtime_build.build(mod.runtime, stock,
-                                           ROOT / "out/runtime/_verify_octakit")
+# Her recipe alone: a module patch (Runtime.patches) is a pinned delta on
+# this proven base, built and checked against the module's own pins below.
+writes, append, info = runtime_build.build(dataclasses.replace(mod.runtime, patches=(), patched=None),
+                                           stock, ROOT / "out/runtime/_verify_octakit")
 img = bytearray(stock)
 for va, expect, write, name in writes:
     off = va - 0x40000400
@@ -52,3 +55,9 @@ print(f"  [{'PASS' if ok else 'FAIL'}] verify_octakit: stock + {len(writes)} wri
 if not ok:
     print(f"         got  {len(img)} B {got}\n         want {info['output_os']['size']} B {want}")
     sys.exit(1)
+if mod.runtime.patches:
+    # The patched build refuses on any drift from Runtime.patched inside build().
+    _, pappend, pinfo = runtime_build.build(mod.runtime, stock, ROOT / "out/runtime/_verify_octakit_patched")
+    print(f"  [PASS] verify_octakit: {len(mod.runtime.patches)} patch(es) on her sources build to the module's "
+          f"pins (raw {pinfo['runtime_size']:,} B, packed {pinfo['packed_size']:,} B, append {len(pappend):,} B): "
+          + ", ".join(pathlib.Path(x).name for x in mod.runtime.patches))

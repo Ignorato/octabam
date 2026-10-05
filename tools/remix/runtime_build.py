@@ -276,7 +276,7 @@ def extract_stock(stock: bytes, op: dict, load: int, runtime_load: int) -> bytes
     return out
 
 
-def writes(spec: dict, stock: bytes, skip=()) -> list[tuple[int, bytes, bytes, str]]:
+def writes(spec: dict, stock: bytes, skip=(), subst=None) -> list[tuple[int, bytes, bytes, str]]:
     """(vaddr, expect, write, name): every sparse write, with its guard's
     sha256 checked against STOCK and expect taken from stock -- the same
     assert-before-write discipline as a CavePatch poke. `skip` names
@@ -295,6 +295,7 @@ def writes(spec: dict, stock: bytes, skip=()) -> list[tuple[int, bytes, bytes, s
         if p["name"] in skip:
             continue
         wend = s
+        region = bytearray(stock[s:e])
         for w in p["writes"]:
             data = bytes.fromhex(w["data"])
             pos = w["offset"]
@@ -303,8 +304,28 @@ def writes(spec: dict, stock: bytes, skip=()) -> list[tuple[int, bytes, bytes, s
             expect = stock[pos:pos + len(data)]
             if any(a == b for a, b in zip(expect, data)):
                 sys.exit(f"runtime build: write in {p['name']} keeps an unchanged stock byte")
-            out.append((base + pos, expect, data, p["name"]))
+            region[pos - s:pos - s + len(data)] = data
             wend = pos + len(data)
+            if not subst:
+                out.append((base + pos, expect, data, p["name"]))
+        if not subst:
+            continue
+        # A patched build: the author's writes are sparse (a byte equal to
+        # stock is not written), so a literal can straddle two writes and
+        # a kept byte. Substitute over the guard's region and re-split it
+        # into the runs that differ from stock, the recipe's own convention.
+        for old, new in subst.items():
+            region = region.replace(old.to_bytes(4, "big"), new.to_bytes(4, "big"))
+        pos = 0
+        while pos < len(region):
+            if region[pos] == stock[s + pos]:
+                pos += 1
+                continue
+            run = pos
+            while run < len(region) and region[run] != stock[s + run]:
+                run += 1
+            out.append((base + s + pos, stock[s + pos:s + run], bytes(region[pos:run]), p["name"]))
+            pos = run
     return out
 
 
@@ -332,20 +353,77 @@ def build(rt, stock: bytes, work: pathlib.Path, skip=()) -> tuple[list, bytes, d
     load = spec["format"]["os_load_address"]
     runtime_spec = spec["append"]["runtime"]
     runtime_load = runtime_spec["load_address"]
+    if spec["append"]["offset"] != len(stock):
+        sys.exit("runtime build: the recipe appends somewhere other than the end of the image")
 
     work = work.resolve()          # every tool runs with cwd=work
     work.mkdir(parents=True, exist_ok=True)
-    (work / "stock").mkdir(exist_ok=True)
-    for i, op in enumerate(runtime_spec["stock_operations"]):
-        (work / "stock" / f"{i:04d}.bin").write_bytes(extract_stock(stock, op, load, runtime_load))
-
     gcc_version = _run(["m68k-elf-gcc", "-dumpfullversion"], work).strip()
 
-    # The memo key: the recipe, every file under her sources, the stock
+    recipe_idents = {"raw": runtime_spec["raw"], "packed": runtime_spec["packed"],
+                     "append": {"size": spec["append"]["length"], "sha256": spec["append"]["sha256"]}}
+    args = (spec, recipe, stock, load, runtime_load, gcc_version, skip)
+    patches = [ROOT / p for p in getattr(rt, "patches", ())]
+    if not patches:
+        runtime, packed, append, symbols = _artifacts(*args, srcdir, work, recipe_idents, "")
+        return _result(spec, stock, skip, gcc_version, runtime, packed, append, symbols, runtime_load)
+
+    # Patched: the author's sources are built first and proved against her
+    # pins (the oracle), then a patched COPY against the module's own pins.
+    # Her recipe writes carry the x33 hashes and the lengths of the raw and
+    # the packed runtime as literals (the OS-resident hash helper and the
+    # post-clear relocation wrapper gate on them); the patched build's
+    # writes carry the patched values in their place.
+    patched = getattr(rt, "patched", None) or {}
+    idents = {k: patched.get(k, {"size": -1, "sha256": f"(unpinned: Runtime.patched[{k!r}])"})
+              for k in ("raw", "packed", "append")}
+    orig = _artifacts(*args, srcdir, work / "orig", recipe_idents, " (unpatched)")
+    psrc = work / "src"
+    if psrc.exists():
+        shutil.rmtree(psrc)
+    shutil.copytree(srcdir, psrc, ignore=shutil.ignore_patterns(".git"))
+    for pf in patches:
+        _run(["patch", "-p1", "-s", "-d", psrc, "-i", pf.resolve()], work)
+    # A patch may add a source: the patched copy's recipe lists the sources
+    # the patched build compiles (its identities are the module's pins, not
+    # the recipe's, so the recipe's own pins are not read from the copy).
+    pargs = (json.loads((psrc / recipe.name).read_text()), psrc / recipe.name) + args[2:]
+    runtime, packed, append, symbols = _artifacts(*pargs, psrc, work, idents,
+                                                  " (patched: " + ", ".join(p.name for p in patches) + ")")
+    subst = {_roll(orig[0]): _roll(runtime), _roll(orig[1]): _roll(packed),
+             len(orig[0]): len(runtime), len(orig[1]): len(packed)}
+    # A patch that changes the runtime's length moves every symbol the
+    # linker derives from it (the backup's start, the stage's end, the
+    # extension sizes); a recipe write carrying one as a literal carries
+    # the patched build's (her post-clear restore copies the runtime from
+    # the backup's uncached start by literal).
+    osym = orig[3]
+    subst.update({osym[k]: v for k, v in symbols.items()
+                  if k in osym and osym[k] != v and osym[k] not in subst})
+    return _result(spec, stock, skip, gcc_version, runtime, packed, append, symbols, runtime_load,
+                   subst=subst, patches=[str(p.relative_to(ROOT)) for p in patches])
+
+
+def _roll(b):
+    h = 0
+    for x in b:
+        h = (h * 33 + x) & 0xFFFFFFFF
+    return h
+
+
+def _artifacts(spec, recipe, stock, load, runtime_load, gcc_version, skip, srcdir, work, idents, label):
+    """(runtime, packed, append, symbols) for one source tree, each
+    verified against `idents`; memoised on the sources."""
+    runtime_spec = spec["append"]["runtime"]
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "stock").mkdir(exist_ok=True)     # the .incbin'd slices, cwd-relative
+    for i, op in enumerate(runtime_spec["stock_operations"]):
+        (work / "stock" / f"{i:04d}.bin").write_bytes(extract_stock(stock, op, load, runtime_load))
+    # The memo key: the recipe, every file under the sources, the stock
     # image, the compiler and the skipped guards. A hit hands back the three
-    # artifacts and the symbol table, each re-verified against the recipe's
-    # own identities (raw, packed, append) -- the same checks a cold build
-    # passes -- and writes the work files the DRAM boot gate reads.
+    # artifacts and the symbol table, each re-verified against the pins --
+    # the same checks a cold build passes -- and writes the work files the
+    # DRAM boot gate reads.
     h = hashlib.sha256()
     h.update(recipe.read_bytes())
     for f in sorted(x for x in srcdir.rglob("*") if x.is_file() and ".git" not in x.parts):
@@ -361,13 +439,13 @@ def build(rt, stock: bytes, work: pathlib.Path, skip=()) -> tuple[list, bytes, d
         except (ValueError, KeyError, TypeError):
             hit = None
     if hit is not None:
-        _verify(f"cached runtime (m68k-elf-gcc {gcc_version})", runtime, runtime_spec["raw"])
-        _verify("cached packed runtime", packed, runtime_spec["packed"])
-        _verify("cached append", append, {"size": spec["append"]["length"], "sha256": spec["append"]["sha256"]})
+        _verify(f"cached runtime (m68k-elf-gcc {gcc_version}){label}", runtime, idents["raw"])
+        _verify(f"cached packed runtime{label}", packed, idents["packed"])
+        _verify(f"cached append{label}", append, idents["append"])
         (work / "runtime.bin").write_bytes(runtime)
         (work / "packed.bin").write_bytes(packed)
         (work / "append.bin").write_bytes(append)
-        return _result(spec, stock, skip, gcc_version, runtime, packed, append, symbols, runtime_load)
+        return runtime, packed, append, symbols
 
     def compile_one(src, obj):
         if src.suffix == ".c":
@@ -390,31 +468,25 @@ def build(rt, stock: bytes, work: pathlib.Path, skip=()) -> tuple[list, bytes, d
     _run(["m68k-elf-objcopy", "-O", "binary", "-j", ".runtime", elf, raw], work)
     runtime = raw.read_bytes()
     _verify(f"rebuilt runtime (m68k-elf-gcc {gcc_version}, recipe pins "
-                f"{spec['compiler']['gcc_version']})", runtime, runtime_spec["raw"])
+                f"{spec['compiler']['gcc_version']}){label}", runtime, idents["raw"])
     for op in runtime_spec["stock_operations"]:
         s = op["target_offset"]
         if runtime[s:s + op["target_length"]] != extract_stock(stock, op, load, runtime_load):
             sys.exit("runtime build: a stock routine inside the runtime differs from its slice")
 
     packed = PACKED_MAGIC + len(runtime).to_bytes(4, "big") + pack(runtime, spec["build"]["max_candidates"])
-    _verify("packed runtime", packed, runtime_spec["packed"])
+    _verify(f"packed runtime{label}", packed, idents["packed"])
     packed_path = work / "packed.bin"
     packed_path.write_bytes(packed)
     packed_obj = work / "packed.o"
     _run(["m68k-elf-objcopy", "-I", "binary", "-O", "elf32-m68k", "-B", "m68k",
           "--rename-section", ".data=.stage.packed,alloc,load,readonly,data,contents",
           packed_path, packed_obj], work)
-    rolling = 0
-    for b in packed:
-        rolling = (rolling * 33 + b) & 0xFFFFFFFF
-    _run([*ld, "--defsym", f"GK_PACKED_RUNTIME_HASH={rolling}", "-o", elf, *objects, packed_obj], work)
+    _run([*ld, "--defsym", f"GK_PACKED_RUNTIME_HASH={_roll(packed)}", "-o", elf, *objects, packed_obj], work)
     append_path = work / "append.bin"
     _run(["m68k-elf-objcopy", "-O", "binary", "-j", ".early", "-j", ".stage", elf, append_path], work)
     append = append_path.read_bytes()
-    _verify("append (loader + stage + packed runtime)", append,
-            {"size": spec["append"]["length"], "sha256": spec["append"]["sha256"]})
-    if spec["append"]["offset"] != len(stock):
-        sys.exit("runtime build: the recipe appends somewhere other than the end of the image")
+    _verify(f"append (loader + stage + packed runtime){label}", append, idents["append"])
 
     symbols = {}
     for line in _run(["m68k-elf-nm", "--defined-only", elf], work).splitlines():
@@ -423,21 +495,21 @@ def build(rt, stock: bytes, work: pathlib.Path, skip=()) -> tuple[list, bytes, d
             symbols[f[2]] = int(f[0], 16)
     _cache_write("runtime", cache_key, json.dumps(dict(
         runtime=runtime.hex(), packed=packed.hex(), append=append.hex(), symbols=symbols)).encode())
-    return _result(spec, stock, skip, gcc_version, runtime, packed, append, symbols, runtime_load)
+    return runtime, packed, append, symbols
 
 
-def _result(spec, stock, skip, gcc_version, runtime, packed, append, symbols, runtime_load):
-    """(writes, append, info) from the built or cached artifacts."""
-    ws = writes(spec, stock, skip)
-    def _roll(b):
-        h = 0
-        for x in b:
-            h = (h * 33 + x) & 0xFFFFFFFF
-        return h
+def _result(spec, stock, skip, gcc_version, runtime, packed, append, symbols, runtime_load,
+            subst=None, patches=()):
+    """(writes, append, info) from the built or cached artifacts. `subst`
+    maps the author's runtime hashes and lengths to a patched build's:
+    every recipe write carrying one as a big-endian literal carries the
+    new one."""
+    ws = writes(spec, stock, skip, subst)
     info = dict(gcc=gcc_version, gcc_pinned=spec["compiler"]["gcc_version"],
                 runtime_size=len(runtime), packed_size=len(packed), append_size=len(append),
                 runtime_load=runtime_load, memory=spec.get("memory"), symbols=symbols,
                 output_os=spec["output"]["os"], id=spec["id"], version=spec["build"]["version"],
+                patches=list(patches),
                 # what octabam's loader needs to carry this runtime as a PAYLOAD:
                 # her stage (signature + GKA3 stream, exactly her .stage section,
                 # where her post-clear relocation re-depacks from), her window,
