@@ -12,7 +12,9 @@ read out/, so one tree runs one remix at a time; PR #486's 25-remix table
 was three worktrees driven by hand. This makes N detached worktrees of HEAD
 plus the tree's uncommitted changes under out/shards/<i>, each with the
 shared vendor/ and .venv/ links, the stock slice, its submodules and its
-OWN port build (out/emu is never shared between trees: AGENTS.md), then
+OWN port build (out/emu is never shared between trees: AGENTS.md; built
+for the machine's own architecture, host_arch(), whatever python3 runs
+this), then
 hands the remixes out from one queue as shards come free, so the dear ones
 (bottleservice, rig-kits) do not decide the wall time. Logs land in
 out/check_shards/<remix>.log; one table at the end; exit 1 when a remix
@@ -65,6 +67,21 @@ def git(*args, cwd=ROOT, check=True):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check)
 
 
+def host_arch():
+    """The machine's own architecture for CMAKE_OSX_ARCHITECTURES. Under
+    Rosetta (an Intel-Homebrew python3, /usr/local/bin) os.uname().machine
+    says x86_64 and the port then runs translated: 1.27x slower to the
+    handoff, 1.75x on DSP frames (measured 6 Oct 2026, every shard of a
+    reach run). Darwin asks the kernel, which answers the same under
+    Rosetta; elsewhere uname is the answer."""
+    machine = os.uname().machine
+    if sys.platform == "darwin":
+        r = subprocess.run(["sysctl", "-n", "hw.optional.arm64"], capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip() == "1":
+            return "arm64"
+    return machine
+
+
 def shard_ok(path):
     """A registered worktree of this repository at `path`."""
     if not (path / ".git").is_file():
@@ -107,7 +124,7 @@ def make_shard(path, log, fresh=False):
                 shutil.rmtree(child, ignore_errors=True) if child.is_dir() else child.unlink()
     (out / "raw").mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / "out/raw/section_3_MAIN_OS.bin", out / "raw/section_3_MAIN_OS.bin")
-    arch = os.uname().machine
+    arch = host_arch()
     cmds = [["git", "submodule", "update", "--init"],
             # `make emu-cf` configures with --fresh (a cache from another
             # source path makes cmake refuse); a kept shard's cache names

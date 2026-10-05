@@ -63,7 +63,7 @@ on which remix is selected, so a run over several remixes does it once:
 | `verify_remixer` (`Makefile` verify-shared) | the remixer (`make remix`) opens and draws headless under Textual's test pilot for stock and every remix (three panes, cursor in each); `k` moves the cursor up in AVAILABLE and `K` resets to stock. SKIPs without textual |
 | `tools/build/label_fmt.py` | the select formatter caves re-derive from their sources (with `m68k-elf-as` on PATH) |
 | `verify_knob_clicks` | the knob census: every continuous knob of the fixture remix's DSP modules moved mid-render, the block-rate step in dBFS; a garbage start stays quiet |
-| `module_gates.py --shared` | every manifest gate declared `remix_arg=False` by a module in the selection, once for the union |
+| `module_gates.py --shared` | every manifest gate declared `remix_arg=False` by a module in the selection, once for the union; every `once=True` gate, once, on the named remix with the fewest modules that carries its module |
 
 **The per-remix half** (`make check-remix REMIX=<name>`), in recipe order:
 
@@ -74,7 +74,7 @@ on which remix is selected, so a run over several remixes does it once:
 | `verify_initregs` | no module's `init` writes r1/n1/m1 (the dispatcher keeps the effect id there) | |
 | `verify_dram_boot` | the image boots under the port; the loader runs once, its `fatal` never, every DRAM window reads back equal to the linked runtime | port |
 | `verify_labels`, `verify_modenames`, `verify_hidden` | the firmware's own formatter code prints each select's words; the MODE formatter renames its neighbours; a hidden engine is placed, dispatched, off the chooser and draws nothing | `.venv` |
-| `module_gates.py --stage isolated --remix-only` | the manifest gates declared `remix_arg=True` | per gate |
+| `module_gates.py --stage isolated --remix-only` | the manifest gates declared `remix_arg=True` and not `once` | per gate |
 | `verify_menu` | the FX1/FX2 choosers and every cloned descriptor against the chooser logic decompiled from the firmware: row order, formatter vs value count, name-field lengths, link bits | |
 | `verify_replaces --image` | on this image, every stock effect id is stock's or declared by `replaces`, on both menus (until 29 Sep 2026 the shared half built all 35 remixes for this: 41 s warm, 402 s on a cold build memo) | |
 | `verify_set` | a real project on the image under the port: the load completes, live ids equal the part's, page-2 lanes reach the DSP record, every track with audio has chain output, CCs over MIDI IN move the right bytes, CC FEEDBACK's wire and cache, the load rewrote no project file, the firmware's log is clean | port, `.venv`, project |
@@ -169,6 +169,12 @@ dear={"DRV": 127, "FOLD": 127, "COMP": 127, "MIX": 127, "WDTH": 127, "SAT": 0},
   `"image"` runs last, on the finished `out/mainos_bus.bin` (and after
   `verify_set` has staged its card).
 - `venv=True` runs it under `.venv/bin/python3` when the venv exists.
+- `once=True` (with `remix_arg=True`, isolated): the gate checks the
+  module's own code, the same in every carrier, so it runs once per run
+  in the shared half, on the named remix with the fewest modules that
+  carries the module, not once per carrying remix. `make check REMIX=x`
+  on its own still runs it on x. For a ColdFire module's port scenarios
+  (KITS: 29 scenarios, 371 s emulated, two carriers).
 - A missing script is `[FAIL]`. The same script may not be listed twice.
 - `dear` is every knob at its dearest setting by name; the stress fixture
   and the pressure render read it, and `make accept` is blocked by name for
