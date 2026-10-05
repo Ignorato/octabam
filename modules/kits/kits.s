@@ -52,6 +52,7 @@
         .set    CS1_MOD,    0x100b145e
         .set    CS1_SVALID, 0x100b145f
         .set    CS1_PTN,    0x1001614e
+        .set    CS1_NAMES,  0x100b1463      | the Part names, 7 B each
         .set    GDIRTY,     0x100f8598
         .set    CUR_BANK,   0x80000002
         .set    CUR_PART,   0x80000003
@@ -97,6 +98,17 @@
         .set    O_LIB,      O_RESID+64
         .set    IMG_LEN,    O_LIB+NKITS*REC
         .set    MAGIC,      0x4b495453      | 'KITS'
+        .set    FLAGS,      KIMG+16         | header: the settings, kept in kits.work
+        .set    KF_AUTO,    1               | AUTOSAVE: a Part's edits into its Kit at a pattern change
+        .set    KF_LEVELS,  2               | KEEP LEVELS: a Kit load keeps the slot's track levels
+        .set    LROWS,      NKITS+3         | LOAD KIT: UNDO KIT, the Kits, the two settings
+        .set    CLIPBUF,    0x460c8122      | stock's clipboard
+        .set    UNDOBUF,    0x460bf218      | stock's undo buffer
+        .set    M_ROW,      0x460e5e40      | long: the open list's cursor
+        .set    M_REDRAW,   0x4006d784      | the open list's draw
+        .set    REQUEST,    0x400a1030      | (bank, pattern): the pattern request
+        .set    KSTOP,      0x27
+        .set    KPTN,       0x2e
         .set    VERSION,    1
         .set    KCS1A,      0x100f85a0      | CS1: magic, RESID, sum (72 B)
         .set    KCS1B,      0x100ffe00      | CS1: ASSIGN (256 B)
@@ -107,7 +119,9 @@
         .text
         .globl  kits_sched, kits_chain, kits_loadall, kits_loadmask, kits_newproj
         .globl  kits_bankw, kits_pstore, kits_preload, kits_saved, kits_clear
-        .globl  kits_partkey, kits_savekey, kits_mkisave
+        .globl  kits_partkey, kits_savekey, kits_mkisave, kits_funcyes
+        .globl  kits_lcopy, kits_lpaste, kits_lclear, kits_pcopy, kits_psnap, kits_pstore_ptn
+        .globl  kits_fright, kits_ptrig
         .globl  KIMG, KSTATE, kits_stage, kits_load_current, kits_save_current
 
 | ============================================================ the hooks ====
@@ -371,6 +385,9 @@ kits_saved:
         moveb   %a2@(0,%d2:l),%d3       | d3 = the Kit
         cmpil   #0xff,%d3
         beq.s   9f
+        movel   %d3,%d0                 | the Kit's other copies: d2 = this slot
+        movel   %d2,%d1
+        bsr.w   others_mark
         movel   %d3,%d0
         bsr.w   kit_at                  | a0 = the record
         moveal  %a0,%a3
@@ -383,6 +400,8 @@ kits_saved:
         lea     %sp@(12),%sp
         movel   %d3,%d0
         bsr.w   set_valid
+        movel   %d3,%d0
+        bsr.w   others_refresh
         moveq   #1,%d0
         movel   %d0,KDIRTY
 9:      movem.l %sp@,%d0-%d7/%a0-%a6
@@ -407,7 +426,11 @@ kits_partkey:
         bne.s   1f
         tstl    0x460d1060              | displaced: the stock PART window
         jmp     0x4002e7be
-1:      bra.w   load_menu
+1:      bsr.w   paste_clone             | MKI FUNC+PASTE+MIDI
+        tstl    %d0
+        bne.s   2f
+        bra.w   load_menu
+2:      rts
 
 | 0x4002dc9c: the Part edit menu (MKII FUNC+PART): SAVE KIT.
 kits_savekey:
@@ -415,7 +438,11 @@ kits_savekey:
         bne.s   1f
         mvzb    0x100b14cf,%d0          | displaced
         jmp     0x4002dca2
-1:      bra.w   save_menu
+1:      bsr.w   paste_clone             | MKII FUNC+PASTE+PART
+        tstl    %d0
+        bne.s   2f
+        bra.w   save_menu
+2:      rts
 
 | 0x40058a64: the MKI FUNC+BANK dispatch: SAVE KIT.
 kits_mkisave:
@@ -426,6 +453,772 @@ kits_mkisave:
         movel   %sp@(12),%d3
         jmp     0x40058a6c
 1:      bra.w   save_menu
+
+| 0x4005e3d8 (key, pressed): FUNC+YES. With the SAVE KIT list open, the
+| row under the cursor is saved now under its Kit's name (Octakit's
+| FUNC+PART+YES quick save); its release is swallowed with it.
+kits_funcyes:
+        tstl    SWALLOW
+        beq.s   1f
+        tstl    %sp@(8)
+        bne.s   1f
+        clrl    SWALLOW
+        rts
+1:      tstl    READY
+        beq.s   9f
+        movel   MOWN,%d0
+        subql   #2,%d0
+        bne.s   9f
+        tstl    M_OBJ
+        beq.s   9f
+        tstl    %sp@(8)
+        beq.s   9f
+        moveq   #1,%d0
+        movel   %d0,SWALLOW
+        clrl    MOWN
+        movel   0x460e5e40,%d0          | the list's cursor
+        movel   %d0,SAVEK
+        jsr     M_CLOSE
+        movel   SAVEK,%d0
+        cmpil   #NKITS,%d0
+        bcc.s   2f
+        suba.l  %a0,%a0
+        bsr.w   kits_save_current
+        pea     0x30
+        pea     T_SAVED
+        jsr     NOTIFY
+        addql   #8,%sp
+2:      rts
+9:      lea     %sp@(-12),%sp           | displaced
+        moveml  %d2-%d4,%sp@
+        jmp     0x4005e3e0
+
+| ============================================================ Phase 2 ======
+
+| list_kit -> d0: the Kit under the open KITS list's cursor; -1 no KITS
+| list is open; -2 a KITS list is open on a row that is no Kit.
+list_kit:
+        moveq   #-1,%d0
+        tstl    READY
+        beq.s   9f
+        tstl    M_OBJ
+        beq.s   9f
+        movel   MOWN,%d1
+        beq.s   9f
+        movel   M_ROW,%d0
+        subql   #1,%d1
+        bne.s   1f
+        subql   #1,%d0                  | LOAD KIT: row 0 is UNDO KIT
+1:      cmpil   #NKITS,%d0
+        bcs.s   9f
+        moveq   #-2,%d0
+9:      rts
+
+| relist: the open list's rows again, drawn.
+relist:
+        moveq   #0,%d0
+        movel   MOWN,%d1
+        subql   #1,%d1
+        bne.s   1f
+        moveq   #1,%d0
+1:      bsr.w   labels
+        jsr     M_REDRAW
+        moveq   #1,%d0
+        movel   %d0,0x46c7c72c
+        rts
+
+| toast: a0 = text
+toast:  pea     0x30
+        movel   %a0,%sp@-
+        jsr     NOTIFY
+        addql   #8,%sp
+        rts
+
+| 0x40060f34 / 0x40060db0 / 0x40060eb4 (key, pressed): FUNC+REC, +STOP,
+| +PLAY. With a KITS list open: copy, paste, clear the Kit under the
+| cursor; a paste or a clear repeated on the same Kit undoes it. Both the
+| press and the release are the list's then.
+kits_lcopy:
+        moveq   #0,%d0
+        bsr.w   inactive_op
+        tstl    %d0
+        beq.s   1f
+        rts
+1:      bsr.w   list_kit
+        tstl    %d0
+        bpl.s   3f
+        addql   #1,%d0
+        bne.s   2f
+        movel   %d3,%sp@-               | displaced
+        movel   %d2,%sp@-
+        movel   %sp@(12),%d3
+        jmp     0x40060f3c
+3:      tstl    %sp@(8)
+        beq.s   2f
+        movel   %d0,%sp@-
+        bsr.w   is_valid
+        movel   %sp@+,%d1
+        tstl    %d0
+        beq.s   2f
+        movel   %d1,KCLIP
+        lea     T_COPIED,%a0
+        bra.w   toast
+2:      rts
+
+kits_lpaste:
+        moveq   #1,%d0
+        bsr.w   inactive_op
+        tstl    %d0
+        beq.s   1f
+        rts
+1:      bsr.w   list_kit
+        tstl    %d0
+        bpl.s   3f
+        addql   #1,%d0
+        bne.s   2f
+        movel   %d3,%sp@-               | displaced
+        movel   %d2,%sp@-
+        movel   %sp@(12),%d3
+        jmp     0x40060db8
+3:      tstl    %sp@(8)
+        beq.s   2f
+        moveq   #1,%d1
+        bra.w   list_op
+2:      rts
+
+kits_lclear:
+        moveq   #2,%d0
+        bsr.w   inactive_op
+        tstl    %d0
+        beq.s   1f
+        rts
+1:      bsr.w   list_kit
+        tstl    %d0
+        bpl.s   3f
+        addql   #1,%d0
+        bne.s   2f
+        movel   %d3,%sp@-               | displaced
+        movel   %d2,%sp@-
+        movel   %sp@(12),%d3
+        jmp     0x40060ebc
+3:      tstl    %sp@(8)
+        beq.s   2f
+        moveq   #2,%d1
+        bra.w   list_op
+2:      rts
+
+| list_op: d0 = Kit, d1 = 1 paste, 2 clear. The same op on the same Kit
+| again restores what it replaced.
+list_op:
+        lea     %sp@(-24),%sp
+        movem.l %d2-%d5/%a2-%a3,%sp@
+        movel   %d0,%d4
+        movel   %d1,%d5
+        cmpl    KUNDO_OP,%d5
+        bne.s   1f
+        cmpl    KUNDO_K,%d4
+        bne.s   1f
+        bsr.w   kit_undo                | the undo
+        lea     T_UNDONE,%a0
+        bra.w   8f
+1:      cmpil   #1,%d5
+        bne.s   2f
+        movel   KCLIP,%d0               | paste: something copied, not itself
+        bmi.w   3f
+        bsr.w   is_valid
+        tstl    %d0
+        beq.w   3f
+        cmpl    KCLIP,%d4
+        beq.w   9f
+2:      movel   %d4,%d0                 | the undo copy
+        bsr.w   kit_at
+        lea     KUNDOREC,%a1
+        movel   #REC,%d0
+        bsr.w   bytecopy
+        movel   %d4,%d0
+        bsr.w   is_valid
+        movel   %d0,KUNDO_VALID
+        movel   %d5,KUNDO_OP
+        movel   %d4,KUNDO_K
+        cmpil   #1,%d5
+        bne.s   4f
+        movel   %d4,%d0                 | paste
+        moveq   #64,%d1
+        bsr.w   others_mark
+        movel   KCLIP,%d0
+        bsr.w   kit_at
+        moveal  %a0,%a3
+        movel   %d4,%d0
+        bsr.w   kit_at
+        moveal  %a0,%a1
+        moveal  %a3,%a0
+        movel   #REC,%d0
+        bsr.w   bytecopy
+        movel   %d4,%d0
+        bsr.w   set_valid
+        movel   %d4,%d0
+        bsr.w   others_refresh
+        lea     T_PASTED,%a0
+        bra.s   7f
+4:      movel   %d4,%d0                 | clear: the slots that held it, unknown
+        bsr.w   forget_kit
+        movel   %d4,%d0
+        bsr.w   clr_valid
+        movel   %d4,%d0
+        bsr.w   kit_at
+        clrl    %a0@
+        clrl    %a0@(4)
+        lea     T_CLEARED,%a0
+7:      moveq   #1,%d0
+        movel   %d0,KDIRTY
+8:      bsr.w   toast
+        bsr.w   cs1_save
+        bsr.w   relist
+        bra.s   9f
+3:      lea     T_NOCOPY,%a0
+        bsr.w   toast
+9:      movem.l %sp@,%d2-%d5/%a2-%a3
+        lea     %sp@(24),%sp
+        rts
+
+| kit_undo: KUNDOREC and the Kit KUNDO_K trade places.
+kit_undo:
+        lea     %sp@(-12),%sp
+        movem.l %d2-%d3/%a2,%sp@
+        movel   KUNDO_K,%d2
+        movel   %d2,%d0
+        moveq   #64,%d1
+        bsr.w   others_mark
+        movel   %d2,%d0
+        bsr.w   kit_at
+        moveal  %a0,%a2
+        lea     KUNDOREC,%a1
+        movel   #REC/2,%d0
+1:      movew   %a2@,%d1
+        movew   %a1@,%a2@+
+        movew   %d1,%a1@+
+        subql   #1,%d0
+        bne.s   1b
+        movel   %d2,%d0
+        bsr.w   is_valid
+        movel   %d0,%d3
+        movel   %d2,%d0
+        bsr.w   clr_valid
+        tstl    KUNDO_VALID
+        beq.s   2f
+        movel   %d2,%d0
+        bsr.w   set_valid
+2:      movel   %d3,KUNDO_VALID
+        movel   %d2,%d0
+        bsr.w   others_refresh
+        moveq   #1,%d0
+        movel   %d0,KDIRTY
+        clrl    KUNDO_OP
+        movem.l %sp@,%d2-%d3/%a2
+        lea     %sp@(12),%sp
+        rts
+
+| forget_kit: d0 = Kit: no slot is known to hold it.
+forget_kit:
+        movel   %d2,%sp@-
+        moveq   #-1,%d2
+        lea     KIMG+O_RESID,%a0
+        moveq   #63,%d1
+1:      cmpb    %a0@(0,%d1:l),%d0
+        bne.s   2f
+        moveb   %d2,%a0@(0,%d1:l)
+2:      subql   #1,%d1
+        bpl.s   1b
+        movel   %sp@+,%d2
+        rts
+
+| bytecopy: a0 -> a1, d0 bytes (word aligned, even). Keeps d2-d7/a2-a6.
+bytecopy:
+        lsrl    #1,%d0
+1:      movew   %a0@+,%a1@+
+        subql   #1,%d0
+        bne.s   1b
+        rts
+
+| next_free: d0 = a Kit -> d0 = the next empty Kit after it, wrapping;
+| -1 when every Kit holds a Part.
+next_free:
+        movel   %d2,%sp@-
+        movel   %d3,%sp@-
+        movel   %d0,%d2
+        movel   #NKITS,%d3
+1:      addql   #1,%d2
+        andil   #NKITS-1,%d2
+        movel   %d2,%d0
+        bsr.w   is_valid
+        tstl    %d0
+        beq.s   2f
+        subql   #1,%d3
+        bne.s   1b
+        moveq   #-1,%d2
+2:      movel   %d2,%d0
+        movel   %sp@+,%d3
+        movel   %sp@+,%d2
+        rts
+
+| cpkit: d0 = from, d1 = to: the whole record (name, Part), valid.
+cpkit:  lea     %sp@(-8),%sp
+        movem.l %d2/%a2,%sp@
+        movel   %d1,%d2
+        bsr.w   kit_at
+        moveal  %a0,%a2
+        movel   %d2,%d0
+        bsr.w   kit_at
+        moveal  %a0,%a1
+        moveal  %a2,%a0
+        movel   #REC,%d0
+        bsr.w   bytecopy
+        movel   %d2,%d0
+        bsr.w   set_valid
+        moveq   #1,%d0
+        movel   %d0,KDIRTY
+        movem.l %sp@,%d2/%a2
+        lea     %sp@(8),%sp
+        rts
+
+| ---- the pattern clipboard carries the pattern's Kit ----------------------
+| 0x40026eb0 (pattern): the pattern copy (FUNC+REC), current bank.
+kits_pcopy:
+        lea     %sp@(-12),%sp
+        movem.l %d0-%d1/%a0,%sp@
+        tstl    READY
+        beq.s   1f
+        movel   %sp@(12+4),%d1
+        bsr.w   assign_at
+        moveq   #0,%d0
+        moveb   %a0@,%d0
+        movel   %d0,ACLIP
+        moveq   #1,%d0
+        movel   %d0,ACLIP_SET
+1:      movem.l %sp@,%d0-%d1/%a0
+        lea     %sp@(12),%sp
+        movel   %sp@(4),%d0             | displaced
+        movel   #0x8ed8,%d1
+        jmp     0x40026eba
+
+| 0x40026ef0 (?, pattern): the paste's undo snapshot of the target.
+kits_psnap:
+        lea     %sp@(-12),%sp
+        movem.l %d0-%d1/%a0,%sp@
+        tstl    READY
+        beq.s   1f
+        movel   %sp@(12+8),%d1
+        movel   %d1,AUNDO_PTN
+        bsr.w   assign_at
+        moveq   #0,%d0
+        moveb   %a0@,%d0
+        movel   %d0,AUNDO
+        moveb   CUR_BANK,%d0
+        extb.l  %d0
+        movel   %d0,AUNDO_BANK
+        moveq   #1,%d0
+        movel   %d0,AUNDO_SET
+1:      movem.l %sp@,%d0-%d1/%a0
+        lea     %sp@(12),%sp
+        movel   %sp@(8),%d0             | displaced
+        lea     %sp@(4),%a0
+        jmp     0x40026ef8
+
+| 0x4002b9b0 (src, pattern): a pattern written from the clipboard (a
+| paste: the copied pattern's Kit) or the undo buffer (an undo: the Kit
+| it had), current bank.
+kits_pstore_ptn:
+        lea     %sp@(-16),%sp
+        movem.l %d0-%d2/%a0,%sp@
+        tstl    READY
+        beq.s   9f
+        movel   %sp@(16+8),%d1
+        andil   #15,%d1
+        movel   %sp@(16+4),%d2
+        cmpil   #CLIPBUF,%d2
+        bne.s   1f
+        tstl    ACLIP_SET
+        beq.s   9f
+        bsr.w   assign_at
+        movel   ACLIP,%d0
+        moveb   %d0,%a0@
+        moveq   #0,%d0
+        moveb   CUR_BANK,%d0
+        lsll    #4,%d0
+        addl    %d1,%d0
+        movel   %d0,LASTPASTE
+        bra.s   8f
+1:      cmpil   #UNDOBUF,%d2
+        bne.s   9f
+        tstl    AUNDO_SET
+        beq.s   9f
+        cmpl    AUNDO_PTN,%d1
+        bne.s   9f
+        moveq   #0,%d0
+        moveb   CUR_BANK,%d0
+        cmpl    AUNDO_BANK,%d0
+        bne.s   9f
+        bsr.w   assign_at
+        movel   AUNDO,%d0
+        moveb   %d0,%a0@
+8:      moveq   #1,%d0
+        movel   %d0,KDIRTY
+        bsr.w   cs1_save
+9:      movem.l %sp@,%d0-%d2/%a0
+        lea     %sp@(16),%sp
+        lea     %sp@(-16),%sp           | displaced
+        moveml  %d2-%d4/%a2,%sp@
+        jmp     0x4002b9b8
+
+| assign_at: d1 = pattern of the current bank -> a0 = its ASSIGN byte
+assign_at:
+        moveq   #0,%d0
+        moveb   CUR_BANK,%d0
+        lsll    #4,%d0
+        andil   #15,%d1
+        addl    %d1,%d0
+        lea     KIMG+O_ASSIGN,%a0
+        addal   %d0,%a0
+        rts
+
+| paste_clone: FUNC+PASTE+PART (MKI FUNC+PASTE+MIDI): with PASTE (STOP)
+| still held after a pattern paste, the pasted pattern's Kit is copied to
+| the next empty Kit and the pattern plays the copy. -> d0 = 1 when it
+| ran (the key does nothing else).
+paste_clone:
+        pea     KSTOP
+        jsr     PUSHED
+        addql   #4,%sp
+        tstl    %d0
+        beq.s   9f
+        movel   LASTPASTE,%d0
+        bmi.s   9f
+        lea     %sp@(-8),%sp
+        movem.l %d2-%d3,%sp@
+        movel   %d0,%d2                 | d2 = the pasted pattern (bank*16 + n)
+        moveq   #-1,%d0
+        movel   %d0,LASTPASTE
+        lea     KIMG+O_ASSIGN,%a0
+        moveq   #0,%d3
+        moveb   %a0@(0,%d2:l),%d3
+        movel   %d3,%d0
+        bsr.w   is_valid
+        tstl    %d0
+        beq.s   1f
+        movel   %d3,%d0
+        bsr.w   next_free
+        tstl    %d0
+        bmi.s   2f
+        movel   %d0,%sp@-
+        movel   %d0,%d1
+        movel   %d3,%d0
+        bsr.w   cpkit
+        movel   %sp@+,%d0
+        lea     KIMG+O_ASSIGN,%a0
+        moveb   %d0,%a0@(0,%d2:l)
+        bsr.w   cs1_save
+        lea     T_CLONED,%a0
+        bra.s   3f
+1:      lea     T_EMPTY,%a0
+        bra.s   3f
+2:      lea     T_NOFREE,%a0
+3:      bsr.w   toast
+        movem.l %sp@,%d2-%d3
+        lea     %sp@(8),%sp
+        moveq   #1,%d0
+        rts
+9:      moveq   #0,%d0
+        rts
+
+| 0x400503c4 (a, b): FUNC+RIGHT. With PTN held: save the current Kit,
+| copy it to the next empty Kit, copy the current pattern to the next
+| empty pattern of the bank, which plays the copy, and request it.
+kits_fright:
+        tstl    READY
+        beq.s   8f
+        pea     KPTN
+        jsr     PUSHED
+        addql   #4,%sp
+        tstl    %d0
+        beq.s   8f
+        tstl    FRIGHT_BUSY             | the press runs it; the release is its
+        beq.s   1f
+        clrl    FRIGHT_BUSY
+        rts
+1:      moveq   #1,%d0
+        movel   %d0,FRIGHT_BUSY
+        bra.w   pattern_clone
+8:      movel   %sp@(4),%d1             | displaced
+        movel   %sp@(8),%d0
+        jmp     0x400503cc
+
+pattern_clone:
+        lea     %sp@(-28),%sp
+        movem.l %d2-%d7/%a2,%sp@
+        moveq   #0,%d6
+        moveb   CUR_BANK,%d6            | d6 = bank
+        moveq   #0,%d7
+        moveb   CUR_PTN,%d7
+        andil   #15,%d7                 | d7 = pattern
+        bsr.w   cur_kit
+        movel   %d0,%d2                 | d2 = the Kit to save into
+        cmpil   #NKITS,%d2
+        bcs.s   1f
+        moveq   #-1,%d0
+        bsr.w   next_free
+        movel   %d0,%d2
+        bmi.w   7f
+1:      movel   %d2,%d0                 | the current Part saved into it
+        suba.l  %a0,%a0
+        bsr.w   kits_save_current
+        movel   %d2,%d0
+        bsr.w   next_free
+        movel   %d0,%d3                 | d3 = the copy
+        bmi.w   7f
+        movel   %d7,%d4                 | d4 = the next empty pattern
+2:      addql   #1,%d4
+        cmpil   #16,%d4
+        beq.w   6f
+        movel   %d6,%sp@-
+        movel   %d4,%sp@-
+        jsr     HASCONT
+        addql   #8,%sp
+        tstl    %d0
+        bne.s   2b
+        movel   %d2,%d0
+        movel   %d3,%d1
+        bsr.w   cpkit
+        movel   %d6,%d0                 | the pattern, through the stock store
+        bsr.w   bank_at
+        movel   %d7,%d0
+        movel   #PSTRIDE,%d1
+        mulu.l  %d1,%d0
+        addal   %d0,%a0
+        movel   %d4,%sp@-
+        movel   %a0,%sp@-
+        jsr     0x4002b9b0
+        addql   #8,%sp
+        movel   %d6,%d0
+        lsll    #4,%d0
+        addl    %d4,%d0
+        lea     KIMG+O_ASSIGN,%a0
+        moveb   %d3,%a0@(0,%d0:l)
+        bsr.w   cs1_save
+        movel   %d4,%sp@-
+        movel   %d6,%sp@-
+        jsr     REQUEST
+        addql   #8,%sp
+        lea     T_PCOPIED,%a0
+        bra.s   9f
+6:      lea     T_NOPTN,%a0
+        bra.s   9f
+7:      lea     T_NOFREE,%a0
+9:      bsr.w   toast
+        movem.l %sp@,%d2-%d7/%a2
+        lea     %sp@(28),%sp
+        rts
+
+| put_levels: a0 = a Part's +0x12: LVLBUF's eight track levels back
+| (even bytes), the cue levels (odd) as the Kit has them.
+put_levels:
+        lea     LVLBUF,%a1
+        moveq   #8,%d0
+1:      moveb   %a1@,%a0@
+        addql   #2,%a0
+        addql   #2,%a1
+        subql   #1,%d0
+        bne.s   1b
+        rts
+
+| autosave_current: the playing Part's edits into the Kit its slot holds
+| (KF_AUTO): working -> the Kit, the saved Part, the CS1 copies; the
+| unsaved bit clear.
+autosave_current:
+        lea     %sp@(-44),%sp
+        movem.l %d2-%d7/%a2-%a6,%sp@
+        moveq   #0,%d4
+        moveb   CUR_BANK,%d4
+        moveq   #0,%d1
+        moveb   CUR_PART,%d1
+        andil   #3,%d1
+        movel   %d1,%d7                 | d7 = the part
+        movel   %d4,%d6
+        lsll    #2,%d6
+        addl    %d1,%d6                 | d6 = the slot
+        lea     KIMG+O_RESID,%a0
+        moveq   #0,%d5
+        moveb   %a0@(0,%d6:l),%d5       | d5 = its Kit
+        cmpil   #0xff,%d5
+        beq.w   9f
+        bsr.w   slot_equal
+        tstl    %d0
+        bne.w   9f
+        movel   %d5,%d0
+        movel   %d6,%d1
+        bsr.w   others_mark
+        movel   %d4,%d0
+        bsr.w   bank_at
+        moveal  %a0,%a2                 | a2 = the bank
+        movel   #PARTSZ,%d3
+        mulu.l  %d7,%d3                 | d3 = part * PARTSZ
+        movel   %a2,%a4
+        addal   %d3,%a4
+        movel   %a4,%a3
+        addal   #WORKOFF,%a3            | a3 = the working Part
+        movel   %d5,%d0
+        bsr.w   kit_at
+        pea     PARTSZ
+        movel   %a3,%sp@-
+        pea     %a0@(R_PAY)
+        jsr     MEMCPY
+        lea     %sp@(12),%sp
+        pea     PARTSZ
+        movel   %a3,%sp@-
+        movel   %a4,%d0
+        addil   #SAVEDOFF,%d0
+        movel   %d0,%sp@-
+        jsr     MEMCPY
+        lea     %sp@(12),%sp
+        pea     PARTSZ
+        movel   %a3,%sp@-
+        movel   %d3,%d0
+        addil   #CS1_SAVED,%d0
+        movel   %d0,%sp@-
+        jsr     MEMCPY
+        lea     %sp@(12),%sp
+        moveal  %a2,%a0
+        addal   #SVALID,%a0
+        moveq   #1,%d0
+        moveb   %d0,%a0@(0,%d7:l)
+        lea     CS1_SVALID,%a0
+        moveb   %d0,%a0@(0,%d7:l)
+        lsll    %d7,%d0
+        notl    %d0
+        moveal  %a2,%a0
+        addal   #MODBITS,%a0
+        moveb   %a0@,%d1
+        andl    %d0,%d1
+        moveb   %d1,%a0@
+        moveb   CS1_MOD,%d1
+        andl    %d0,%d1
+        moveb   %d1,CS1_MOD
+        movel   %d5,%d0
+        bsr.w   others_refresh
+        moveq   #1,%d0
+        movel   %d0,KDIRTY
+        movel   %d0,GDIRTY
+        addql   #1,CNT_AUTOSAVE
+9:      movem.l %sp@,%d2-%d7/%a2-%a6
+        lea     %sp@(44),%sp
+        rts
+
+| ---- PTN+FUNC+TRIG: copy, paste, clear an inactive pattern ---------------
+| 0x40056b2c (pattern): a pattern trig with PTN held. With FUNC held too the
+| trig names a target instead of requesting it (Octakit's PTN+FUNC+TRIG).
+kits_ptrig:
+        tstl    READY
+        beq.s   9f
+        movel   %sp@(4),%d0
+        cmpil   #15,%d0
+        bhi.s   9f
+        pea     KFUNC
+        jsr     PUSHED
+        addql   #4,%sp
+        tstl    %d0
+        beq.s   9f
+        movel   %sp@(4),%d0
+        movel   %d0,PTGT
+        rts
+9:      movel   %a2,%sp@-               | displaced
+        movel   %d2,%sp@-
+        movel   %sp@(12),%d2
+        jmp     0x40056b34
+
+| inactive_op: d0 = 0 copy, 1 paste, 2 clear; the stack as the handler got
+| it, 4 deeper. With PTN and the target's trig held, the op runs on that
+| pattern of the current bank -> d0 = 1 (the key is taken); else 0.
+inactive_op:
+        movel   PTGT,%d1
+        bmi.w   8f
+        tstl    READY
+        beq.w   8f
+        lea     %sp@(-12),%sp
+        movem.l %d2-%d3/%a2,%sp@
+        movel   %d0,%d3                 | d3 = the op
+        movel   %d1,%d2                 | d2 = the pattern
+        pea     KPTN
+        jsr     PUSHED
+        addql   #4,%sp
+        tstl    %d0
+        beq.w   7f
+        movel   %d2,%sp@-               | its trig: key code = pattern
+        jsr     PUSHED
+        addql   #4,%sp
+        tstl    %d0
+        beq.w   7f
+        tstl    %sp@(12+4+8)            | the press acts; the release is taken
+        beq.w   6f
+        tstl    %d3
+        bne.s   1f
+        movel   %d2,%sp@-               | copy: the stock pattern copy
+        jsr     0x40026eb0
+        addql   #4,%sp
+        lea     T_PCOPY,%a0
+        bra.w   5f
+1:      cmpl    PUNDO_OP,%d3            | the same op on the same pattern: undo
+        bne.s   2f
+        cmpl    PUNDO_T,%d2
+        bne.s   2f
+        movel   %d2,%sp@-
+        pea     UNDOBUF
+        jsr     0x4002b9b0
+        addql   #8,%sp
+        clrl    PUNDO_OP
+        lea     T_UNDONE,%a0
+        bra.s   5f
+2:      cmpil   #1,%d3
+        bne.s   3f
+        movel   0x460d0ffa,%d0          | paste: a pattern on the clipboard
+        cmpil   #14,%d0
+        bne.s   4f
+3:      movel   %d2,%sp@-               | the target's undo snapshot
+        pea     0x11
+        jsr     0x40026ef0
+        addql   #8,%sp
+        movel   %d3,PUNDO_OP
+        movel   %d2,PUNDO_T
+        cmpil   #1,%d3
+        bne.s   10f
+        movel   %d2,%sp@-
+        pea     CLIPBUF
+        jsr     0x4002b9b0
+        addql   #8,%sp
+        lea     T_PPASTE,%a0
+        bra.s   5f
+10:     movel   %d4,%sp@-               | clear: every audio track's steps and locks
+        moveq   #0,%d4
+11:     pea     1
+        movel   %d4,%sp@-
+        movel   %d2,%sp@-
+        jsr     0x40039df4
+        lea     %sp@(12),%sp
+        addql   #1,%d4
+        moveq   #8,%d0
+        cmpl    %d4,%d0
+        bne.s   11b
+        movel   %sp@+,%d4
+        lea     T_PCLEAR,%a0
+        bra.s   5f
+4:      lea     T_NOPCOPY,%a0
+5:      bsr.w   toast
+6:      moveq   #1,%d0
+        bra.s   9f
+7:      moveq   #0,%d0
+9:      movem.l %sp@,%d2-%d3/%a2
+        lea     %sp@(12),%sp
+        rts
+8:      moveq   #0,%d0
+        rts
 
 | ============================================================ staging ======
 
@@ -444,7 +1237,22 @@ stage_req:
         addql   #1,CNT_ISR
         rts
 1:      movel   %a0,%d0
-        moveq   #0,%d2                  | no apply
+        movel   FLAGS,%d2
+        btst    #0,%d2                  | KF_AUTO
+        beq.s   2f
+        moveq   #0,%d2                  | a change of pattern: the playing
+        moveb   CUR_BANK,%d2            | Part's edits into its Kit first
+        cmpl    %d0,%d2
+        bne.s   3f
+        moveb   CUR_PTN,%d2
+        cmpl    %d1,%d2
+        beq.s   2f
+3:      lea     %sp@(-8),%sp
+        movem.l %d0-%d1,%sp@
+        bsr.w   autosave_current
+        movem.l %sp@,%d0-%d1
+        lea     %sp@(8),%sp
+2:      moveq   #0,%d2                  | no apply
         bra.w   kits_stage
 9:      rts
 
@@ -576,13 +1384,83 @@ st_out: movem.l %sp@,%d2-%d7/%a2-%a6
         lea     %sp@(44),%sp
         rts
 
+| others_mark: d0 = a Kit about to be saved, d1 = the slot it is saved
+| from. Every other slot RESID says holds it: refreshed after the save
+| (REFRESH) when it is the Kit unedited and not playing, else unknown.
+others_mark:
+        lea     %sp@(-24),%sp
+        movem.l %d2-%d6/%a2,%sp@
+        movel   %d0,%d5
+        movel   %d1,%d6
+        lea     REFRESH,%a2
+        moveq   #0,%d3                  | the slot, 0..63
+1:      clrb    %a2@(0,%d3:l)
+        cmpl    %d6,%d3
+        beq.s   3f
+        lea     KIMG+O_RESID,%a0
+        moveq   #0,%d0
+        moveb   %a0@(0,%d3:l),%d0
+        cmpl    %d5,%d0
+        bne.s   3f
+        movel   %d3,%d4
+        lsrl    #2,%d4                  | d4 = its bank
+        movel   %d3,%d1
+        andil   #3,%d1
+        bsr.w   slot_ok
+        tstl    %d0
+        beq.s   2f
+        moveq   #1,%d0
+        moveb   %d0,%a2@(0,%d3:l)
+        bra.s   3f
+2:      lea     KIMG+O_RESID,%a0
+        moveq   #-1,%d0
+        moveb   %d0,%a0@(0,%d3:l)
+3:      addql   #1,%d3
+        moveq   #64,%d0
+        cmpl    %d3,%d0
+        bne.s   1b
+        movem.l %sp@,%d2-%d6/%a2
+        lea     %sp@(24),%sp
+        rts
+
+| others_refresh: d0 = the Kit just saved: into the slots others_mark kept.
+others_refresh:
+        lea     %sp@(-16),%sp
+        movem.l %d2-%d3/%d5/%a2,%sp@
+        movel   %d0,%d5
+        lea     REFRESH,%a2
+        moveq   #0,%d3
+1:      tstb    %a2@(0,%d3:l)
+        beq.s   2f
+        clrb    %a2@(0,%d3:l)
+        movel   %d5,%d0
+        movel   %d3,%d1
+        lsrl    #2,%d1
+        movel   %d3,%d2
+        andil   #3,%d2
+        bsr.w   load_into
+2:      addql   #1,%d3
+        moveq   #64,%d0
+        cmpl    %d3,%d0
+        bne.s   1b
+        movem.l %sp@,%d2-%d3/%d5/%a2
+        lea     %sp@(16),%sp
+        rts
+
 | slot_ok: d4 = bank, d1 = slot -> d0 = 1 when a Kit may be copied there:
-| the slot's working Part is the Kit RESID names for it, byte for byte
-| (nothing in it that no Kit holds), and slot_ok_named. Stock's unsaved
+| slot_ok_named, and the slot's working Part is the Kit RESID names for
+| it, byte for byte (nothing in it that no Kit holds). Stock's unsaved
 | bit is not the test: it stays set after an edit is undone and is set on
 | every Part of a project saved without a Part Save (OCTABAM89_setgate:
 | 0xf on bank 3, one slot equal to its saved copy). Keeps d1-d7/a1-a6.
 slot_ok:
+        bsr.w   slot_ok_named
+        tstl    %d0
+        bne.s   slot_equal
+        rts
+| slot_equal: d4 = bank, d1 = slot -> d0 = 1 when the slot's working Part
+| is the Kit RESID names for it. Keeps d1-d7/a1-a6.
+slot_equal:
         lea     %sp@(-16),%sp
         movem.l %d1-%d2/%a1-%a2,%sp@
         movel   %d4,%d2
@@ -592,7 +1470,7 @@ slot_ok:
         moveq   #0,%d0
         moveb   %a0@(0,%d2:l),%d0
         cmpil   #0xff,%d0
-        beq.s   2f                      | unknown content: kept
+        beq.s   3f                      | unknown content: kept
         bsr.w   kit_at
         lea     %a0@(R_PAY),%a2
         movel   %d4,%d0
@@ -602,19 +1480,21 @@ slot_ok:
         movel   #PARTSZ,%d0
         mulu.l  %d1,%d0
         addal   %d0,%a0
-        movel   #PARTSZ/2,%d2           | PARTSZ is even, both Parts word aligned
-1:      mvzw    %a0@+,%d0
-        mvzw    %a2@+,%d1
-        cmpl    %d1,%d0
-        bne.s   2f
+        movel   #PARTSZ/4,%d2           | long words (both word aligned), then
+2:      movel   %a0@+,%d0               | the last two bytes
+        cmpl    %a2@+,%d0
+        bne.s   3f
         subql   #1,%d2
-        bne.s   1b
-        movem.l %sp@,%d1-%d2/%a1-%a2
+        bne.s   2b
+        mvzw    %a0@,%d0
+        mvzw    %a2@,%d1
+        cmpl    %d1,%d0
+        bne.s   3f
+        moveq   #1,%d0
+        bra.s   4f
+3:      moveq   #0,%d0
+4:      movem.l %sp@,%d1-%d2/%a1-%a2
         lea     %sp@(16),%sp
-        bra.s   slot_ok_named
-2:      movem.l %sp@,%d1-%d2/%a1-%a2
-        lea     %sp@(16),%sp
-        moveq   #0,%d0
         rts
 | slot_ok_named: d4 = bank, d1 = slot -> d0 = 1 when no engine track
 | names it (while the transport runs) and no queued or chained pattern's
@@ -693,6 +1573,13 @@ load_into:
         movel   #PARTSZ,%d3
         mulu.l  %d7,%d3                 | d3 = slot * PARTSZ
         lea     %a2@(0,%d3:l),%a4
+        movel   %a4,%a0                 | the slot's track levels, Part +0x12 + 2t
+        addal   #WORKOFF+0x12,%a0
+        lea     LVLBUF,%a1
+        moveq   #16,%d0
+5:      moveb   %a0@+,%a1@+
+        subql   #1,%d0
+        bne.s   5b
         pea     PARTSZ
         pea     %a3@(R_PAY)
         movel   %a4,%d0
@@ -721,7 +1608,18 @@ load_into:
         moveb   %a0@,%d1
         andl    %d0,%d1
         moveb   %d1,%a0@
-3:      movel   %d7,%d0                 | the name: six characters and a NUL
+3:      movel   FLAGS,%d0               | KEEP LEVELS: the levels back
+        btst    #1,%d0
+        beq.s   6f
+        movel   %a4,%a0
+        addal   #SAVEDOFF+0x12,%a0
+        bsr.w   put_levels
+        tstl    LI_SAVEDONLY
+        bne.s   6f
+        movel   %a4,%a0
+        addal   #WORKOFF+0x12,%a0
+        bsr.w   put_levels
+6:      movel   %d7,%d0                 | the name: six characters and a NUL
         mulu.w  #7,%d0
         moveal  %a2,%a0
         addal   #PNAMES,%a0
@@ -735,7 +1633,7 @@ load_into:
         moveq   #0,%d0
         moveb   CUR_BANK,%d0
         cmpl    %d6,%d0
-        bne.s   2f
+        bne.w   2f
         pea     PARTSZ
         pea     %a3@(R_PAY)
         movel   %d3,%d0
@@ -746,6 +1644,25 @@ load_into:
         lea     CS1_SVALID,%a0
         moveq   #1,%d0
         moveb   %d0,%a0@(0,%d7:l)
+        movel   FLAGS,%d0               | KEEP LEVELS in the CS1 copies
+        btst    #1,%d0
+        beq.s   7f
+        movel   %d3,%d0
+        addil   #CS1_SAVED+0x12,%d0
+        moveal  %d0,%a0
+        bsr.w   put_levels
+        tstl    LI_SAVEDONLY
+        bne.s   7f
+        movel   %d3,%d0
+        addil   #CS1_WORK+0x12,%d0
+        moveal  %d0,%a0
+        bsr.w   put_levels
+7:      movel   %d7,%d0                 | the name's CS1 copy
+        mulu.w  #7,%d0
+        addil   #CS1_NAMES,%d0
+        moveal  %d0,%a0
+        moveal  %a3,%a1
+        bsr.w   name6
         tstl    LI_SAVEDONLY
         bne.s   4f
         pea     PARTSZ
@@ -904,6 +1821,12 @@ kits_save_current:
         addal   %d0,%a0
         moveal  %a3,%a1
         bsr.w   name6
+        movel   %d7,%d0                 | and its CS1 copy (the current bank)
+        mulu.w  #7,%d0
+        addil   #CS1_NAMES,%d0
+        moveal  %d0,%a0
+        moveal  %a3,%a1
+        bsr.w   name6
         movel   %d6,%d0
         lsll    #4,%d0
         moveq   #0,%d1
@@ -934,7 +1857,7 @@ load_menu:
         movem.l %d2-%d7/%a2-%a6,%sp@
         moveq   #1,%d0
         bsr.w   labels                  | the rows, row 0 UNDO KIT
-        lea     LOADCB,%a0
+        lea     load_yes,%a0
         bsr.w   callbacks
         bsr.w   cur_kit
         addql   #1,%d0
@@ -946,9 +1869,11 @@ load_menu:
         pea     LBTAB
         pea     MSEL
         movel   %d0,%sp@-
-        pea     NKITS+1
+        pea     LROWS
         jsr     M_OPEN
         lea     %sp@(20),%sp
+        moveq   #1,%d0
+        movel   %d0,MOWN
         movem.l %sp@,%d2-%d7/%a2-%a6
         lea     %sp@(44),%sp
 m_out:  rts
@@ -965,7 +1890,7 @@ save_menu:
         movem.l %d2-%d7/%a2-%a6,%sp@
         moveq   #0,%d0
         bsr.w   labels
-        lea     SAVECB,%a0
+        lea     save_yes,%a0
         bsr.w   callbacks
         bsr.w   cur_kit
         cmpil   #NKITS,%d0
@@ -988,6 +1913,8 @@ save_menu:
         pea     NKITS
         jsr     M_OPEN
         lea     %sp@(20),%sp
+        moveq   #2,%d0
+        movel   %d0,MOWN
         movem.l %sp@,%d2-%d7/%a2-%a6
         lea     %sp@(44),%sp
         rts
@@ -1007,9 +1934,32 @@ cur_kit:
         movel   %d1,%d0
         rts
 
-| the LOAD KIT row's YES: row 0 = UNDO KIT
+| the LOAD KIT row's YES: row 0 = UNDO KIT, then the Kits, then the two
+| settings (each YES turns one on or off)
 load_yes:
         movel   MSEL,%d0
+        cmpil   #NKITS+1,%d0
+        bcs.s   4f
+        subil   #NKITS+1,%d0            | 0 AUTOSAVE, 1 KEEP LEVELS
+        movel   %d2,%sp@-
+        moveq   #1,%d1
+        lsll    %d0,%d1
+        movel   FLAGS,%d2
+        eorl    %d1,%d2
+        movel   %d2,FLAGS
+        andl    %d2,%d1                 | the toast: the row's new state
+        movel   %sp@+,%d2
+        tstl    %d1
+        beq.s   5f
+        moveq   #1,%d1
+5:      lsll    #1,%d0
+        addl    %d1,%d0
+        lea     T_SETTINGS,%a0
+        moveal  %a0@(0,%d0:l:4),%a0
+        moveq   #1,%d1
+        movel   %d1,KDIRTY
+        bra.w   toast
+4:      tstl    %d0
         bne.s   1f
         moveq   #0,%d0
         moveb   UNDOKIT,%d0
@@ -1170,14 +2120,28 @@ labels:
         addql   #1,%d2
         cmpil   #NKITS,%d2
         bne.w   5b
-        movem.l %sp@,%d2-%d5/%a2-%a4
+        tstl    %d5                     | the LOAD list's two settings
+        beq.s   9f
+        movel   FLAGS,%d1
+        lea     T_SETTINGS,%a0
+        moveq   #0,%d0
+        btst    #0,%d1
+        beq.s   1f
+        moveq   #1,%d0
+1:      movel   %a0@(0,%d0:l:4),%a3@+
+        moveq   #2,%d0
+        btst    #1,%d1
+        beq.s   2f
+        moveq   #3,%d0
+2:      movel   %a0@(0,%d0:l:4),%a3@+
+9:      movem.l %sp@,%d2-%d5/%a2-%a4
         lea     %sp@(28),%sp
         rts
 
 | callbacks: a0 = the YES handler for every row
 callbacks:
         lea     CBTAB,%a1
-        movel   #NKITS,%d0
+        movel   #LROWS-1,%d0
 1:      movel   %a0,%a1@+
         subql   #1,%d0
         bpl.s   1b
@@ -1374,7 +2338,13 @@ post_load:
 3:      tstl    %d7
         beq.s   4f
         bsr.w   cs1_load
-4:      movel   #MAGIC,%d0
+4:      clrl    ACLIP_SET
+        clrl    AUNDO_SET
+        moveq   #-1,%d0
+        movel   %d0,LASTPASTE
+        movel   %d0,KCLIP
+        clrl    KUNDO_OP
+        movel   #MAGIC,%d0
         movel   %d0,KMAGIC
         lea     LRU,%a0
         moveq   #63,%d1
@@ -1409,6 +2379,7 @@ forget_bank:
 
 | lib_empty: no Kit, no assignment, no slot holds one.
 lib_empty:
+        clrl    FLAGS
         lea     KIMG+O_ASSIGN,%a0
         moveq   #-1,%d0
         moveq   #63,%d1
@@ -1703,56 +2674,73 @@ v3_manifest:
         bne.s   2b
 9:      rts
 
-| infer_resid: a slot holds Kit k when its working Part equals k's and a
-| pattern of that bank pointing at the slot plays k.
+| infer_resid: each slot's working Part against every Kit: an equal one
+| is the Kit the slot holds; a slot equal to none is saved into the next
+| empty Kit (its stock name), so no Part is lost and every slot is known.
 infer_resid:
         lea     %sp@(-44),%sp
         movem.l %d2-%d7/%a2-%a6,%sp@
-        moveq   #0,%d4                  | bank
-1:      moveq   #0,%d5                  | pattern
-2:      movel   %d4,%d0
-        lsll    #4,%d0
-        addl    %d5,%d0
-        lea     KIMG+O_ASSIGN,%a0
-        moveq   #0,%d6
-        moveb   %a0@(0,%d0:l),%d6
-        cmpil   #0xff,%d6
-        beq.s   5f
-        movel   %d4,%d0
-        movel   %d5,%d1
-        bsr.w   pbyte_at
-        moveq   #0,%d7
-        moveb   %a0@,%d7
-        cmpil   #3,%d7
-        bhi.s   5f
-        movel   %d6,%d0
-        bsr.w   kit_at
-        lea     %a0@(R_PAY),%a3
+        moveq   #0,%d6                  | the slot, 0..63
+1:      movel   %d6,%d4
+        lsrl    #2,%d4                  | d4 = bank
+        movel   %d6,%d7
+        andil   #3,%d7                  | d7 = part
         movel   %d4,%d0
         bsr.w   bank_at
         movel   #PARTSZ,%d0
         mulu.l  %d7,%d0
-        moveal  %a0,%a2
-        addal   #WORKOFF,%a2
-        addal   %d0,%a2
-        movel   #PARTSZ,%d0
-3:      mvzb    %a2@+,%d1
-        mvzb    %a3@+,%d2
-        cmpl    %d2,%d1
-        bne.s   5f
+        addal   %d0,%a0
+        moveal  %a0,%a5                 | a5 = the bank + part offset
+        movel   %a0,%a2
+        addal   #WORKOFF,%a2            | a2 = the working Part
+        moveq   #0,%d5                  | the Kit
+2:      movel   %d5,%d0
+        bsr.w   is_valid
+        tstl    %d0
+        beq.s   4f
+        movel   %d5,%d0
+        bsr.w   kit_at
+        lea     %a0@(R_PAY),%a3
+        moveal  %a2,%a4
+        movel   #PARTSZ/2,%d0
+3:      movew   %a4@+,%d1
+        cmpw    %a3@+,%d1
+        bne.s   4f
         subql   #1,%d0
         bne.s   3b
-        movel   %d4,%d0
-        lsll    #2,%d0
-        addl    %d7,%d0
-        lea     KIMG+O_RESID,%a0
-        moveb   %d6,%a0@(0,%d0:l)
-5:      addql   #1,%d5
-        moveq   #16,%d0
-        cmpl    %d5,%d0
+        bra.s   6f                      | equal: d5 is the slot's Kit
+4:      addql   #1,%d5
+        cmpil   #NKITS,%d5
         bne.s   2b
-        addql   #1,%d4
-        cmpl    %d4,%d0
+        moveq   #-1,%d0                 | none: the next empty Kit
+        bsr.w   next_free
+        movel   %d0,%d5
+        bmi.s   7f
+        bsr.w   kit_at
+        moveal  %a0,%a3
+        pea     PARTSZ
+        movel   %a2,%sp@-
+        pea     %a3@(R_PAY)
+        jsr     MEMCPY
+        lea     %sp@(12),%sp
+        movel   %d4,%d0
+        bsr.w   bank_at
+        movel   %d7,%d0
+        mulu.w  #7,%d0
+        addal   #PNAMES,%a0
+        addal   %d0,%a0
+        moveal  %a0,%a1
+        moveal  %a3,%a0
+        bsr.w   name6
+        clrb    %a3@(6)
+        clrb    %a3@(7)
+        movel   %d5,%d0
+        bsr.w   set_valid
+6:      lea     KIMG+O_RESID,%a0
+        moveb   %d5,%a0@(0,%d6:l)
+7:      addql   #1,%d6
+        moveq   #64,%d0
+        cmpl    %d6,%d0
         bne.w   1b
         movem.l %sp@,%d2-%d7/%a2-%a6
         lea     %sp@(44),%sp
@@ -1963,9 +2951,25 @@ T_EMPTY:   .asciz  "EMPTY KIT"
 T_NOUNDO:  .asciz  "NO UNDO KIT"
 T_KITNAME: .asciz  "KIT NAME"
 DEFNAME:   .asciz  "NEW KIT"
+T_COPIED:  .asciz  "KIT COPIED"
+T_PASTED:  .asciz  "KIT PASTED"
+T_CLEARED: .asciz  "KIT CLEARED"
+T_UNDONE:  .asciz  "UNDO"
+T_NOCOPY:  .asciz  "COPY A KIT FIRST"
+T_CLONED:  .asciz  "KIT COPIED TO NEXT"
+T_NOFREE:  .asciz  "NO EMPTY KIT"
+T_NOPTN:   .asciz  "NO EMPTY PATTERN"
+T_PCOPIED: .asciz  "PATTERN+KIT COPIED"
+T_PCOPY:   .asciz  "PATTERN COPIED"
+T_PPASTE:  .asciz  "PATTERN PASTED"
+T_PCLEAR:  .asciz  "PATTERN CLEARED"
+T_NOPCOPY: .asciz  "COPY A PATTERN FIRST"
+T_AUTO0:   .asciz  "AUTOSAVE OFF"
+T_AUTO1:   .asciz  "AUTOSAVE ON"
+T_LVL0:    .asciz  "KEEP LEVELS OFF"
+T_LVL1:    .asciz  "KEEP LEVELS ON"
         .align  4
-LOADCB:    .long   load_yes
-SAVECB:    .long   save_yes
+T_SETTINGS: .long  T_AUTO0, T_AUTO1, T_LVL0, T_LVL1
 
 | State in .text: the depacked window is RAM and starts zeroed at boot.
         .align  4
@@ -1982,6 +2986,7 @@ CNT_IOERR: .long   0               | kits.work writes that failed
 CNT_BADFILE: .long 0               | kits.work files refused
 CNT_STAGED: .long  0               | Kits copied into a slot
 CNT_REPOINT: .long 0               | Part bytes repointed
+CNT_AUTOSAVE: .long 0              | AUTOSAVE copies
 STAMP:     .long   0
 CLEARING:  .long   0
 CRCREADY:  .long   0
@@ -1994,6 +2999,23 @@ BW_RET:    .long   0
 PS_RET:    .long   0
 PR_RET:    .long   0
 MSEL:      .long   0
+MOWN:      .long   0               | 1 LOAD KIT, 2 SAVE KIT list opened last
+SWALLOW:   .long   0
+KCLIP:     .long   -1              | the Kit FUNC+REC copied in a list
+KUNDO_OP:  .long   0               | 1 paste, 2 clear: what KUNDOREC undoes
+KUNDO_K:   .long   0
+KUNDO_VALID: .long 0
+ACLIP:     .long   0               | the copied pattern's Kit
+ACLIP_SET: .long   0
+AUNDO:     .long   0               | the paste target's Kit before the paste
+AUNDO_SET: .long   0
+AUNDO_PTN: .long   0
+AUNDO_BANK: .long  0
+LASTPASTE: .long   -1              | bank*16 + pattern of the last pattern paste
+FRIGHT_BUSY: .long 0
+PTGT:      .long   -1              | PTN+FUNC+TRIG's target pattern
+PUNDO_OP:  .long   0
+PUNDO_T:   .long   -1
 SAVEK:     .long   0
 V3MGEN:    .long   0
 V3MHAVE:   .long   0
@@ -2007,10 +3029,13 @@ KIMG:   .space  IMG_LEN
         .align  4
 LRU:    .space  64*4
 CRCTAB: .space  256*4
-LBTAB:  .space  (NKITS+1)*4
-CBTAB:  .space  (NKITS+1)*4
+LBTAB:  .space  LROWS*4
+CBTAB:  .space  LROWS*4
+LVLBUF: .space  16
+KUNDOREC: .space REC
 LBUF:   .space  NKITS*16
 REFD:   .space  32
+REFRESH: .space 64
 V3GEN:  .space  NKITS*4
 V3HAVE: .space  32
 FOBJ:   .space  24

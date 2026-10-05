@@ -1,0 +1,669 @@
+#!/usr/bin/env python3
+"""KITS under the port: the Kits each pattern plays, staged through the
+stock Part slots; LOAD / SAVE KIT; kits.work over a save, a reboot and a
+power cycle; the migration, Em's v3 import, a rejected bank file and a
+missing project directory.
+
+    python3 tools/verify/verify_kits.py REMIX [--project DIR] [--octakit-project DIR]
+                                              [--strand-project DIR]
+
+The project (OT_PROJECT, ~/.octabam_project) is staged once with no
+kits.work, so its Parts migrate at the load; every panel scenario forks
+from that load (`ot_emu --scenario`). Bank 3 (the project's saved bank on
+OCTABAM89_setgate) is the bank under test; ASSIGN and Part bytes are
+poked after the load so the scenarios do not depend on the project's
+pattern content beyond pattern 1 playing.
+
+  base      the migration: READY, kits.work on the card with a good CRC,
+            Kit n = bank n/4's Part n%4 (working copy, its name), ASSIGN
+            = each pattern's Part byte; no stock file rewritten.
+  free      pattern 2 -> Kit 0, PTN+TRIG 2 while playing: the pattern's
+            own slot (free) holds Kit 0, the engine plays it after the
+            switch.
+  repoint   ... with pattern 2's Part byte on the playing slot: another
+            slot takes Kit 0 and the Part byte names it.
+  stopped   the same while stopped: applied at once.
+  progchg   a program change (bank 3 pattern 2) while playing.
+  chain     patterns 2-4 -> Kits 0, 1, 4, all on the playing slot,
+            chained: each in its own slot, the chain cycles.
+  trackbtn  the chain, and track keys every 25 ms for 3 s across its
+            first switch (ems-octakit#5).
+  presses   the chain, 250 track presses at 180 ms.
+  cc        a CC every frame for 3,000 frames with a program change.
+  load      PART, UP UP, YES (MKII): the current pattern plays the Kit
+            two rows up, its slot holds it, UNDO KIT then brings the old
+            one back.
+  save      FUNC+PART, DOWN DOWN, YES, YES (the name editor): the Kit
+            two rows down is the current Part, named.
+  quick     FUNC+PART, DOWN, FUNC+YES: saved at once.
+  saveproj  LOAD KIT, SAVE PROJECT: kits.work and kits.strd on the card
+            with the change; a second boot of that card reads it; a power
+            cycle (`--cs1-in`, `--no-post`) of the same card too, and of a
+            card whose change was never saved (RESID and ASSIGN from CS1).
+  lcopy     LOAD KIT open on the current Kit: FUNC+REC, UP, FUNC+STOP:
+            the Kit above is a copy; FUNC+STOP again: it is back.
+  lclear    SAVE KIT open, DOWN x3, FUNC+PLAY: that Kit is empty; again:
+            it is back.
+  toggle    LOAD KIT, DOWN to the AUTOSAVE row, YES: the setting is on.
+  autosave  AUTOSAVE on, CC 7 on track 1 (an edit), PTN+TRIG 2: the
+            edit is in the playing slot's Kit and its saved Part.
+  levels    KEEP LEVELS on, CC 7 on track 1, LOAD KIT two rows up: the
+            Kit loaded, track 1's level the edited one.
+  ptncopy   FUNC+REC (pattern 1), pattern 14, FUNC+STOP: pattern 14
+            plays pattern 1's Kit; FUNC+STOP again: its own again.
+  pclone    ... the paste with STOP held and PART pressed: pattern 14
+            plays a copy of the Kit, in the next empty Kit.
+  fright    PTN+FUNC+RIGHT: the current Part saved into its slot's Kit;
+            pattern 14 (the first empty one after 1) is pattern 1, playing
+            a copy of that Kit.
+  inactive  PTN and FUNC held: TRIG 1 + REC (copy pattern 1), TRIG 14 +
+            STOP (paste): pattern 14 is pattern 1 with its Kit.
+  inundo    ... and TRIG 14 + STOP again: pattern 14 as it was.
+  import    a project with Em's kits3a/b.work and no kits.work: each
+            occupied Kit's name and Part and the newest manifest's ASSIGN,
+            as tools/verify's own reader of her format gives them.
+  strand    a project whose bank01.work the firmware rejects: the load,
+            400 frames playing and a pattern paste, no halt.
+  noproj    a project name with no directory on the card: the load runs.
+
+Every scenario: no halt, the counters CNT_NOSLOT, CNT_INVALID,
+CNT_IOERR and CNT_BADFILE at zero (CNT_ISR is reported), the firmware's
+LOG without an error beyond the samples the stage leaves out. SKIPs
+without a project or the port, or for a remix without KITS.
+
+What it cannot see: the hardware; the arranger (its schedule runs in the
+tick, counted as CNT_ISR, untested here); the sound.
+"""
+import argparse
+import os
+import pathlib
+import shutil
+import struct
+import subprocess
+import sys
+import zlib
+from concurrent.futures import ThreadPoolExecutor
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
+from remix import registry  # noqa: E402
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+EMU = ROOT / "out/emu/ot_emu"
+PY = ROOT / ".venv/bin/python3"
+OUT = ROOT / "out/kitsverify"
+BLOB, BSTRIDE, PSTRIDE, PARTSZ = 0x400e21e0, 0x9b340, 0x8ed8, 0x18b2
+WORK, SAVED, PNAMES, PBYTE = 0x8ed80, 0x9504a, 0x9b316, 0x8e57
+REC, O_ASSIGN, O_VALID, O_RESID, O_LIB = 6338, 64, 320, 352, 416
+IMG_LEN = O_LIB + 256 * REC
+TRK = 0x8000182a
+CS1, CS1_LEN = 0x10000000, 0x100000
+STATE = ("READY KDIRTY NOWRITE PENDING ISR NOSLOT INVALID IOERR BADFILE "
+         "STAGED REPOINT STAMP").split()
+K = dict(no=0x32, yes=0x31, play=0x28, stop=0x27, ptn=0x2e, func=0x2d, part=0x1d,
+         up=0x33, down=0x20, right=0x21, mixer=0x30, rec=0x29)
+BANK = 2                                  # bank 3: the project's own
+
+
+def run(cmd, log):
+    with open(log, "w") as f:
+        f.write(" ".join(map(str, cmd)) + "\n"); f.flush()
+        r = subprocess.run(list(map(str, cmd)), cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)
+    if r.returncode:
+        sys.exit(f"verify_kits: ot_emu exit {r.returncode} -- {log}")
+    return log.read_text(errors="replace")
+
+
+class Script:
+    """A --live-script at emulated milliseconds."""
+
+    def __init__(self):
+        self.t, self.lines = 1500, []
+
+    def send(self, x, gap=60):
+        self.lines.append(f"{self.t:.0f} {x}"); self.t += gap
+
+    def tap(self, k, gap=400):
+        c = K[k] if isinstance(k, str) else k
+        self.send(f"key {c:#x} down", 40); self.send(f"key {c:#x} up", gap)
+
+    def down(self, k, gap=80):
+        self.send(f"key {(K[k] if isinstance(k, str) else k):#x} down", gap)
+
+    def up(self, k, gap=80):
+        self.send(f"key {(K[k] if isinstance(k, str) else k):#x} up", gap)
+
+    def hold(self, k, *inner, gap=400):
+        self.down(k)
+        for x in inner:
+            self.tap(x, 200)
+        self.up(k, gap)
+
+    def wait(self, ms):
+        self.send("enc 6 0", ms)
+
+    def text(self):
+        return "\n".join(self.lines + [f"{self.t + 300:.0f} quit"]) + "\n"
+
+
+def v3_reference(files):
+    """Em's kits3a/b.work as her reader takes them (persistence.c): per Kit
+    the newest generation of a record whose CRC-32 holds; ASSIGN from the
+    newest valid manifest. -> ({kit: (name, payload) or None}, assign[256])."""
+    best, mgen, assign = {}, None, [0xff] * 256
+    for d in files:
+        if len(d) < 0x600:
+            continue
+        for off in (0x200, 0x400):
+            m = d[off:off + 0x200]
+            if m[:4] != b"OTK3" or struct.unpack(">I", m[0x1fc:])[0] != zlib.crc32(m[:0x1fc]):
+                continue
+            g = struct.unpack(">I", m[20:24])[0]
+            if mgen is None or g > mgen:
+                mgen = g
+                assign = [m[0x20 + i] if m[0x120 + i // 8] >> (i % 8) & 1 else 0xff for i in range(256)]
+        for k in range(256):
+            r = d[0x600 + k * 0x1a00:0x600 + (k + 1) * 0x1a00]
+            if len(r) < 0x1a00 or r[:8] != b"OTK3KITS" or struct.unpack(">H", r[24:26])[0] != k:
+                continue
+            if struct.unpack(">I", r[0x19fc:])[0] != zlib.crc32(r[:0x19fc]):
+                continue
+            g = struct.unpack(">I", r[20:24])[0]
+            if k in best and g <= best[k][0]:
+                continue
+            best[k] = (g, (r[0x20:0x27].split(b"\0")[0], r[0x28:0x28 + PARTSZ]) if r[9] & 1 else None)
+    return {k: v for k, (g, v) in best.items()}, assign
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("remix", nargs="?", default=os.environ.get("REMIX"))
+    proj = os.environ.get("OT_PROJECT") or (pathlib.Path.home() / ".octabam_project").read_text().strip() \
+        if (pathlib.Path.home() / ".octabam_project").is_file() else os.environ.get("OT_PROJECT", "")
+    ap.add_argument("--project", default=proj)
+    ap.add_argument("--octakit-project", default=str(pathlib.Path.home() / "octa/backups/card_20261003_bottleservice/kept/Bottleservice 2026"))
+    ap.add_argument("--strand-project", default=str(pathlib.Path.home() / "octa/backups/card_20261004_strand/PROJECT 261004p"))
+    ap.add_argument("--only", default="", help="comma-separated scenario names")
+    a = ap.parse_args()
+    remix = registry.remix(a.remix)
+    if "KITS" not in remix.modules:
+        print(f"  [ -- ] verify_kits: {a.remix} carries no KITS"); return 0
+    if not a.project:
+        print("  [SKIP] verify_kits: no project (OT_PROJECT=<dir> or --project)"); return 0
+    if not EMU.is_file():
+        print("  [SKIP] verify_kits: no port binary (make emu-cf)"); return 0
+    pdir = pathlib.Path(a.project).expanduser()
+    if not (pdir / "project.work").is_file():
+        sys.exit(f"verify_kits: {pdir} is not a project")
+    OUT.mkdir(parents=True, exist_ok=True)
+    only = set(filter(None, a.only.split(",")))
+
+    # ---- the image and the unit's symbols -------------------------------------
+    env = dict(os.environ, REMIX=a.remix, XBUS="1", SPEC="1"); env.setdefault("BUILD", "0")
+    r = subprocess.run([sys.executable, str(ROOT / "tools/build/build_bus.py")], env=env,
+                       capture_output=True, text=True, cwd=ROOT)
+    if r.returncode:
+        sys.exit(f"verify_kits: building {a.remix} failed:\n{(r.stdout + r.stderr)[-1500:]}")
+    image = OUT / "mainos.bin"
+    shutil.copy2(ROOT / "out/mainos_bus.bin", image)
+    nm = subprocess.run(["m68k-elf-nm", str(ROOT / "out/platform/runtime/runtime.elf")],
+                        capture_output=True, text=True).stdout
+    sym = {f[2]: int(f[0], 16) for f in (l.split() for l in nm.splitlines()) if len(f) == 3}
+    KI, KS = sym["KIMG"], sym["KSTATE"]
+    b3 = BLOB + BANK * BSTRIDE
+    fails = 0
+
+    def check(msg, ok):
+        nonlocal fails
+        print(f"  [{'ok' if ok else 'FAIL'}] {msg}")
+        fails += not ok
+
+    sys.path.insert(0, str(ROOT / "tools/emu"))
+    import emu_card  # noqa: E402
+
+    def stage(src, name, extra=()):
+        d = OUT / f"proj_{name}"
+        if d.exists():
+            shutil.rmtree(d)
+        d.mkdir(parents=True)
+        for f in pathlib.Path(src).iterdir():
+            if f.is_file() and f.suffix.lower() in (".work",):
+                shutil.copy2(f, d / f.name)
+        for f in extra:
+            shutil.copy2(f, d / f.name)
+        card = OUT / f"card_{name}.img"
+        r = subprocess.run([str(PY), str(ROOT / "tools/emu/ot_emu/stage_card.py"), str(d), "OCTABAM", name,
+                            "--tree", str(OUT / f"tree_{name}"), "--out", str(card)],
+                           cwd=ROOT, capture_output=True, text=True)
+        if r.returncode:
+            sys.exit(f"verify_kits: stage_card failed:\n{r.stdout[-800:]}{r.stderr[-800:]}")
+        return card
+
+    card = stage(pdir, "KITS")
+    base = [EMU, "--image", image, "--card", card, "--set", "OCTABAM", "--project", "KITS",
+            "--load-ms", "90000", "--mkii", "--dsp"]
+
+    def dumps(tag):
+        return (f"{KS:#x},48={OUT / f'{tag}_st.bin'};{KI:#x},{IMG_LEN}={OUT / f'{tag}_img.bin'};"
+                f"{b3:#x},{BSTRIDE:#x}={OUT / f'{tag}_b3.bin'};{TRK:#x},16={OUT / f'{tag}_trk.bin'};"
+                f"0x80001828,2={OUT / f'{tag}_eng.bin'}")
+
+    def pa(ptn):
+        return KI + O_ASSIGN + BANK * 16 + ptn
+
+    def pb(ptn):
+        return b3 + ptn * PSTRIDE + PBYTE
+
+    scen, scripts = [], {}
+
+    def add(tag, script=None, pokes=(), extra=(), more_dumps=""):
+        if only and tag not in only:
+            return
+        args = []
+        if pokes:
+            args += ["--poke", ";".join(f"{x:#x}={v:#x}" for x, v in pokes)]
+        if script is not None:
+            sp = OUT / f"{tag}.script"; sp.write_text(script.text()); args += ["--live-script", sp]
+        args += list(extra) + ["--mem-dump", dumps(tag) + more_dumps]
+        scen.append(f"{OUT / (tag + '.txt')} " + " ".join(map(str, args)))
+        scripts[tag] = script
+
+    def playing_switch(s, ptn, wait=17000):
+        s.tap("no"); s.tap("play", 2000); s.hold("ptn", ptn); s.wait(wait)
+
+    s = Script(); s.tap("no"); add("base", s, extra=["--card-out", OUT / "base.img"])
+    s = Script(); playing_switch(s, 1); add("free", s, [(pa(1), 0)])
+    s = Script(); playing_switch(s, 1); add("repoint", s, [(pa(1), 0), (pb(1), 0)])
+    s = Script(); s.tap("no"); s.hold("ptn", 1); s.wait(1500); add("stopped", s, [(pa(1), 0), (pb(1), 0)])
+    (OUT / "progchg.midi").write_text("200 c0 21\n")
+    add("progchg", None, [(pa(1), 0), (pb(1), 0)],
+        ["--sequencer", "--internal-clock", "--frames", "60000", "--midi", OUT / "progchg.midi"])
+
+    def chain(s, extra=None):
+        s.tap("no"); s.tap("play", 2000)
+        s.down("ptn"); s.down(1, 120); s.tap(2, 120); s.tap(3, 120); s.up(1, 120); s.up("ptn", 300)
+        if extra:
+            extra(s)
+    cpokes = [(pa(1), 0), (pa(2), 1), (pa(3), 4), (pb(1), 0), (pb(2), 0), (pb(3), 0)]
+    s = Script(); chain(s, lambda s: s.wait(48000)); add("chain", s, cpokes)
+
+    def sweep(s):
+        s.wait(11500)
+        for i in range(120):                # a track key every 25 ms, 12 ms down
+            s.send(f"key {0x10 + i % 8:#x} down", 12); s.send(f"key {0x10 + i % 8:#x} up", 13)
+        s.wait(3000)
+    s = Script(); chain(s, sweep); add("trackbtn", s, cpokes)
+
+    def presses(s):
+        for i in range(250):
+            s.tap(0x10 + i % 8, 140)
+    s = Script(); chain(s, presses); add("presses", s, cpokes)
+    (OUT / "cc.midi").write_text("".join(f"{f} b0 07 {(f * 7) % 128:02x}\n" for f in range(1, 3000))
+                                 + "300 c0 21\n")
+    add("cc", None, [(pa(1), 0)], ["--sequencer", "--internal-clock", "--frames", "3100", "--midi", OUT / "cc.midi"])
+    s = Script(); s.tap("no"); s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500); add("load", s)
+    s = Script(); s.tap("no"); s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500)
+    s.tap("part", 800); s.send(f"key {K['up']:#x} down", 60); s.send(f"key {K['up']:#x} up", 60)
+    for _ in range(40):                    # back to row 0, UNDO KIT
+        s.tap("up", 60)
+    s.tap("yes", 1500); add("undo", s)
+    s = Script(); s.tap("no"); s.hold("func", "part", gap=800); s.tap("down", 200); s.tap("down", 200)
+    s.tap("yes", 1200); s.tap("yes", 1500); add("save", s)
+    s = Script(); s.tap("no"); s.hold("func", "part", gap=800); s.tap("down", 200)
+    s.down("func", 100); s.tap("yes", 200); s.up("func", 1500); add("quick", s)
+
+    # ---- Phase 2 -----------------------------------------------------------
+    s = Script(); s.tap("no"); s.tap("part", 800); s.hold("func", "rec"); s.tap("up", 200)
+    s.hold("func", "stop", gap=600)
+    s.down("func"); s.tap("stop", 300); s.up("func", 600); add("lundo", s)       # the second paste undoes
+    s = Script(); s.tap("no"); s.tap("part", 800); s.hold("func", "rec"); s.tap("up", 200)
+    s.hold("func", "stop", gap=600); add("lcopy", s)
+    s = Script(); s.tap("no"); s.hold("func", "part", gap=800)
+    for _ in range(3):
+        s.tap("down", 150)
+    s.hold("func", "play", gap=600); add("lclear", s)
+    s = Script(); s.tap("no"); s.hold("func", "part", gap=800)
+    for _ in range(3):
+        s.tap("down", 150)
+    s.hold("func", "play", gap=600); s.hold("func", "play", gap=600); add("lclundo", s)
+    s = Script(); s.tap("no"); s.tap("part", 800)
+    for _ in range(260):
+        s.tap("down", 30)
+    s.tap("yes", 800); add("toggle", s)                           # the last row is KEEP LEVELS
+    s = Script(); s.tap("no"); s.tap("play", 2000); s.send("midi b0 07 23", 500); s.hold("ptn", 1); s.wait(17000)
+    add("autosave", s, [(KI + 16 + 3, 1), (pa(1), 0)])
+    s = Script(); s.tap("no"); s.send("midi b0 07 23", 500)
+    s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500)
+    add("levels", s, [(KI + 16 + 3, 2)])
+
+    def ptncopy(s, extra=None):
+        s.tap("no"); s.hold("func", "rec", gap=600)                 # pattern 1 copied
+        s.hold("ptn", 13, gap=800)                                    # pattern 14
+        if extra:
+            extra(s)
+        else:
+            s.hold("func", "stop", gap=800)
+    s = Script(); ptncopy(s); add("ptncopy", s, [(pa(0), 5)])
+    # The stock undo of a pattern paste (0x4002ba2c: 0x4002b9b0 from the undo
+    # buffer) is not reached from the panel under the port, on stock either
+    # (a second FUNC+STOP pastes again): the routines are called in order.
+    add("ptnundo", None, (),
+        ["--step", f"-:poke:{pa(0):#x}=5;{pa(13):#x}=3", "--step", "-:call:0x40026eb0,0", "--step", "-:call:0x40026ef0,0x11,13",
+         "--step", "-:call:0x4002b9b0,0x460c8122,13",
+         "--step", f"-:dump:{pa(13):#x},1={OUT / 'ptnundo_mid.bin'}",
+         "--step", "-:call:0x4002b9b0,0x460bf218,13"])
+    s = Script(); ptncopy(s, lambda s: (s.down("func"), s.down("stop", 300), s.tap("part", 300),
+                                       s.up("stop"), s.up("func", 800)))
+    add("pclone", s, [(pa(0), 5)])
+    s = Script(); s.tap("no"); s.down("ptn"); s.down("func"); s.tap("right", 300); s.up("func"); s.up("ptn", 2000)
+    add("fright", s, [(pa(0), 5)])
+
+    def inactive(s, again=False):
+        s.tap("no"); s.down("ptn"); s.down("func")
+        s.down(0, 100); s.tap("rec", 200); s.up(0, 200)
+        s.down(13, 100); s.tap("stop", 300); s.up(13, 200)
+        if again:
+            s.down(13, 100); s.tap("stop", 300); s.up(13, 200)
+        s.up("func"); s.up("ptn", 800)
+    s = Script(); inactive(s); add("inactive", s, [(pa(0), 5)])
+    s = Script(); inactive(s, True); add("inundo", s, [(pa(0), 5)])
+
+    def loadkit(s):
+        s.tap("no"); s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500)
+    s = Script(); loadkit(s)
+    s.tap(0x1c, 1000); s.tap("right", 700); s.tap("down", 500); s.tap("yes", 1100); s.tap("yes", 30000)  # PROJ: SAVE PROJECT
+    add("saveproj", s, extra=["--card-out", OUT / "saved.img"],
+        more_dumps=f";{CS1:#x},{CS1_LEN:#x}={OUT / 'cs1_saved.bin'}")
+    s = Script(); loadkit(s); s.wait(2000)
+    add("unsaved", s, extra=["--card-out", OUT / "unsaved.img"],
+        more_dumps=f";{CS1:#x},{CS1_LEN:#x}={OUT / 'cs1_unsaved.bin'}")
+    if scen:
+        run(base + [x for sc in scen for x in ("--scenario", sc)] + ["--scenario-jobs", "6"], OUT / "port.txt")
+
+    # ---- reading a run back ---------------------------------------------------
+    def st(tag):
+        d = (OUT / f"{tag}_st.bin").read_bytes()
+        return {n: struct.unpack(">I", d[4 * i:4 * i + 4])[0] for i, n in enumerate(STATE)}
+
+    def img(tag):
+        return (OUT / f"{tag}_img.bin").read_bytes()
+
+    def b3_(tag):
+        return (OUT / f"{tag}_b3.bin").read_bytes()
+
+    def kit(im, k):
+        return im[O_LIB + k * REC + 16:O_LIB + (k + 1) * REC]
+
+    def slot(b, s):
+        return b[WORK + s * PARTSZ:WORK + (s + 1) * PARTSZ]
+
+    def clean(tag, extra_ok=()):
+        log = (OUT / f"{tag}.txt").read_text(errors="replace")
+        halted = any(w in log for w in ("stopped before", "FAULT", "ILLEGAL", "EXCEPTION", "DID NOT RETURN"))
+        s = st(tag)
+        bad = {k: s[k] for k in ("NOSLOT", "INVALID", "IOERR", "BADFILE") if s[k] and k not in extra_ok}
+        check(f"{tag}: no halt, READY {s['READY']}, counters {bad or 'zero'} (ISR {s['ISR']}, "
+              f"staged {s['STAGED']}, repointed {s['REPOINT']})", not halted and not bad and s["READY"] == 1)
+        return s
+
+    def exists(tag):
+        return (OUT / f"{tag}_st.bin").is_file()
+
+    # base: the migration
+    if exists("base"):
+        clean("base")
+        im, b = img("base"), b3_("base")
+        files = emu_card.extract_image((OUT / "base.img").read_bytes())
+        kw = next((v for k, v in files.items() if k.lower().endswith("/kits/kits.work")), b"")
+        check(f"base: kits.work on the card ({len(kw)} B), CRC-32 holds",
+              len(kw) == IMG_LEN and struct.unpack(">I", kw[12:16])[0] == zlib.crc32(kw[64:]))
+        ok = all(kit(im, BANK * 4 + p) == slot(b, p) for p in range(4))
+        check("base: Kits 9-12 are bank 3's working Parts", ok)
+        names = [im[O_LIB + (BANK * 4 + p) * REC:O_LIB + (BANK * 4 + p) * REC + 7].split(b"\0")[0] for p in range(4)]
+        stock = [b[PNAMES + 7 * p:PNAMES + 7 * p + 7].split(b"\0")[0] for p in range(4)]
+        check(f"base: their names are the Parts' ({names})", names == stock)
+        asg = [im[O_ASSIGN + BANK * 16 + p] for p in range(16)]
+        want = [BANK * 4 + b[p * PSTRIDE + PBYTE] if asg[p] != 0xff else 0xff for p in range(16)]
+        check(f"base: bank 3's assignments follow the Part bytes ({asg})", asg == want and asg[0] != 0xff)
+        changed = [k for k, v in files.items() if k.startswith("OCTABAM/KITS/")
+                   and (k.endswith(".work") or k.endswith(".strd")) and "kits" not in k.rsplit("/", 1)[1]
+                   and (OUT / "proj_KITS" / k.rsplit("/", 1)[1]).is_file()
+                   and (OUT / "proj_KITS" / k.rsplit("/", 1)[1]).read_bytes() != v]
+        check(f"base: no stock file rewritten ({changed})", not changed)
+        log = next((v for k, v in files.items() if k.upper().startswith("LOG")), b"").decode("latin1")
+        errs = [l for l in log.splitlines() if "ERROR" in l and "Couldn't load" not in l]
+        check(f"base: the firmware's LOG has no other error ({errs[:2]})", not errs)
+
+    def plays(tag, ptn, k):
+        b, im = b3_(tag), img(tag)
+        s = b[ptn * PSTRIDE + PBYTE]
+        trk = (OUT / f"{tag}_trk.bin").read_bytes()
+        return s, slot(b, s) == kit(im, k), trk
+
+    for tag in ("free", "repoint", "stopped", "progchg"):
+        if not exists(tag):
+            continue
+        s = clean(tag)
+        sl, ok, trk = plays(tag, 1, 0)
+        eng = (OUT / f"{tag}_eng.bin").read_bytes()
+        engine = {trk[8 + t] for t in range(8) if trk[t] == BANK}
+        check(f"{tag}: pattern 2's slot {sl + 1} holds Kit 1, the engine plays it (engine {eng[0] + 1}:{eng[1] + 1}, "
+              f"tracks' parts {sorted(engine)})",
+              ok and eng[0] == BANK and eng[1] == sl and engine <= {sl})
+        if tag == "free":
+            check("free: the pattern's own slot (2), nothing repointed", sl == 1 and s["REPOINT"] == 0)
+        if tag in ("repoint", "stopped", "progchg"):
+            check(f"{tag}: the Part byte repointed off the playing slot ({sl + 1})", sl != 0 or tag == "stopped")
+
+    for tag in ("chain", "trackbtn", "presses"):
+        if not exists(tag):
+            continue
+        clean(tag)
+        b, im = b3_(tag), img(tag)
+        sl = [b[p * PSTRIDE + PBYTE] for p in (1, 2, 3)]
+        held = [slot(b, x) == kit(im, k) for x, k in zip(sl, (0, 1, 4))]
+        check(f"{tag}: patterns 2-4 on slots {[x + 1 for x in sl]}, each holding its Kit ({held})",
+              len(set(sl)) == 3 and all(held))
+
+    if exists("cc"):
+        clean("cc")
+        log = (OUT / "cc.txt").read_text(errors="replace")
+        check("cc: the sequencer ran its 3,100 frames", "REACHED" in log)
+
+    def cur_slot(b, ptn=0):
+        return b[ptn * PSTRIDE + PBYTE]
+
+    if exists("load"):
+        clean("load")
+        im, b = img("load"), b3_("load")
+        b0 = img("base") if exists("base") else None
+        k = im[O_ASSIGN + BANK * 16]
+        s_ = cur_slot(b)
+        check(f"load: pattern 1 plays Kit {k + 1} (two rows above Kit {BANK * 4 + s_ + 1}), its slot holds it",
+              k == BANK * 4 + s_ - 2 and im[O_RESID + BANK * 4 + s_] == k and slot(b, s_) == kit(im, k))
+        sv = b[SAVED + s_ * PARTSZ:SAVED + (s_ + 1) * PARTSZ]
+        check("load: the saved Part is the Kit too (FUNC+CUE reloads it)", sv == kit(im, k))
+    if exists("undo"):
+        clean("undo")
+        im, b = img("undo"), b3_("undo")
+        s_ = cur_slot(b)
+        check(f"undo: UNDO KIT brought Kit {BANK * 4 + s_ + 1} back ({im[O_ASSIGN + BANK * 16] + 1})",
+              im[O_ASSIGN + BANK * 16] == BANK * 4 + s_)
+    for tag, rows, named in (("save", 2, True), ("quick", 1, False)):
+        if not exists(tag):
+            continue
+        clean(tag)
+        im, b = img(tag), b3_(tag)
+        s_ = cur_slot(b)
+        k = BANK * 4 + s_ + rows
+        name = im[O_LIB + k * REC:O_LIB + k * REC + 8].split(b"\0")[0]
+        check(f"{tag}: Kit {k + 1} = the current Part, assigned, named {name}",
+              kit(im, k) == slot(b, s_) and im[O_ASSIGN + BANK * 16] == k and name)
+
+    # ---- Phase 2 checks -------------------------------------------------------
+    def valid(im, k):
+        return im[O_VALID + k // 8] >> (k % 8) & 1
+
+    if exists("lcopy") and exists("base"):
+        clean("lcopy")
+        im, b0 = img("lcopy"), img("base")
+        s_ = cur_slot(b3_("lcopy"))
+        k = BANK * 4 + s_
+        check(f"lcopy: Kit {k} (above Kit {k + 1}) is a copy of it",
+              im[O_LIB + (k - 1) * REC:O_LIB + k * REC] == b0[O_LIB + k * REC:O_LIB + (k + 1) * REC])
+    if exists("lundo") and exists("base"):
+        clean("lundo")
+        im, b0 = img("lundo"), img("base")
+        k = BANK * 4 + cur_slot(b3_("lundo")) - 1
+        check(f"lundo: the second paste brought Kit {k + 1} back", kit(im, k) == kit(b0, k))
+    if exists("lclear") and exists("base"):
+        clean("lclear")
+        im = img("lclear")
+        k = BANK * 4 + cur_slot(b3_("lclear")) + 3
+        check(f"lclear: Kit {k + 1} is empty", not valid(im, k))
+    if exists("lclundo") and exists("base"):
+        clean("lclundo")
+        im, b0 = img("lclundo"), img("base")
+        k = BANK * 4 + cur_slot(b3_("lclundo")) + 3
+        check(f"lclundo: the second clear brought Kit {k + 1} back", valid(im, k) and kit(im, k) == kit(b0, k))
+    if exists("toggle"):
+        clean("toggle")
+        im = img("toggle")
+        check(f"toggle: KEEP LEVELS on from its row (flags {im[16:20].hex()})", im[19] & 2)
+    if exists("autosave"):
+        s_ = clean("autosave")
+        im, b = img("autosave"), b3_("autosave")
+        k = im[O_RESID + BANK * 4]
+        check(f"autosave: slot 1's Kit {k + 1} and saved Part hold track 1's edited level (0x23)",
+              k != 0xff and kit(im, k)[0x12] == 0x23 and b[SAVED + 0x12] == 0x23)
+    if exists("levels"):
+        clean("levels")
+        im, b = img("levels"), b3_("levels")
+        s_ = cur_slot(b)
+        k = im[O_ASSIGN + BANK * 16]
+        w = slot(b, s_)
+        check(f"levels: Kit {k + 1} loaded, track 1 level kept at 0x23 (Kit has {kit(im, k)[0x12]:#x})",
+              k == BANK * 4 + s_ - 2 and w[0x12] == 0x23 and w[:0x12] == kit(im, k)[:0x12]
+              and w[0x22:] == kit(im, k)[0x22:] and w[0x13:0x22:2] == kit(im, k)[0x13:0x22:2])
+    if exists("ptncopy"):
+        clean("ptncopy")
+        im = img("ptncopy")
+        check(f"ptncopy: pattern 14 plays pattern 1's Kit ({im[O_ASSIGN + BANK * 16 + 13]})",
+              im[O_ASSIGN + BANK * 16 + 13] == 5)
+    if exists("ptnundo"):
+        clean("ptnundo")
+        im = img("ptnundo")
+        mid = (OUT / "ptnundo_mid.bin").read_bytes()[0]
+        check(f"ptnundo: the paste gave pattern 14 Kit 6 ({mid + 1}), the undo its own Kit 4 back "
+              f"({im[O_ASSIGN + BANK * 16 + 13] + 1})", mid == 5 and im[O_ASSIGN + BANK * 16 + 13] == 3)
+    if exists("pclone"):
+        clean("pclone")
+        im = img("pclone")
+        k2 = im[O_ASSIGN + BANK * 16 + 13]
+        check(f"pclone: pattern 14 plays Kit {k2 + 1}, a copy of Kit 6",
+              k2 not in (5, 0xff) and valid(im, k2) and kit(im, k2) == kit(im, 5))
+    if exists("fright"):
+        clean("fright")
+        im, b = img("fright"), b3_("fright")
+        k2 = im[O_ASSIGN + BANK * 16 + 13]
+        k1 = img("base")[O_RESID + BANK * 4 + cur_slot(b3_("base"))] if exists("base") else BANK * 4
+        same = all(b[i] == b[13 * PSTRIDE + i] for i in range(PSTRIDE) if i != PBYTE)
+        check(f"fright: pattern 14 = pattern 1 ({same}), plays Kit {k2 + 1}, a copy of Kit {k1 + 1}",
+              same and k2 not in (k1, 0xff) and kit(im, k2) == kit(im, k1))
+
+    if exists("inactive"):
+        clean("inactive")
+        im, b = img("inactive"), b3_("inactive")
+        same = all(b[i] == b[13 * PSTRIDE + i] for i in range(PSTRIDE) if i != PBYTE)
+        check(f"inactive: pattern 14 = pattern 1 ({same}) with its Kit ({im[O_ASSIGN + BANK * 16 + 13] + 1}), "
+              , same and im[O_ASSIGN + BANK * 16 + 13] == 5)
+    if exists("inundo") and exists("base"):
+        clean("inundo")
+        b, b0 = b3_("inundo"), b3_("base")
+        same = b[13 * PSTRIDE:14 * PSTRIDE] == b0[13 * PSTRIDE:14 * PSTRIDE]
+        check(f"inundo: the second paste gave pattern 14 back as it was ({same}, Kit "
+              f"{img('inundo')[O_ASSIGN + BANK * 16 + 13]})", same)
+
+    # ---- the save, a second boot, power cycles --------------------------------
+    s1 = OUT / "power.script"
+    sc = Script(); sc.tap("no"); s1.write_text(sc.text())
+
+    def boot(tag, card_, cs1=None):
+        cmd = [EMU, "--image", image, "--card", card_, "--set", "OCTABAM", "--project", "KITS", "--load-ms", "90000",
+               "--live-script", s1, "--mem-dump", dumps(tag)]
+        if cs1 is not None:
+            cmd += ["--cs1-in", cs1, "--no-post"]
+        run(cmd, OUT / f"{tag}.txt")
+        return tag
+
+    if exists("saveproj"):
+        clean("saveproj")
+        want = img("saveproj")
+        files = emu_card.extract_image((OUT / "saved.img").read_bytes())
+        for ext in ("work", "strd"):
+            d = next((v for k, v in files.items() if k.lower().endswith(f"/kits/kits.{ext}")), b"")
+            check(f"saveproj: kits.{ext} holds the loaded Kit's assignment",
+                  len(d) == IMG_LEN and d[O_ASSIGN + BANK * 16] == want[O_ASSIGN + BANK * 16])
+        jobs = [("reboot", OUT / "saved.img", None), ("power", OUT / "saved.img", OUT / "cs1_saved.bin")]
+        if exists("unsaved"):
+            jobs.append(("powerun", OUT / "unsaved.img", OUT / "cs1_unsaved.bin"))
+        with ThreadPoolExecutor(3) as ex:
+            list(ex.map(lambda j: boot(*j), jobs))
+        for tag, ref in (("reboot", "saveproj"), ("power", "saveproj"), ("powerun", "unsaved")):
+            if not exists(tag):
+                continue
+            clean(tag)
+            im, w = img(tag), img(ref)
+            check(f"{tag}: ASSIGN and RESID as before ({im[O_ASSIGN + BANK * 16]}, "
+                  f"{im[O_RESID + BANK * 4:O_RESID + BANK * 4 + 4].hex()})",
+                  im[O_ASSIGN:O_RESID + 64] == w[O_ASSIGN:O_RESID + 64] or
+                  (im[O_ASSIGN:O_VALID] == w[O_ASSIGN:O_VALID] and im[O_RESID:O_RESID + 64] == w[O_RESID:O_RESID + 64]))
+
+    # ---- Em's v3 files ----------------------------------------------------------
+    ok_dir = pathlib.Path(a.octakit_project).expanduser()
+    v3 = [ok_dir / f"kits3{p}.work" for p in "ab"]
+    if (not only or "import" in only) and all(f.is_file() for f in v3):
+        c = stage(ok_dir, "IMPORT", extra=v3)
+        run([EMU, "--image", image, "--card", c, "--set", "OCTABAM", "--project", "IMPORT", "--load-ms", "90000",
+             "--live-script", s1, "--mem-dump", dumps("import"), "--card-out", OUT / "import.img"], OUT / "import.txt")
+        clean("import")
+        im = img("import")
+        ref, asg = v3_reference([f.read_bytes() for f in v3])
+        occ = {k: v for k, v in ref.items() if v}
+        bad = [k for k, (name, pay) in occ.items()
+               if kit(im, k) != pay or im[O_LIB + k * REC:O_LIB + k * REC + 8].split(b"\0")[0] != name
+               or not im[O_VALID + k // 8] >> (k % 8) & 1]
+        check(f"import: {len(occ)} occupied Kits, name and Part as her files give them ({bad[:5]})", occ and not bad)
+        check("import: ASSIGN from her newest manifest", list(im[O_ASSIGN:O_ASSIGN + 256]) == asg)
+        files = emu_card.extract_image((OUT / "import.img").read_bytes())
+        check("import: kits.work written, her files left in place",
+              any(k.lower().endswith("/import/kits.work") for k in files)
+              and all(any(k.endswith(f"/IMPORT/kits3{p}.work") for k in files) for p in "ab"))
+    else:
+        print("  [SKIP] import: no kits3a/b.work at --octakit-project")
+
+    # ---- a rejected bank file, a missing project --------------------------------
+    sd = pathlib.Path(a.strand_project).expanduser()
+    if (not only or "strand" in only) and (sd / "project.work").is_file():
+        c = stage(sd, "STRAND")
+        sc = Script(); sc.tap("no"); sc.tap("play", 9000); sc.tap("stop", 400)
+        sc.hold("func", "rec"); sc.hold("ptn", 1); sc.hold("func", "stop", gap=1000)   # copy, pattern 2, paste
+        (OUT / "strand.script").write_text(sc.text())
+        run([EMU, "--image", image, "--card", c, "--set", "OCTABAM", "--project", "STRAND", "--load-ms", "90000",
+             "--dsp", "--live-script", OUT / "strand.script", "--mem-dump", dumps("strand")], OUT / "strand.txt")
+        clean("strand")
+    else:
+        print("  [SKIP] strand: no project at --strand-project")
+    if not only or "noproj" in only:
+        run([EMU, "--image", image, "--card", card, "--set", "OCTABAM", "--project", "NOPROJ", "--load-ms", "90000",
+             "--live-script", s1, "--mem-dump", dumps("noproj")], OUT / "noproj.txt")
+        s = st("noproj")
+        log = (OUT / "noproj.txt").read_text(errors="replace")
+        check(f"noproj: the load ran, no halt (READY {s['READY']}, IOERR {s['IOERR']})",
+              not any(w in log for w in ("stopped before", "FAULT", "ILLEGAL")))
+
+    print(f"verify_kits: {'FAIL' if fails else 'ok'} ({fails} failure(s))")
+    return 1 if fails else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
