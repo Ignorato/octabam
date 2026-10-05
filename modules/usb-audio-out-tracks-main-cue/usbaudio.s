@@ -985,18 +985,24 @@ audio_ep3_down:
 | frame ISR and a controller that never answers must not wedge the machine.
 | Clobbers d0/d1.
 audio_ep3_flush:
+    movel   %d2,%sp@-
     moveq   #16,%d1                 | attempts
 1:  movel   #EP3IN_BIT,%d0
     movel   %d0,EPFLUSH
-2:  movel   EPFLUSH,%d0             | complete when the bit clears
+    movel   #0x10000,%d2            | bound: a flush with USBCMD.RS clear (session end) may never complete
+2:  movel   EPFLUSH,%d0
     andil   #EP3IN_BIT,%d0
+    beqs    4f
+    subql   #1,%d2
     bnes    2b
+4:
     movel   ENDPTSTAT,%d0
     andil   #EP3IN_BIT,%d0
     beqs    3f                      | idle: done
     subql   #1,%d1
     bnes    1b
-3:  rts
+3:  movel   %sp@+,%d2
+    rts
 
 | ---- the per-block producer (installed at 0x4000d9a0, inside frame_isr) ----
 | frame_isr runs once per 16-frame block: the block clock, the audio and the
