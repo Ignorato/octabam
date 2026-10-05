@@ -30,8 +30,9 @@ silent tracks. It checks:
 - EP `0x83` is isochronous, 960 bytes, bInterval 2.
 - AS_GENERAL has 20 channels; FORMAT_TYPE_I has subslot 4 and 24 bits.
 - A second open with the first poll held back 600 frames: `anchor` within
-  that gap and `lastfill` at 512 ± 64; over the next 400 polls the fill
-  holds the servo band's floor (384) with no underrun.
+  that gap and `lastfill` within `AUD_TARGET` ± `AUD_TARGET`/2 (`AUD_TARGET`
+  is 64 since 28 Sep 2026, 512 before); over the next 400 polls `minfill`
+  stays at or above `AUD_TARGET`/2 with no underrun.
 - Taps: with the read-back arena and MAIN/CUE re-poked before every poll
   with words that name their source, side and frame, channel N carries
   only its own source (tracks 1–8 L/R, MAIN L/R, CUE L/R), each seen.
@@ -71,7 +72,8 @@ block, on every tone that reached MAIN (T8 both sides 15.95 / 16.03, T6
 42 to 126 samples, so 16 is the only lag under 882 that fits). Bryan T heard
 MAIN lag on his unit (25 Sep 2026), the same direction. Since 28 Sep the
 producer writes MAIN/CUE into the ring slot `MAIN_CUE_LAG_BLOCKS` = 1 block
-behind the tracks' slot (the consumer runs 512 frames behind, so the slot is
+behind the tracks' slot (the consumer runs `AUD_TARGET` = 64 frames behind (512 until 28 Sep
+2026), which is more than one 16-frame block, so the slot is
 unread), and `verify_usb_align` reads 0 under the port. The size of the lag
 on hardware is inferred from the port's structure, not measured on a unit.
 
@@ -86,7 +88,8 @@ read before and after each:
 | 1 | USBSIG | 60 s | all 16 at their frequency, −27.0 dBFS | 97.1–100% per channel | 0 / 0 / 0 | 0 |
 | 2 | USBLOAD (locks every step, 200 BPM) | 120 s | all 16, −19.3 dBFS | 97.1–100% | 0 / 0 / 0 | 0 |
 
-`lastn` 11 and `lastfill` 512–576 after each take.
+`lastn` 11 and `lastfill` 512–576 after each take (`AUD_TARGET` was 512 on
+this image; 64 since 28 Sep 2026).
 
 **20 channels (`usb-out-tracks-main-cue` image 90, Bryan T's MKII, 25 Sep 2026).**
 Channels 17/18 carried MAIN and 19/20 CUE: an uncued track was on MAIN
@@ -244,13 +247,13 @@ image is byte-identical to the one built before the variants (27 Sep 2026).
   producing blocks.
 - **Endpoint.** EP3 IN, isochronous, asynchronous, bInterval 2 (250 µs).
   Packets carry 11 or 12 frames, at most 960 bytes, one high-speed
-  transaction. A rate servo moves the packet size ±0.1 frame against a
-  512-frame target fill, so the stream is a gap-free copy of the ring.
+  transaction. A rate servo moves the packet size ±0.2 frame (`SERVO_MAX`) against a
+  `AUD_TARGET` = 64-frame target fill (512 and a deadband until 28 Sep 2026), so the stream is a gap-free copy of the ring.
   Four transfer descriptors are kept queued (1 ms of polls). The frame
   interrupt (every 363 µs) is the only context that queues packets.
 - **The first poll sets the cushion.** SET_INTERFACE alt 1 queues four
   packets and then nothing more until one has retired, the controller's
-  own record that the host polled. At that block the consumer is set 512
+  own record that the host polled. At that block the consumer is set `AUD_TARGET` (64)
   frames behind the producer and the frames produced in between are
   skipped once (`anchor` in the counters). A host that starts polling late
   (macOS: about 460 frames after alt 1, Bryan T's unit, 27 Sep 2026) had

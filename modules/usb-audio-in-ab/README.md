@@ -48,7 +48,7 @@ once a second:
   DSP's frame clock produces into EP3 IN's ring and consumes from this one.
   1,355 frames is about 31 ms, the round trip through the unit before the
   host's own buffers.
-- **Where it comes from**: `AUD_TARGET` + `IN_TARGET` (896) plus about 460
+- **Where it comes from**: `AUD_TARGET` + `IN_TARGET` (896 when they were 512 + 384; 64 + 96 = 160 since 28 Sep 2026) plus about 460
   frames EP3 IN gains between the stream starting and macOS polling it
   steadily (INFERRED from two sessions).
 - **The split drifts** about 0.5 frames a second (11 ppm, that Mac against
@@ -64,7 +64,7 @@ So `IN_TARGET` alone does not set the latency. Two levers, both in
 1. **Anchor usbaudio's consumer at the host's first IN poll** rather than
    at SET_INTERFACE. Done 28 Sep 2026 (`usbaudio_kick`, the `anchor`
    counter over `0x55`; `verify_usb` holds the bench's first poll back 600
-   frames and checks the fill lands at 512). Not measured on a unit:
+   frames and checks the fill lands within `AUD_TARGET`/2 of `AUD_TARGET`). Not measured on a unit:
    expected sum of the two `lastfill`s about 896.
 2. Lower `AUD_TARGET`, `IN_TARGET` and `AUD_BAND` together, keeping
    `IN_TARGET − AUD_BAND` (this ring's floor) above the jitter the unit
@@ -136,7 +136,7 @@ So `IN_TARGET` alone does not set the latency. Two levers, both in
   single one), then is skipped and the first visit runs the stock state 7
   itself (since 5 Oct 2026; before that every frame). `in_seconds` counts
   transfers, so it stops rising while closed.
-- Cushion `IN_TARGET` = 384 frames (8.7 ms).
+- Cushion `IN_TARGET` = 96 frames (2.2 ms; 384 frames, 8.7 ms, until 28 Sep 2026).
 - The **dTDs and packet buffers are in on-chip SRAM** at `0x80007c00`, and
   the EP0 reply buffer at `0x80007f80`, declared as `Claims.sram`; see
   *SRAM*.
