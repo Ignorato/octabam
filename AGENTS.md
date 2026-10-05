@@ -520,6 +520,30 @@ payload, or read through a build-supplied base; and audit any stock-table
 read on BOTH payloads under `rig_render.py`. Our own modules were scanned
 14 Sep 2026 and read none.
 
+**A KNOB WORD UNDER AN LFO IS NOT A CLEAN WORD: BITS 8-15 ARE NON-ZERO, AND
+NO LOCAL RENDER WRITES THEM.** Each ColdFire halfword is one DSP word `<< 8`,
+and the firmware's LFO store (`movew %d0,%a1@` at `0x4000d07a`,
+`docs/firmware/LFO.md` section 5) writes the modulated value with its low byte
+free. Measured under the port (`ot_emu --watch-pc 0x4000d07a`, bottleservice
+with `tools/harness/stress_project.py`, 24 LFOs per part, depth 18-28 on
+FX1/FX2 knobs, 900 frames, 5 Oct 2026): 21,088 stores, 21,011 with a
+non-zero low byte (e.g. `d0 = 0x22fe` for knob 34); 147 stores had knob
+byte 0 and all 147 carried a non-zero low byte (largest knob byte seen
+0x7d), so a knob at 0 under an LFO is not a zero word. The gate project at
+LFO depth 0: 19,843 stores, all with a zero low byte. A knob at rest is
+clean; `dsp_host -params` takes 0..127 and writes clean words, so no render
+shows it. Two modules read the raw word: WAVE's `asr #$10` on OCT left a
+remainder in b0, `neg b` borrowed from b1 (one octave off at any OCT) and at
+OCT 4 `do n3` ran with LC = 0xffff (65,535 `asr` a block); SEND's
+registration `tst` on the raw DEL/REV word counted a track at knob 0 as a
+sender (N/(N+1) dilution of every other sender, -6.02 dB with one). Rule:
+mask a page word with `and #>$7f0000` before any shift, compare, select or
+`tst` use (the form the servers, Spectrum and BusVerb use); the
+`asr` then leaves a clean low word. After `and`, store from `a1`/`b1`
+(`move a1,x:`), not `move a,x:` (the A2-staleness trap above). The
+`dsp_host -pword k:off=hex` option writes a raw word after `-params`, and
+`verify_wave` / `verify_onebus` render dirty words.
+
 **A DESCRIPTOR NAME THAT EXACTLY FILLS ITS FIELD LEAVES NO NUL, AND THE
 CRASH LANDS SOMEWHERE ELSE ENTIRELY.** `abbr` is a 5-byte field holding FOUR
 characters plus a terminator; `fullname` is 13 bytes holding TWELVE (and the

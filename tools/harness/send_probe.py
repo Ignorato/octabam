@@ -37,7 +37,7 @@ non-fundamental energy relative to the fundamental. MOD and SPEED are forced to
 import argparse, array, cmath, math, os, pathlib, struct, subprocess, sys, wave
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-HOST = ROOT / "vendor/dsp56300/build/source/dsp_host/dsp_host"
+HOST = pathlib.Path(os.environ.get("DSP_HOST") or ROOT / "vendor/dsp56300/build/source/dsp_host/dsp_host")
 
 SR = 44100
 FRAMES = 15                # pinned: bus latency of exactly 2 blocks (30 samples) and the bit-identity

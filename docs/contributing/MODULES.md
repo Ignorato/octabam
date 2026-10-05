@@ -260,6 +260,12 @@ in bits 8-15 of the same words (`docs/firmware/PARAM_PAGES.md`). Any slot
 may carry any count (stock CHORUS TAPS sits on slot 6, stock FILTER's DIST
 knob on slot 11).
 
+A knob word read by the DSP carries the LFO's low byte in bits 8-15 whenever
+the knob is modulated (measured 5 Oct 2026, `docs/firmware/LFO.md` section
+5). Mask every page-1 knob read with `and #>$7f0000` before it is shifted,
+compared, tested or selected on; `dsp_host -params` writes clean words, so
+render the dirty case with `-pword k:off=hex`.
+
 Put a MODE on an even slot: the panel's page-2 knob editor (`0x4003a474`)
 writes even slots (slot 6 hardware-confirmed), so a select there is
 settable from a cave or a main-menu screen through the firmware's own
