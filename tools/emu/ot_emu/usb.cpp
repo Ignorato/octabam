@@ -53,6 +53,8 @@ namespace ot
 			// firmware never brings the controller up (octemu measured no
 			// bring-up writes until OTGSC reported a session).
 			val |= OTGSC_BSV | m_otgscIs;
+			if(m_sessionEnded)
+				val &= ~OTGSC_BSV;			// unplug: B-session no longer valid
 		}
 		else if(word == R_PORTSC1 && connected())
 		{
@@ -91,6 +93,14 @@ namespace ot
 			// firmware's ack keeps BSVIE set, which re-latched).
 			reg = val & ~0x00ff0000u;	// the interrupt-status byte is not storage: it is the latch below
 			m_otgscIs &= ~(val & OTGSC_BSVIS);
+			if((val & OTGSC_BSVIS) && m_unplugUnacked)
+			{
+				// The stock ISR acknowledges BSVIS after its session-end
+				// code (USBCMD.RS and USBINTR cleared): `unplug` answers now.
+				m_unplugUnacked = false;
+				usbTrace(m_stats.sofs, "unplug acknowledged");
+				reply("ok\n");
+			}
 			if((val & OTGSC_BSVIE) && !(old & OTGSC_BSVIE))
 				m_otgscIs |= OTGSC_BSVIS;
 			return;
@@ -360,6 +370,8 @@ namespace ot
 
 	bool UsbDevice::isoInStarved() const
 	{
+		if(m_sessionEnded)
+			return false;				// the host is gone: no poll to hold device time for
 		for(int ep = 1; ep < g_endpoints; ++ep)
 		{
 			const uint32_t epctrl = m_regs[(R_EPCTRL0 + 4u * ep) / 4];
@@ -371,7 +383,7 @@ namespace ot
 
 	bool UsbDevice::benchBusy() const
 	{
-		if(m_request || m_resetPending || m_resetUnacked)
+		if(m_request || m_resetPending || m_resetUnacked || m_unplugUnacked)
 			return true;
 		for(int ep = 0; ep < g_endpoints; ++ep)
 			if(m_in[ep].pending || m_out[ep].pending)
@@ -539,6 +551,15 @@ namespace ot
 			// (the "err no-eplist" it got for its first SETUP, 25 Sep 2026).
 			m_resetPending = true;
 			busReset();
+		}
+		else if(l.rfind("unplug", 0) == 0)
+		{
+			// The cable pulled: B-session valid drops and BSVIS latches (it
+			// interrupts when the guest set BSVIE), which the stock ISR
+			// takes as session end (USBCMD.RS cleared, USBINTR = 0).
+			m_sessionEnded = true;
+			m_unplugUnacked = true;
+			m_otgscIs |= OTGSC_BSVIS;
 		}
 		else if(l.rfind("speed ", 0) == 0)
 		{

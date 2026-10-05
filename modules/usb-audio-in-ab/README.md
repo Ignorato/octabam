@@ -93,6 +93,7 @@ So `IN_TARGET` alone does not set the latency. Two levers, both in
 
 - `tools/verify/verify_usb_in.py` (the manifest's gate; `make check` runs it for any remix that carries the module).
 - `verify_usb`.
+- `verify_usb_in` runs 3 and 4: a bus reset and a session end with both streams open and no alt 0 from the host leave `in_alt`, `in_running` and `in_tx` word 0 at 0, and GET_INTERFACE(5) answers 0.
 
 ## How it works
 
@@ -118,6 +119,19 @@ So `IN_TARGET` alone does not set the latency. Two levers, both in
   interface 5 alt 0 or 1 records the alt setting and ACKs; any other alt
   STALLs. usbaudio.s answers GET_INTERFACE(5) from the same byte
   (`USB_IN` in its `remix.inc`).
+- Bus reset and session end: `in_alt` is cleared by usbaudio's
+  `audio_reset_shim` (`0x4001e91c`, the USBSTS.URI handler) and
+  `audio_sessend_shim` (`0x4001e952`, the OTGSC.BSVIS session end), which
+  the OUT module in every remix with this one carries (`USB_IN`). Before
+  them, a cable pull or a host crash with the stream open left `in_alt =
+  in_running = 1`, `in_build` underran, and `rx_inject` wrote zeros over
+  the module's jacks until a host sent SET_INTERFACE(5, 0) (USB 2.0
+  9.1.1.5: alternate setting 0 after a reset). State 7 sees `in_alt = 0`
+  and brings EP3 OUT down within one frame. Port only: `verify_usb_in` runs
+  3 (URI) and 4 (session end); no unit has had a reset or a pulled cable
+  with this build. The flush `in_down` issues runs with USBCMD.RS already
+  clear on the session-end path; the port's flush completes at once, so
+  that case is unmeasured.
 - `in_state7_shim`, a detour on the frame-transfer state machine's state 7
   (`0x40004bc0`). It is the one owner of EP3 OUT:
   - brings it up and down;
@@ -192,7 +206,7 @@ counters through a host session and prints a verdict.
 | what | where |
 |---|---|
 | code | DRAM unit `usbaudio_in`; DSP section `rx_inject_ab.asm`, payload A's donor region, 33 words |
-| hooks | `0x4001dd0a` SET_INTERFACE (after usbaudio's), `0x40004bc0` frame transfer state 7, `0x4001de6e` EP0 stall store; DSP P:`0x88` (`DspHook`) |
+| hooks | `0x4001e91c` bus reset and `0x4001e952` session end (usbaudio's shims, below), `0x4001dd0a` SET_INTERFACE (after usbaudio's), `0x40004bc0` frame transfer state 7, `0x4001de6e` EP0 stall store; DSP P:`0x88` (`DspHook`) |
 | ring | 1,024 × 8 B, the unit's data |
 | DMA memory | dTDs `0x80007c00` (128 B), packet buffers `0x80007c80` (384 B), EP0 reply `0x80007f80` (64 B): `Claims.sram` |
 | host-port buffer | `in_tx`, 192 B, through the uncached alias (+`0x08000000`) → core 0 X bank +`$320`..+`$380` |

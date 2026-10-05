@@ -270,6 +270,20 @@ def main():
             check(f"{audio}: 400 polls on, the fill held near the target: min {c2['minfill']} (floor {AUD_TARGET // 2}), max {c2['maxfill']}, no underrun",
                   c2["underruns"] == 0 and c2["minfill"] >= AUD_TARGET // 2,
                   f"minfill {c2['minfill']} maxfill {c2['maxfill']} underruns {c2['underruns']}")
+            # Bus reset with the stream open and no alt 0 from the host (a
+            # cable pull or a host crash): USB 2.0 9.1.1.5 puts the interface
+            # back to alt 0. The stock URI handler writes no alt byte
+            # (audio_reset_shim does), so before it GET_INTERFACE(4) answered
+            # 1 and the stream went on.
+            b.reset()
+            alt = b.ctrl_in(0x81, 0x0a, 0, 4, 1)
+            check("USB AUDIO: GET_INTERFACE reports alt 0 after a bus reset", alt == b"\x00", alt.hex())
+            after = [len(b.ep_in(3, 1024)) for _ in range(8)]
+            check("USB AUDIO: a bus reset stops the stream (empty polls)", all(a == 0 for a in after[2:]), str(after))
+            b.ctrl_nodata(0x01, 0x0b, 1, 4)
+            got = [len(b.ep_in(3, 1024)) for _ in range(400)]
+            check("USB AUDIO: SET_INTERFACE alt 1 after the reset brings the stream back, none of the last 300 polls empty",
+                  all(g > 0 for g in got[100:]), f"empty polls after the first 100: {sum(1 for g in got[100:] if g == 0)}")
             b.ctrl_nodata(0x01, 0x0b, 0, 4)
             # Full speed: the same device re-enumerated. The stereo sum of the
             # tracks (OUT TRACKS MAIN CUE, OUT TRACKS) or track 8's L/R (OUT MASTER) in 44/45-frame

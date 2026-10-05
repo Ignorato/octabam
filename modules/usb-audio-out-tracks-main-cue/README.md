@@ -41,6 +41,9 @@ silent tracks. It checks:
   ten.
 - Every subslot's low byte is zero, with 0 underruns and 0 overruns.
 - After alt 0, every poll is empty.
+- After a bus reset with the stream open and no alt 0 from the host,
+  GET_INTERFACE(4) answers 0 and every poll is empty (`verify_usb`, port
+  only; before `audio_reset_shim` it answered 1 and the stream went on).
 
 A build with `MAIN_CUE_BASE` pointed at a frame- and channel-coded pattern
 streamed 8,709 frames: every channel 17–20 subslot held the expected word
@@ -205,6 +208,7 @@ only (`verify_usb`).
 - `verify_usb` (`make check REMIX=usb-out-tracks-main-cue`): the checks under *Measured*,
   and SET CUR of the sample frequency: 44100 acknowledged, 48000 a status-stage STALL,
   EP0 answering after each.
+- `verify_usb` also resets the bus with the stream open: GET_INTERFACE(4) answers 0, the polls are empty, and SET_INTERFACE alt 1 brings the stream back.
 - `tools/verify/verify_usb_align.py` (the manifest's gate): MAIN/CUE against the tracks.
 
 ## Variants
@@ -292,6 +296,24 @@ this open; anchor is the frames skipped at that poll.
 - `usb_host.py … counters` reads them under the port.
 - `verify_usb` checks them after its stream.
 
+### Bus reset and session end
+
+The stock USBSTS.URI handler (`jsr 0x4001d6b8` at `0x4001e91c`: flush, dTD
+tokens cleared, ENDPTCTRL1 cleared) and the OTGSC.BSVIS session-end path
+(`0x4001e952`: USBCMD.RS and USBINTR cleared) write neither `usbaudio_alt`
+nor ENDPTCTRL3. USB 2.0 9.1.1.5 puts every interface back to alternate
+setting 0 on a reset. Before `audio_reset_shim` and `audio_sessend_shim`, a
+cable pull or host crash with the stream open left `usbaudio_alt = 1`: the
+producer kept running, `usbaudio_kick` re-primed EP3 IN before the device was
+configured, the next SET_INTERFACE(4, 1) took `.Lep3_same` (no flush, no
+cushion zero, no anchor), and GET_INTERFACE(4) answered 1. Both shims clear
+`usbaudio_alt` (and USB AUDIO IN's `in_alt` when `USB_IN`); the frame ISR
+tears EP3 down. They are in every USB AUDIO OUT variant's `DETOURS` and
+displace one instruction pair each (`jsr 0x4001d6b8; moveq #64,%d0`, and
+`movel 0xfc0b0140,%d0`). Port only. On the session-end path the frame ISR's
+`audio_ep3_flush` runs with USBCMD.RS already clear; the port's flush
+completes at once, so that case is unmeasured.
+
 ## Ground
 
 | what | where |
@@ -299,6 +321,6 @@ this open; anchor is the frames skipped at that poll.
 | code | DRAM unit `usbaudio` |
 | rings | 1,024 × 80 B (20 channels) + 1,024 × 8 B (stereo sum), the unit's data |
 | DMA memory | `aud_dtds` + `aud_bufs`, 4 × 32 B + 4 × 960 B, through the uncached alias (+`0x08000000`) |
-| hooks | `0x4001dd04` SET_INTERFACE, `0x4001d824` GET_INTERFACE, `0x4001de64` class requests, `0x4001d4b2` EP0 page fix, `0x4000d9a0` producer, `0x4001e606` USB ISR (USB MIDI's, overridden) |
+| hooks | `0x4001e91c` bus reset (USBSTS.URI handler), `0x4001e952` session end (OTGSC.BSVIS), `0x4001dd04` SET_INTERFACE, `0x4001d824` GET_INTERFACE, `0x4001de64` class requests, `0x4001d4b2` EP0 page fix, `0x4000d9a0` producer, `0x4001e606` USB ISR (USB MIDI's, overridden) |
 | poke | `0x400e2004` device class → `ef 02 01` |
 | descriptors | USB MIDI's `usbmidi_cfg` unit, generated with the audio function when this module is in the remix |

@@ -342,18 +342,24 @@ in_down:
 
 | Flush EP3 OUT, bounded, repeating while it still shows primed.
 in_flush:
+    movel   %d2,%sp@-
     moveq   #16,%d1
 1:  movel   #EP3OUT_BIT,%d0
     movel   %d0,EPFLUSH
+    movel   #0x10000,%d2            | bound: a flush with USBCMD.RS clear (session end) may never complete
 2:  movel   EPFLUSH,%d0
     andil   #EP3OUT_BIT,%d0
+    beqs    4f
+    subql   #1,%d2
     bnes    2b
+4:
     movel   ENDPTSTAT,%d0
     andil   #EP3OUT_BIT,%d0
     beqs    3f
     subql   #1,%d1
     bnes    1b
-3:  rts
+3:  movel   %sp@+,%d2
+    rts
 
 | EP3 OUT's queue head from ENDPTLISTADDR (a value outside SDRAM is not a
 | list: the firmware's constant then). -> a0, cached in qh_in.
