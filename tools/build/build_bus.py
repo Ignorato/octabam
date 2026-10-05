@@ -2721,6 +2721,7 @@ hostquit:
         # once and compare them.
         LFO01_MARK = "LFO lines 0-1: ROLLED TOO"
         PTABLE_MARK = "$fab1e0"          # schema.DspSection.ptable's literal
+        PTABLE2_MARK = "$fab2e0"         # schema.DspSection.ptable2's literal
 
         # ---- XTABLE: the P tables go to the stock curve bank ------------
         _xt_base, _xt_words = stock_mod.CURVE_BANK
@@ -2755,7 +2756,8 @@ hostquit:
                 # first, and each literal is rewritten to its own start.
                 _n = ((len(LFO01 + LFOTAB) if LFO01_MARK in _t else len(LFOTAB))
                       if "$facade" in _t else 0) \
-                    + (len(_MODS[_k].dsp.ptable) if PTABLE_MARK in _t else 0)
+                    + (len(_MODS[_k].dsp.ptable) if PTABLE_MARK in _t else 0) \
+                    + (len(_MODS[_k].dsp.ptable2) if PTABLE2_MARK in _t else 0)
                 _xt_layout[_k] = (_xa, _n)
                 _xa += _n
             if _xa > _xt_base + _xt_words:
@@ -2775,6 +2777,44 @@ hostquit:
                          f"the curve bank record")
             for k, w in enumerate(words):
                 wrw_p(BASE + off + (start - _xt_base + k) * 3, w)
+
+        # ---- XHARVEST: a given-up effect's own X data ----------------------
+        # The third place for a table, used only when a module's table and
+        # code fit neither the curve bank nor one P run: the X records only
+        # an effect on neither chooser addresses (stock.x_exclusive_runs),
+        # less any record a kept effect's pinned words read. Each table
+        # block goes whole into the first run it fits; adjacent records of
+        # one owner form one run. Every image that places without it is
+        # unchanged.
+        _xh_recs = stock_mod.x_records(_pristine, tag)
+        _xh_gone = stock_mod.harvested(_listed)
+        _xh_pin = frozenset(w for _a, _n, _k, _c in stock_mod.pinned(tag, _xh_gone)
+                            for w in range(_a, _a + _n))
+        _xh_runs = [{"base": a, "words": n, "owner": o, "cursor": a}
+                    for a, n, o in stock_mod.x_exclusive_runs(tag, _xh_gone, _xh_pin)]
+
+        def place_xh(words, start):
+            """Write table words into this payload's X records at `start`."""
+            for k, w in enumerate(words):
+                a = start + k
+                r = next((r for r in _xh_recs if r[0] <= a < r[0] + r[1]), None)
+                if r is None:
+                    sys.exit(f"payload {tag}: X:0x{a:05x} is in no X record")
+                wrw_p(BASE + r[2] + (a - r[0]) * 3, w)
+
+        def _xh_fit(blocks):
+            """First-fit X start per block over the XHARVEST runs, or None.
+            Does not move the cursors."""
+            cur = {id(r): r["cursor"] for r in _xh_runs}
+            out = []
+            for b in blocks:
+                r = next((r for r in _xh_runs
+                          if cur[id(r)] + len(b) <= r["base"] + r["words"]), None)
+                if r is None:
+                    return None
+                out.append((cur[id(r)], r))
+                cur[id(r)] += len(b)
+            return out
 
         def _p2x(src, name):
             """Every `p:(` table read in the CODE becomes `x:(`; comments
@@ -2797,10 +2837,16 @@ hostquit:
                 sys.exit(f"payload {tag}: {name} has multiple $facade "
                          f"LFOTAB literals -- expected exactly one")
             _ptab = list(remix_modules()[name].dsp.ptable) if name in remix_modules() else []
+            _ptab2 = list(remix_modules()[name].dsp.ptable2) if name in remix_modules() else []
             if PTABLE_MARK in src and (not _ptab or src.count(PTABLE_MARK) > 1):
                 sys.exit(f"payload {tag}: {name}: a DspSection.ptable and exactly one "
                          f"{PTABLE_MARK} literal in the source go together "
                          f"(table {len(_ptab)} words, literal x{src.count(PTABLE_MARK)})")
+            if (bool(_ptab2) != (PTABLE2_MARK in src) and PTABLE_MARK in src) \
+                    or src.count(PTABLE2_MARK) > 1:
+                sys.exit(f"payload {tag}: {name}: a DspSection.ptable2 and exactly one "
+                         f"{PTABLE2_MARK} literal in the source go together "
+                         f"(table {len(_ptab2)} words, literal x{src.count(PTABLE2_MARK)})")
             if _ptab and PTABLE_MARK not in src:
                 # The manifest declares a table this SOURCE never reads: an
                 # alternate engine (RVSRC= / DLSRC=, the reference side of
@@ -2809,7 +2855,7 @@ hostquit:
                 # engines build through one manifest.
                 print(f"  {name}: declares a {len(_ptab)}-word ptable the "
                       f"source does not read -- not placed")
-                _ptab = []
+                _ptab, _ptab2 = [], []
             if DEV and name == "DELAY SERVER":
                 # DEV: the delay does NOT go in the donor region. It is
                 # assembled at DEV_DELAY_P (see that constant) and its module
@@ -2869,33 +2915,56 @@ hostquit:
             # it keeps the length honest instead of assuming origin-invariant
             # encoding, which is exactly the kind of assumption this codebase
             # has been burned by.
-            _fit, _last = None, None
             _xa = _xt_layout.get(name)          # (X address, words) or None
-            for _r in runs:
-                _c, _end = _r["cursor"], _r["base"] + _r["words"]
-                _tab, _s2, _lfo = None, src, "$facade" in src
-                # LFOTAB, the module's ptable, or BOTH in one slot (LFOTAB
-                # first; each literal rewritten to its own start).
-                _ltab = ((LFO01 + LFOTAB) if LFO01_MARK in src else LFOTAB) \
-                    if _lfo else []
-                if _lfo or _ptab:
-                    _tab = _ltab + _ptab
-                    _at = _xa[0] if _xa is not None else _c
-                    if _xa is None and _c + len(_tab) > _end:
-                        continue
-                    if _lfo:
-                        _s2 = _s2.replace("$facade", f"${_at:x}")
-                    if _ptab:
-                        _s2 = _s2.replace(PTABLE_MARK, f"${_at + len(_ltab):x}")
-                    if _xa is not None:
-                        _s2, _xt_sites[name] = _p2x(_s2, name)
-                    else:
-                        _c += len(_tab)
-                _w, _syms = assemble_syms(_s2, _c, label=name)
-                _last = (_c, len(_w))
-                if _c + len(_w) <= _end:
-                    _fit = (_r, _tab, _s2, _c, _w, _syms)
-                    break
+            _lfo = "$facade" in src
+            # LFOTAB, the module's ptable, or BOTH in one slot (LFOTAB
+            # first; each literal rewritten to its own start), then ptable2.
+            _ltab = ((LFO01 + LFOTAB) if LFO01_MARK in src else LFOTAB) \
+                if _lfo else []
+
+            def _try_runs(xh):
+                """First run the module fits, as (run, table, source, origin,
+                words, syms), and the last (origin, length) tried. `xh` is
+                the XHARVEST start of each table block, or None."""
+                fit, last = None, None
+                for _r in runs:
+                    _c, _end = _r["cursor"], _r["base"] + _r["words"]
+                    _tab, _s2 = None, src
+                    if _lfo or _ptab:
+                        _tab = _ltab + _ptab + _ptab2
+                        if xh is not None:
+                            _at, _at2 = xh[0], (xh[1] if _ptab2 else None)
+                        else:
+                            _at = _xa[0] if _xa is not None else _c
+                            _at2 = _at + len(_ltab) + len(_ptab)
+                        if xh is None and _xa is None and _c + len(_tab) > _end:
+                            continue
+                        if _lfo:
+                            _s2 = _s2.replace("$facade", f"${_at:x}")
+                        if _ptab:
+                            _s2 = _s2.replace(PTABLE_MARK, f"${_at + len(_ltab):x}")
+                        if _ptab2:
+                            _s2 = _s2.replace(PTABLE2_MARK, f"${_at2:x}")
+                        if xh is not None or _xa is not None:
+                            _s2, _xt_sites[name] = _p2x(_s2, name)
+                        else:
+                            _c += len(_tab)
+                    _w, _syms = assemble_syms(_s2, _c, label=name)
+                    last = (_c, len(_w))
+                    if _c + len(_w) <= _end:
+                        fit = (_r, _tab, _s2, _c, _w, _syms)
+                        break
+                return fit, last
+
+            _fit, _last = _try_runs(None)
+            _xh = None
+            if _fit is None and _xa is None and _ptab and _xh_runs:
+                _blocks = [_ltab + _ptab] + ([_ptab2] if _ptab2 else [])
+                _xh = _xh_fit(_blocks)
+                if _xh is not None:
+                    _fit, _xlast = _try_runs([a for a, _r in _xh])
+                    if _fit is None:
+                        _xh = None
             if _fit is None:
                 if len(runs) < 2 and _last is not None:
                     # ⚠️ WORDING FROZEN: the build report is API (refhash
@@ -2921,7 +2990,39 @@ hostquit:
                 if _h.label not in _syms:
                     sys.exit(f"payload {tag}: {name}'s hook at P:0x{_h.site_on(tag):05x} names "
                              f"label {_h.label!r}, which the source does not define")
-            if tab is not None and _xa is not None:
+            if tab is not None and _xh is not None:
+                _bl = [_ltab + _ptab] + ([_ptab2] if _ptab2 else [])
+                for _i, (_b, (_a, _xr)) in enumerate(zip(_bl, _xh)):
+                    # a module that addresses these words itself would read
+                    # or write under the table (ledger.curve_bank_claims'
+                    # rule, for this ground)
+                    for _on, _osrc in plan:
+                        for _g in ledger._X_ADDR.findall("\n".join(
+                                l.split(";", 1)[0] for l in _osrc.splitlines())):
+                            _v = int(next(h for h in _g if h), 16)
+                            if _a <= _v < _a + len(_b):
+                                sys.exit(f"payload {tag}: {_on} addresses "
+                                         f"X:0x{_v:05x}, where {name}'s table "
+                                         f"goes in {_xr['owner']}'s X data")
+                    for _on, _osrc in plan:
+                        _om = remix_modules().get(_on)
+                        for _dr in (_om.claims.dsp_ranges
+                                    if _om is not None and _om.claims is not None else ()):
+                            if (_dr.space == "x" and not _dr.half_relative
+                                    and _dr.start < _a + len(_b) and _a < _dr.start + _dr.length):
+                                sys.exit(f"payload {tag}: {_on} claims X:0x{_dr.start:05x}"
+                                         f"+{_dr.length} ({_dr.what}), where {name}'s "
+                                         f"table goes in {_xr['owner']}'s X data")
+                    place_xh(_b, _a)
+                    _xr["cursor"] = _a + len(_b)
+                    print(f"  {'PTABLE' if _i == 0 else 'PTABLE2':13} "
+                          f"X:0x{_a:05x}..0x{_a + len(_b):05x} "
+                          f"({len(_b):4d} words)  {name}'s table"
+                          + (" block 1" if len(_bl) > 1 and _i == 0 else
+                             " block 2" if _i else "")
+                          + f"  in {_xr['owner']}'s X data (given up)")
+                print(f"  {'':13} {name}: {_xt_sites[name]} p:( reads -> x:(")
+            elif tab is not None and _xa is not None:
                 if len(tab) != _xa[1]:
                     sys.exit(f"payload {tag}: {name}'s table is {len(tab)} "
                              f"words, its X slot {_xa[1]}")

@@ -11,6 +11,7 @@ the ledger names both; a clean pair must stay clean.
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -954,6 +955,90 @@ def main():
                       f"runs in BOTH payloads (MiniVerb into the 618-word "
                       f"opening, Euclid into the big run) and leaves PLATE's "
                       f"routine in DARK's span stock")
+
+    # ---- XHARVEST: a table in a given-up effect's own X data ------------
+    # DJ EQ kept (the curve bank is not free), SPRING REV given up, and a
+    # fixture whose two table blocks (145 + 448 words) and 508 words of code
+    # fit no P run together. Each block must land in SPRING's X data on
+    # BOTH payloads (X:0x89a4 / X:0x8464, one 844-word run each), whole,
+    # first-fit, and the image must carry its words there.
+    _fx_dir = ROOT / "modules/xhfixture"
+    _fx_probe = ROOT / "remixes/_selftest_xh.py"
+    _t1 = tuple(0x100000 + i for i in range(145))
+    _t2 = tuple(0x200000 + i for i in range(448))
+    try:
+        _fx_dir.mkdir(exist_ok=True)
+        (_fx_dir / "fixture.asm").write_text(
+            "init:\n        rts\nproc:\n"
+            "        move    #>$fab1e0,r5\n        move    #>$fab2e0,r4\n"
+            "        move    p:(r5),x0\n        move    p:(r4),x1\n"
+            + "        nop\n" * 500 + "        rts\n")
+        (_fx_dir / "manifest.py").write_text(
+            "from remix.schema import DspSection, Kind, MenuEntry, Module, Param, YBase\n"
+            "MODULE = Module(name='xhfixture', key='XHFIXTURE', kind=Kind.DSP_EFFECT,\n"
+            "    doc='fixture', menu=MenuEntry(fx2_id=0x1e, donor_desc=0x400d58b8,\n"
+            "    abbr=b'XHF', fullname=b'XhFixture'),\n"
+            "    params=tuple([Param(b'A', 0, active=True)] + [Param()] * 11),\n"
+            "    dsp=DspSection(asm='modules/xhfixture/fixture.asm', priority=40,\n"
+            "        ybase=YBase.NEVER,\n"
+            f"        ptable={_t1!r},\n        ptable2={_t2!r}))\n")
+        _fx_probe.write_text(
+            "from remix.schema import Remix\n"
+            "REMIX = Remix(name='_selftest_xh', doc='scratch', fallback='NONE',\n"
+            "    modules=('XHFIXTURE', 'FILTER', 'SPATIALIZER', 'EQUALIZER', 'PHASER',\n"
+            "             'FLANGER', 'CHORUS', 'PLATE REV', 'DARK REV', 'COMPRESSOR',\n"
+            "             'LO-FI', 'DJ EQ', 'COMB FILTER'))\n")
+        r = subprocess.run([sys.executable, "tools/build/build_bus.py"],
+                           cwd=ROOT, capture_output=True, text=True,
+                           env={**os.environ, "REMIX": "_selftest_xh",
+                                "XBUS": "1", "SPEC": "1"})
+        _img = (ROOT / "out/mainos_bus.bin").read_bytes() if not r.returncode else b""
+    finally:
+        _fx_probe.unlink(missing_ok=True)
+        shutil.rmtree(_fx_dir, ignore_errors=True)
+        for junk in (ROOT / "remixes/__pycache__").glob("_selftest_xh*"):
+            junk.unlink(missing_ok=True)
+    if r.returncode:
+        bad += 1
+        print(f"  [FAIL] 'XHARVEST probe' does not build:\n"
+              f"{r.stdout[-600:]}{r.stderr[-400:]}")
+    else:
+        _want = {"A": (0x89a4, 0x89a4 + 145), "B": (0x8464, 0x8464 + 145)}
+        _seen, _pay, _ok = {}, None, True
+        for line in r.stdout.splitlines():
+            m = re.match(r"-- payload (\w+) --", line.strip())
+            if m:
+                _pay = m.group(1)
+            m = re.match(r"\s+(PTABLE2?)\s+X:0x([0-9a-f]+)\.\..*SPRING REV's X data", line)
+            if m and _pay:
+                _seen[(_pay, m.group(1))] = int(m.group(2), 16)
+        for _p, (_a1, _a2) in _want.items():
+            if (_seen.get((_p, "PTABLE")), _seen.get((_p, "PTABLE2"))) != (_a1, _a2):
+                bad += 1; _ok = False
+                print(f"  [FAIL] 'XHARVEST probe' payload {_p}: blocks at "
+                      f"{_seen.get((_p, 'PTABLE'))}/{_seen.get((_p, 'PTABLE2'))}, "
+                      f"expected 0x{_a1:05x}/0x{_a2:05x}")
+                continue
+            import dsp_modmap as _dm
+            _recs = stock.x_records(_img, _p)
+            for _a, _t in ((_a1, _t1), (_a2, _t2)):
+                for _k, _w in enumerate(_t):
+                    _r = next(x for x in _recs if x[0] <= _a + _k < x[0] + x[1])
+                    _o = _r[2] + (_a + _k - _r[0]) * 3
+                    if _dm.w24(_img, _o) != _w:
+                        bad += 1; _ok = False
+                        print(f"  [FAIL] 'XHARVEST probe' payload {_p}: "
+                              f"X:0x{_a + _k:05x} is not the table's word")
+                        break
+        if _ok:
+            print("  [PASS] 'XHARVEST probe' puts both table blocks in SPRING "
+                  "REV's X data on both payloads, first-fit, words in the image")
+    try:
+        DspSection(asm="x.asm", priority=0, ptable2=(1,))
+        bad += 1
+        print("  [FAIL] DspSection accepted ptable2 without ptable")
+    except ValueError:
+        print("  [PASS] DspSection refuses ptable2 without ptable")
 
     # ---- FX1 rows (Remix.fx1) -------------------------------------------
     # The schema half. The BUILD half -- the relocated list, FX1's own id and
