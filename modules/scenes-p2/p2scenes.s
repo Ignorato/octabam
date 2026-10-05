@@ -441,7 +441,7 @@ ec2:    movel   %a5,%d1
         bne.s   eb2
         addql   #8,%d1
 eb2:    movel   %d0,%d7
-        bsr.w   pappend                | d3 = b0, d1 = b1 -> a5 (0 = full)
+        bsr.w   pappend                | d3 = b0, d1 = b1, d0 = value -> a5 (0 = full)
         movel   %d7,%d0
         movel   %a5,%d1
         beq.w   edone                  | full: the turn is dropped
@@ -494,46 +494,57 @@ pfnext: addql   #3,%a0
 pfdone: movel   %sp@+,%d2
         rts
 
-| pappend: a4 = pool, d3 = b0, d1 = b1 -> a5 = the new entry (value unset),
-| or 0 when the pool holds POOL_MAX. Clobbers d0.
+| pappend: a4 = pool, d3 = b0, d1 = b1, d0 = value -> a5 = the new entry,
+| or 0 when the pool holds POOL_MAX. Clobbers d0. The frame ISR walks the
+| pool without a lock: the entry's three bytes are written first and the
+| count last, so the ISR sees either the old count or a whole entry.
 pappend:
+        movel   %d0,%sp@-              | value
         moveq   #0,%d0
         moveb   %a4@(2),%d0
         cmpil   #POOL_MAX,%d0
         bcs.s   paok
         suba.l  %a5,%a5
+        addql   #4,%sp
         rts
-paok:   movel   %d0,%sp@-
-        addql   #1,%d0
-        moveb   %d0,%a4@(2)
-        movel   %sp@,%d0
+paok:   movel   %d0,%sp@-              | count
         addl    %d0,%d0
-        addl    %sp@+,%d0              | index*3
+        addl    %sp@,%d0               | index*3
         lea     %a4@(3),%a5
         addal   %d0,%a5
         moveb   %d3,%a5@
         moveb   %d1,%a5@(1)
+        movel   %sp@(4),%d0
+        moveb   %d0,%a5@(2)
+        movel   %sp@+,%d0
+        addql   #1,%d0
+        moveb   %d0,%a4@(2)            | the count goes last
+        addql   #4,%sp
         rts
 
-| premove: a4 = pool, a5 = the entry to drop; the tail moves down.
+| premove: a4 = pool, a5 = the entry to drop; the tail moves down, then the
+| count drops (the ISR sees a duplicated entry, never an unwritten one).
 | Clobbers d0, d1, a0, a1.
 premove:
         moveq   #0,%d0
         moveb   %a4@(2),%d0
-        subql   #1,%d0
-        moveb   %d0,%a4@(2)
+        subql   #1,%d0                 | the new count
         movel   %d0,%d1
         addl    %d0,%d0
         addl    %d1,%d0
         lea     %a4@(3),%a0
         addal   %d0,%a0                | a0 = one past the last entry
+        moveq   #0,%d0
+        moveb   %a4@(2),%d0
+        subql   #1,%d0
         moveal  %a5,%a1
 prloop: cmpl    %a0,%a1
         bcc.s   prdone
         moveb   %a1@(3),%a1@
         addql   #1,%a1
         bra.s   prloop
-prdone: rts
+prdone: moveb   %d0,%a4@(2)
+        rts
 
 | pcommit: a4 = pool (working window), d5 = part. Mirrors the pool into the
 | part's SRAM twin, sets the stock scene editor's dirty marks and drops the
@@ -637,10 +648,11 @@ swaloop:
         orl     %d0,%d3                | b0 = scene<<3 | track
         moveq   #0,%d1
         moveb   %a2@(1),%d1            | b1
+        moveq   #0,%d0
+        moveb   %a2@(2),%d0            | the value
         bsr.w   pappend
         movel   %a5,%d0
         beq.s   swcommit               | full
-        moveb   %a2@(2),%a5@(2)
         addql   #3,%a2
         bra.s   swaloop
 swcommit:
