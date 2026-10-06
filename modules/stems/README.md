@@ -223,12 +223,31 @@ The error names: `RING FULL` (the card fell behind; the files still play),
   writer task sleeps on a shared timer that holds one waiter (STEM_REC.md
   4.7). Once REC has been pressed since power-on, don't run an OS upgrade
   until you've power cycled.
+- The same timer: after pulling and reinserting the card, power cycle
+  before the next take. A card probe can take the timer from the writer,
+  and the next take then fills the ring and stays at `SAVING` (`stems.s`
+  line 1367; traced in the source, not tested on a unit).
 
 The proof of concept also warned against saving or loading while a take
 was written, because it wrote through the file layer's shared staging
 buffer (STEM_REC.md 7.5 and 7.5a). This build doesn't use that buffer, so
 the warning no longer applies to STEM REC. Stock's own saves still share
 it with each other, as in stock.
+
+## Flashing it
+
+The remix is `stems` (`remixes/test/stems/`): STEM REC and the 14 stock
+effects. [BUILDING.md](../../docs/guide/BUILDING.md) has every step.
+
+1. Build: `make image REMIX=stems BUILD=N` writes
+   `out/OCTATRACK_OCTABAMN.bin`. N becomes the OS version the unit shows.
+2. Flash from the card ([BUILDING.md section 5](../../docs/guide/BUILDING.md#5-flash-from-the-card)),
+   then power cycle once more: STEMS1's first boot after the upgrade had
+   no audio until a power cycle
+   ([FAILURE_MODES.md](../../docs/contributing/FAILURE_MODES.md)).
+3. Existing projects need nothing: the remix adds no effects and moves no
+   knobs.
+4. Back to stock: [BUILDING.md section 8](../../docs/guide/BUILDING.md#8-back-to-stock-or-another-remix).
 
 ## How it works
 

@@ -275,7 +275,7 @@ PROJECT → OS UPGRADE → [YES].
 **After the flash.** Every result, good and bad, goes into
 `docs/firmware/STEM_REC.md` (a new "Hardware" section), any new failure
 into `docs/contributing/FAILURE_MODES.md`, the image into `CHANGELOG.md`, and
-the Status of `remixes/stems/README.md` is updated.
+the Status of `remixes/test/stems/README.md` is updated.
 
 ## What the first flash could hit, predicted 🔮
 
@@ -580,4 +580,4 @@ it is seen; what is predicted is in this file's own block above.
 
 **After the flash:** every result, good and bad, goes into
 `docs/firmware/STEM_REC.md` (a new "Hardware" section) and
-`FAILURE_MODES.md`, and the Status of `remixes/stems/README.md` is updated.
+`FAILURE_MODES.md`, and the Status of `remixes/test/stems/README.md` is updated.
