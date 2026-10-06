@@ -59,12 +59,6 @@ class DocLinks(unittest.TestCase):
             "README.md": "`lib.a[2](gpt.cpp.o)` and `[x](nowhere.md)`\n",
             "CHANGELOG.md": "[old](docs/TIMESTRETCH_PIPELINE.md)\n"}), [])
 
-    def test_dated_plans_and_specs_are_records(self):
-        self.assertEqual(self.fails({
-            "docs/superpowers/plans/2026-09-10-x.md":
-                "[old](../../remixer/GONE.md) and docs/remixer/GONE.md §1\n",
-            "docs/superpowers/specs/2026-09-10-x-design.md":
-                "```bash\ngit add docs/WSL.md\n```\n"}), [])
 
 
 if __name__ == "__main__":

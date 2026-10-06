@@ -12,10 +12,8 @@ Two kinds of reference are checked:
 Exempt: `docs/history/` (removed 16 Sep 2026; cited as provenance and read
 with `git show 3ceba41:docs/history/<file>`), a path right after
 `git show <sha>:`, a path holding a placeholder (`<name>`, `*`, `X`, `...`), and
-CHANGELOG.md (a record of what was true at each image), the dated plans and
-specs under docs/superpowers/ (each a record of the tree on its date: their
-paths and commands are what was run), and the tests' fixtures under
-tools/verify/tests/.
+CHANGELOG.md (a record of what was true at each image), and the tests'
+fixtures under tools/verify/tests/.
 
 A `.md` file may not contain the section sign: "BUILDING.md section 5",
 never the symbol (30 Sep 2026: it reads like a mis-decoded character).
@@ -29,8 +27,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 TEXT = {".md", ".py", ".sh", ".asm", ".s", ".S", ".inc", ".c", ".h", ".cpp",
         ".hpp", ".txt", ".yml", ".yaml", ".toml", ".json", ".swift", ""}
 EXEMPT_FILES = {"CHANGELOG.md"}
-EXEMPT_DIRS = ("tools/verify/tests/",          # fixture paths, invented on purpose
-               "docs/superpowers/")            # dated plans and specs: records
+EXEMPT_DIRS = ("tools/verify/tests/",)          # fixture paths, invented on purpose
 MDLINK = re.compile(r"(?<![\w\]])\[(?:[^\[\]]|\[[^\]]*\])*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 REPOPATH = re.compile(r"(?<![\w./-])((?:docs|tools|modules|remixes)/[\w./+-]*?\.md)(?![\w/])")
 GITSHOW = re.compile(r"git show [0-9a-f]{6,40}:\S*$")

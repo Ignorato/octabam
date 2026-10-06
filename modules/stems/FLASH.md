@@ -8,7 +8,7 @@ busy project, eleven files at 24 bits filled the ring (RING FULL). Results
 in `docs/firmware/STEM_REC.md` section 17.3, with the tests not reported
 yet.
 
-Piece 5 (`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`),
+Piece 5 (`git show 4d2d6456:docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`),
 on Yves's MKII. A track's file is now its share of MAIN, after its fader.
 MAIN, CUE and the inputs are sources of their own, the input pairs can be
 stereo or mono, and 24 BIT switches the files to 24 bits. The ring is
@@ -190,7 +190,7 @@ The stop conditions are flash A's.
 
 ## Flash A — `stems`: STEMS in MAIN MENU (staged 30 Sep 2026)
 
-Piece 4 of the roadmap (`docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`,
+Piece 4 of the roadmap (`git show 4d2d6456:docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`,
 section 0), on Yves's MKII. It proves the menu, measures the card at 1, 2, 4
 and 8 tracks from the peak fill, records with a static machine playing, and
 compares a take's level with the stock recorder's.
@@ -447,7 +447,7 @@ card image.
 
 Carried from crosscheck's flash plan, `git show 7dee174:docs/effects/FLASHPLAN.md` (branch `crosscheck`), which upstream does not have: upstream records flashed images in `CHANGELOG.md`, and this one was never flashed.
 
-⚠️ **A record, not the plan for this branch.** It builds tag 28 from branch `crosscheck`, and what it says about the emulator is about crosscheck's port, which could not draw the screen; upstream's can (`--lcd`, `--live`). Flash A, piece 4 of the roadmap (`docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`), gets its own plan on this branch, built from this record.
+⚠️ **A record, not the plan for this branch.** It builds tag 28 from branch `crosscheck`, and what it says about the emulator is about crosscheck's port, which could not draw the screen; upstream's can (`--lcd`, `--live`). Flash A, piece 4 of the roadmap (`git show 4d2d6456:docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`), gets its own plan on this branch, built from this record.
 
 ### Flash 13 — `stems`, tag 28: STEM REC streams T1 to the card (staged 13 Sep 2026, restaged 14 Sep, restaged for streaming 23 Sep)
 

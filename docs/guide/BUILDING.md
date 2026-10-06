@@ -138,7 +138,8 @@ for f in /opt/m68k-elf/bin/m68k-elf-*; do sudo ln -sf "$f" /usr/local/bin/; done
   packed runtime and append all match the recipe" (`make bus REMIX=ok-ms`,
   28 Sep 2026; KITS replaced Octakit on 6 Oct).
 - ✅ USB MIDI's linked unit matches its author's build at `0x400d24f0`,
-  1,124 bytes (`make bus REMIX=octatrick-usb`).
+  1,124 bytes (`make bus REMIX=octatrick-usb`, 28 Sep 2026; octatrick-usb
+  became `octatrick` on 29 Sep).
 - ✅ This repository's pinned ColdFire bytes still match
   (`tools/build/label_fmt.py`), and `scripts/disasm.sh emac 0x40003664 8`
   still prints `msacl`.

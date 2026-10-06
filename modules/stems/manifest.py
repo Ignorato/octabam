@@ -9,8 +9,8 @@ file or two mono ones; 24 BIT (off at boot) records 24-bit files. Each
 source is a file, <set>/AUDIO/YYMMDD-HHMM/<name>.wav: the tracks after
 the fader, MAIN and CUE as mixed, the inputs raw. stems_peak keeps the
 take's largest ring fill, for the menu's PEAK row. Design:
-docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md; the menu,
-docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md.
+git show 4d2d6456:docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md; the menu,
+git show 4d2d6456:docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md.
 Every stock fact the unit uses: docs/firmware/STEM_REC.md.
 
 HOW, in one breath: a detour at the per-frame routine's only call site

@@ -1,7 +1,7 @@
 # The stock facts STEM REC stands on
 
 Every address, argument and behaviour the STEM REC module
-(`modules/stems/`, design in `docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md`)
+(`modules/stems/`, design in `git show 4d2d6456:docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md`)
 relies on, with the evidence for each.
 
 **Method.** Read from `out/raw/section_3_MAIN_OS.bin`, SHA-256
@@ -6442,7 +6442,7 @@ was recorded, or a hang during the write.
 
 ### 12.0 The design as built
 
-Spec: `docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md`.
+Spec: `git show 4d2d6456:docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md`.
 
 - The take is written while it records. Each enabled track gets its own
   file, `<set>/AUDIO/YYMMDD-HHMM/T<n>.wav`, 16-bit stereo.
@@ -6604,7 +6604,7 @@ passes.
 
 STEM REC was carried from `crosscheck` (`7dee174`) onto upstream `main` at
 `68af650` on 27 Sep 2026 (spec:
-`docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`).
+`git show 4d2d6456:docs/superpowers/specs/2026-09-26-stem-rec-upstream-port-design.md`).
 `stems.s` is byte-identical (md5 `cf735ce0927b23e36b2fa04980cc7536`). Image
 SHA-256 `164f31224bf61181e3f50e7dec40df9afcae5b16dbf6e4c0d0cc5e986af0a84e`.
 
@@ -6802,7 +6802,7 @@ stale free space until it recounts.
 
 ## 15. Eight tracks under the emulator
 
-Piece 2 (`docs/superpowers/specs/2026-09-27-stem-rec-eight-tracks-design.md`),
+Piece 2 (`git show 4d2d6456:docs/superpowers/specs/2026-09-27-stem-rec-eight-tracks-design.md`),
 27–28 Sep 2026, on upstream `2a849af` merged in (`a1c4e27`). The build
 records all eight tracks by default (`stems_tracks = 0xFF`), and
 `stems_peak` keeps the take's largest ring fill. Image SHA-256
@@ -7052,8 +7052,8 @@ exactly, which is what each check tests.
 
 ## 16. The STEMS category in MAIN MENU
 
-Piece 3 of the roadmap: `docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md`
-and its plan, `docs/superpowers/plans/2026-09-28-stem-rec-menu.md`.
+Piece 3 of the roadmap: `git show 4d2d6456:docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md`
+and its plan, `git show 4d2d6456:docs/superpowers/plans/2026-09-28-stem-rec-menu.md`.
 
 ### 16.1 What the design stands on, measured ✅ under the port
 
@@ -7581,7 +7581,7 @@ the take is whole and aligned.
 ### 18.9 The gates ✅ under the port
 
 Every gate of the spec's section 6
-(`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`), run on
+(`git show 4d2d6456:docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`), run on
 branch `stem-rec-p5` at `3780665` (dirty 0), 5 Oct 2026: `make check-remix
 REMIX=stems` (317 PASS, 0 FAIL, the only SKIP `verify_set`'s, which needs a project; `/home/yvez/xcheck/v5-p5-big2.log`), then
 `verify_stems.py stems --long` (363 PASS, 0 FAIL, 0 SKIP; `v5-p5-big2-long.log`),

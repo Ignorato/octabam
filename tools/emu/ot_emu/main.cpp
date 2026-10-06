@@ -2111,6 +2111,9 @@ int main(int _argc, char** _argv)
 					::_exit(2);
 				if(blockDump.empty() || blockDump != bootBlockDump)
 					rtos.closeBlockDump();
+				// The card was built before the fork; a child's --card-fail-after applies here.
+				if(card && cardFailAfter >= 0)
+					card->failWritesAfter(cardFailAfter);
 
 				if(dspPair)
 				{
