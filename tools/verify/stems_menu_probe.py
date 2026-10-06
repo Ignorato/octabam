@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """What STEMS's menu design assumes, measured under the port (piece 3,
-Task 2; docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md).
+Task 2; git show 4d2d6456:docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md).
 
     python3 tools/verify/stems_menu_probe.py [--mki]
 

@@ -1,8 +1,8 @@
 | STEM REC -- the enabled tracks to the card while the sequencer plays. The
 | build records all eight by default (stems_tracks = 0xFF).
 |
-| Design: docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md
-| (streaming), over docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md.
+| Design: git show 4d2d6456:docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md
+| (streaming), over git show 4d2d6456:docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md.
 | Every stock address below, with its evidence: docs/firmware/STEM_REC.md.
 |
 | Three parts share the state words below:
@@ -246,7 +246,7 @@ bus_src:    .long   BUS, BUS+0x80, IN_AB_OFF, IN_CD_OFF
             .long   IN_AB_OFF+IN_A_OFF, IN_AB_OFF+IN_B_OFF, IN_CD_OFF+IN_A_OFF, IN_CD_OFF+IN_B_OFF
         .balign 2
 
-| ---- the STEMS category (docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md)
+| ---- the STEMS category (git show 4d2d6456:docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md)
 | A fifth MAIN MENU category. The manifest's TableGrow gives the root a row
 | pointing at stems_cat_label, stems_icon and stems_list. The list and its
 | rows live here, in DRAM: the menu engine writes the list's cursor

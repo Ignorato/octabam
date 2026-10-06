@@ -13,7 +13,7 @@ The Unicorn is the one tools/emu/emu_bringup.py selects: the repository's
 patched build, whose EMAC multiplies in fractional mode as the MCF5445x
 does. The harness refuses to run when that self-test fails. Each test
 compares a routine with tools/verify/stems_gain.py or a reference beside
-it (docs/superpowers/plans/2026-10-01-stem-rec-sources.md, "Testing")."""
+it (git show 4d2d6456:docs/superpowers/plans/2026-10-01-stem-rec-sources.md, "Testing")."""
 import pathlib
 import random  # noqa: F401  (the tests that follow draw their inputs from it)
 import struct

@@ -1054,7 +1054,7 @@ class DramRegion:
     loader stage or its .bss reach the lowest region. The loader never
     writes these bytes and nothing clears them: a region must not need
     initial contents. STEM REC's ring (8 MiB since piece 5) and its task's
-    stack are the first users (docs/superpowers/specs/
+    stack are the first users (git show 4d2d6456:docs/superpowers/specs/
     2026-09-10-stem-rec-poc-design.md, section 5)."""
 
     symbol: str

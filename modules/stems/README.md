@@ -14,11 +14,11 @@ width 16 bits; the menu changes each. The port has run every source, both
 widths and the menu key by key on the MKII and MKI panels
 (STEM_REC.md sections 15, 16 and 18).
 
-- The design: `docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md`,
-  over the proof of concept's `docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md`.
-  The menu: `docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md`.
+- The design: `git show 4d2d6456:docs/superpowers/specs/2026-09-22-stem-rec-streaming-design.md`,
+  over the proof of concept's `git show 4d2d6456:docs/superpowers/specs/2026-09-10-stem-rec-poc-design.md`.
+  The menu: `git show 4d2d6456:docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md`.
   After the fader, the buses and 24 bits:
-  `docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`.
+  `git show 4d2d6456:docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`.
 - Every stock address the module uses, with its evidence:
   `docs/firmware/STEM_REC.md`. Section 12 covers streaming, section 18
   the level path, the inputs and MASTER TRACK.
@@ -106,7 +106,7 @@ measures the ring against the emulated card's speed (STEM_REC.md 15.4).
 
 The hook's figures are instruction counts. Its time on the unit isn't
 measured: whether the unit has room for it is flash C's test
-(`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md` 4.6).
+(`git show 4d2d6456:docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md` 4.6).
 STEMS3 recorded eleven files at 24 bits on the unit; clicks and the
 screen's response during a take aren't reported yet (STEM_REC.md 17.3).
 Before piece 5 the hook copied the tracks as they were and cost 743
