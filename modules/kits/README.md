@@ -19,8 +19,8 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 | keys | MKII | MKI |
 |---|---|---|
 | LOAD KIT | PART | FUNC+MIDI |
-| SAVE KIT | FUNC+PART | FUNC+BANK |
-| quick save (the Kit under the cursor, its name kept) | FUNC+PART, then FUNC+YES | FUNC+BANK, then FUNC+YES |
+| SAVE KIT | FUNC+PART | FUNC+MIDI, then FUNC+BANK |
+| quick save (the Kit under the cursor, its name kept) | FUNC+PART, then FUNC+YES | FUNC+MIDI, FUNC+BANK, then FUNC+YES |
 | reload the current Kit | FUNC+CUE (stock Part Reload) | FUNC+CUE |
 | the pasted pattern plays a copy of its Kit in the next empty Kit | FUNC+PASTE+PART (PART while STOP is held after the paste) | FUNC+PASTE+MIDI |
 | save the Kit, copy it and the pattern to the next empty ones, play the copy | PTN+FUNC+RIGHT | PTN+FUNC+RIGHT |
@@ -31,6 +31,13 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
   plays, `NNN ---` on an empty one) and two settings, AUTOSAVE and KEEP
   LEVELS (YES turns one on or off). YES on a Kit: the current pattern
   plays it, now.
+- **MKI FUNC+BANK** is SAVE KIT only while the LOAD KIT list is open
+  (Octakit's key map); with SAVE KIT open it closes it, over the Kit name
+  editor it cancels it, and anywhere else it is stock's (PATTERN SETTINGS
+  on the main screen, the recording list in RECORDING SETUP). The open
+  list is KITS' when the stock list's callbacks pointer (`0x460e5e28`) is
+  KITS' table; the editor when its done callback (`0x460e761a`) is
+  KITS'.
 - **SAVE KIT** lists the 256 Kits, the cursor on the current Part's.
   YES opens the name editor (seven characters, `NEW KIT` for an empty
   Kit); the current Part is saved into the Kit and the current pattern
@@ -129,6 +136,11 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
   restore, its stock routines called in order: the panel's second
   FUNC+STOP pastes again under the port, on stock too), FUNC+PASTE+PART,
   PTN+FUNC+RIGHT, PTN+FUNC+TRIG paste and its undo.
+- ✅ The MKI panel (the port without `--mkii`): FUNC+BANK on the main
+  screen opens PATTERN SETTINGS; FUNC+MIDI then FUNC+BANK opens SAVE KIT,
+  and a save from it lands; FUNC+BANK again closes it; over the name
+  editor it cancels, nothing saved; after LOAD KIT closed by NO, and in
+  RECORDING 1 SETUP after it, FUNC+BANK is stock's.
 - ✅ SAVE PROJECT writes `kits.work` and `kits.strd`; a second boot of the
   card, a power cycle of it (`--cs1-in`, `--no-post`) and a power cycle
   of a card whose change was never saved each come back with the same

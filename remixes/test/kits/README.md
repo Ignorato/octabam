@@ -4,7 +4,7 @@
 
 ## What is in it
 
-- **KITS** (sambanks) — a library of 256 Parts per project; each pattern plays its Kit through the stock Part slots. PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI / FUNC+BANK).
+- **KITS** (sambanks) — a library of 256 Parts per project; each pattern plays its Kit through the stock Part slots. PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI, then FUNC+BANK).
 
 ## Status
 

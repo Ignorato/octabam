@@ -1367,7 +1367,7 @@ int main(int _argc, char** _argv)
 			"              [--usb-host SOCKET] [--usb-notify FILE] [--usb-fs]   the USB device controller + a scripted host (usb.h)\n"
 			"              [--interactive] [--rtc host|off|EPOCH] [--dsp-rt]    the line protocol on stdin/stdout (tools/panel)\n"
 			"              [--step FRAME:call|poke|dump:SPEC]...              a gate's whole script on one boot: FRAME '-' = after the load, N = N frames after the transport start\n"
-			"              [--live-script FILE]                              '<emulated ms> key|enc|pot|midi|quit ...' lines, transport stopped, no wall-clock pacing\n"
+			"              [--live-script FILE]                              '<emulated ms> key|enc|pot|midi|poke|quit ...' lines, transport stopped, no wall-clock pacing\n"
 			"              [--no-post]                                       no LOAD PROJECT post: the firmware's own power-up load\n"
 			"              [--cs1-in FILE]                                   CS1 (0x10000000) from FILE before the boot: a power cycle with an earlier --mem-dump 0x10000000,0x100000\n"
 			"              [--scenario \"LOG ARGS...\"]... [--scenario-jobs N]  load once, fork one child per scenario (stdout to LOG, ARGS its post-load options)\n");
@@ -2252,6 +2252,11 @@ int main(int _argc, char** _argv)
 					while(is >> hex)
 						bytes.push_back(static_cast<uint8_t>(std::strtoul(hex.c_str(), nullptr, 16)));
 					rtos.midiIn(bytes);
+				}
+				else if(what == "poke")
+				{
+					std::string spec; is >> spec;			// as --poke: "addr=byte[;...]"
+					pokeBytes(spec, "live");
 				}
 				else
 					std::printf("live       : unknown line '%s'\n", _line.c_str());

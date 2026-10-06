@@ -33,8 +33,8 @@ MODULE = Module(
     kind=Kind.CF_PATCH,
     category=Category.PARTS, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.HARDWARE, proof_note="Sam's MKII (image A6, 6 Oct 2026): the Octakit import, ems-octakit #5, STOP/PTN+TRIG/PLAY with the Rytm, a rejected bank file, power cycles; `verify_kits` under the port",
-    doc="256 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI / "
-        "FUNC+BANK); each pattern plays its Kit through the stock Part slots. After Em's Octakit.",
+    doc="256 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI, "
+        "then FUNC+BANK); each pattern plays its Kit through the stock Part slots. After Em's Octakit.",
     linked=(Linked("kits", "modules/kits/kits.s", dram=True, include=kits_inc),),
     detours=(
         Detour(0x400A0570, H("4fefffec48d7007c"), "kits", "kits_sched",
@@ -63,7 +63,7 @@ MODULE = Module(
         Detour(0x4002DC9C, H("71b9100b14cf"), "kits", "kits_savekey",
                "the Part edit menu (MKII FUNC+PART): SAVE KIT"),
         Detour(0x40058A64, H("2f032f02262f000c"), "kits", "kits_mkisave",
-               "the MKI FUNC+BANK dispatch: SAVE KIT", pad_to=8),
+               "the MKI FUNC+BANK dispatch: SAVE KIT from LOAD KIT, else stock", pad_to=8),
         Detour(0x4004C146, H("41f9400a7230"), "kits", "kits_status",
                "the status line's Part field: NNN name of the Kit in the current slot"),
         Detour(0x4005E3D8, H("4feffff448d7001c"), "kits", "kits_funcyes",

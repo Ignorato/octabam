@@ -395,3 +395,9 @@ Entries from here to the end of the file (5 Oct 2026) were recorded in other doc
 - **Seen:** under the port, 26 Sep 2026: `bottleservice` halted (`illegal`, `0x45d2128e` in that build) at frame 40 of `verify_set`'s run on CC 68 (a MODE change re-defaulting page-1 knobs); TEMPO BUS and MODE DEFAULTS called the writer bare. Not flashed. Source: `git show 2063370f:modules/octakit/README.md` "Calling the page-1 writer beside her", `modules/tempo-bus/README.md`.
 - **Cause:** Octakit rewrites the writer's dirty store (`0x40054fec`) to check a token long 12 bytes above the arguments (top half `GK_TRACK_PARAMETER_TOKEN_ARMED`, `0x54500000`) and halts on any other; her wrapper sets it and accepts only the three stock return addresses.
 - **Fix:** both modules push the token (`P1TOKEN`, `modules/tempo-bus/helpers.s`, `modules/mode-defaults/modedef.s`).
+
+## MKI: FUNC+BANK opens SAVE KIT, PATTERN SETTINGS unreachable (KITS) ✅ measured under the port, fixed
+
+- **Seen:** a user on an MKI with KITS, Discord (kazeko), 6 Oct 2026: "cant find pattern edit now ... before FUNC + BANK". Not reproduced on an MKI unit.
+- **Cause:** `kits_mkisave` detoured the MKI FUNC+BANK dispatch `0x40058a64` and opened SAVE KIT whenever KITS was ready. Stock opens the Part edit menu there only while the PART window is open, and otherwise PATTERN SETTINGS (`0x40083440`) or, in RECORDING SETUP, the recording list. Octakit kept the stock condition (SAVE KIT from LOAD KIT only).
+- **Fix:** SAVE KIT only while KITS' LOAD KIT list is open (the stock list's callbacks pointer `0x460e5e28` is KITS' table), close SAVE KIT, cancel the Kit name editor; anything else runs the stock dispatch. `verify_kits` `mki*` scenarios on the MKI panel.
