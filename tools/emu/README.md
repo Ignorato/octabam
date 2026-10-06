@@ -121,7 +121,7 @@ out/emu/ot_emu --image out/mainos_bus.bin --card out/card.img --set OCTABAM --pr
     - `call`, a poke `addr=byte;...`, or a memory dump `addr,len=path;...`;
     - FRAME `-` means after the load and before the transport;
     - FRAME N means frame N after the transport start.
-  - `--live-script FILE`: lines of `<emulated ms> key|enc|pot|midi|quit ...`,
+  - `--live-script FILE`: lines of `<emulated ms> key|enc|pot|midi|poke|quit ...` (`poke` as `--poke`),
     applied at those emulated times with the transport stopped.
   - `--scenario "LOG ARGS..."` (repeatable, with `--scenario-jobs N`) loads
     once and forks one child per scenario from the identical loaded

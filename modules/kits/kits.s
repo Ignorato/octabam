@@ -77,9 +77,12 @@
         .set    NOTIFY,     0x4005a2b8      | (str, ticks)
         .set    M_OPEN,     0x4006d94c      | (count, sel, &sel, labels, callbacks)
         .set    M_OBJ,      0x460e5e30      | long: the open callback menu
+        .set    M_CBS,      0x460e5e28      | long: its callbacks, stored by M_OPEN
         .set    M_CLOSE,    0x4006d754
         .set    T_OPEN,     0x4007e664      | (max, title, buffer, 1, done(confirmed))
         .set    T_OBJ,      0x460e7612
+        .set    T_DONE,     0x460e761a      | long: the open editor's done callback
+        .set    T_CANCEL,   0x4007d950      | closes the editor, done(0)
         .set    SPRINTF,    0x40013a08
         .set    F_OPEN,     0x40016864      | (fo, path, mode, buffer, size)
         .set    F_READ,     0x40016564      | (fo, dst, n) -> 1
@@ -445,15 +448,36 @@ kits_savekey:
         bra.w   save_menu
 2:      rts
 
-| 0x40058a64: the MKI FUNC+BANK dispatch: SAVE KIT.
+| 0x40058a64: the MKI FUNC+BANK dispatch. With the LOAD KIT list open:
+| SAVE KIT in its place (Octakit's FUNC+MIDI, then FUNC+BANK); with the
+| SAVE KIT list open: closed; with the Kit name editor open: cancelled.
+| Anywhere else the stock dispatch (PATTERN SETTINGS on the main screen).
+| The open list is KITS' when the callbacks M_OPEN stored are CBTAB; MOWN
+| is the one opened last, so that one. The editor is KITS' when its done
+| callback is save_named.
 kits_mkisave:
         tstl    READY
+        beq.s   9f
+        tstl    T_OBJ
+        beq.s   2f
+        movel   T_DONE,%d0
+        cmpil   #save_named,%d0
+        bne.s   9f
+        jmp     T_CANCEL                | done(0): nothing saved
+2:      tstl    M_OBJ
+        beq.s   9f
+        movel   M_CBS,%d0
+        cmpil   #CBTAB,%d0
+        bne.s   9f
+        movel   MOWN,%d0
+        subql   #1,%d0
         bne.s   1f
-        movel   %d3,%sp@-               | displaced
+        jsr     M_CLOSE                 | LOAD KIT: M_OBJ is clear after it
+1:      bra.w   save_menu
+9:      movel   %d3,%sp@-               | displaced
         movel   %d2,%sp@-
         movel   %sp@(12),%d3
         jmp     0x40058a6c
-1:      bra.w   save_menu
 
 | 0x4005e3d8 (key, pressed): FUNC+YES. With the SAVE KIT list open, the
 | row under the cursor is saved now under its Kit's name (Octakit's

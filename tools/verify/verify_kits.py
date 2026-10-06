@@ -69,6 +69,16 @@ pattern content beyond pattern 1 playing.
   inactive  PTN and FUNC held: TRIG 1 + REC (copy pattern 1), TRIG 14 +
             STOP (paste): pattern 14 is pattern 1 with its Kit.
   inundo    ... and TRIG 14 + STOP again: pattern 14 as it was.
+  mki*      the MKI panel (no --mkii), its own load. FUNC+BANK: on the
+            main screen PATTERN SETTINGS (mkiptn); after FUNC+MIDI (LOAD
+            KIT) SAVE KIT in its place (mkilist), closed by FUNC+BANK
+            again (mkiclose); after LOAD KIT closed by NO, PATTERN SETTINGS
+            (mkino); FUNC+MIDI, FUNC+BANK, DOWN DOWN, YES, YES saves the
+            Kit two rows down, named (mkisave); over the Kit name editor it
+            cancels, nothing saved (mkiedit); a list not KITS' leaves FUNC+BANK
+            to stock: LOAD KIT open with the list's
+            callbacks pointer poked to stock's Part menu table (mkiforeign;
+            the recorder setup's own key map never reaches the hook).
   import    a project with Em's kits3a/b.work and no kits.work: each
             occupied Kit's name and Part and the newest manifest's ASSIGN,
             as tools/verify's own reader of her format gives them.
@@ -121,6 +131,9 @@ STATE = ("READY KDIRTY NOWRITE PENDING ISR NOSLOT INVALID IOERR BADFILE "
 K = dict(no=0x32, yes=0x31, play=0x28, stop=0x27, ptn=0x2e, func=0x2d, part=0x1d,
          up=0x33, down=0x20, right=0x21, mixer=0x30, rec=0x29)
 BANK = 2                                  # bank 3: the project's own
+MKI = dict(midi=0x35, bank=0x2f, recab=0x2b)   # held with FUNC on the MKI panel
+MENU = 0x460e5e28                         # the stock list: callbacks, labels, object, &selection
+PSET, TEXTED = 0x460fab34, 0x460e7612     # PATTERN SETTINGS' window, the text editor (nonzero: open)
 
 
 def run(cmd, log):
@@ -281,9 +294,9 @@ def main():
     def pb(ptn):
         return b3 + ptn * PSTRIDE + PBYTE
 
-    scen, scripts = [], {}
+    scen, mki_scen, scripts = [], [], {}
 
-    def add(tag, script=None, pokes=(), extra=(), more_dumps=""):
+    def add(tag, script=None, pokes=(), extra=(), more_dumps="", mki=False):
         if only and tag not in only:
             return
         args = []
@@ -292,7 +305,7 @@ def main():
         if script is not None:
             sp = OUT / f"{tag}.script"; sp.write_text(script.text()); args += ["--live-script", sp]
         args += list(extra) + ["--mem-dump", dumps(tag) + more_dumps]
-        scen.append(f"{OUT / (tag + '.txt')} " + " ".join(map(str, args)))
+        (mki_scen if mki else scen).append(f"{OUT / (tag + '.txt')} " + " ".join(map(str, args)))
         scripts[tag] = script
 
     def playing_switch(s, ptn, wait=17000):
@@ -429,8 +442,34 @@ def main():
     s = Script(); loadkit(s); s.wait(2000)
     add("unsaved", s, extra=["--card-out", OUT / "unsaved.img"],
         more_dumps=f";{CS1:#x},{CS1_LEN:#x}={OUT / 'cs1_unsaved.bin'}")
+
+    # ---- the MKI panel: FUNC+BANK (its own load: the panel is chosen at boot) --
+    def ui(tag):
+        return (f";{MENU:#x},36={OUT / f'{tag}_menu.bin'};{sym['MOWN']:#x},4={OUT / f'{tag}_mown.bin'}"
+                f";{PSET:#x},4={OUT / f'{tag}_pset.bin'};{TEXTED:#x},4={OUT / f'{tag}_ted.bin'}")
+
+    def mki(tag, *steps, pokes=()):
+        s = Script(); s.tap("no")
+        for st_ in steps:
+            if isinstance(st_, tuple):          # (address, long): a poke at this point of the script
+                s.send("poke " + ";".join(f"{st_[0] + i:#x}={st_[1] >> 24 - 8 * i & 0xff:#x}" for i in range(4)), 200)
+            elif st_ in MKI:
+                s.hold("func", MKI[st_], gap=800)
+            else:
+                s.tap(st_, 600)
+        add(tag, s, pokes, more_dumps=ui(tag), mki=True)
+    mki("mkiptn", "bank")
+    mki("mkilist", "midi", "bank")
+    mki("mkiclose", "midi", "bank", "bank")
+    mki("mkino", "midi", "no", "bank")
+    mki("mkisave", "midi", "bank", "down", "down", "yes", "yes")
+    mki("mkiedit", "midi", "bank", "yes", "bank")
+    mki("mkiforeign", "midi", (MENU, 0x400b9b04), "bank", (MENU, sym["CBTAB"]))
     if scen:
         run(base + [x for sc in scen for x in ("--scenario", sc)] + ["--scenario-jobs", "3"], OUT / "port.txt")
+    if mki_scen:
+        run([x for x in base if x != "--mkii"] + [x for sc in mki_scen for x in ("--scenario", sc)]
+            + ["--scenario-jobs", "3"], OUT / "port_mki.txt")
 
     # ---- reading a run back ---------------------------------------------------
     def st(tag):
@@ -580,6 +619,43 @@ def main():
         name = im[O_LIB + k * REC:O_LIB + k * REC + 8].split(b"\0")[0]
         check(f"{tag}: Kit {k + 1} = the current Part, assigned, named {name}",
               kit(im, k) == slot(b, s_) and im[O_ASSIGN + BANK * 16] == k and name)
+
+    # ---- the MKI panel --------------------------------------------------------
+    def menu(tag):
+        w = struct.unpack(">9I", (OUT / f"{tag}_menu.bin").read_bytes())
+        lw = lambda n: struct.unpack(">I", (OUT / f"{tag}_{n}.bin").read_bytes()[:4])[0]
+        return dict(cbs=w[0], obj=w[2], count=w[8], mown=lw("mown"), pset=lw("pset"), ted=lw("ted"))
+    cb = sym["CBTAB"]
+    if exists("mkiptn"):
+        clean("mkiptn"); m = menu("mkiptn")
+        check(f"mkiptn: FUNC+BANK opens PATTERN SETTINGS ({m['pset']:#x}), no list", m["pset"] and not m["obj"])
+    if exists("mkilist"):
+        clean("mkilist"); m = menu("mkilist")
+        check(f"mkilist: FUNC+MIDI, FUNC+BANK: SAVE KIT open ({m['count']} rows), PATTERN SETTINGS closed",
+              m["obj"] and m["cbs"] == cb and m["mown"] == 2 and m["count"] == 256 and not m["pset"])
+    if exists("mkiclose"):
+        clean("mkiclose"); m = menu("mkiclose")
+        check("mkiclose: FUNC+BANK again closes SAVE KIT", not m["obj"] and not m["pset"])
+    if exists("mkino"):
+        clean("mkino"); m = menu("mkino")
+        check("mkino: LOAD KIT closed by NO, FUNC+BANK: PATTERN SETTINGS", m["pset"] and not m["obj"])
+    if exists("mkisave"):
+        clean("mkisave")
+        im, b = img("mkisave"), b3_("mkisave")
+        s_ = cur_slot(b)
+        k = BANK * 4 + s_ + 2
+        name = im[O_LIB + k * REC:O_LIB + k * REC + 8].split(b"\0")[0]
+        check(f"mkisave: Kit {k + 1} = the current Part, assigned, named {name}",
+              kit(im, k) == slot(b, s_) and im[O_ASSIGN + BANK * 16] == k and name)
+    if exists("mkiedit") and exists("base"):
+        clean("mkiedit"); m = menu("mkiedit")
+        check("mkiedit: FUNC+BANK over the Kit name editor cancels it: no editor, no list, "
+              "no PATTERN SETTINGS, the Kits as loaded",
+              not m["ted"] and not m["obj"] and not m["pset"] and img("mkiedit")[O_LIB:] == img("base")[O_LIB:])
+    if exists("mkiforeign"):
+        clean("mkiforeign"); m = menu("mkiforeign")
+        check(f"mkiforeign: a list whose callbacks are not KITS': FUNC+BANK is stock's (PATTERN SETTINGS "
+              f"{m['pset']:#x}), SAVE KIT not opened (MOWN {m['mown']})", m["pset"] and m["mown"] == 1)
 
     # ---- Phase 2 checks -------------------------------------------------------
     def valid(im, k):
