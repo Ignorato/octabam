@@ -14,6 +14,68 @@ discussions #2 and #3), the pattern clipboard carrying the Kit, and the
 `NNN name` status line. It reads Octakit's `kits3a/b.work` files.
 Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 
+## What a Kit is
+
+A Kit is the 6,322 bytes of one Octatrack Part, plus an eight-byte name.
+Loading a Kit loads those bytes into a Part slot (with KEEP LEVELS on,
+the slot's eight track levels are kept, below).
+
+The Octatrack manual's Part (OS 1.40A, section 10.2 PARTS: page 52 of the
+[MKII manual](https://www.elektron.se/wp-content/uploads/2024/09/Octatrack-MKII-User-Manual_ENG_OS1.40A_210414.pdf),
+page 53 of the [MKI manual](https://www.elektron.se/wp-content/uploads/2024/09/Octatrack-User-Manual_ENG-OS1.40A_220204.pdf);
+summary in section 4.7): "machine, sample and effect assignments along
+with track parameter settings and up to 16 scenes". Per track, from the
+Part's layout (`docs/firmware/PARAM_PAGES.md` section 5 and the offsets
+after section 7; `docs/firmware/PARTS.md` section 9; `docs/firmware/MIDI.md`
+Appendix A section 3):
+
+| in a Kit | Part offset |
+|---|---|
+| FX1 and FX2 effect selections, eight tracks each | `+0x00`, `+0x08` |
+| track levels and cue levels | `+0x12 + 2t`, `+0x13 + 2t` |
+| the machine type (Flex, Static, Thru, Neighbor, Pickup) | `+0x22 + t` |
+| PLAYBACK page settings, one set per machine type | `+0x2a + 30t + 6·machine` |
+| the Flex or Static sample slot each machine plays | not located |
+| LFO, AMP, FX1, FX2 page 1 | `+0x11a + 24t` |
+| LFO page 2 (destination, wave, multiplier, trig mode), AMP, FX1, FX2 page 2 | `+0x2f2 + 30t` |
+| the eight MIDI tracks' parameters | `+0x3e2 + 32(t−8)` |
+| the 16 scenes' locks | `+0x662 + 32(8·scene + t)` |
+| the LFO designer shapes, audio and MIDI tracks | `+0x1702`, `+0x1792` |
+
+Not in a Kit, as with a Part:
+
+- The samples. A Kit holds a sample slot number; the slot's file and its
+  settings are in the project's Flex and Static slot lists (manual section
+  4.3). Kits are per project (`kits.work` in the project directory), so a
+  slot number always refers to the same project's list.
+- Everything the pattern holds: trigs, parameter locks, track lengths and
+  scales (manual section 4.6).
+- Tempo: the project's, or the pattern's when tempo is per pattern
+  (manual section 8.9.1).
+- Arrangements, track recorders and project settings (manual section 4.3).
+
+### Against the Machinedrum and Monomachine
+
+Octakit's README: "I prefer the silver boxes' (MnM & MD's) Kit approach
+over Parts". What KITS takes from them is the link: each pattern names a
+Kit and plays it, Kits are saved and loaded by name from one list, and
+LOAD KIT keeps an UNDO KIT. A Kit's contents are the Octatrack's Part,
+which is not what an MD or MnM Kit holds.
+
+| | Machinedrum ([manual](https://www.elektron.se/wp-content/uploads/2024/09/machinedrum_manual_OS1.63_1.pdf), OS 1.63, p. 14 "MACHINEDRUM KITS", p. 35 "CLASSIC VS EXTENDED") | Monomachine ([manual](https://www.elektron.se/wp-content/uploads/2024/09/monomachine_manual_OS1.32.pdf), OS 1.32, p. 1-18 "MONOMACHINE KITS") | KITS |
+|---|---|---|---|
+| how many | 64 (8,192 on +Drive) | 128 (16,384 on +Drive) | 255 per project |
+| a pattern plays its Kit | in EXTENDED mode | yes | yes |
+| machine per track, its parameters | 16 tracks | 6 tracks | 8 audio tracks (and 8 MIDI tracks) |
+| track effects | yes | yes | FX1, FX2 and their settings |
+| LFOs | yes (p. 33: "the LFO settings are stored in the kit") | 6×3 | 3 per track, and the LFO designer shapes |
+| master effects and their routing | yes | — | no master effects on the Octatrack |
+| MIDI sequencer track settings | — | yes | the MIDI tracks' parameters |
+| scenes | — | — | 16 |
+| sample assignments | — | — | the slot number per machine |
+| tempo | not in a Kit | not in a Kit | not in a Kit |
+| UNDO KIT | yes | yes | yes |
+
 ## Use
 
 | keys | MKII | MKI |
