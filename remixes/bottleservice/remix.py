@@ -17,7 +17,7 @@ from remix.schema import Proof, Remix
 
 REMIX = Remix(
     name="bottleservice",
-    family="rig", proof=Proof.PORT, proof_note="with Octakit on Sam's MKII (images A0-A3, 4 Oct 2026); with KITS under the port",
+    family="rig", proof=Proof.HARDWARE, proof_note="Sam's MKII (image A6 with KITS, 6 Oct 2026; images A0-A3 with Octakit, 4 Oct 2026)",
     doc="The delay and reverb bus (BusDelay on T1's FX2, BusVerb on T5's FX2, SEND on every other track's FX2, the stock DELAY on T8) + SPECTRUM, CHARACTER and MODULATION on FX1 + USB MIDI + USB AUDIO OUT MASTER (T8 to the computer) + KITS.",
     modules=("REVERB SERVER", "DELAY SERVER", "SEND",
              "SPECTRUM", "CHARACTER", "MODULATION",
