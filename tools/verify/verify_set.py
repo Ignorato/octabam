@@ -342,7 +342,11 @@ def main():
     aux = recs[64 + 24] << 8 | recs[64 + 25]                     # T2 halfword 12
     t2_fx2 = registry.by_id(part["fx2"][1])
     if t2_fx2 is not None and t2_fx2.key in mods:
-        check("midi: CC 40 = 100 on T2's channel reached T2's AUX halfword", (aux >> 8) == 100,
+        # a select on slot 0 clamps to its count, as slot 6 does below (VOCODER's
+        # NOTE is 61 steps: CC 100 lands as 60)
+        n0 = t2_fx2.params[0].count if t2_fx2.params and t2_fx2.params[0].count else 128
+        want = min(100, n0 - 1)
+        check(f"midi: CC 40 = 100 on T2's channel reached T2's AUX halfword (as {want})", (aux >> 8) == want,
               f"halfword 12 = {aux:#06x} (knob {aux >> 8}; the lane's slew takes ~30 frames)")
     else:
         # an unimplemented id runs the fallback, whose page publishes no slot 0

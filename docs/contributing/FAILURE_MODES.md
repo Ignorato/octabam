@@ -433,3 +433,10 @@ Entries from here to the end of the file (5 Oct 2026) were recorded in other doc
 - **Seen:** kazeko, MKI, 6 Oct 2026, Discord: "after loading new KIT values appear after a moment; when OT sequencer does not run, after loading kit i need to press FUNC to display loaded values".
 - **Cause:** LOAD KIT ran the stock Part Reload (`0x4004aab4`) without the screen refresh stock FUNC+CUE runs after it (`0x4005e0a8..0x4005e0d8`). Under the port, stopped: the screen after LOAD KIT differed from the screen after a further FUNC tap by 11 bytes.
 - **Fix:** `kits_load_current` runs the same refresh; the two screens are equal (`verify_kits` `drawn`).
+
+## Left-only click bursts from VOCODER on T1, at one phase of the pattern 🟡 measured, cause inferred, avoided
+
+- **Seen:** Ignorato's MKII, 5 Oct 2026, VOCODER 0.2 (the builds before OCTABAM20) on FX2 of T1, a voice on a THRU track: click bursts on the left main out only, at one phase of the 2-second pattern, worst at trigs. Captured at the main outs through a Scarlett 18i8. Absent with T1's FX2 on NONE; absent with VOCODER on T2 or T3 (OCTABAM20, clean alone and two per core).
+- **Cause (🟡 inferred):** a core's position 0 is the case of "Junk on main R ... T1 with BusDelay": an effect there can finish before the ColdFire's pull of the previous frame's read-back has passed T1's words. That entry is main R with 16-24 samples of random full-scale words; these were left-only bursts, so the match is not measured. T5 (core 0's position 0) was never tried.
+- **Fix (avoidance):** VOCODER runs at FX2 positions 1 and 2 only (r7 0x6500 and 0x6800: T2, T3, T6, T7) and is a dry pass at position 0. The padding fix of the BusDelay entry costs two samples a frame, which two VOCODERs on a core cannot afford.
+- **Check:** a capture of the main outs with VOCODER on T1 against T2, trigs on the track; T5 against T6 for core 0.
