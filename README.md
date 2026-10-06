@@ -93,7 +93,7 @@ from the card (section 5).
 
 | module | author | what it does | proof |
 |---|---|---|---|
-| [**KITS**](modules/kits/README.md) | [sambanks](https://github.com/sambanks) | 256 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI / FUNC+BANK); each pattern plays its Kit through the stock Part slots. | port-gated: `verify_kits` |
+| [**KITS**](modules/kits/README.md) | [sambanks](https://github.com/sambanks) | 256 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI / FUNC+BANK); each pattern plays its Kit through the stock Part slots. After Em's Octakit. | port-gated: `verify_kits` |
 | [**MIDI SCENES**](modules/midi-scenes/README.md) | [bkkbrls-del/midisc](https://github.com/bkkbrls-del/midisc) | MIDI-driven scene locks (hold/morph/save/reload/clear/copy/paste), built from bkkbrls-del/midisc as linker-placed units. | on hardware: `ok-ms` on his unit, 14 Sep 2026 |
 | [**SCENES P2**](modules/scenes-p2/README.md) | [sambanks](https://github.com/sambanks) | Scene locks and the crossfader on FX1/FX2 page 2 (hold a scene, turn a page-2 knob). | port-gated: 26 Sep 2026 |
 

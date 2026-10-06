@@ -4,6 +4,14 @@
 assigned to it, through the stock Part slots. `Kind.CF_PATCH`: one DRAM
 unit (`kits.s`), 23 detours, nothing on the DSP. The firmware facts it
 stands on are [`docs/firmware/PARTS.md`](../../docs/firmware/PARTS.md).
+
+Credit: Em ([emuyia](https://github.com/emuyia)) designed Kits on the
+Octatrack in [Octakit](https://github.com/emuyia/ems-octakit) (MIT,
+Copyright (c) 2026 June Kiff). KITS follows its design: 256 Kits per
+project, LOAD KIT and SAVE KIT on PART and FUNC+PART with its key map, the
+list copy, paste, clear and undo, AUTOSAVE and KEEP LEVELS (ems-octakit
+discussions #2 and #3), the pattern clipboard carrying the Kit, and the
+`NNN name` status line. It reads Octakit's `kits3a/b.work` files.
 Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 
 ## Use

@@ -34,7 +34,7 @@ MODULE = Module(
     category=Category.PARTS, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.PORT, proof_note="`verify_kits`",
     doc="256 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI / "
-        "FUNC+BANK); each pattern plays its Kit through the stock Part slots.",
+        "FUNC+BANK); each pattern plays its Kit through the stock Part slots. After Em's Octakit.",
     linked=(Linked("kits", "modules/kits/kits.s", dram=True, include=kits_inc),),
     detours=(
         Detour(0x400A0570, H("4fefffec48d7007c"), "kits", "kits_sched",
