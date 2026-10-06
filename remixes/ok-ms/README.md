@@ -8,7 +8,7 @@ and MIDI SCENES; since 6 Oct 2026 KITS takes Octakit's place.
 
 | module | what you get |
 |---|---|
-| [KITS](../../modules/kits/README.md) | 256 named Kits per project; each pattern plays its Kit through the stock Part slots; old projects migrate on load (Octakit's kits3a/b.work are imported). MKII PART / FUNC + PART open LOAD / SAVE KIT, FUNC + CUE reloads. |
+| [KITS](../../modules/kits/README.md) | 255 named Kits per project; each pattern plays its Kit through the stock Part slots; old projects migrate on load (Octakit's kits3a/b.work are imported). MKII PART / FUNC + PART open LOAD / SAVE KIT, FUNC + CUE reloads. |
 | [MIDI SCENES](../../modules/midi-scenes/README.md) (bkkbrls-del, [midisc](https://github.com/bkkbrls-del/midisc)) | scene locks driven over MIDI: a second lock table the panel never had; hold, morph, save, reload, clear, copy, paste when a MIDI event is driving. The panel path is untouched. |
 
 The fourteen stock FX2 effects are listed, so the chooser is stock's.

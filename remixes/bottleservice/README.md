@@ -8,7 +8,7 @@ A remix of Octatrack OS 1.40C, built from your own copy of it, that adds:
   edits the bus engines;
 - **USB MIDI** and **USB audio** (the master track into a computer) over the
   Octatrack's own USB port;
-- **KITS**: 256 Kits per project; each pattern plays its Kit.
+- **KITS**: 255 Kits per project; each pattern plays its Kit.
 
 Named after the set it is built for. Runs on an MKII; see [Where it has
 run](#where-it-has-run). Each module has its own page with the technical
@@ -165,7 +165,7 @@ Plug the unit into a computer over its USB port.
 
 ## Kits
 
-KITS keeps a library of 256 named Kits per project; each pattern plays the
+KITS keeps a library of 255 named Kits per project; each pattern plays the
 Kit assigned to it, through the stock Part slots. The keys follow Em's
 Octakit (in this remix until 6 Oct 2026). MKII keys:
 

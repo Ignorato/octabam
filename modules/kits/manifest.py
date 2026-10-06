@@ -1,7 +1,7 @@
-"""KITS -- 256 Kits per project; a Kit is a saved Part.
+"""KITS -- 255 Kits per project; a Kit is a saved Part.
 
 The stock Part engine runs as it is: four working Part slots per bank, the
-pattern's Part byte names one. KITS keeps a library of 256 Parts and, per
+pattern's Part byte names one. KITS keeps a library of 255 Parts and, per
 pattern, the Kit it plays; before a pattern is scheduled its Kit is copied
 into a slot of its bank that nothing is playing and the pattern's Part byte
 names that slot. LOAD KIT and SAVE KIT run the stock Part Reload and Part
@@ -33,7 +33,7 @@ MODULE = Module(
     kind=Kind.CF_PATCH,
     category=Category.PARTS, author="sambanks", author_url="https://github.com/sambanks",
     proof=Proof.HARDWARE, proof_note="Sam's MKII (image A6, 6 Oct 2026): the Octakit import, ems-octakit #5, STOP/PTN+TRIG/PLAY with the Rytm, a rejected bank file, power cycles; `verify_kits` under the port",
-    doc="256 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI, "
+    doc="255 Kits per project: PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI, "
         "then FUNC+BANK); each pattern plays its Kit through the stock Part slots. After Em's Octakit.",
     linked=(Linked("kits", "modules/kits/kits.s", dram=True, include=kits_inc),),
     detours=(

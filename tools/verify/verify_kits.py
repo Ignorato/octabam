@@ -79,6 +79,14 @@ pattern content beyond pattern 1 playing.
             to stock: LOAD KIT open with the list's
             callbacks pointer poked to stock's Part menu table (mkiforeign;
             the recorder setup's own key map never reaches the hook).
+  k256save  bank 3's four slots with no Kit (RESID 0xff): SAVE KIT opens
+            on the first empty Kit (record 255 is "no Kit", never a row).
+  k256load  the same, LOAD KIT: the cursor on UNDO KIT.
+  drawn     stopped, LOAD KIT two rows up: the screen is the same as after
+            a further FUNC tap (drawn by the load itself, as stock FUNC+CUE).
+  k256rescue  a Part in record 255 (its valid bit and a name poked) and
+            pattern 5 noted as on Em's Kit 256: rescue_k256 moves the Part
+            to the first empty Kit and assigns pattern 5 to it.
   import    a project with Em's kits3a/b.work and no kits.work: each
             occupied Kit's name and Part and the newest manifest's ASSIGN,
             as tools/verify's own reader of her format gives them.
@@ -134,6 +142,7 @@ BANK = 2                                  # bank 3: the project's own
 MKI = dict(midi=0x35, bank=0x2f, recab=0x2b)   # held with FUNC on the MKI panel
 MENU = 0x460e5e28                         # the stock list: callbacks, labels, object, &selection
 PSET, TEXTED = 0x460fab34, 0x460e7612     # PATTERN SETTINGS' window, the text editor (nonzero: open)
+LCD = 0x46c7e0ea                          # the 1-bpp plane (tools/emu/README.md "The screen")
 
 
 def run(cmd, log):
@@ -376,6 +385,25 @@ def main():
     s.tap("yes", 1200); s.tap("yes", 1500); add("save", s)
     s = Script(); s.tap("no"); s.hold("func", "part", gap=800); s.tap("down", 200)
     s.down("func", 100); s.tap("yes", 200); s.up("func", 1500); add("quick", s)
+
+    lcdd = f";{LCD:#x},1024="
+    s = Script(); s.tap("no"); s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500)
+    add("drawn", s, more_dumps=lcdd + str(OUT / "drawn_lcd.bin"))
+    s = Script(); s.tap("no"); s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500)
+    s.tap("func", 1500); add("drawnf", s, more_dumps=lcdd + str(OUT / "drawnf_lcd.bin"))
+
+    # ---- record 255 is "no Kit" ---------------------------------------------
+    nokit = [(KI + O_RESID + BANK * 4 + i, 0xff) for i in range(4)]
+    menud = f";{MENU:#x},36="
+    s = Script(); s.tap("no"); s.hold("func", "part", gap=800)
+    add("k256save", s, nokit, more_dumps=menud + str(OUT / "k256save_menu.bin"))
+    s = Script(); s.tap("no"); s.tap("part", 800)
+    add("k256load", s, nokit, more_dumps=menud + str(OUT / "k256load_menu.bin"))
+    r255 = KI + O_LIB + 255 * REC
+    if not only or "k256rescue" in only:
+        add("k256rescue", None, (), ["--step", f"-:poke:{KI + O_VALID + 31:#x}=0x80;{sym['V3K256']:#x}=0x20;"
+                                     + ";".join(f"{r255 + i:#x}={c:#x}" for i, c in enumerate(b"RESCUE\0")),
+                                     "--step", f"-:call:{sym['rescue_k256']:#x}"])
 
     # ---- Phase 2 -----------------------------------------------------------
     s = Script(); s.tap("no"); s.tap("part", 800); s.hold("func", "rec"); s.tap("up", 200)
@@ -620,6 +648,31 @@ def main():
         check(f"{tag}: Kit {k + 1} = the current Part, assigned, named {name}",
               kit(im, k) == slot(b, s_) and im[O_ASSIGN + BANK * 16] == k and name)
 
+    if exists("drawn") and exists("drawnf"):
+        clean("drawn")
+        a_, b_ = (OUT / "drawn_lcd.bin").read_bytes(), (OUT / "drawnf_lcd.bin").read_bytes()
+        check(f"drawn: LOAD KIT while stopped draws the Kit at once (screen equal to after a FUNC tap, "
+              f"{sum(x != y for x, y in zip(a_, b_))} bytes differ)", a_ == b_)
+
+    # ---- record 255 ---------------------------------------------------------------
+    def first_empty(im):
+        return next(k for k in range(255) if not im[O_VALID + k // 8] >> (k % 8) & 1)
+    if exists("k256save"):
+        clean("k256save")
+        im = img("k256save"); cur = struct.unpack(">9I", (OUT / "k256save_menu.bin").read_bytes())[6]
+        check(f"k256save: no Kit in the slot: SAVE KIT opens on Kit {cur + 1}, the first empty one "
+              f"({first_empty(im) + 1})", cur == first_empty(im))
+    if exists("k256load"):
+        clean("k256load")
+        cur = struct.unpack(">9I", (OUT / "k256load_menu.bin").read_bytes())[6]
+        check(f"k256load: no Kit in the slot: LOAD KIT opens on UNDO KIT (row {cur})", cur == 0)
+    if exists("k256rescue") and exists("base"):
+        clean("k256rescue")
+        im, k = img("k256rescue"), first_empty(img("base"))
+        check(f"k256rescue: record 255's Part is Kit {k + 1}, named RESCUE, pattern 5 on it; record 255 empty",
+              im[O_LIB + k * REC:O_LIB + k * REC + 7] == b"RESCUE\0" and im[O_VALID + k // 8] >> (k % 8) & 1
+              and not im[O_VALID + 31] & 0x80 and im[O_ASSIGN + 5] == k)
+
     # ---- the MKI panel --------------------------------------------------------
     def menu(tag):
         w = struct.unpack(">9I", (OUT / f"{tag}_menu.bin").read_bytes())
@@ -632,7 +685,7 @@ def main():
     if exists("mkilist"):
         clean("mkilist"); m = menu("mkilist")
         check(f"mkilist: FUNC+MIDI, FUNC+BANK: SAVE KIT open ({m['count']} rows), PATTERN SETTINGS closed",
-              m["obj"] and m["cbs"] == cb and m["mown"] == 2 and m["count"] == 256 and not m["pset"])
+              m["obj"] and m["cbs"] == cb and m["mown"] == 2 and m["count"] == 255 and not m["pset"])
     if exists("mkiclose"):
         clean("mkiclose"); m = menu("mkiclose")
         check("mkiclose: FUNC+BANK again closes SAVE KIT", not m["obj"] and not m["pset"])

@@ -1,10 +1,10 @@
 # `kits` — KITS
 
-256 Kits per project on the stock effects.
+255 Kits per project on the stock effects.
 
 ## What is in it
 
-- **KITS** (sambanks) — a library of 256 Parts per project; each pattern plays its Kit through the stock Part slots. PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI, then FUNC+BANK).
+- **KITS** (sambanks) — a library of 255 Parts per project; each pattern plays its Kit through the stock Part slots. PART = LOAD KIT, FUNC+PART = SAVE KIT (MKI: FUNC+MIDI, then FUNC+BANK).
 
 ## Status
 
