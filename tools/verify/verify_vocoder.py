@@ -24,13 +24,14 @@ Gates:
 
     python3 tools/verify/verify_vocoder.py
 """
-import importlib.util, math, pathlib, struct, subprocess, sys
+import importlib.util, math, pathlib, struct, subprocess, sys, tempfile
 
 import numpy as np
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401
 import send_probe  # dispatch-table entry resolution
 from remix import registry
+from remix.schema import R7_ALLOC
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MOD = registry.by_name("vocoder")
@@ -40,8 +41,7 @@ MEM = f"out/dsp/_audition_{MOD.name}_A.mem"
 HOST = "vendor/dsp56300/build/source/dsp_host/dsp_host"
 FXID = MOD.menu.fx2_id
 FRAMES = 15
-TMP = pathlib.Path("out/_vcgate")
-TMP.mkdir(parents=True, exist_ok=True)
+TMP = pathlib.Path(tempfile.mkdtemp(prefix="vcgate_"))
 
 _spec = importlib.util.spec_from_file_location("vocoder_ref", ROOT / "modules/vocoder/vocoder_ref.py")
 REF = importlib.util.module_from_spec(_spec)
@@ -77,7 +77,7 @@ def q23(x):
     return [max(-(1 << 23), min((1 << 23) - 1, int(round(s * (1 << 23))))) for s in x]
 
 
-ALLOC = {1: 0, 2: 1, 4: 2, 5: 3, 7: 4, 8: 5, 10: 6, 11: 7}   # r7 (0x6000 + 0x100 n) -> its base-table entry
+ALLOC = R7_ALLOC                  # r7 (0x6000 + 0x100 n) -> its base-table entry
 
 
 def render(L, R, r7=5, **kw):

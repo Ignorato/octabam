@@ -755,6 +755,28 @@ class Harness:
     # fall back to the firmware's own NONE rather than to SEND. See
     # NO_FALLBACK below.
     bus_client: bool = False
+    # THE STATE BLOCK A LOCAL RENDER RUNS THE MODULE AT: dsp_host's -r7
+    # index n (X:0x6000 + 0x100 n; R7_ALLOC gives its allocator entry).
+    # None = the default, FX2 position 0 (n = 2), or FX1 (n = 1) for an
+    # fx1_only module. A module that runs at some positions only and is a
+    # dry pass elsewhere names one it runs at, or `send_probe --direct`,
+    # the audition and verify_dirtystate measure its dry pass (VOCODER:
+    # 5, 0x6500, a core's second FX2 slot).
+    render_r7: int | None = None
+
+
+# dsp_host's -r7 index (X:0x6000 + 0x100 n) -> the allocator's base-table
+# entry for that slot: FX1 at 1, 4, 7, 10; FX2 at 2, 5, 8, 11.
+R7_ALLOC = {1: 0, 2: 1, 4: 2, 5: 3, 7: 4, 8: 5, 10: 6, 11: 7}
+
+
+def render_slot(mod) -> tuple[int, int]:
+    """(dsp_host -r7 index, -alloc entry) a local render of `mod` uses."""
+    h = getattr(mod, "harness", None)
+    if h is not None and h.render_r7 is not None:
+        return h.render_r7, R7_ALLOC[h.render_r7]
+    c = getattr(mod, "claims", None)
+    return (1, 0) if (c is not None and c.fx1_only) else (2, 1)
 
 
 @dataclass(frozen=True)

@@ -59,12 +59,13 @@ proc:
 ; ---- TWO PER CORE, BUILT IN: FX2 positions 1 and 2 only --------------------------
 ; Three VOCODERs on one DSP core overran Ignorato's MKII (a glitch, then a stall
 ; until a reboot; two ran safely), so it runs at two positions per core and is an
-; exact dry pass everywhere else. Not position 0 (T1, T5): there the ColdFire's pull
-; of the previous frame's read-back must finish before T1's FX2 output is copied
-; over it, and reaches T1's words ~4.5 samples after T1's entry, jittering with the
-; pattern (docs/contributing/FAILURE_MODES.md, "Junk on main R ... T1 with BusDelay").
-; On Ignorato's MKII VOCODER on T1 put left-only click bursts into the main out at
-; one phase of the pattern, worst at trigs; on T2 and T3 it ran clean (5 Oct 2026).
+; exact dry pass everywhere else. Not position 0 (T1, T5). Measured: on Ignorato's
+; MKII VOCODER on T1 put left-only click bursts into the main out at one phase of
+; the pattern, worst at trigs; on T2 and T3 it ran clean (5 Oct 2026). Inferred:
+; at position 0 the ColdFire's pull of the previous frame's read-back must finish
+; before T1's FX2 output is copied over it (docs/contributing/FAILURE_MODES.md,
+; "Junk on main R ... T1 with BusDelay"; that was main R, 16-24 samples). T5 is
+; excluded by analogy, unmeasured.
 ; So it runs at r7 = 0x6500 and 0x6800 (T2, T3 on core 1; T6, T7 on core 0). r7 per
 ; slot measured under the port: modules/send/README.md, "An FX1 slot is not a client".
         move    r7,a
@@ -237,8 +238,8 @@ vc_run:
         tfr     y1,a      b,y0
         macr    y0,x0,a                 ; the c band
         move    a,x:(r5)+               ; (r5 -> the next band)
-; the VCA: the band sum += e (c band), rounded to 24 bits (76 dB under the
-; vocoded signal at -20 dBFS; two moves a band fewer than 48)
+; the VCA: the band sum += e (c band), rounded to 24 bits (about 62 dB under
+; the vocoded signal, README and DESIGN; two moves a band fewer than 48)
         move    a,y0
         move    x:(r7+$17),x0           ; e
         move    x:(r7+$2),b

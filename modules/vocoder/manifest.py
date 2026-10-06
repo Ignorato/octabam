@@ -40,7 +40,7 @@ MODULE = Module(
     key="VOCODER",
     kind=Kind.DSP_EFFECT,
     category=Category.TRACK, author="Ignorato", author_url="https://github.com/Ignorato",
-    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, 4-5 Oct 2026, by ear: OCTABAM12 at T1 T2 T5 T6 stable on all eight tracks; the move to T2 T3 T6 T7 (T1 clicked) heard clean on the 0.2 code (OCTABAM20), not on this build",
+    proof=Proof.HARDWARE, proof_note="Ignorato's MKII, 4-5 Oct 2026, by ear: OCTABAM12 at the earlier positions T1 T2 T5 T6, stable on all eight tracks; this build at T2 T3 T6 T7 not flashed; those positions heard clean on the 0.2 code only (OCTABAM20, branch vocoder-0.2 at f83463c8)",
     doc="Ten-band vocoder after the Roland VP-330: the track's voice, a built-in carrier at NOTE or input B. FX2 of tracks 2, 3, 6 and 7 only.",
     menu=MenuEntry(
         fx2_id=0x1a,
@@ -73,7 +73,7 @@ MODULE = Module(
         r7_latch_slot=None,
         gate_label=None,
     ),
-    harness=Harness(layout_char="X", is_server=False),
+    harness=Harness(layout_char="X", is_server=False, render_r7=5),   # runs at 0x6500/0x6800 only
     gates=(Gate("tools/verify/verify_vocoder.py", remix_arg=False),),
     dear={"NOTE": 60, "CONS": 127, "DRY": 127, "LEVL": 127, "MODE": 1},
 )

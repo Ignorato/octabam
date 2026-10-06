@@ -29,7 +29,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from vocoder_law import (FS, CENTRES, Q_BAND, EMPH, TILT_DB, ATTACK_MS, RELEASE_MS,  # noqa: F401
+from vocoder_law import (FS, CENTRES, Q_BAND, EMPH, TILT_DB, RELEASE_MS,  # noqa: F401
                          MAKEUP_SHIFT, NOTE_LO, NOTE_HI, K_BLEP, HP_FC, HP_Q, NOTE_NAMES,
                          band_coefs, note_name, note_inc, note_idt)
 
@@ -82,7 +82,7 @@ def vocode(L, R, mode=0, note=24, cons=48, dry=0, levl=100):
     m = (L + R) / 2 if mode == 0 else L
     c = carrier_int(note, n) if mode == 0 else R / 2
     q = 1.0 / Q_BAND
-    au, ad = (1 - math.exp(-1 / (FS * t * 1e-3)) for t in (ATTACK_MS, RELEASE_MS))
+    ad = 1 - math.exp(-1 / (FS * RELEASE_MS * 1e-3))
     acc = np.zeros(n)
     for f1, f2, w in band_coefs():
         a = _svf_bp(_svf_bp(m, f1, q), f2, q)
