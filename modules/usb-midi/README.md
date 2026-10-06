@@ -75,10 +75,12 @@ The port's flush completes at once and ignores the overlay; the controller's
 behaviour on the flush/re-prime sequence is not measured. Hardware status:
 port only.
 
-## Clock (port only, 6 Oct 2026)
+## Clock (6 Oct 2026)
 
-Reported on a unit (Discord, 6 Oct 2026): with USB MIDI clock the sequencer
-follows, time stretch, LFOs and FX do not; DIN clock drives all of them.
+Reported by Kazeko (MKI, Discord, 6 Oct 2026): with USB MIDI clock the
+sequencer follows, time stretch, LFOs and FX do not; DIN clock drives all
+of them. After the change (#633), the same unit: reported working; the
+build number and which of the three were checked are not recorded.
 
 - The UART0 ISR (`0x400106ec`) timestamps each `0xF8` before passing it on:
   DTCN0 (`0xfc07000c`) into `0x46c8345a`, the delta into `0x46c83466`
@@ -120,8 +122,7 @@ The `usb-midi` remix (this module on the stock effects) has not been flashed.
 
 ## Open
 
-- Not measured: USB clock on the unit, before or after the timestamp;
-  clock jitter over USB against DIN (bulk transfers have no schedule; the
+- Not measured: clock jitter over USB against DIN (bulk transfers have no schedule; the
   gate sends one `0xF8` per transfer, a host can bunch several into one
   packet, and each then gets a near-zero interval); a CC flood against the
   256-byte queue; DISK MODE entered with a MIDI session open; Windows.
