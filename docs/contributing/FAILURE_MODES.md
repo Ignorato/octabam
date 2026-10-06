@@ -13,11 +13,11 @@ host stops audio setup", "A track button pressed within about 250 ms of a patter
 change halts in Octakit's Part-refresh wrapper", "USB MIDI clock moves the
 sequencer and not the tempo", and every entry after the line "Entries from here to the end of the file (5 Oct 2026)".
 
-## USB MIDI clock moves the sequencer and not the tempo: time stretch, LFOs and FX ignore it 🟡 cause measured under the port, fix built (unflashed)
+## USB MIDI clock moves the sequencer and not the tempo: time stretch, LFOs and FX ignore it ✅ fixed (#633), confirmed on Kazeko's MKI
 
 - **Seen:** reported on Discord, 6 Oct 2026, a remix carrying USB MIDI: USB clock reaches the sequencer, not time stretch, LFOs or FX; DIN clock drives all of them.
 - **Cause:** the tempo (`0x80001818`) is built by the clock handler `0x40005a48` from the DTCN0 interval the UART0 ISR stores for each `0xF8` (`0x4001070a`); the USB decoder enqueued the byte without it, so the tempo stayed at the project's (no DIN clock since power-on) or at the last DIN clock's. Measured under the port (`modules/usb-midi/README.md` "Clock"); that time stretch, LFOs and FX read `0x80001818` is inferred.
-- **Fix:** `usbmidi_rx_decode` timestamps each `0xF8` as the ISR does; `verify_usbmidi_clock`. Not yet run on a unit.
+- **Fix:** `usbmidi_rx_decode` timestamps each `0xF8` as the ISR does; `verify_usbmidi_clock` (#633). Kazeko's MKI, 6 Oct 2026: reported working on a build carrying #633 (build number and which of time stretch, LFOs and FX were checked not recorded).
 
 ## STOP, a pattern switch while stopped, PLAY halts in Octakit's pattern-event retry bridge, D0 = CORRUPT (image A5, bottleservice) ✅ closed by removal (6 Oct 2026)
 
