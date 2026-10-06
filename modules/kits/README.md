@@ -44,6 +44,9 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
   YES opens the name editor (seven characters, `NEW KIT` for an empty
   Kit); the current Part is saved into the Kit and the current pattern
   plays it.
+- In either list, LEVEL moves the cursor a row per detent (Octakit's
+  LEVEL scroll; the encoder dispatch call `0x40061e00`), UP and DOWN as
+  stock.
 - In either list, FUNC+REC copies the Kit under the cursor, FUNC+STOP
   pastes onto it, FUNC+PLAY clears it; the same paste or clear again on
   the same Kit undoes it.
@@ -136,6 +139,8 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
   PTN+TRIG, PLAY three times over the chain's patterns, each playing its
   Kit; the chain for 60 s on the clock with a CC every 250 ms across
   tracks 1-8 (CC 7, 46, 47, 55). No halt, every counter zero.
+- ✅ LEVEL in LOAD KIT: +3 then −1 moves the cursor two rows; on the main
+  screen LEVEL still sets the current track's level (stock).
 - ✅ A slot with no Kit: SAVE KIT opens on the first empty Kit, LOAD KIT
   on UNDO KIT; a Part in record 256 moves to the next empty Kit with the
   patterns noted on it.
