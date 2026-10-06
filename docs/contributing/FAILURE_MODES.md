@@ -399,5 +399,5 @@ Entries from here to the end of the file (5 Oct 2026) were recorded in other doc
 ## MKI: FUNC+BANK opens SAVE KIT, PATTERN SETTINGS unreachable (KITS) ✅ measured under the port, fixed
 
 - **Seen:** a user on an MKI with KITS, Discord (kazeko), 6 Oct 2026: "cant find pattern edit now ... before FUNC + BANK". Not reproduced on an MKI unit.
-- **Cause:** `kits_mkisave` detoured the MKI FUNC+BANK dispatch `0x40058a64` and opened SAVE KIT whenever KITS was ready. Stock opens the Part edit menu there only while the PART window is open, and otherwise PATTERN SETTINGS (`0x40083440`) or, in RECORDING SETUP, the recording list. Octakit kept the stock condition (SAVE KIT from LOAD KIT only).
+- **Cause:** `kits_mkisave` detoured the MKI FUNC+BANK dispatch `0x40058a64` and opened SAVE KIT whenever KITS was ready. Stock opens the Part edit menu there only while the PART window is open, and otherwise PATTERN SETTINGS (`0x40083440`) or one of two targets chosen by flags at `0x460d1aec` / `0x460d1736`. Octakit kept the stock condition (SAVE KIT from LOAD KIT only).
 - **Fix:** SAVE KIT only while KITS' LOAD KIT list is open (the stock list's callbacks pointer `0x460e5e28` is KITS' table), close SAVE KIT, cancel the Kit name editor; anything else runs the stock dispatch. `verify_kits` `mki*` scenarios on the MKI panel.

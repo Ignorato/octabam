@@ -34,7 +34,8 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 - **MKI FUNC+BANK** is SAVE KIT only while the LOAD KIT list is open
   (Octakit's key map); with SAVE KIT open it closes it, over the Kit name
   editor it cancels it, and anywhere else it is stock's (PATTERN SETTINGS
-  on the main screen, the recording list in RECORDING SETUP). The open
+  on the main screen). RECORDING SETUP has its own key map
+  (`0x400b9e36`): FUNC+BANK there never reaches the hook. The open
   list is KITS' when the stock list's callbacks pointer (`0x460e5e28`) is
   KITS' table; the editor when its done callback (`0x460e761a`) is
   KITS'.
@@ -139,8 +140,9 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
 - ✅ The MKI panel (the port without `--mkii`): FUNC+BANK on the main
   screen opens PATTERN SETTINGS; FUNC+MIDI then FUNC+BANK opens SAVE KIT,
   and a save from it lands; FUNC+BANK again closes it; over the name
-  editor it cancels, nothing saved; after LOAD KIT closed by NO, and in
-  RECORDING 1 SETUP after it, FUNC+BANK is stock's.
+  editor it cancels, nothing saved; after LOAD KIT closed by NO, and with
+  a list open that is not KITS' (its callbacks pointer poked to stock's
+  Part menu table), FUNC+BANK is stock's.
 - ✅ SAVE PROJECT writes `kits.work` and `kits.strd`; a second boot of the
   card, a power cycle of it (`--cs1-in`, `--no-post`) and a power cycle
   of a card whose change was never saved each come back with the same
