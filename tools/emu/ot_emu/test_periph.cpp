@@ -129,8 +129,8 @@ int main()
 
 		// DTIM3 (DTMR 0x0b: bus/1, restart, no ORRI, DTRR untouched) is a
 		// timestamp: it counts at 132 MHz, interrupts nothing and offers the
-		// idle skip no expiry. DTIM0 (DTMR 7) counts the DTIN pin: no model,
-		// it holds at 0.
+		// idle skip no expiry. DTIM0 (DTMR 7) counts the DTIN pin: held at 0
+		// without a pin rate, 256 fs with the one Rtos gives it.
 		ot::DmaTimer u("DTIM3", 132e6);
 		u.write(0, 2, 0x0b, 0.0);
 		{
@@ -143,6 +143,9 @@ int main()
 		ot::DmaTimer z("DTIM0", 132e6);
 		z.write(0, 2, 7, 0.0);
 		checkEq("a DTIN-clocked channel holds at 0", z.count(44100.0), 0);
+		ot::DmaTimer p("DTIM0", 132e6, 256.0 * 44100.0);
+		p.write(0, 2, 7, 0.0);
+		checkEq("a DTIN-clocked channel with a pin rate counts 256 per sample", p.count(44100.0), 11289600);
 	}
 
 	// ---- INTC ------------------------------------------------------------

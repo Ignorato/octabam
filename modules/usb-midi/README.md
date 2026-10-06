@@ -75,6 +75,32 @@ The port's flush completes at once and ignores the overlay; the controller's
 behaviour on the flush/re-prime sequence is not measured. Hardware status:
 port only.
 
+## Clock (port only, 6 Oct 2026)
+
+Reported on a unit (Discord, 6 Oct 2026): with USB MIDI clock the sequencer
+follows, time stretch, LFOs and FX do not; DIN clock drives all of them.
+
+- The UART0 ISR (`0x400106ec`) timestamps each `0xF8` before passing it on:
+  DTCN0 (`0xfc07000c`) into `0x46c8345a`, the delta into `0x46c83466`
+  (`0x4001070a..0x4001071e`). The clock handler (`0x40005a48`) builds the
+  tempo from that delta: a 24-tick ring, `24 * 21,168,000 * 32 / sum`,
+  clamped 600..7320, into `0x80001818` (and `0x80001814` every 24th tick).
+  The decoder called `midi_rx_enqueue` directly and stored no timestamp.
+- Measured under the port before the change (`usb-midi` remix, CLOCK
+  RECEIVE set, 96 ticks per run): the handler ran on all 96 USB ticks; from
+  cold the interval stayed 0, the ring sum stayed under the handler's
+  threshold and `0x80001818` was never written (the project's 2880); after
+  DIN clock it held the last DIN interval and the DIN tempo (2402) through a
+  USB run at another rate. That the time stretch, LFOs and FX read this
+  tempo is inferred.
+- `usbmidi_rx_decode` now does the ISR's five instructions for each `0xF8`
+  before it is enqueued. `verify_usbmidi_clock`: two USB runs at 50 and
+  40 ms per tick read 1200 and 1498 (want 1200 and 1501); before the change
+  both read 2400, the DIN run's tempo.
+- DTIN0's clock is inferred: the handler's constant gives BPM × 24 only for
+  256 fs (11.2896 MHz). The port counts DTCN0 at that rate (`rtos.h`);
+  before this change it held at 0 and no MIDI clock tempo ran under the port.
+
 ## On the unit
 
 Image 64, `usb-audio`, Sam's MKII, 25 Sep 2026:
@@ -94,9 +120,11 @@ The `usb-midi` remix (this module on the stock effects) has not been flashed.
 
 ## Open
 
-- Not measured: timing on the unit (bulk transfers have no schedule; clock
-  jitter over USB against DIN), a CC flood against the 256-byte queue,
-  DISK MODE entered with a MIDI session open, Windows.
+- Not measured: USB clock on the unit, before or after the timestamp;
+  clock jitter over USB against DIN (bulk transfers have no schedule; the
+  gate sends one `0xF8` per transfer, a host can bunch several into one
+  packet, and each then gets a near-zero interval); a CC flood against the
+  256-byte queue; DISK MODE entered with a MIDI session open; Windows.
 
 ## Gates
 
@@ -104,6 +132,10 @@ The `usb-midi` remix (this module on the stock effects) has not been flashed.
 - `verify_usbmidi_rx` (image stage): the four packets of "Receive path",
   parsed bytes compared with sent bytes, and each packet accepted whole by
   the dTD. Five of its nine checks fail on the code before this change.
+- `verify_usbmidi_clock` (image stage): DIN clock, then USB clock at two
+  other rates, under `--interactive` with each byte handed over at a known
+  sample; `0x80001818` within 1% of the tick spacing's BPM × 24 after each
+  run. Both USB checks fail without the timestamp.
 
 ## What it is
 
