@@ -14,8 +14,10 @@ docs/superpowers/specs/2026-09-28-stem-rec-menu-design.md.
 Every stock fact the unit uses: docs/firmware/STEM_REC.md.
 
 HOW, in one breath: a detour at the per-frame routine's only call site
-(0x40004b12) packs each enabled track's post-FX2 read-back block into a
-8 MiB ring each frame; an RTOS task of the module's own streams the ring
+(0x40004b12) mirrors core 0's MAIN gains every frame and, while a take
+runs, packs each source into an 8 MiB ring: each track's read-back block
+times its gain (its share of MAIN), MAIN and CUE as mixed, the inputs
+raw; an RTOS task of the module's own streams the ring
 to the card while the take runs, through the file layer's raw sector
 routines from its own buffers (never the buffered API or its shared
 staging buffer), then rewrites each file's header and sets its length;
@@ -25,8 +27,9 @@ DRAM remix already gives up. The writer's sector buffers are a third
 region, `stems_buf`: fourteen 49,664-byte stream buffers and fourteen 512-byte
 sector-0 copies.
 
-⚠️ UNFLASHED. No module upstream hooks the frame site or grows MAIN
-MENU's root (29 Sep 2026); the ledger refuses one that does, by name.
+On hardware: STEMS1 to STEMS3 on Yves's MKII (docs/firmware/STEM_REC.md
+section 17). No module upstream hooks the frame site or grows MAIN MENU's
+root (29 Sep 2026); the ledger refuses one that does, by name.
 """
 
 import pathlib
@@ -75,8 +78,8 @@ MODULE = Module(
     key="STEM REC",
     kind=Kind.CF_PATCH,
     category=Category.MACHINES, author="yvesrosius", author_url="https://github.com/yvesrosius",
-    proof=Proof.HARDWARE, proof_note="Yves's MKII, 30 Sep 2026 (STEMS1): T1-T8, about two minutes; "
-        "piece 5 (after the fader, the sources, 24 bits) port-gated, unflashed",
+    proof=Proof.HARDWARE, proof_note="Yves's MKII: STEMS1 (30 Sep 2026), T1-T8 for about two minutes; "
+        "STEMS3 (6 Oct 2026), T1-T8 after the fader, MAIN and AB at 16 and 24 bits",
     doc="MAIN MENU > STEMS: every track after its fader, MAIN, CUE and the inputs to the card "
         "while the sequencer plays (streamed: 16 or 24 bits, up to 60 min).",
     linked=(Linked("stems", "modules/stems/stems.s", dram=True, include=gtab_inc),),
