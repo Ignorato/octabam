@@ -141,6 +141,8 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
   tracks 1-8 (CC 7, 46, 47, 55). No halt, every counter zero.
 - ✅ LEVEL in LOAD KIT: +3 then −1 moves the cursor two rows; on the main
   screen LEVEL still sets the current track's level (stock).
+- ✅ Playing, PATTERN held, TRIG 2 then TRIG 3 tapped one after the other:
+  two switches, the held-TRIG mask (`0x460d1ab6`) back at 0, as stock.
 - ✅ A slot with no Kit: SAVE KIT opens on the first empty Kit, LOAD KIT
   on UNDO KIT; a Part in record 256 moves to the next empty Kit with the
   patterns noted on it.

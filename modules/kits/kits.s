@@ -1311,9 +1311,15 @@ kits_status:
 
 | ============================================================ staging ======
 
-| stage_req: d0 = bank, d1 = pattern. In task context only.
+| stage_req: d0 = bank, d1 = pattern. In task context only. Keeps d2: the
+| stock callers of the scheduler and the chain append hold values there
+| across the call (the PATTERN+TRIG handler its key, 0x40056ba4).
 stage_req:
-        cmpil   #15,%d0
+        movel   %d2,%sp@-
+        bsr.s   1f
+        movel   %sp@+,%d2
+        rts
+1:      cmpil   #15,%d0
         bhi.s   9f
         cmpil   #15,%d1
         bhi.s   9f

@@ -87,6 +87,9 @@ pattern content beyond pattern 1 playing.
   lvl       LOAD KIT open, LEVEL +3 then -1: the cursor two rows below
             where it opened (lvl0: LOAD KIT open alone).
   lvlstock  LEVEL +3 on the main screen: the current track's level +3 (stock).
+  ptnmask   playing, PATTERN held, TRIG 2 tapped, then TRIG 3: a switch
+            each, so the held-TRIG mask (0x460d1ab6) is 0 with PATTERN still
+            down (a bit left set makes the next tap a chain).
   k256rescue  a Part in record 255 (its valid bit and a name poked) and
             pattern 5 noted as on Em's Kit 256: rescue_k256 moves the Part
             to the first empty Kit and assigns pattern 5 to it.
@@ -404,6 +407,8 @@ def main():
     add("lvlstock", s, more_dumps=f";0x80000c50,16={OUT / 'lvlstock_lev.bin'}")
     s = Script(); s.tap("no", 600)
     add("lvlbase", s, more_dumps=f";0x80000c50,16={OUT / 'lvlbase_lev.bin'}")
+    s = Script(); s.tap("no"); s.tap("play", 2000); s.down("ptn", 100); s.tap(1, 800); s.tap(2, 800)
+    s.wait(500); add("ptnmask", s, more_dumps=f";0x460d1ab6,2={OUT / 'ptnmask_mask.bin'}")
 
     # ---- record 255 is "no Kit" ---------------------------------------------
     nokit = [(KI + O_RESID + BANK * 4 + i, 0xff) for i in range(4)]
@@ -677,6 +682,10 @@ def main():
         moved = [(i // 2 + 1, a_[i], b_[i]) for i in range(0, 16, 2) if a_[i] != b_[i]]
         check(f"lvlstock: with no list open LEVEL is stock's: the current track's level moved (track, from, to: {moved})",
               len(moved) == 1 and moved[0][2] == moved[0][1] + 3)
+    if exists("ptnmask"):
+        clean("ptnmask")
+        m_ = struct.unpack(">H", (OUT / "ptnmask_mask.bin").read_bytes())[0]
+        check(f"ptnmask: TRIG 2 then TRIG 3 under PATTERN leave no TRIG held in the mask ({m_:#06x})", m_ == 0)
 
     # ---- record 255 ---------------------------------------------------------------
     def first_empty(im):
