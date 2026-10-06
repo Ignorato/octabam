@@ -30,6 +30,7 @@ Remixes
 - KITS replaces OCTAKIT, SCENES KITS, SCENES P2 KITS and KITS RELOAD in bottleservice, ok-ms, mods and character-txtr; mods also carries DIRECT_JUMP_KYOTI and RELOAD_FROM_PROJECT; `remixes/test/octakit` removed, `remixes/test/kits` added (6 Oct, port only).
 - bottleservice takes the computer's stereo output onto inputs C/D (USB AUDIO IN CD + USB CROSSBAR); USB AUDIO OUT MASTER polls every 250 µs (28 Sep). Both IN modules out again on 4 Oct (#575, image A0 below).
 - bottleservice keeps the stock DELAY's FX2 chooser row; `BUILD` tags past 99 are a letter and a digit (`A0` = 100) (4 Oct, #576).
+- `stems`: STEM REC on the stock effects; STEMS1 listed STEM REC alone and drew a one-row FX2 chooser (1 Oct).
 - Twelve `usb-io-<out>-<in>` test remixes and `usb-out-main`; USB remixes named by direction (`usb-full` → `usb-out-tracks`, `usb-lean` → `usb-out-tracks-main-cue`, `usb-master` → `usb-out-master`, `usb-mc` → `usb-out-main-cue`) (28 Sep).
 - `remixes/test/` holds the one-module carriers; `mods` moved there, `restock` removed (28–30 Sep).
 - `octatrick` carries SYNTH MACHINE, SCALE QUANTIZER, DIRECT JUMP, TUNER, USB MIDI, USB AUDIO OUT TRACKS MAIN CUE and USB AUDIO IN ABCD + USB CROSSBAR on the stock effects less SPATIALIZER (its payload-A words hold the IN inject); `octatrick-usb` folded into it and removed (Tim Hastie, 29 Sep, #526).
@@ -37,6 +38,8 @@ Remixes
 - Removed: `bamsep26` (bottleservice is its superset), `mutables`, `nimbus`, `hello`, `hello-dram` (27 Sep).
 
 Modules
+- STEM REC: MAIN MENU > STEMS records every track to the card while the sequencer plays, one 16-bit stereo file per track, streamed, up to 60 min (Yves Rosius, 26-30 Sep).
+- STEM REC, piece 5: every track after its fader (its share of MAIN, from core 0's own gain arithmetic redone in the frame hook), MAIN, CUE and the inputs AB/CD as sources (stereo or mono), 24-bit files, an 8 MiB ring; the menu's labels keep moving when the card falls behind (Yves Rosius, 1-4 Oct).
 - KITS (new): 256 Kits per project through the stock Part slots: each pattern's Kit is copied into a slot nothing plays before the pattern is scheduled; LOAD/SAVE KIT on the stock list menu with Octakit's key map, UNDO KIT, list copy/paste/clear/undo, AUTOSAVE and KEEP LEVELS, the pattern clipboard carrying the Kit, FUNC+PASTE+PART, PTN+FUNC+RIGHT, PTN+FUNC+TRIG; kits.work/kits.strd, migration of the stock Parts, import of Octakit's kits3a/b.work; no `illegal` (6 Oct, port: `verify_kits`, 89 checks; on the unit in image A6).
 - OCTAKIT, SCENES KITS, SCENES P2 KITS, KITS RELOAD removed, with the build's Runtime/ArenaReserve machinery (every other remix's image and report bit-identical; refhash 24/24); TEMPO BUS and MODE DEFAULTS no longer push Octakit's token (6 Oct).
 - OCTAKIT: patch 0002, a track button within ~250 ms of a queued pattern change ran her Part-refresh writer into its context fatal (BUSY during the handoff; ems-octakit#5's setting); on BUSY the writer now runs stock unwrapped (5 Oct, port-measured).
@@ -74,6 +77,7 @@ Gates and tools
 - Shards: image-stage gates on their own shard, long-pole remixes split into gate jobs; the cover 681 s → 530 s (29 Sep).
 - Tape Echo probe: glibc `random()` vectors on every host, oracle built `-fwrapv` (27 Sep).
 - `tools/hw/bcr2000.py` (28 Sep), `tools/hw/usb_probe.py` (Bryan T, 28 Sep), `tools/harness/usb_align.py` (28 Sep), `tools/ghidra` (roblg, #483, 28 Sep).
+- `verify_docs` exempts the dated plans and specs under `docs/superpowers/`, records like this file (1 Oct).
 - `verify_docs` checks every relative Markdown link; the remixer TUI draws again (30 Sep).
 - `Formatter.PLAIN` zeroes a clone's formatter words on any module, not only one with a stepped slot (5 Oct); refhash 24/24 bit-identical, no shipping module changed.
 
@@ -82,6 +86,16 @@ Docs
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - ColdFire load on a unit: Bryan T's CF METER takes (4 Oct; `docs/firmware/ARCHITECTURE.md` section 6): ~16.5 µs per playing voice at CPI ~4.4 against the port, no first-voice premium (the morning's +37 µs retracted the same evening), the USB stack ~14 µs idle / ~25 µs playing, no crossbar contention; OUT TRACKS MAIN CUE costs 27–50 µs of frame interrupt over OUT MAIN CUE, most of it with no host connected; TSTR and the stock DELAY not measurable; interrupt levels from the ICR writes in `KERNEL.md`.
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
+
+## STEMS3 — 6 Oct 2026 (`stems` at `fc7baad`)
+
+On the unit (Yves's MKII, reported 6 Oct): T1 to T8 record from Static and
+THRU machines, and so do MAIN and AB in stereo. A stem follows its track's
+LEVEL, AMP VOL, and BAL. On a light project, eleven stereo files peaked the
+ring at 10% at 16 bits and 13 to 16% at 24 bits. On a busy project at 24
+bits the ring filled: RING FULL, and the files saved, cut where it filled
+(open; `docs/firmware/STEM_REC.md` section 17.3).
+- STEM REC, piece 5: every track after its fader, MAIN, CUE and the inputs, 24 bits, the 8 MiB ring.
 
 ## Image A6 (106) — 6 Oct 2026 (`bottleservice` at `e2e1d60f`)
 
@@ -194,6 +208,22 @@ BURN 1. BURN 2 not tried (predicted mean ~352 µs, longest ~400 µs).
 Sam's bottleservice project squealed on PLAY on this image before CF Meter was
 selected; a fresh project did not (cause not measured).
 - The remix: stock effects + USB MIDI + USB AUDIO OUT TRACKS MAIN CUE + CF METER + CF METER IDLE + WAVE LOAD.
+
+## STEMS2 — 1 Oct 2026 (`stems` at `d646e83`)
+
+On the unit (Yves's MKII): it flashed, and FX2's page shows the stock
+effects again. The first boot played audio. A stem doesn't follow its
+track's LEVEL, as designed so far (`docs/firmware/STEM_REC.md` section 17.2).
+- The remix: STEM REC on the 14 stock effects; STEM REC's code is STEMS1's.
+
+## STEMS1 — 30 Sep 2026 (`stems` at `4ec1276`)
+
+On the unit (Yves's MKII): T1 alone, then T1-T8 for about two minutes, every
+take whole; stopping the sequencer ended the take; every file plays. The first
+boot had no audio until a power cycle (open). FX2's chooser had one row. The
+stems sit about 12 dB under normal playback, by ear
+(`docs/firmware/STEM_REC.md` section 17.1).
+- The remix: STEM REC alone. MAIN MENU > STEMS: REC, a status row, T1-T8, PEAK.
 
 ## Image 88 — 27 Sep 2026 (`bottleservice` at `d6867bd`)
 

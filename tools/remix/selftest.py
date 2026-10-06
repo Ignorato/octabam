@@ -19,9 +19,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 from remix import ledger, registry, schema, state, stock  # noqa: E402
-from remix.schema import (BusRole, CavePatch, Claims, Detour, DspHook, DspRange,  # noqa: E402
-                          DspSection, Formatter, Keep, Kind, MenuEntry, Module, Param,
-                          Poke, SymbolRef, TableGrow, YBase)
+from remix.schema import (BusRole, CavePatch, Claims, Detour, DramRegion, DspHook,  # noqa: E402
+                          DspRange, DspSection, Formatter, Keep, Kind, Linked, MenuEntry,
+                          Module, Param, Poke, SymbolRef, TableGrow, YBase)
 
 
 _PRIORITY = iter(range(100, 1000))      # distinct unless a case sets one
@@ -87,6 +87,22 @@ def _cave(name, cave_addr, length=16, hook_addr=None):
                               pinned=b"\x4e\x71" * (length // 2),
                               hook_addr=hook_addr,
                               hook_stock=b"\x00" * 10 if hook_addr else b""),),
+    )
+
+
+def _region(name, symbol):
+    return Module(
+        name=name, key=name.upper(), kind=Kind.CF_PATCH, doc="fixture",
+        linked=(Linked(name, "does/not/exist.s", dram=True),),
+        dram_regions=(DramRegion(symbol, 0x1000),),
+    )
+
+
+def _detour(name, site):
+    return Module(
+        name=name, key=name.upper(), kind=Kind.CF_PATCH, doc="fixture",
+        linked=(Linked(name, "does/not/exist.s", dram=True),),
+        detours=(Detour(site, b"\x4e\x71" * 4, name, "entry"),),
     )
 
 
@@ -215,6 +231,17 @@ CASES = [
     ("a range on another module's core-private Y word",
      [_ranged("alpha", DspRange("y", 0x0900, 0x10, "state")),
       _effect("beta", 0x1e, reserved=(0x0905,))], "DSP data"),
+    ("two modules claiming one DRAM region symbol",
+     [_region("alpha", "ring"), _region("beta", "ring")], "DRAM region"),
+    # A hook site is a fixed address whether or not its cave floats. Every
+    # hook-based cave upstream floats, and until the ledger registered
+    # their sites, none of them was checked against anything.
+    ("two floating caves hooking the same instruction",
+     [_cave("alpha", None, hook_addr=0x40004d40),
+      _cave("beta", None, hook_addr=0x40004d40)], "hook site"),
+    ("a floating cave's hook and a detour at one site",
+     [_cave("alpha", None, hook_addr=0x40004b12),
+      _detour("beta", 0x40004b12)], "hook site"),
 ]
 
 CLEAN = [_effect("alpha", 0x07, reserved=(0x0905,)),
@@ -812,7 +839,7 @@ def main():
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
     _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
-             "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (),     # stock effects + ColdFire modules, no DSP words
+             "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (), "stems": (),     # stock effects + ColdFire modules, no DSP words
              "repitch": (), "plocks-p2": (), "kits": (), "analog-bassdrum": ("SPRING REV",),
              "sidechain-compressor": ("SPRING REV",), "kyoti-mute-sidechain": ("SPRING REV",),   # its DSP section in SPRING's words
              # Zac Kyoti's ColdFire modules on the stock effects, no DSP words

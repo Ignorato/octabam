@@ -110,6 +110,10 @@ def preboot_layout(layout, entries):
                 ('runtime stage', layout['stage'], layout['stage_end'])]
     if 'bss_end' in layout:
         occupied.append(('runtime .bss', layout['runtime_end'], layout['bss_end']))
+    # A module's DRAM regions (schema.DramRegion, STEM REC's ring and stack)
+    # are claims on the same arena: a pre-boot payload may not land on them.
+    occupied += [(f'DRAM region {sym}', a, a + n)
+                 for sym, (a, n) in layout.get('regions', {}).items()]
     result = []
     for entry in entries:
         for role, length in (('dst', entry['rawlen']), ('stage', len(entry['blob']))):
@@ -129,7 +133,7 @@ def preboot_layout(layout, entries):
 
 
 def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, preboot=(), includes=None,
-          unit_defs=None):
+          unit_defs=None, regions=()):
     """units: [(module key, Linked)] with dram=True, in link order.
     payloads: [dict(name, blob, stage, dst, rawlen, rhash, backup)] for
     payloads built elsewhere: `blob` = signature + GKA3 stream.
@@ -141,7 +145,10 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
     carries that section only when there is one. Returns
     (append bytes, symbols of the octabam runtime, boot poke, payload
     names) and writes LAYOUT. unit_defs: {unit label: resolved
-    Linked.defsyms} for each unit's assembly (link_runtime)."""
+    Linked.defsyms} for each unit's assembly (link_runtime). regions:
+    [(symbol, size, align)] of uninitialised DRAM (schema.DramRegion),
+    stacked down from the reserve's ceiling and handed to the link as
+    --defsym symbol=address."""
     import json
     work = work.resolve()
     work.mkdir(parents=True, exist_ok=True)
@@ -157,6 +164,13 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
         for p in payloads:
             defs.update(p.get("symbols", {}))
         defs.update(defsyms or {})
+        # DramRegions: stacked down from the ceiling, named to the link.
+        placed = {}
+        top = ceiling
+        for r_sym, r_size, r_align in regions:
+            top = (top - r_size) & ~(r_align - 1)
+            placed[r_sym] = (top, r_size)
+        defs.update({s: a for s, (a, _) in placed.items()})
         raw, symbols = link_runtime(units, work / "runtime", defs, base, includes, unit_defs)
         packed = pack.PACKED_MAGIC + len(raw).to_bytes(4, "big") + \
             pack.pack(raw, MAX_CANDIDATES)
@@ -175,6 +189,13 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
             sys.exit(f"platform build: the runtime's .bss ends at 0x{bss_end:08x}, past the "
                      f"reserve's ceiling 0x{ceiling:08x} ({size:,} B). Reserve more pages "
                      f"(tools/remix/arena.py PLATFORM_PAGES).")
+        if placed:
+            floor_sym, (floor, _) = min(placed.items(), key=lambda kv: kv[1][0])
+            if max(stage_end, bss_end) > floor:
+                sys.exit(f"platform build: the runtime, its stage and its .bss end at "
+                         f"0x{max(stage_end, bss_end):08x}, above DRAM region {floor_sym} at "
+                         f"0x{floor:08x} -- shrink the regions or reserve more pages "
+                         f"(tools/remix/arena.py PLATFORM_PAGES).")
         entries.append(dict(name="octabam", blob=SIGNATURE + packed,
                             stage=stage + UNCACHED, dst=base + UNCACHED,
                             rawlen=len(raw), rhash=roll(raw), backup=0))
@@ -183,6 +204,8 @@ def build(units, payloads, work: pathlib.Path, reserve=None, defsyms=None, prebo
                       stage_end=stage_end, ceiling=ceiling, size=size)
         if bss_end > symbols.get("__bss_start", bss_end):
             layout.update(bss_end=bss_end)
+        if placed:
+            layout["regions"] = {s: [a, n] for s, (a, n) in placed.items()}
     if preboot:
         try:
             layout['preboot'] = preboot_layout(layout, preboot)
