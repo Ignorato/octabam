@@ -64,6 +64,16 @@ Docs
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
 
+## STEMS3 — 6 Oct 2026 (`stems` at `fc7baad`)
+
+On the unit (Yves's MKII, reported 6 Oct): T1 to T8 record from Static and
+THRU machines, and so do MAIN and AB in stereo. A stem follows its track's
+LEVEL, AMP VOL, and BAL. On a light project, eleven stereo files peaked the
+ring at 10% at 16 bits and 13 to 16% at 24 bits. On a busy project at 24
+bits the ring filled: RING FULL, and the files saved, cut where it filled
+(open; `docs/firmware/STEM_REC.md` section 17.3).
+- STEM REC, piece 5: every track after its fader, MAIN, CUE and the inputs, 24 bits, the 8 MiB ring.
+
 ## STEMS2 — 1 Oct 2026 (`stems` at `d646e83`)
 
 On the unit (Yves's MKII): it flashed, and FX2's page shows the stock

@@ -7258,6 +7258,57 @@ STEMS1's STEM REC on the 14 stock effects. Yves reported it from the unit.
   `stem-rec-p5`).
 - **Not yet reported:** the card's speed (test 4).
 
+### 17.3 Flash C: STEMS3 on Yves's MKII, reported 6 Oct 2026
+
+The image is STEMS3 (`BUILD=3`, from `fc7baad`; `modules/stems/FLASH.md`):
+piece 5, with stems after the fader, MAIN, CUE, the inputs, and 24 bits.
+Yves reported each result from the unit and the card, by ear and by eye.
+PEAK is the menu's own readout: the take's largest ring fill, in whole
+percent of the ring's capacity in frames.
+
+- ✅ **The flash.** STEMS3 flashed and records.
+- ✅ **T1 to T8 record**, from Static machines and from THRU machines.
+- ✅ **MAIN and AB, stereo, record.**
+- ✅ **A stem follows its track's LEVEL, AMP VOL, and BAL**, by ear.
+  STEMS2's stems didn't follow LEVEL (17.2); piece 5 takes them after the
+  fader (18.2). The null tests against `MAIN.wav` (flash C's tests 3 and
+  4) aren't reported yet.
+- ✅ **A light project leaves the card room, at 16 and at 24 bits.** On a
+  project with audio on AB, T1 as a THRU track, and MAIN only:
+
+  | Sources | Width | Data rate | PEAK | Behind at the peak |
+  |---|---|---|---|---|
+  | AB | 16 bits | 0.18 MB/s | 0% | under 0.48 s |
+  | T1 to T8, MAIN, AB, CD (11 stereo files) | 16 bits | 1.94 MB/s | 10% | 0.43 to 0.48 s |
+  | the same | 24 bits | 2.91 MB/s | 13 to 16% | 0.37 to 0.49 s |
+
+  The last column is computed from PEAK: the ring holds 11,915 frames of
+  eleven 16-bit files and 7,943 of eleven 24-bit files, and a frame is
+  16 samples. 🟡 Inferred: the peak is about two of the writer's
+  512-frame chunks at both widths, and about the same time behind, so
+  the slowest round was set by a stall of the card, not by the amount of
+  data. Falsifier: a longer take at 24 bits whose PEAK keeps rising.
+- 🔴 **A busy project at 24 bits filled the ring.** The same eleven files
+  at 24 bits, with every track playing audio, all trigs enabled, and
+  scenes set on several parameters: PEAK reached 100%, the status read
+  SAVING, then RING FULL. The take's files saved and play, cut where the
+  ring filled. That's the overflow stop as built (12.0): the take
+  ends at the last whole frame. The writer was 2.88 s of audio behind
+  when it stopped, the 8 MiB ring at that rate. Cause open
+  (`docs/contributing/FAILURE_MODES.md`). Two candidates, not told apart:
+  the Static machines read from the same card the writer writes to, and
+  a busy project leaves the writer task less of the CPU, since the frame
+  interrupt grows with every playing voice and STEM REC's hook runs
+  inside it (18.9 found the port's card path slowed by a longer frame
+  interrupt). What tells them apart: the cut take's length, which gives
+  the rate the writer fell behind at, and the same project with Flex
+  machines instead of Static ones.
+- **Not reported yet:** the first boot (test 1), the menu's rows (test
+  2), the null tests (3 and 4), the inputs in mono, CD, and against the
+  stock recorder (5), the 24-bit files in a DAW against a 16-bit take
+  (6), the 5-minute take at eight tracks and 16 bits (7), clicks, the
+  screen's response, and timing during a take (8), and stock saves (10).
+
 ## 18. The level path (piece 5)
 
 Measured 1 Oct 2026 under the port with `tools/verify/stems_levels_probe.py`

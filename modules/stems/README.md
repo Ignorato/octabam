@@ -27,7 +27,8 @@ widths and the menu key by key on the MKII and MKI panels
 
 ## Status
 
-**Measured under the ColdFire port, unflashed.** The port is the project's
+**Measured under the ColdFire port, and run on Yves's MKII** (STEMS1 to
+STEMS3, `docs/firmware/STEM_REC.md` section 17). The port is the project's
 emulator of the unit's main processor. `tools/verify/verify_stems.py`, part
 of `make check REMIX=stems`, runs the module on fixture projects. It reads
 each take back off the port's card and checks the header, the sizes, and
@@ -106,6 +107,8 @@ measures the ring against the emulated card's speed (STEM_REC.md 15.4).
 The hook's figures are instruction counts. Its time on the unit isn't
 measured: whether the unit has room for it is flash C's test
 (`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md` 4.6).
+STEMS3 recorded eleven files at 24 bits on the unit; clicks and the
+screen's response during a take aren't reported yet (STEM_REC.md 17.3).
 Before piece 5 the hook copied the tracks as they were and cost 743
 instructions per frame at eight tracks.
 
@@ -205,9 +208,10 @@ The error names: `RING FULL` (the card fell behind; the files still play),
   4.0 s and 2.6 s at those three. Under the port's card model, eight
   tracks at 16 bits already fall slightly behind: the frame interrupt,
   longer with this piece's hook, leaves the emulated card one sector a
-  frame, and the ring would fill in about 160 s (STEM_REC.md 18.9). A
-  real card's speed is measured on the unit (STEM_REC.md 15.4; flash C's
-  test 7).
+  frame, and the ring would fill in about 160 s (STEM_REC.md 18.9). On
+  the unit (STEMS3), eleven stereo files at 24 bits, 2.91 MB/s, peaked
+  the ring at 13 to 16% on a light project and filled it on a busy one:
+  RING FULL, cause open (STEM_REC.md 17.3).
 - A power cut or a card pull before the end loses the take: each file is
   left at 0 bytes, because its length is set only at the end
   (STEM_REC.md 12.3).

@@ -2,6 +2,12 @@
 
 ## Flash C — `stems`: stems after the fader, the buses and 24 bits (staged 5 Oct 2026)
 
+**Flashed** on Yves's MKII, reported 6 Oct 2026: it records T1 to T8,
+MAIN, and AB, and a stem follows its track's LEVEL, AMP VOL, and BAL. On a
+busy project, eleven files at 24 bits filled the ring (RING FULL). Results
+in `docs/firmware/STEM_REC.md` section 17.3, with the tests not reported
+yet.
+
 Piece 5 (`docs/superpowers/specs/2026-10-01-stem-rec-sources-design.md`),
 on Yves's MKII. A track's file is now its share of MAIN, after its fader.
 MAIN, CUE and the inputs are sources of their own, the input pairs can be
