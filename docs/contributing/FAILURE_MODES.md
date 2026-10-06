@@ -421,3 +421,15 @@ Entries from here to the end of the file (5 Oct 2026) were recorded in other doc
 - **Seen:** a user on an MKI with KITS, Discord (kazeko), 6 Oct 2026: "cant find pattern edit now ... before FUNC + BANK". Not reproduced on an MKI unit.
 - **Cause:** `kits_mkisave` detoured the MKI FUNC+BANK dispatch `0x40058a64` and opened SAVE KIT whenever KITS was ready. Stock opens the Part edit menu there only while the PART window is open, and otherwise PATTERN SETTINGS (`0x40083440`) or one of two targets chosen by flags at `0x460d1aec` / `0x460d1736`. Octakit kept the stock condition (SAVE KIT from LOAD KIT only).
 - **Fix:** SAVE KIT only while KITS' LOAD KIT list is open (the stock list's callbacks pointer `0x460e5e28` is KITS' table), close SAVE KIT, cancel the Kit name editor; anything else runs the stock dispatch. `verify_kits` `mki*` scenarios on the MKI panel.
+
+## KITS: an empty project shows Kit 256, and SAVE KIT opens on it ✅ measured under the port, fixed
+
+- **Seen:** kazeko, MKI, 6 Oct 2026, Discord: "empty project, first kit is 256 instead of 1".
+- **Cause:** ASSIGN and RESID store "no Kit" as `0xff`, which is also Kit 256's index; `cur_kit`'s callers bounded it by 256 Kits, so a slot with no Kit read as Kit 256 (the status line, the LOAD KIT and SAVE KIT cursors, PTN+FUNC+RIGHT), and a save there could never be assigned to a pattern.
+- **Fix:** 255 Kits (`NUSE`); record 256 is never a Kit. A Part found in it at a load (an earlier save, or Em's Kit 256 on import, with the patterns her manifest names) moves to the next empty Kit (`rescue_k256`). `verify_kits` `k256save`, `k256load`, `k256rescue`.
+
+## KITS: LOAD KIT shows the loaded values late, or only after a key press when stopped ✅ measured under the port, fixed
+
+- **Seen:** kazeko, MKI, 6 Oct 2026, Discord: "after loading new KIT values appear after a moment; when OT sequencer does not run, after loading kit i need to press FUNC to display loaded values".
+- **Cause:** LOAD KIT ran the stock Part Reload (`0x4004aab4`) without the screen refresh stock FUNC+CUE runs after it (`0x4005e0a8..0x4005e0d8`). Under the port, stopped: the screen after LOAD KIT differed from the screen after a further FUNC tap by 11 bytes.
+- **Fix:** `kits_load_current` runs the same refresh; the two screens are equal (`verify_kits` `drawn`).

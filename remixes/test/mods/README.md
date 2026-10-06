@@ -15,7 +15,7 @@ Each module's own page has the technical detail and the measurements.
 
 | area | module | what you get |
 |---|---|---|
-| Kits | [KITS](../../../modules/kits/README.md) | 256 named Kits per project; each pattern plays its Kit through the stock Part slots |
+| Kits | [KITS](../../../modules/kits/README.md) | 255 named Kits per project; each pattern plays its Kit through the stock Part slots |
 | Scenes | [MIDI SCENES](../../../modules/midi-scenes/README.md) (bkkbrls-del, [midisc](https://github.com/bkkbrls-del/midisc)) | scene locks driven over MIDI: hold, morph, save, reload, clear, copy, paste |
 | Patterns | [DIRECT_JUMP_KYOTI](../../../modules/direct-jump-kyoti/README.md), [RELOAD_FROM_PROJECT](../../../modules/reload-from-project/README.md) (Zac Kyoti) | an immediate pattern change ([PTN] + [YES]); reload from the project |
 | MIDI | [CC MAP](../../../modules/cc-map/README.md) | CC 62–67 reach the FX2 effect's page-2 knobs, CC 68–73 the FX1 effect's (stock reaches page 1 only) |

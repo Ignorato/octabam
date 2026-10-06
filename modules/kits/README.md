@@ -1,13 +1,13 @@
 # `kits` — KITS
 
-256 Kits per project. A Kit is a saved Part; each pattern plays the Kit
+255 Kits per project. A Kit is a saved Part; each pattern plays the Kit
 assigned to it, through the stock Part slots. `Kind.CF_PATCH`: one DRAM
 unit (`kits.s`), 23 detours, nothing on the DSP. The firmware facts it
 stands on are [`docs/firmware/PARTS.md`](../../docs/firmware/PARTS.md).
 
 Credit: Em ([emuyia](https://github.com/emuyia)) designed Kits on the
 Octatrack in [Octakit](https://github.com/emuyia/ems-octakit) (MIT,
-Copyright (c) 2026 June Kiff). KITS follows its design: 256 Kits per
+Copyright (c) 2026 June Kiff). KITS follows its design: Kits per
 project, LOAD KIT and SAVE KIT on PART and FUNC+PART with its key map, the
 list copy, paste, clear and undo, AUTOSAVE and KEEP LEVELS (ems-octakit
 discussions #2 and #3), the pattern clipboard carrying the Kit, and the
@@ -27,7 +27,7 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
 | copy / paste / clear an inactive pattern of the current bank (paste or clear again: undo) | hold PTN, FUNC and the pattern's TRIG; REC / STOP / PLAY | the same |
 
 - **LOAD KIT** lists UNDO KIT (the Kit the current pattern had before
-  the last load), the 256 Kits (`NNN name`, `*` on a Kit no pattern
+  the last load), the 255 Kits (`NNN name`, `*` on a Kit no pattern
   plays, `NNN ---` on an empty one) and two settings, AUTOSAVE and KEEP
   LEVELS (YES turns one on or off). YES on a Kit: the current pattern
   plays it, now.
@@ -39,7 +39,8 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
   list is KITS' when the stock list's callbacks pointer (`0x460e5e28`) is
   KITS' table; the editor when its done callback (`0x460e761a`) is
   KITS'.
-- **SAVE KIT** lists the 256 Kits, the cursor on the current Part's.
+- **SAVE KIT** lists the 255 Kits, the cursor on the current Part's
+  (the first empty Kit when the slot holds none).
   YES opens the name editor (seven characters, `NEW KIT` for an empty
   Kit); the current Part is saved into the Kit and the current pattern
   plays it.
@@ -85,7 +86,11 @@ Markers as in `CHIP.md`: ✅ measured, 📖 read from the code.
   64 bytes of header (`KITS`, version 1, length, CRC-32 of the rest,
   the settings), ASSIGN (256), the valid bits (32), RESID (64), then 256
   records of an 8-byte name, 8 reserved bytes and the 6,322-byte Part:
-  1,622,944 bytes. Written after the bank writer (`0x400917c8`) when a
+  1,622,944 bytes. Record 256 is never a Kit: ASSIGN and RESID use 0xff
+  for "no Kit". A Part found there at a load (Em's Kit 256, or a save
+  into Kit 256 by a build before 255) moves to the next empty Kit; on
+  Em's import the patterns her manifest gives Kit 256 move with it.
+  Written after the bank writer (`0x400917c8`) when a
   Kit or an assignment changed, copied to `.strd` by the project store
   (`0x4008ee74`) and back by the project reload (`0x4008f180`). A
   `kits.work` that fails its CRC is never overwritten; the project then
@@ -131,6 +136,12 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
   PTN+TRIG, PLAY three times over the chain's patterns, each playing its
   Kit; the chain for 60 s on the clock with a CC every 250 ms across
   tracks 1-8 (CC 7, 46, 47, 55). No halt, every counter zero.
+- ✅ A slot with no Kit: SAVE KIT opens on the first empty Kit, LOAD KIT
+  on UNDO KIT; a Part in record 256 moves to the next empty Kit with the
+  patterns noted on it.
+- ✅ LOAD KIT while stopped draws the loaded Kit at once (the screen equals
+  the one after a further FUNC tap): the load runs stock FUNC+CUE's
+  refresh after the Part Reload.
 - ✅ LOAD KIT, UNDO KIT, SAVE KIT with the name editor, quick save, the list
   copy / paste / clear and their undos, the AUTOSAVE and KEEP LEVELS rows
   and behaviours, a pattern copy and paste carrying its Kit (and the undo

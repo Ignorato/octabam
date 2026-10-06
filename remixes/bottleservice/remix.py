@@ -5,7 +5,7 @@ DEFAULTS, TEMPO BUS, SCENES P2; `bamsep26` until 27 Sep 2026) and PLOCKS P2
 (page-2 parameter locks, since 3 Oct 2026) with USB MIDI and
 USB AUDIO OUT MASTER (two channels: track 8, the master track, post-FX
 pre-fader), on the DRAM platform,
-and KITS (256 Kits per project through the stock Part slots; Em's Octakit
+and KITS (255 Kits per project through the stock Part slots; Em's Octakit
 with the SCENES KITS and SCENES P2 KITS bridges until 6 Oct 2026). On Sam's
 MKII since image 88 (27 Sep 2026). USB AUDIO IN CD and USB CROSSBAR were in
 it from 28 Sep to 4 Oct 2026 and were removed: with them and a computer on

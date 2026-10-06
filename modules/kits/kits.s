@@ -1,8 +1,8 @@
-| KITS -- 256 Kits per project; a Kit is a saved Part.
+| KITS -- 255 Kits per project; a Kit is a saved Part.
 |
 | The stock Part engine is untouched: four working Part slots per bank, the
 | pattern's Part byte (+0x8e57) names one of them, the sequencer and the
-| frame ISR apply it. KITS keeps a library of 256 Parts (KLIB) and, per
+| frame ISR apply it. KITS keeps a library of 255 Parts (KLIB) and, per
 | pattern, the Kit it plays (ASSIGN). Before a pattern is scheduled its
 | Kit is copied into one of its bank's slots that no engine track names,
 | and the pattern's Part byte is pointed at that slot. RESID says which Kit
@@ -91,7 +91,8 @@
         .set    F_COPY,     0x40016388      | (dst, src, 0)
         .set    PROJDIR,    0x40025230      | (0, 0) -> the project directory
         .set    IOB_LEN,    0x1000
-        .set    NKITS,      256
+        .set    NKITS,      256             | records in kits.work
+        .set    NUSE,       255             | Kits 1-255: index 255 (0xff) is "no Kit" in ASSIGN and RESID
         .set    REC,        6338            | name 8, flags 4, reserved 4, payload
         .set    R_PAY,      16
         .set    HDR_LEN,    64
@@ -104,7 +105,7 @@
         .set    FLAGS,      KIMG+16         | header: the settings, kept in kits.work
         .set    KF_AUTO,    1               | AUTOSAVE: a Part's edits into its Kit at a pattern change
         .set    KF_LEVELS,  2               | KEEP LEVELS: a Kit load keeps the slot's track levels
-        .set    LROWS,      NKITS+3         | LOAD KIT: UNDO KIT, the Kits, the two settings
+        .set    LROWS,      NUSE+3         | LOAD KIT: UNDO KIT, the Kits, the two settings
         .set    CLIPBUF,    0x460c8122      | stock's clipboard
         .set    UNDOBUF,    0x460bf218      | stock's undo buffer
         .set    M_ROW,      0x460e5e40      | long: the open list's cursor
@@ -505,7 +506,7 @@ kits_funcyes:
         movel   %d0,SAVEK
         jsr     M_CLOSE
         movel   SAVEK,%d0
-        cmpil   #NKITS,%d0
+        cmpil   #NUSE,%d0
         bcc.s   2f
         suba.l  %a0,%a0
         bsr.w   kits_save_current
@@ -534,7 +535,7 @@ list_kit:
         subql   #1,%d1
         bne.s   1f
         subql   #1,%d0                  | LOAD KIT: row 0 is UNDO KIT
-1:      cmpil   #NKITS,%d0
+1:      cmpil   #NUSE,%d0
         bcs.s   9f
         moveq   #-2,%d0
 9:      rts
@@ -771,10 +772,12 @@ next_free:
         movel   %d2,%sp@-
         movel   %d3,%sp@-
         movel   %d0,%d2
-        movel   #NKITS,%d3
+        movel   #NUSE,%d3
 1:      addql   #1,%d2
-        andil   #NKITS-1,%d2
-        movel   %d2,%d0
+        cmpil   #NUSE,%d2
+        bcs.s   3f
+        moveq   #0,%d2
+3:      movel   %d2,%d0
         bsr.w   is_valid
         tstl    %d0
         beq.s   2f
@@ -987,7 +990,7 @@ pattern_clone:
         andil   #15,%d7                 | d7 = pattern
         bsr.w   cur_kit
         movel   %d0,%d2                 | d2 = the Kit to save into
-        cmpil   #NKITS,%d2
+        cmpil   #NUSE,%d2
         bcs.s   1f
         moveq   #-1,%d0
         bsr.w   next_free
@@ -1252,7 +1255,7 @@ kits_status:
         tstl    READY
         beq.s   9f
         bsr.w   cur_kit
-        cmpil   #NKITS,%d0
+        cmpil   #NUSE,%d0
         bcc.s   9f
         movel   %d0,%sp@-
         bsr.w   kit_at
@@ -1841,6 +1844,18 @@ kits_load_current:
         movel   %d7,%sp@-
         jsr     P_RELOAD
         addql   #4,%sp
+        moveq   #1,%d0                  | the screen as stock's FUNC+CUE leaves it
+        movel   %d0,0x46c7c72c          | (0x4005e0a8..0x4005e0d8): drawn now,
+        moveq   #-1,%d0                 | stopped or playing
+        movel   %d0,%sp@-
+        jsr     0x4004d948
+        addql   #4,%sp
+        jsr     0x40032208
+        jsr     0x4004d640
+        jsr     0x400486cc
+        jsr     0x4006dbe8
+        jsr     0x40077b00
+        jsr     0x4002f2f8
         moveq   #1,%d0
         movel   %d0,KDIRTY
         bsr.w   cs1_save
@@ -1922,7 +1937,7 @@ kits_save_current:
 
 | ============================================================ the menus ====
 
-| load_menu: UNDO KIT, then the 256 Kits; the cursor on the current Part's.
+| load_menu: UNDO KIT, then the 255 Kits; the cursor on the current Part's.
 load_menu:
         tstl    T_OBJ
         bne.w   m_out
@@ -1937,7 +1952,7 @@ load_menu:
         bsr.w   callbacks
         bsr.w   cur_kit
         addql   #1,%d0
-        cmpil   #NKITS+1,%d0
+        cmpil   #NUSE+1,%d0
         bcs.s   2f
         moveq   #0,%d0
 2:      movel   %d0,MSEL
@@ -1954,7 +1969,7 @@ load_menu:
         lea     %sp@(44),%sp
 m_out:  rts
 
-| save_menu: the 256 Kits; the cursor on the current Part's Kit, else the
+| save_menu: the 255 Kits; the cursor on the current Part's Kit, else the
 | first empty one.
 save_menu:
         tstl    T_OBJ
@@ -1969,7 +1984,7 @@ save_menu:
         lea     save_yes,%a0
         bsr.w   callbacks
         bsr.w   cur_kit
-        cmpil   #NKITS,%d0
+        cmpil   #NUSE,%d0
         bcs.s   3f
         moveq   #0,%d2                  | the first empty Kit
 2:      movel   %d2,%d0
@@ -1977,7 +1992,7 @@ save_menu:
         tstl    %d0
         beq.s   4f
         addql   #1,%d2
-        cmpil   #NKITS,%d2
+        cmpil   #NUSE,%d2
         bne.s   2b
         moveq   #0,%d2
 4:      movel   %d2,%d0
@@ -1986,7 +2001,7 @@ save_menu:
         pea     LBTAB
         pea     MSEL
         movel   %d0,%sp@-
-        pea     NKITS
+        pea     NUSE
         jsr     M_OPEN
         lea     %sp@(20),%sp
         moveq   #2,%d0
@@ -2014,9 +2029,9 @@ cur_kit:
 | settings (each YES turns one on or off)
 load_yes:
         movel   MSEL,%d0
-        cmpil   #NKITS+1,%d0
+        cmpil   #NUSE+1,%d0
         bcs.s   4f
-        subil   #NKITS+1,%d0            | 0 AUTOSAVE, 1 KEEP LEVELS
+        subil   #NUSE+1,%d0            | 0 AUTOSAVE, 1 KEEP LEVELS
         movel   %d2,%sp@-
         moveq   #1,%d1
         lsll    %d0,%d1
@@ -2069,7 +2084,7 @@ load_yes:
 | save), else the name editor first.
 save_yes:
         movel   MSEL,%d0
-        cmpil   #NKITS,%d0
+        cmpil   #NUSE,%d0
         bcc.s   9f
         movel   %d0,SAVEK
         pea     KFUNC
@@ -2194,7 +2209,7 @@ labels:
         lea     %sp@(20),%sp
 8:      lea     %a4@(16),%a4
         addql   #1,%d2
-        cmpil   #NKITS,%d2
+        cmpil   #NUSE,%d2
         bne.w   5b
         tstl    %d5                     | the LOAD list's two settings
         beq.s   9f
@@ -2414,7 +2429,12 @@ post_load:
 3:      tstl    %d7
         beq.s   4f
         bsr.w   cs1_load
-4:      clrl    ACLIP_SET
+4:      bsr.w   rescue_k256             | a kits.work saved into Kit 256
+        tstl    %d0
+        beq.s   5f
+        moveq   #1,%d0
+        movel   %d0,KDIRTY
+5:      clrl    ACLIP_SET
         clrl    AUNDO_SET
         moveq   #-1,%d0
         movel   %d0,LASTPASTE
@@ -2607,10 +2627,16 @@ v3_import:
         bpl.s   2b
         clrl    V3MGEN
         clrl    V3MHAVE
+        lea     V3K256,%a0
+        moveq   #7,%d0
+3:      clrl    %a0@+
+        subql   #1,%d0
+        bpl.s   3b
         lea     FMT_V3A,%a0
         bsr.w   v3_file
         lea     FMT_V3B,%a0
         bsr.w   v3_file
+        bsr.w   rescue_k256
         bsr.w   infer_resid
         movem.l %sp@,%d2-%d7/%a2-%a6
         lea     %sp@(44),%sp
@@ -2715,21 +2741,26 @@ vf_out: rts
 v3_manifest:
         movel   %a2@,%d0                | 'OTK3ROOT' or 'OTK3LINK'
         cmpil   #0x4f544b33,%d0
-        bne.s   9f
+        bne.w   9f
         moveal  %a2,%a0
         movel   #0x1fc,%d0
         bsr.w   crc32
         cmpl    %a2@(0x1fc),%d0
-        bne.s   9f
+        bne.w   9f
         tstl    V3MHAVE
         beq.s   1f
         movel   %a2@(20),%d0
         cmpl    V3MGEN,%d0
-        bls.s   9f
+        bls.w   9f
 1:      movel   %a2@(20),%d0
         movel   %d0,V3MGEN
         moveq   #1,%d0
         movel   %d0,V3MHAVE
+        lea     V3K256,%a3              | this manifest's patterns on her Kit 256
+        moveq   #7,%d0
+5:      clrl    %a3@+
+        subql   #1,%d0
+        bpl.s   5b
         lea     KIMG+O_ASSIGN,%a0
         moveal  %a2,%a1
         addal   #0x120,%a1              | the valid bits
@@ -2743,7 +2774,18 @@ v3_manifest:
         bne.s   3f
         moveq   #-1,%d1
         bra.s   4f
-3:      moveb   %a2@(0x20,%d2:l),%d1
+3:      moveq   #0,%d1
+        moveb   %a2@(0x20,%d2:l),%d1
+        cmpil   #0xff,%d1
+        bne.s   4f
+        movel   %d2,%d0                 | her Kit 256: noted, "no Kit" here
+        lsrl    #3,%d0
+        lea     V3K256,%a3
+        addal   %d0,%a3
+        movel   %d2,%d0
+        andil   #7,%d0
+        bset    %d0,%a3@
+        moveq   #-1,%d1
 4:      moveb   %d1,%a0@(0,%d2:l)
         addql   #1,%d2
         cmpil   #NKITS,%d2
@@ -2785,7 +2827,7 @@ infer_resid:
         tstl    %d0
         bne.s   6f                      | equal: d5 is the slot's Kit
 4:      addql   #1,%d5
-        cmpil   #NKITS,%d5
+        cmpil   #NUSE,%d5
         bne.s   2b
         moveq   #-1,%d0                 | none: the next empty Kit
         bsr.w   next_free
@@ -2977,9 +3019,61 @@ kit_at: movel   #REC,%d1
         addil   #KIMG+O_LIB,%d0
         moveal  %d0,%a0
         rts
+| rescue_k256: record 255 is no Kit (ASSIGN and RESID use 0xff for none),
+| but a Part can be there: Em's Kit 256, or a save before NUSE (the SAVE
+| KIT cursor opened on it for a slot with no Kit). It moves to the next
+| empty Kit; the patterns V3K256 names (the import's) are assigned to it.
+| -> d0 = 1 when a Part moved.
+rescue_k256:
+        lea     %sp@(-12),%sp
+        movem.l %d2-%d3/%a2,%sp@
+        moveq   #0,%d3
+        lea     KIMG+O_VALID+31,%a0
+        btst    #7,%a0@
+        beq.s   9f
+        moveq   #-1,%d0
+        bsr.w   next_free
+        movel   %d0,%d2
+        bmi.s   9f                      | no empty Kit: it stays where it is
+        bsr.w   kit_at
+        moveal  %a0,%a2
+        movel   #NUSE,%d0
+        bsr.w   kit_at
+        pea     REC
+        movel   %a0,%sp@-
+        movel   %a2,%sp@-
+        jsr     MEMCPY
+        lea     %sp@(12),%sp
+        movel   %d2,%d0
+        bsr.w   set_valid
+        lea     KIMG+O_VALID+31,%a0
+        bclr    #7,%a0@
+        lea     KIMG+O_ASSIGN,%a0
+        lea     V3K256,%a1
+        movel   #255,%d1
+1:      movel   %d1,%d0
+        lsrl    #3,%d0
+        moveb   %a1@(0,%d0:l),%d0
+        movel   %d1,%d3
+        andil   #7,%d3
+        btst    %d3,%d0
+        beq.s   2f
+        moveb   %d2,%a0@(0,%d1:l)
+2:      subql   #1,%d1
+        bpl.s   1b
+        moveq   #1,%d3
+9:      lea     V3K256,%a0              | used once
+        moveq   #7,%d0
+3:      clrl    %a0@+
+        subql   #1,%d0
+        bpl.s   3b
+        movel   %d3,%d0
+        movem.l %sp@,%d2-%d3/%a2
+        lea     %sp@(12),%sp
+        rts
 | is_valid: d0 = Kit -> d0 = 1 when it holds a Part
 is_valid:
-        cmpil   #NKITS,%d0
+        cmpil   #NUSE,%d0
         bcc.s   1f
         movel   %d0,%d1
         lsrl    #3,%d1
@@ -3114,6 +3208,7 @@ REFD:   .space  32
 REFRESH: .space 64
 V3GEN:  .space  NKITS*4
 V3HAVE: .space  32
+V3K256: .space  32                      | patterns her manifest gives Kit 256
 FOBJ:   .space  24
 PATH:   .space  260
 PSRC:   .space  260
