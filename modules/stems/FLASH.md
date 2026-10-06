@@ -414,19 +414,6 @@ take? Compare the damaged bank's `.work` with a backup: audio-like bytes
 in it point here. Then reproduce under the port with a second bank dirty
 and a write watch on `0x4ecd3000`.
 
-#### A take ends early with no error shown
-
-**Symptom.** A take stops by itself before STEM REC or the sequencer
-stopped it. Its files play but are shorter than the performance.
-
-**Cause.** Predicted. The card fell behind and the 4 MiB ring filled, so
-the take stopped at the last whole frame (status 1, overflow), or the take
-reached the 60-minute cap (status 0). Streaming spec, section 1.
-
-**First check.** The status word under the port, or the take's length: 60
-minutes is the cap. A slow or nearly full card is the likely cause of an
-overflow.
-
 #### After a power cut or a card pull, a take's files are empty
 
 **Symptom.** A take's `Tn.wav` files exist but have zero length.

@@ -5,6 +5,12 @@ a mode is seen on hardware.
 
 Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.md`.
 
+## STEM REC: RING FULL ends a 24-bit take on a busy project 🔴 open
+
+- **Seen:** STEMS3 (`stems`), Yves's MKII, reported 6 Oct 2026. T1 to T8, MAIN, AB, and CD at 24 bits (eleven stereo files, 2.91 MB/s), with every track playing audio, all trigs enabled, and scenes set on several parameters: PEAK reached 100%, the status read SAVING, then RING FULL. The files saved and play, cut where the ring filled. The same sources on a light project (audio on AB, T1 as THRU, and MAIN) peaked at 13 to 16%, and at 10% at 16 bits.
+- **Cause:** open. The take stopped as designed when the writer fell 2.88 s behind, the 8 MiB ring at that rate (`docs/firmware/STEM_REC.md` 17.3). Not told apart: the Static machines reading from the same card, and a busy project leaving the writer task less of the CPU (the frame interrupt grows with every playing voice, and the hook runs inside it; under the port a longer frame interrupt slows the card path, STEM_REC.md 18.9).
+- **Fix:** open. On a busy project, record fewer sources or 16 bits. To find out: the cut take's length, which gives the rate the writer fell behind at; the same project with Flex machines instead of Static ones; the same project at 16 bits, and with T1 to T8 alone. Predicted in `modules/stems/FLASH.md` as "A take ends early with no error shown", before the menu showed RING FULL.
+
 ## No audio on the first boot after an OS upgrade, with no DSP module 🔴 open
 
 - **Seen:** STEMS1 (`stems`: STEM REC alone, no DSP module), Yves's MKII, 30 Sep 2026. The first boot after the upgrade played nothing, in the loaded project and in a new one; the stock recorder's buffers still drew the inputs' waveforms. A power cycle brought the sound back.
