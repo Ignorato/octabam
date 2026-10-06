@@ -24,11 +24,19 @@
 |    At full speed (max packet 64) the stock 64-byte dTD already matches.
 |  * A dTD that completed with halted / data buffer error / transaction error
 |    status is counted in usbmidi_rx_errs and not decoded.
+|  * Each 0xF8 is timestamped before it is enqueued, as the UART0 ISR does
+|    (0x4001070a..0x4001071e): DTCN0 into CLK_T, the delta into CLK_DT. The
+|    clock handler 0x40005a48 builds the tempo (0x80001818, 0x80001814) from
+|    that delta; without it USB clock steps the sequencer and leaves the tempo
+|    at the project's, or at the last DIN clock's.
 
 .set EP2_RX_PRIME,  0x4001d184      | usb_midi_rx_prime(buf), the 64-byte form
 .set RX_ENQUEUE,    0x40092bbc      | midi_rx_enqueue(byte on stack)
 .set FRAMER,        0x40092bf4      | MIDI framer, INTC source 36 handler, ends in rte
 .set FIFO_COUNT,    0x46100b7c
+.set DTCN0,         0xfc07000c      | DMA timer 0 count (DTIN0 pin)
+.set CLK_T,         0x46c8345a      | DTCN0 at the last 0xF8
+.set CLK_DT,        0x46c83466      | DTCN0 delta between the last two 0xF8: the MIDI clock handler's tempo input
 .set RX_BUF,        0x4ecc9000      | usb_midi_rx_buf; its 4 KB page holds nothing else
 .set EP2_RX_DTD,    0x4ec953e0      | next-dTD word; token at +4, buffer at +8
 .set EP2_RX_TD,     0x4ec953e4
@@ -161,7 +169,8 @@ usbmidi_rx_prime:
     rts
 
 | usbmidi_rx_decode: d0 = byte count (a multiple of 4) at RX_BUF. Event
-| packets -> midi_rx_enqueue, as usbmidi.s's decoder does, with room made first.
+| packets -> midi_rx_enqueue, as usbmidi.s's decoder does, with room made first
+| and each 0xF8 timestamped.
 | Trashes d0-d5/a0-a3; d5 = the entry SR.
 usbmidi_rx_decode:
     lea     RX_BUF,%a2
@@ -186,7 +195,15 @@ usbmidi_rx_decode:
     bras    4b
 6:  moveq   #0,%d2
 7:  mvzb    %a2@(1,%d2:l),%d0
-    movel   %d0,%sp@-
+    cmpil   #0xf8,%d0
+    bnes    9f
+    movel   DTCN0,%d1
+    movel   %d1,%d0
+    subl    CLK_T,%d0
+    movel   %d0,CLK_DT
+    movel   %d1,CLK_T
+    mvzb    %a2@(1,%d2:l),%d0       | the 0xF8 again
+9:  movel   %d0,%sp@-
     jsr     RX_ENQUEUE
     addql   #4,%sp
     addql   #1,%d2

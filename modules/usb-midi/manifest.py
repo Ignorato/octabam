@@ -42,7 +42,8 @@ MODULE = Module(
         Linked("usbmidi_cfg", "modules/usb-midi/cfg.s", cpu="5475", dram=True,
                include=descriptors.remix_inc),
     ),
-    gates=(Gate("tools/verify/verify_usbmidi_rx.py", stage="image"),),
+    gates=(Gate("tools/verify/verify_usbmidi_rx.py", stage="image"),
+           Gate("tools/verify/verify_usbmidi_clock.py", stage="image")),
     detours=(
         Detour(0x4001d9ca, H("4879400b9868"), "usbmidi_rx", "usbmidi_rx_setcfg_shim",
                "SET_CONFIGURATION body: note the speed, then usbmidi's EP2 bring-up (512-byte packets at high speed)"),

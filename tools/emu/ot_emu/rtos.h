@@ -662,7 +662,7 @@ namespace ot
 		double m_sample = 0.0;
 
 		Pit m_pit0, m_pit1;
-		DmaTimer m_dtim[4] = {{"DTIM0", g_busClockHz}, {"DTIM1", g_busClockHz}, {"DTIM2", g_busClockHz}, {"DTIM3", g_busClockHz}};
+		DmaTimer m_dtim[4] = {{"DTIM0", g_busClockHz, 256.0 * g_sampleHz}, {"DTIM1", g_busClockHz}, {"DTIM2", g_busClockHz}, {"DTIM3", g_busClockHz}};
 		Edma m_edma;
 		Intc m_intc0, m_intc1;
 		Uart m_uart60{"UART@fc060000", g_uart0}, m_uart64{"UART@fc064000", g_uartA}, m_uart68{"UART@fc068000", g_uartB};

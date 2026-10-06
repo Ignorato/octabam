@@ -369,7 +369,9 @@ commands' reply formats are the header comment of `main.cpp`
   replies (`docs/firmware/PANEL.md` section 4c).
 - **DMA timers** DTIM0–3 (`0xfc070000 + 0x4000·n`, INTC0 sources 32–35);
   DTIM1 is the firmware's 8.333 ms UI/LED tick. The 2.8 s boot logo on
-  DTIM3 is skipped unless `--boot-logo`.
+  DTIM3 is skipped unless `--boot-logo`. DTIM0 counts its DTIN0 pin at
+  256 fs (inferred from the MIDI clock handler), the timestamp the MIDI
+  clock tempo is built from.
 - **The frame edge.** With `--dsp` the frame interrupt is the DSP's bank
   word (O9b), so a stalled core freezes the sequencer on trig 1;
   `--frame-timer` restores the 16-sample timer, and `--frame` uses the
