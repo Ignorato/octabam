@@ -11,7 +11,7 @@ with the stock weight table; a select snaps at the fader's midpoint. A
 page-2 knob turned while a scene is held edits that scene's lock instead
 of the Part (both page-2 editors detoured at entry). The pool travels with
 the Part: Part Save / Reload and Project Save copy the window whole, and
-Octakit's Kits keep the Part layout.
+a KITS Kit is a whole Part.
 
 Sites: the frame builder's join after the morph (0x4000cf40), the FX2
 page-2 editor (0x4003a9dc) and FX1's (0x4003abe4), all at instruction
@@ -25,12 +25,10 @@ H = bytes.fromhex
 
 def next_inc(modules):
     """Where a turn with no scene held continues: the stock prologue replay
-    inside the unit, or, when Octakit is in the image, nothing here -- the
-    SCENES P2 KITS bridge overrides her writes at the two editor entries and
-    the build defines P2_NEXT2 / P2_NEXT1 as her wrappers."""
-    if "OCTAKIT" in modules:
-        return "| P2_NEXT2 / P2_NEXT1: Octakit's editor wrappers (SCENES P2 KITS)\n"
-    return ("        .set    P2_NEXT2, fx2_stock\n"
+    inside the unit. PLOCKS = 1 when PLOCKS P2 is in the remix: the dial
+    shows a held step's page-2 lock."""
+    plocks = f"        .set    PLOCKS, {1 if 'PLOCKS P2' in modules else 0}\n"
+    return (plocks + "        .set    P2_NEXT2, fx2_stock\n"
             "        .set    P2_NEXT1, fx1_stock\n")
 
 MODULE = Module(

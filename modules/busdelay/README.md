@@ -58,6 +58,11 @@ off and the output is mono to both channels.
   GRAIN 1,028 / REVERSE 395 per sample (1,354 words and 1,126 before the
   23 Sep 2026 rewrite; 1,326 words after the return left 20 Sep, +28 for
   the TIME ramp).
+- 5 Oct 2026, the cycles pass (bit-identical, `verify_delay.py` against
+  the 23c91b15 engine, every case): GRAIN 1,007 → 975 per sample. The
+  grain readers' two clean reloads per grain went: `move a1,r5` and
+  `move a1,r6` take a1 raw, as the t1 read already did, and `add #>$1`
+  needs only a1 correct before its mask.
 - 23 Sep 2026: the sample loop reads the aux accumulator through r3 and
   writes the chain at `(r3+n3)`, keeps x_in, the lag, the fraction, the
   TIME ramp, the crossfeed terms and the stage outputs in registers, and
@@ -82,7 +87,7 @@ off and the output is mono to both channels.
 
 Image 28 (15 Sep 2026), the two 32K lines: "sounds fantastic now".
 
-On Sam's unit in every rig flash. Heard: REVERSE 371 ms over 93 ("the long
+On Sam's unit in every flash that carried the bus. Heard: REVERSE 371 ms over 93 ("the long
 one is better"); GRAIN DENS 32 → 127 on the loop "sounds pretty good".
 
 ## Open
@@ -109,7 +114,10 @@ region (`Y:0x4000–0xBFFF`) — the region BusVerb's tank owns on core 0 and
 nothing writes on core 1 (measured under the port: OCTABAM89 C02, 900
 frames, every DSP write per 256-word region on both cores; core 1 wrote
 `Y:0x0000–0x07ff`, `0x0900–0x09ff`, `0x36000–0x361ff` and its shared half,
-nothing in `0x1000–0xBFFF`). TIME is 64 + knob·256 samples, 1.5–739 ms;
+nothing in `0x1000–0xBFFF`). Stock's core 1 → core 0 mailbox was the first
+16 words of LineL (`X:0x38000–0x3800F`, rewritten by stock every frame, so
+16 samples were wrong once per ring pass); every build moves it to
+`X:0x37F00–0x37F0F` (`docs/firmware/DSP.md`, section 5). TIME is 64 + knob·256 samples, 1.5–739 ms;
 the sticky snap knows twelve divisions, 1/32T … 1/4. — at 121 BPM 1/4 (496
 ms) and 1/2T (661 ms) hold, 1/4. (744 ms) from 122 BPM, 1/2 never below
 162. REVERSE's mono ring is LineL's 32K, unchanged. LineR's pointer is
@@ -119,7 +127,10 @@ sample 16K away. The DEV hatch (payload A, beside the reverb's tank) keeps
 two 16K lines in the shared half; `tools/remix/geom.py` selects the
 `; @B` / `; @DEV` lines, and the two geometries render bit-identically at
 any TIME both can hold (`verify_twocore`). The ledger refuses a second
-owner of the private region on the same payload (`Claims.owns_fx2_buffers`).
+owner of the private region on the same payload (`Claims.owns_fx2_buffers`)
+and anything else declared in LineL's half (`Claims.dsp_ranges`,
+`Y:0x38000–0x3FFFF`); `verify_set` holds the port's shared-window write
+census to it.
 
 Stored TIME bytes from before (64 + knob·128) now mean twice the time:
 `ot_project.py stamp-slot <project> busdelay 1 20` puts every part's T1 at

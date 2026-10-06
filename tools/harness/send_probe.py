@@ -37,10 +37,11 @@ non-fundamental energy relative to the fundamental. MOD and SPEED are forced to
 import argparse, array, cmath, math, os, pathlib, struct, subprocess, sys, wave
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-HOST = ROOT / "vendor/dsp56300/build/source/dsp_host/dsp_host"
+HOST = pathlib.Path(os.environ.get("DSP_HOST") or ROOT / "vendor/dsp56300/build/source/dsp_host/dsp_host")
 
 SR = 44100
-FRAMES = 15                # dsp_host caps a block at 15 frames
+FRAMES = 15                # pinned: bus latency of exactly 2 blocks (30 samples) and the bit-identity
+                           # references are recorded at 15; dsp_host's cap is 16 (tools/harness/README.md)
 WARMUP_BLOCKS = 300        # the engine stays dry for 256 CALLS; pad well past it
 
 INIT_TAB, PROC_TAB = 0x215, 0x235

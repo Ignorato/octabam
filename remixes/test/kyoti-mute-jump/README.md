@@ -1,0 +1,21 @@
+# `kyoti-mute-jump` -- MUTE_MODES, DIRECT_JUMP_KYOTI
+
+2 ColdFire modules by Zac Kyoti and the stock effects.
+
+## What is in it
+
+- **MUTE_MODES** -- [`modules/mute-modes/README.md`](../../../modules/mute-modes/README.md).
+- **DIRECT_JUMP_KYOTI** -- [`modules/direct-jump-kyoti/README.md`](../../../modules/direct-jump-kyoti/README.md).
+- the 14 stock FX2 effects, listed so the chooser is stock's.
+
+## Status
+
+Built and booted under the ColdFire port (`make check`). Not flashed in this form; the author's own combined image (KYOTI V1.0) carries these modules on his MKI.
+
+## Build
+
+```bash
+make image REMIX=kyoti-mute-jump BUILD=1
+```
+
+[BUILDING.md](../../../docs/guide/BUILDING.md) is the walk-through from a fresh machine to a flashed unit. `make check REMIX=kyoti-mute-jump` runs every gate first.

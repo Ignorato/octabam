@@ -18,7 +18,8 @@ does for every manifest, and this file only re-exports its MODULE. Nothing
 inside `upstream/` is edited here.
 
 Emulator-verified (26 Sep 2026 in Tim's tree; here in remix octatrick,
-29 Sep 2026); not confirmed on hardware.
+29 Sep 2026). On hardware: UP + TEMPO opens the window and tunes on Tim's
+MKI (test build 3.0 b40 = `octatrick` at BUILD 40, 29 Sep 2026).
 """
 
 import dataclasses
@@ -34,4 +35,4 @@ MODULE = runpy.run_path(str(_UPSTREAM), run_name="remix_manifest_tuner")["MODULE
 # are added here rather than in his manifest.
 MODULE = dataclasses.replace(
     MODULE, category=Category.MACHINES, author="timhastie/octatrick-modules", author_url="https://github.com/timhastie/octatrick-modules",
-    proof=Proof.CHECK, proof_note="`octatrick` under the port, 29 Sep 2026 (sources unchanged since 26 Sep); not confirmed on hardware")
+    proof=Proof.HARDWARE, proof_note="Tim's MKI, test build 3.0 b40 (`octatrick` at BUILD 40), 29 Sep 2026: UP + TEMPO opens the window and tunes; sources unchanged since 26 Sep")

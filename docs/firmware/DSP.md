@@ -111,6 +111,12 @@ module labels above (`P:0x3a1`, `P:0x2bf`, `func_00055a`) are Bryan T's;
 until 30 Aug 2026 they read "parameter unpacking", "resampler" and "gain
 routine".
 
+Its ColdFire cost at 137 → 120 BPM (TSTR AUTO, audibly stretching, seven
+FLEX voices) is not measurable in the frame interrupt: 257–278 µs against
+244–268 µs with TSTR off (Bryan T's CF METER takes, 4 Oct 2026,
+`ARCHITECTURE.md` section 6). Beyond 2× (voice `+3`, `REPITCH.md`) is
+untested.
+
 ## 4. Disassembly ✅
 
 The vendored dsp56300 project (`vendor/dsp56300/build/source/disassemble/
@@ -241,7 +247,27 @@ neighbour before overwriting it.
 
 Frame setup copies 72 words from `X:0x30000` to `y:0x1b8` and writes
 parameter values back into `X:0x30000` (`P:0xa8..0xb6`). The allocator
-also hands out `Y:0x30000` as an FX2 base. X, Y and P alias in the shared
+also hands out `Y:0x30000` as an FX2 base. Payload B reads `X:0x30000-0x30045`
+(`P:0x8f-0x134`) and writes `X:0x30044` (`P:0x133`).
+
+Payload B also hands core 0 sixteen words a frame. In its frame loop
+(`P:0x4b-0x56`) it copies the mailbox into `y:$1f0..` and `y:$280..` (its
+filtered `X:0x0000-0x000F`, `P:0x151-0x166`) into the mailbox; at frame end
+(`P:0x172-0x179`) it copies `y:$1f0..` into the mailbox; payload A copies
+the mailbox into `y:$280..` at frame setup (`P:0x9b-0xa2`). In every octabam
+image the mailbox is `X:0x37F00-0x37F0F` (stock: `X:0x38000-0x3800F`, the
+first words of BusDelay's LineL and of a stock effect's buffer on bank
+track 3 FX2), and payload B's boot zero loop (`P:0x40-0x4a`) clears
+`Y:0x3F00-0xBFFF` and `0x37F00-0x3FFFF` (stock: `Y:0x4000-0xBFFF` and
+`0x38000-0x3FFFF`), so the mailbox reads zero at B's first frame-loop pass
+as stock's does. Six operands carry this (A `P:0x9c`; B `P:0x41`, `P:0x43`,
+`P:0x45`, `P:0x4c`, `P:0x173`; `tools/remix/dsp_ranges.py`
+`STOCK_PATCHES`), each asserted stock before it is written. Payload A's own
+boot zero (`P:0x40-0x49`, `Y:0x30000-0x37FFF`) also covers the mailbox, so
+core 0's first mailbox read at boot returns zeros; in stock that read
+returns the 16 words B's first frame-loop pass copies from its
+uninitialised `y:$280` (port, `--dsp-dirty`). Every later read is the same
+in both. X, Y and P alias in the shared
 window `0x30000`–`0x3FFFF` (`git show 93a787fc:dsp/alias_probe.asm`, `CHIP.md`); `dsp_host`
 keeps the spaces separate and cannot show aliasing.
 

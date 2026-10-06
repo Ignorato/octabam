@@ -5,7 +5,7 @@ shimmer, a gate and mid/side width.
 
 The reverb stage of the bus ([`send`](../send/README.md)): every track's
 REV send, plus the delay's repeats × DLY, feed it, and it prints its tail
-under its own host's dry. Hosted on T5's FX2 in the rig, on payload A
+under its own host's dry. Hosted on T5's FX2 (RIG HOSTS), on payload A
 (core 0), which serves tracks 5–8 (measured; test it on track 5). Source
 `reverb_server.asm`, manifest `manifest.py` (the MODE rows), built by
 `tools/build/build_bus.py`. The development record (the four-line engine,
@@ -101,6 +101,13 @@ from `$c`; BusVerb's `$c` knob field is MODE.
   40 → 0.64, 80 → 0.87, 127 → 1.49 s. At DIFF 127 the four diffusion
   allpasses at g 0.77 read as a metallic sheen; capping the span at ~0.70
   removes it.
+- 5 Oct 2026, the cycles pass (bit-identical, `verify_roll.py` against
+  the 23c91b15 engine: ROOM / PLATE / BIG and the TIME/SIZE/DIFF maxima):
+  1,090 → 1,064 cycles/sample. The tank loop writes each line's output
+  straight into its Hadamard slot through r4 (u0..u7 now contiguous at
+  `$16..$1d`; the write-back scratch fb0..fb3 moved to `$3a..$3d`), so the
+  per-line table is five words and the 23-word collect after the loop is
+  gone, with the four `lua`s that re-pointed the Hadamard's second group.
 - Cost (pricer `cycle_count.py`, words): 1,135 → 1,117 cycles/sample on
   23 Sep 2026, when the sample loop moved its u vectors, feedback
   scratch, output stage, allpass phase, chain word and aux pointers onto
@@ -226,6 +233,10 @@ the base literal per payload); 65,536 words per server:
 | `shared+0x4000` / `0x4200` | 2 × 512 | in-loop allpasses |
 | `shared+0x4500..0x453f` | 8 × 6 + 8 × 2 | tank state table A (tap loop: read offset, fraction, d0 carry, damping state, LO state, output) at `+0x4500`, table B (feedback: weight, gain) at `+0x4530` |
 | `shared+0x4800` / `0x5000` | 2 × 2048 | bloom allpasses (output branch), taps 1801/1291 |
+
+`shared+0x0800..0x57FF` is declared as `Claims.dsp_ranges` (payload A:
+`Y:0x30800–0x357FF`); the warm-up clears all of it, and `verify_set`
+holds the port's shared-window write census to it.
 
 r7 block: `$84+` hangs the DSP; `$82` warm-up counter (`$2c0000 | blocks`,
 capped 0x100), `$83` write phase; the asm header is the slot map, from a

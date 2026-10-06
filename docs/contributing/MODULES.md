@@ -101,7 +101,10 @@ settings:
 `tools/verify/module_gates.py` collects the selection's gates, runs each
 script once (two modules naming one gate share it) with `REMIX` and
 `BUILD` exported, the remix name as `argv[1]` when `remix_arg` is set,
-and `.venv/bin/python3` when `venv` is set and the venv exists. An
+and `.venv/bin/python3` when `venv` is set and the venv exists. A gate
+with `once=True` checks the module's own code and runs once per run on
+the smallest carrying remix of the selection instead of once per carrying
+remix (a ColdFire module's port scenarios). An
 `"isolated"` gate (the default) builds its own scratch image or none and
 runs before the selected image is restored; an `"image"` gate reads
 `out/mainos_bus.bin` and runs after `make bus` and the shared set gates
@@ -172,7 +175,10 @@ state things you might assume:
   formatter draws: an enumerated renderer with three labels asked to draw
   0..127 draws no knob at all; a bipolar pair draws a count-5 select as a
   balance dial. Declare `formatter=` per slot; `verify_menu` checks the
-  renderer against the count.
+  renderer against the count. `Formatter.PLAIN` zeroes both formatter
+  words on any module (since 5 Oct 2026; until then only a module with a
+  stepped slot had its clone's formatters reset, and CF METER's SRC on
+  FILTER's bipolar slot 3 drew as a balance dial).
 - **Four per-parameter arrays carry the drawing**, `P`-relative
   (`docs/firmware/PARAM_PAGES.md` section 2, section 7): `P+0x9a` count (drawn on a
   fixed 0–127 scale: count 16 = ⅛ of the travel), `P+0x0ca` formatter A,
@@ -184,6 +190,23 @@ state things you might assume:
   `none|HP|LP|BOTH`: the words come from the renderer, not the
   descriptor). Every enabled slot needs an explicit in-range default
   (`verify_menu`).
+- **Raw descriptor words**, for a drawing no `Formatter` names:
+  `Param(formatter_word=, widget_word=, word_12a=)` write `P+0x0ca`,
+  `P+0x0fa` and `P+0x12a` for that slot. Each is `None` (the donor's word),
+  an int (a stock address or a literal, `0` included), or a `(unit, symbol)`
+  pair naming a `Linked` or `CavePatch` label in the remix and a symbol it
+  exports. They are written after every other descriptor pass, so they are
+  what the slot holds; a slot with any of them takes no `formatter` and no
+  `FormatterReg`. `verify_menu` checks such a slot against the declaration
+  (int exact, symbol non-zero and not the donor's, `None` the donor's) in
+  place of the count rule. The stock formatters and widgets are in
+  `docs/firmware/PARAM_PAGES.md` section 7. The build emits no label
+  formatter for such a slot; its `labels` are display-only (the remixer's
+  help row, the BCR map).
+- **`active` writes the slot's enable nibble.** `True` draws it, `False`
+  hides it. `None` (the default) hides it too, except on a
+  `MenuEntry(stock_dsp=True)` clone, where it keeps the donor's nibble,
+  link bit included; `verify_menu` checks that nibble against the donor's.
 - **A `name` of `None` inherits the donor's; `b""` blanks it.** Write the
   name explicitly even when the donor has it: the harness reads these.
 - A labelled select wider than five values normally falls back to a plain
@@ -240,6 +263,12 @@ in bits 8-15 of the same words (`docs/firmware/PARAM_PAGES.md`). Any slot
 may carry any count (stock CHORUS TAPS sits on slot 6, stock FILTER's DIST
 knob on slot 11).
 
+A knob word read by the DSP carries the LFO's low byte in bits 8-15 whenever
+the knob is modulated (measured 5 Oct 2026, `docs/firmware/LFO.md` section
+5). Mask every page-1 knob read with `and #>$7f0000` before it is shifted,
+compared, tested or selected on; `dsp_host -params` writes clean words, so
+render the dirty case with `-pword k:off=hex`.
+
 Put a MODE on an even slot: the panel's page-2 knob editor (`0x4003a474`)
 writes even slots (slot 6 hardware-confirmed), so a select there is
 settable from a cave or a main-menu screen through the firmware's own
@@ -285,7 +314,7 @@ operator arrives at this mode.
 | | the remixer | the unit |
 |---|---|---|
 | `names` | the UNIT pane's rows follow the current MODE (`Module.knob_map_in`); `send_probe --set SCTR=40` resolves the alias | `tools/build/mode_names.py` emits a MODE formatter that rewrites the descriptor's name fields before printing its own word |
-| `defaults` | applied the moment MODE changes | `modules/mode-defaults` (in the rig): the FX1 and FX2 page-2 editors are detoured, and a MODE turned on the panel writes the view -- page 1 through the stock page-1 writer, page 2 with the editor's own stores; without the module, `stamp-defaults` writes them; a MODE over CC MAP goes through the same unit (the cave calls it) |
+| `defaults` | applied the moment MODE changes | `modules/mode-defaults` (in bottleservice): the FX1 and FX2 page-2 editors are detoured, and a MODE turned on the panel writes the view -- page 1 through the stock page-1 writer, page 2 with the editor's own stores; without the module, `stamp-defaults` writes them; a MODE over CC MAP goes through the same unit (the cave calls it) |
 
 The unit half needs no new hook: a descriptor carries its twelve parameter
 names as 12 × 6 bytes at `E+0x4e`, the clones are writable RAM, and every
@@ -446,259 +475,38 @@ dsp=DspSection(
   blanket string replace over the whole source, comments included; a
   shared-window address that must not move to the other half cannot be
   spelled `$30000`, and the literal is censused.
-- **`ptable`**: a tuple of words the build parks in the stock curve bank
-  (X:0x4840) and points the source's `$fab1e0` literal at.
+- **`ptable`**: a tuple of words the build places and points the source's
+  `$fab1e0` literal at. It goes to the first of three places that fits:
+  1. the stock curve bank X:0x4840, when no stock reader of it is kept;
+  2. P, directly before the module's code, in one harvested run;
+  3. the X data that only a given-up stock effect addresses
+     (`stock.x_exclusive_runs`), when the table and the code together fit
+     no P run. SPRING REV's are X:0x89a4..0x8cef on A and
+     X:0x8464..0x87af on B, 844 words each.
+
+  In places 1 and 3 every `p:(` read in the code becomes `x:(`, so a
+  module with a table reads P for nothing else.
+- **`ptable2`**: a second block with its own `$fab2e0` literal. In places
+  1 and 2 it follows `ptable` directly. In place 3 each block goes whole
+  into the first run with room, so a table larger than any one run is
+  declared as two blocks.
+- **`subst`**: per-payload text substitutions applied to the source before
+  the build's own rewrites, `{"A": {"@SBASE@": "$33e00"}, "B": {"@SBASE@":
+  "$3be00"}}` (`dsp_asm` has no `equ` and no expressions). Both payloads name
+  the same keys and exactly the section's `payloads`; every key must occur in
+  the source; a key or value overlapping a marker the build substitutes
+  (`schema.SUBST_RESERVED`: `$30000`, `$facade`, `$fab1e0`, `$fab2e0`, `; ROTLATCH`, ...)
+  is refused. The build report prints each `SUBST` line.
 - **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
   label)`). The two stock words at `site` become `jsr >label` after
   placement, the build asserting them first; the section replays the
-  displaced instruction. A section with hooks and no `MenuEntry` is placed
-  on `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject
-  at the frame head, P:0x88, on payload A. The ledger refuses two sections
-  on one site of one payload.
-- **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
-
-### Rules for DSP code, each established on hardware
-
-`AGENTS.md` has the assembler and arithmetic traps (`mpy`/`a0`, `mpysu`,
-labels by prefix, Tcc and the condition codes) and the dispatcher rule
-(measure r7/r6/X:0x213 facts under the port). Beside those:
-
-- Let the AGU do address work; hand-rolled modulo cost 135 cycles/sample.
-- `dsp_asm` also mis-encodes illegal parallel moves silently: `x:(rN+disp)`
-  is never parallel; `mpy y0,x0,a` takes a parallel move, `mpy x0,y0,a`
-  discards it; XY dual moves need the X pointer in R0–R3 and Y in R4–R7.
-- Two data moves between writing an address register and using it, never
-  an M-register write there; no M-register write inside the sample loop.
-- A modulo offset larger than the buffer is undefined, and silent.
-- Absolute Y scratch at `0x800` or above; `X:0x213` is valid in init only.
-- When a register holding a constant is repurposed, grep every read.
-- Check the assembler's exit status, not the generator's; `| grep` masks a
-  failed assemble.
-- With an impulse input, a flat RMS envelope is instability, not a long
-  tail.
-
-### Page 2: even slots are knob fields, odd slots are companion fields
-
-Slots 6/8/10 are delivered in bits 16-23 of `r6+$c/$d/$e` and slots 7/9/11
-in bits 8-15 of the same words (`docs/firmware/PARAM_PAGES.md`). Any slot
-may carry any count (stock CHORUS TAPS sits on slot 6, stock FILTER's DIST
-knob on slot 11).
-
-Put a MODE on an even slot: the panel's page-2 knob editor (`0x4003a474`)
-writes even slots (slot 6 hardware-confirmed), so a select there is
-settable from a cave or a main-menu screen through the firmware's own
-routine. An emulator run showed the same editor writing all six page-2
-slots (`docs/firmware/MAINMENU.md` section 9c-ii / section 9e), so the odd-slot
-restriction is in doubt; an even slot is the proven choice. The DSP read
-must take the field the slot is delivered in.
-
-### FX2 ids
-
-`0x00`-`0x03` are the values stock treats as synonyms for "no effect"
-(correct chooser names, dead knobs, garbage audio); the schema rejects them.
-
-The fifteen stock ids are refused without `replaces` (`schema.STOCK_FX2_IDS`):
-the two DSP dispatch tables are indexed by the raw id and shared between
-FX1 and FX2, so a module on a stock id replaces that effect's code wherever
-the id is selected, FX1 included, and a remix that omits the module then
-aliases the id to SEND, which takes the stock effect away from FX1 too.
-Free ids: `0x06 0x07 0x09 0x0a 0x0b 0x0e 0x0f 0x17 0x1a 0x1b 0x1d 0x1e
-0x1f`, of which `0x1d 0x1e 0x1f` are unclaimed.
-
-The registry is the arbiter: `registry.modules()` refuses two modules on
-one id at import, whether or not any remix selects both. `make modules`
-prints what is claimed.
-
-### Per-mode knob names and defaults: `ModeView`
-
-A multi-mode effect reuses its knobs. Declare the difference:
-
-```python
-mode_slot=7,                       # which slot carries the MODE select
-mode_views=(
-    ModeView(mode=0, defaults={0: 40, 1: 60}),          # CLEAN
-    ModeView(mode=1, names={6: b"SCTR", 8: b"DENS"},    # GRAIN
-             defaults={0: 36, 6: 40, 8: 127}),
-),
-```
-
-Both maps are sparse and optional. `names` renames a slot for that mode
-(four characters); `defaults` is where the other knobs land when the
-operator arrives at this mode.
-
-| | the remixer | the unit |
-|---|---|---|
-| `names` | the UNIT pane's rows follow the current MODE (`Module.knob_map_in`); `send_probe --set SCTR=40` resolves the alias | `tools/build/mode_names.py` emits a MODE formatter that rewrites the descriptor's name fields before printing its own word |
-| `defaults` | applied the moment MODE changes | `modules/mode-defaults` (in the rig): the FX1 and FX2 page-2 editors are detoured, and a MODE turned on the panel writes the view -- page 1 through the stock page-1 writer, page 2 with the editor's own stores; without the module, `stamp-defaults` writes them; a MODE over CC MAP goes through the same unit (the cave calls it) |
-
-The unit half needs no new hook: a descriptor carries its twelve parameter
-names as 12 × 6 bytes at `E+0x4e`, the clones are writable RAM, and every
-stepped select already has a formatter cave the panel calls as `fmt(buf,
-value)` with the value in hand. `tools/verify/verify_modenames.py` (in
-`make check`) calls each MODE formatter on the emulated ColdFire and reads
-the names back out of the clone.
-
-The MODE select also names itself: its cave writes the value's word into
-its own name field before printing it, so the knob reads CLEAN / GRAIN /
-REVRS rather than MODE (Character's SAT and BusVerb's MODE declare
-`mode_slot` for this alone). Every other select keeps its name and the tick
-widget flashes the word on a turn — on image 26 SIZE / SHFT / RATE
-reading `93MS` / `RUN` / `+12` / `1x` did not say what the knob was (Sam,
-15 Sep 2026; image 27 with the names back: "that's better").
-
-Two limits, inferred: the rename lands on the draw after the one that
-formats MODE if the panel draws names first (turning the encoder redraws);
-and the descriptor is shared by every track running the effect, so two
-tracks in different modes have one set of names between them.
-
-Each mode's block costs 8 bytes per renamed slot plus a terminator in the
-cave. Rename a slot whose meaning changes; a knob merely unused in a mode
-keeps its name and says so in its `doc`.
-
-### A station
-
-The stations (`modules/spectrum/`, `modules/character/`,
-`modules/modulation/`) are per-track inserts on a stock effect's id, FX1
-only (`Claims(fx1_only=True)`, below). They never housekeep: an FX1
-instance on track 5 runs before that track's FX2 instance, and position 0
-housekeeps unconditionally, so an electing FX1 participant would flip the
-rotation twice in the first block. The layout alphabet is exhausted
-(A-W, Y, Z), so stations take digits as `layout_char`; `send_probe --feed S
---set S:SEND=100` feeds the tone to a station's own track. Every slot the
-sample loop touches sits below `$40` (a displacement past 63 assembles to
-the two-word form).
-
-## Keeping stock effects in the chooser
-
-Every image replaces the FX2 chooser wholesale. Which stock effects are
-given up is derived from the choosers: an effect on neither FX1's nor
-FX2's list is consumed (`stock.harvested`); by default PLATE, SPRING and
-DARK REV, whose 2,724 words every module packs into. The rest keep their
-code, descriptor and dispatch entries in every image.
-
-`tools/remix/stock.py` registers them under their own keys (`"FILTER"`,
-`"CHORUS"`, `"DELAY"`, …), so a remix keeps one by listing it like a
-module, in the position it should draw at:
-
-```python
-modules=("REVERB SERVER", "DELAY SERVER", "SEND", "FILTER", "LO-FI", "TEMPO SYNC")
-```
-
-A stock row is a list row and a cursor position; `make cycles`
-does not count it (only FILTER's cost is measured, 192 cycles per
-instance). The build writes its list row and cursor position;
-`verify_menu` checks that its descriptor and id entry are byte-identical to
-stock. A stock effect a remix leaves out is left alone entirely: an old
-project that selects it still runs it, it just has no row.
-`remixes/test/mods/remix.py` lists all fourteen.
-
-Two rules, both enforced:
-
-- **Four stock effects allocate an instance buffer**: SPATIALIZER, FLANGER,
-  CHORUS, COMB read `X:0x213` at init (measured by scanning the payload
-  disassembly). The allocator hands out a base per track slot, and those
-  bases are the addresses BusVerb's tank and BusDelay's line hardcode; the chooser is one list for all eight tracks, so an image cannot
-  keep them apart. The ledger refuses the pair
-  (`Claims.stock_instance_buffer` against any module with
-  `owns_fx2_buffers` or a non-`NEVER` `ybase`). All four are legal in an
-  insert-only remix.
-- **More than seven rows moves the list.** The list cave at `0x400d6b00`
-  holds seven rows before the first clone; a longer list goes to the tail
-  of the stock zero run (`LONG_LIST`, 32 rows) and the viewport is capped at
-  the screen's seven. Scrolling the relocated list on the panel is inferred
-  from stock's fifteen-row list; no image with more than seven rows has
-  been flashed.
-
-Stock rows appear in the remixer with their real knobs: `stock.py` reads
-each descriptor's names, defaults, value counts and enable bitmap out of
-the pristine image (`out/raw/section_3_MAIN_OS.bin`); a duplicated label
-gets a `2` suffix on the later slot. A select carries the firmware's own
-labels: `tools/build/stock_labels.py` runs every formatter for every value
-on the emulated ColdFire and checks the result in as
-`tools/remix/stock_labels.json` (`make stock-labels`). Each stock effect
-has a `layout_char` (L E J P A C Z O K I Y); `--pick chorus` also works.
-
-They render locally the way an insert does, from a dump of the stock
-image's payload A (`out/dsp/_stock_A.mem`), with `dsp_host -alloc 1` so a
-buffered effect gets Y:0x4000 as the hardware gives track 1, and `-audio 0`
-because the dispatcher's `move #$0,r0` puts the audio block at X:0 and
-stock effects use X:0x20-0xff as scratch. Measured on a 438 Hz tone at
-0.5 FS:
-
-| effect | result |
-|---|---|
-| FILTER | unity at defaults; BASE=20 WDTH=10 Q=100 takes the tone down 27 dB |
-| EQ, DJ EQ, PHASER, SPATIALIZER, COMB, COMPRESSOR | bit-exact unity at defaults |
-| FLANGER | MIX=0 is a bit-exact dry pass; full modulation flanges |
-| CHORUS | MIX=0 exactly dry; MIX=127 puts sidebands on the tone |
-| LO-FI | renders only with `tools/patches/dsp56300.patch` (`mpyri`); DIST, SRR and AMF/AMD act. At all-zero settings it passes the tone at exactly 2× (+6 dB); whether the unit does the same is unmeasured |
-| DELAY | no DSP code (the Echo Freeze delay is ColdFire-side); the audition refuses |
-
-A stock effect that sounds wrong locally is evidence about the harness or
-emulator before it is evidence about the effect.
-
-## What an unimplemented id falls back to
-
-The build rewrites the FX2 dispatch tables wholesale, so every one of the
-32 ids points at a descriptor and a DSP entry, including id 0, which is
-what a fresh part's FX2 slot holds. `Remix.fallback` names where they go:
-
-- **`fallback="SEND"`, for a remix with a bus.** The send client passes the
-  audio through and only taps it, so a track that selects a missing effect
-  becomes a send. No stock effect is a safe target (it would process the
-  unknown id on whatever knobs the part holds), and the target must be a
-  module of ours (it needs a cloned descriptor, a cursor position and placed
-  code).
-- **`fallback="NONE"`, for a remix with no bus.** Unimplemented ids resolve
-  to the firmware's own NONE: the descriptor a stock chooser carries at list
-  row 0 and the per-payload null stub. It costs one chooser row (four bytes
-  of cave) and no words.
-
-`NONE` is refused beside any bus participant (`registry.remix()`).
-Housekeeping (flipping the rotation word and clearing the accumulators) is
-gated to payload A and done by the first core-0 participant dispatched that
-block; with SEND on every unassigned track, core 0 always has one. Under
-`NONE` an unassigned track runs nothing, so a project with tracks 5-8 all
-unassigned would have no housekeeper and a server on the other core would
-read an accumulator never rotated and never cleared. No local test can
-settle it: `dsp_host` runs both cores lock-step or under a chosen
-interleave.
-
-Declare `bus_client=True` in a module's `Harness` if it writes the shared
-accumulators; `is_server=True` is the other half. `schema.on_the_bus()`
-reads both.
-
-## Declaring DSP code
-
-```python
-dsp=DspSection(
-    asm="modules/<name>/engine.asm",
-    priority=1,
-    ybase=YBase.XBUS,
-    r7_latch_slot=None,
-    gate_label="bus_notfirst",
-)
-```
-
-- **`priority` is byte-load-bearing.** The donor region is packed in this
-  order. The send client is first because the fallback alias needs its
-  entry points to exist; the delay is last so the region's trailing free
-  words belong to it.
-- **`ybase` decides when `$30000` is rewritten** to the payload's own half
-  of the shared window: the delay in every build, the reverb once the bus
-  has moved into the shared window, the send client never. The rewrite is a
-  blanket string replace over the whole source, comments included; a
-  shared-window address that must not move to the other half cannot be
-  spelled `$30000`, and the literal is censused.
-- **`ptable`**: a tuple of words the build parks in the stock curve bank
-  (X:0x4840) and points the source's `$fab1e0` literal at.
-- **`hooks`**: entries from STOCK P code (`schema.DspHook(site, stock,
-  label)`). The two stock words at `site` become `jsr >label` after
-  placement, the build asserting them first; the section replays the
-  displaced instruction. A section with hooks and no `MenuEntry` is placed
-  on `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject
-  at the frame head, P:0x88, on payload A. The ledger refuses two sections
-  on one site of one payload.
+  displaced instruction. `site` is one P address for every payload, or
+  `{"A": addr, "B": addr}` naming exactly the section's payloads when the
+  stock code sits at a different address on each (the payloads are linked
+  separately). A section with hooks and no `MenuEntry` is placed on
+  `payloads` only and takes no dispatch entry: USB AUDIO IN's RX inject at
+  the frame head, P:0x88, on payload A. The ledger refuses two hooks whose
+  two-word spans share a word on one payload.
 - **Program space is per core.** `make bus REMIX=<name>` prints the live ledger.
 
 ### Porting a published algorithm
@@ -719,6 +527,26 @@ examples; each README has its sources, `THIRD_PARTY.md` the licences).
   page-1 control is a knob.
 - Prove each mode against a float transcription of its source
   (`modules/modulation/modulation_ref.py`, `modules/spectrum/capacitor2_ref.py`).
+
+### Rules for DSP code, each established on hardware
+
+`AGENTS.md` has the assembler and arithmetic traps (`mpy`/`a0`, `mpysu`,
+labels by prefix, Tcc and the condition codes) and the dispatcher rule
+(measure r7/r6/X:0x213 facts under the port). Beside those:
+
+- Let the AGU do address work; hand-rolled modulo cost 135 cycles/sample.
+- `dsp_asm` also mis-encodes illegal parallel moves silently: `x:(rN+disp)`
+  is never parallel; `mpy y0,x0,a` takes a parallel move, `mpy x0,y0,a`
+  discards it; XY dual moves need the X pointer in R0–R3 and Y in R4–R7.
+- Two data moves between writing an address register and using it, never
+  an M-register write there; no M-register write inside the sample loop.
+- A modulo offset larger than the buffer is undefined, and silent.
+- Absolute Y scratch at `0x800` or above; `X:0x213` is valid in init only.
+- When a register holding a constant is repurposed, grep every read.
+- Check the assembler's exit status, not the generator's; `| grep` masks a
+  failed assemble.
+- With an impulse input, a flat RMS envelope is instability, not a long
+  tail.
 
 ## Declaring a ColdFire module
 
@@ -761,9 +589,9 @@ behind octabam's loader and depacked there at boot. The cost is 10 MB of
 the unit's 85.5 MB sample/recorder pool. `dram=False` places the unit in
 one of the OS image's free zero runs (~8 KB, shared with everyone). Prefer
 DRAM unless the code has to run before the loader, or you are matching an
-author's ROM layout byte for byte. A module whose DRAM is its own (a
-`Runtime` with its own window) declares the pages it takes with
-`ArenaReserve` so the build stacks everyone's reservations.
+author's ROM layout byte for byte. A unit's `.bss` (uninitialised; KITS's
+1.6 MB library, PLOCKS P2's 1.5 MB table) lands in the same reserve and
+must end below its ceiling.
 
 `Linked.include=fn` gives a unit data that depends on the REMIX: the build
 calls `fn(modules)` (the remix's modules by key), writes the text it
@@ -774,6 +602,16 @@ grown with the audio function when a USB AUDIO module is in the remix, with
 that module's channel count; `modules/usb-audio-*`: the layout `.set` that
 picks which of three builds of one source the unit is). Works for
 both forms since 25 Sep 2026.
+
+`Linked.defsyms=(("NAME", value), ...)` (as `CavePatch.defsyms`) defines
+symbols the source uses and does not define, for both `m68k-elf-as` (so
+`.ifdef NAME` / `.ifndef NAME` gates see them) and `m68k-elf-ld`. Each
+value resolves to a bridge's continuation target (`Override.defsym`)
+first, then a global of a unit or cave linked earlier, else the declared
+value. A name the source itself defines (a label or `.equ`) is refused;
+two DRAM units resolving one name to different values are refused (one
+link). A switch that depends on another module being in the image is
+`include`'s job, not a defsym's.
 
 DRAM units are assembled for the chip itself (`-mcpu=54455`, ISA C):
 GNU ld refuses to link an ISA-C object beside ISA-B ones, and an ISA-C
@@ -787,24 +625,34 @@ is written. `kind="jmp"` for a stub that replays what it displaced and
 jumps on, `"jsr"` for a callable that returns, `"lea"` to rewrite the
 operand of a six-byte `lea abs.l,An`. `pad_to` nops the rest of a displaced
 span longer than six bytes; `target=` names a stock address instead of a
-symbol.
+symbol. The detour writes `pad_to` bytes (six when unset) and `expect` must
+cover all of them; the schema refuses a shorter `expect`.
 
-A **`Poke`** is a plain asserted rewrite. **`TableGrow`** relocates a stock
-pointer array into free space with your symbols appended and repoints
-every reference. An **`Override`** says a bridge's claim at a site stands
-in for another module's (`modules/scenes-kits/`).
+A **`Poke`** is a plain asserted rewrite. A **`Keep`** names stock bytes
+your module relies on and does not write: the ledger refuses any other
+module's write there, and the build asserts them on the stock image and
+again on the finished one. **`TableGrow`** relocates a stock pointer array
+into free space with your symbols appended (or, with `insert_at=i`,
+inserted before stock entry `i` -- which renumbers every entry after it)
+and repoints every reference. An **`Override`** says a bridge's claim at a
+site stands in for another module's (`modules/scenes-kits/`).
+`conflicts=(("<KEY>", "<why>"),)` names a module yours must never share an
+image with although no claim overlaps.
 
-**`Runtime`** is the third form: a recipe (`firmware.json`) the build
-compiles, packs, identity-checks and appends as its own payload of the
-loader (Octakit's shape). One per image.
+Until 6 Oct 2026 there was a third form, `Runtime`: a recipe
+(`firmware.json`) the build compiled, packed, identity-checked and
+appended as its own payload of the loader (Octakit's shape; `git show
+2063370f:tools/remix/runtime_build.py`).
 
 ### The oracle
 
 A port is done when the author's build and this repo's build agree byte for byte.
 `Linked.reference=(addr, sha256)` re-links the unit at the author's own
-address on every build and compares; a `Runtime` re-derives every identity
-its recipe pins. `tools/verify/verify_midiscenes.py` and
-`verify_octakit.py` are the standing proofs. When you port someone else's
+address on every build, with its declared `defsyms` and this remix's
+`remix.inc`, and compares; a unit whose bytes depend on the remix gives
+`reference=fn` instead, `fn(modules) -> (addr, sha256)` naming the variant
+the author ratified for that selection. `tools/verify/verify_midiscenes.py`
+is the standing proof. When you port someone else's
 mod, run their build against the shared stock image first and use its
 output as the oracle.
 
@@ -819,8 +667,8 @@ etiquette.
 
 ### What the gates prove, and what they cannot
 
-`make check REMIX=<name>` builds, runs the ledger (detour sites, pokes,
-runtime writes and caves checked against every other selected module;
+`make check REMIX=<name>` builds, runs the ledger (every fixed-address
+write span, kept bytes and caves checked against every other selected module;
 `make modules` prints the pairwise matrix), the oracle, and boots the image
 under the ColdFire port (`tools/verify/verify_dram_boot.py`): the loader
 ran once, its hash gates passed, the boot reached the RTOS handoff, and
@@ -1080,10 +928,16 @@ own.
 ## Resource claims and the ledger
 
 `tools/remix/ledger.py` refuses a build whose selected modules collide, and
-names both: FX2 ids, cave ranges, hook sites, detour sites, pokes, runtime
-writes, DSP hook sites per payload (`DspSection.hooks`), on-chip SRAM
-windows (`Claims.sram`), core-private Y words, the per-core FX2 instance
-buffer region, appended runtimes (one per image), arena reserves.
+names both: FX2 ids, declared conflicts (`Module.conflicts`), every
+fixed-address write by the bytes it covers (cave ranges, cave hooks and
+detours over their whole span, pokes, table and symbol refs, emit pokes,
+runtime writes), kept stock bytes (`Module.keeps`), two modules growing
+one stock array, DSP hook sites per payload (`DspSection.hooks`), on-chip
+SRAM windows (`Claims.sram`), core-private Y words, the per-core FX2
+instance buffer region, DSP data ranges (`Claims.dsp_ranges`), appended
+runtimes (one per image), arena reserves. A key named in `conflicts`,
+`requires` or an `Override` must be a module's, or the registry refuses
+to load.
 
 Core-private Y is derived by scanning your source for `y:>$09xx`. Low Y is
 per core, not per instance. Declare `Claims(reserved_private_y=…)` only for
@@ -1095,9 +949,20 @@ hardcoded there, so two such modules on one core overwrite each other. A scan ca
 static scanning could not locate the stock reverbs' buffers, which compute
 their bases at runtime (`docs/firmware/DSP.md` section 7c).
 
-The shared 64K window (`Y:0x30000`-`0x3FFFF`) is not checked: the servers'
-buffer extents there are not established well enough to write down.
-`AGENTS.md`'s ownership notes are the map: payload A's half is fully owned.
+DSP data a module writes outside its r7 block and the regions above is
+declared as `Claims(dsp_ranges=(DspRange(space, start, length, what), ...))`.
+`half_relative=True` makes `start` an offset from the payload's half of the
+shared window (0x30000 on A, 0x38000 on B). In the shared 64K window
+(`Y:0x30000`-`0x3FFFF`) X, Y and P alias and both cores see it, so a range
+there is checked against every module's on either payload, against the bus
+scratch `0x36000-0x361FF` unless the module is a bus participant, and
+against stock's per-frame staging `0x30000-0x30047`; below it, against the
+same space on the same payload, the FX2 buffer region and core-private Y
+words. With a project, `verify_set` records the port's write census
+(`--dsp-writes`) and refuses a shared-window region a core wrote that no
+range it may write meets (`tools/remix/dsp_ranges.py`). The census counts
+non-zero writes per 256 words, so a clear of zeroed memory is invisible to
+it: a range a warm-up clears is declared from the source.
 
 `python3 tools/remix/selftest.py` (in `make check`) proves the ledger
 catches each collision it claims to.
@@ -1117,7 +982,7 @@ Specific to a module:
   silently (`AGENTS.md`).
 
 `dsp_host` boots both payloads (`-memB`; `tools/harness/rig_render.py` for
-the whole rig), so a server on core 1 renders on core 1 with the shared
+all eight tracks), so a server on core 1 renders on core 1 with the shared
 window shared. No local test is evidence that a cross-core timing defect is
 absent: the two cores run lock-step or under a chosen `-skew`.
 
@@ -1149,6 +1014,15 @@ descriptors are not), so both FX1 tables are repointed in place, the
 id-indexed lookup and the row the encoder scrolls; the build asserts they
 hold stock's descriptor first. Replacing an FX2-only effect (DELAY, the
 reverbs) leaves FX1 alone.
+
+`MenuEntry(..., replaces="COMPRESSOR", stock_dsp=True)` keeps the stock
+effect's own DSP: the id's two dispatch words stay the pristine image's
+(stock init/proc, on FX1 and FX2), the descriptor is cloned as usual, and
+the module's `DspSection` is code reached through its `DspHook`s only (at
+least one is required; no `init`/`proc` labels). It is placed on its
+`payloads` like a hooked section. `verify_replaces` checks the dispatch
+words; `make cycles` does not price the section, since stock's code runs
+there. A `stock_dsp` module cannot be the remix's fallback.
 
 If your replacement allocates a buffer, size it for FX1: an FX2 slot is
 16,384 words, an FX1 slot 3,072 (measured, `X:0x255` in both payloads).
@@ -1230,6 +1104,16 @@ dry at any setting, and `dsp_host`'s guard seeing no write above `0x3fff`
 on every FX1 base. FX1 bases are `0x1000 0x1c00 0x2800 0x3400`, only
 1,024-aligned on two of the four, so modulo addressing over more than 1,024
 words needs the linear-plus-mask idiom (`modules/modulation/`).
+
+#### Per-core instance ceiling
+
+`DspSection.max_per_core` (1..4, default None) declares how many copies of
+an insert one core can carry. `tools/build/cycle_count.py` prices an insert
+at min(4, `max_per_core`) copies instead of four, and prints the ceiling on
+the module's row and in the WORST ONE CORE line; `--json` carries it as
+`declared_max_per_core`. The unit does not enforce it: a user can still
+select the effect on every track of a core. The remix README states the
+ceiling and what a further instance costs.
 
 #### What is different about FX1
 

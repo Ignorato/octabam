@@ -110,8 +110,10 @@ def audio_config(hs, other_speed=False, key="USB AUDIO OUT TRACKS MAIN CUE", wit
     device macOS accepts (his measurement against an Elektron Digitone):
     one AudioControl collecting the MIDIStreaming interface, another
     collecting the AudioStreaming one. The clock source is read-only
-    (bmControls 0b01): a host-programmable clock would need a control OUT
-    with a data stage, which the stock EP0 stack does not have.
+    (bmControls 0b01) with one rate. Read-only does not stop a host SETting
+    it: the Elektron Outbox 8 sends SET CUR 44100 (a control OUT with a
+    4-byte data stage), which the stock EP0 stack cannot receive; usbaudio.s
+    takes it (44100 acknowledged, any other rate STALLed).
 
     `key` is the audio module: USB AUDIO OUT MASTER declares its two channels
     front left / front right (the standard stereo cluster); the other two

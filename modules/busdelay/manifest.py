@@ -11,7 +11,7 @@ states its renderer. TIME's formatter is the tempo-sync cave, registered
 over slot 0 by that module.
 """
 
-from remix.schema import (Gate, Category, Proof, ModeView, BusRole, Claims, YBase, DspSection, Formatter, Harness, Kind,
+from remix.schema import (Gate, Category, Proof, ModeView, BusRole, Claims, DspRange, YBase, DspSection, Formatter, Harness, Kind,
                           MenuEntry, Module, Param)
 
 _PLAIN = Formatter.PLAIN
@@ -168,7 +168,10 @@ MODULE = Module(
     # is not established.
     # LineR is the core's private FX2 buffer region: the ledger refuses a
     # second owner on the same payload (BusVerb's tank is payload A's).
-    claims=Claims(reserved_private_y=(0x0903,), owns_fx2_buffers=True),
+    # LineL is payload B's whole half of the shared window: the write
+    # pointer walks base + (phase & $7fff) every sample whatever TIME is.
+    claims=Claims(reserved_private_y=(0x0903,), owns_fx2_buffers=True, dsp_ranges=(
+        DspRange("y", 0x0000, 0x8000, "LineL", half_relative=True),)),
     harness=Harness(layout_char="D", is_server=True),
     # the GRAIN lever, the tempo feed, and the bus's two-core and one-aux gates
     gates=(Gate('tools/verify/verify_grains.py'),

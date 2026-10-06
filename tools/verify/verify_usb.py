@@ -84,6 +84,7 @@ def main():
                                 "--watch-mem", f"{MIDI_FIFO_HEAD:#x},4"] + (["--frame"] if audio else []),
                                cwd=ROOT, stdout=lf, stderr=subprocess.STDOUT)
     fails = []
+    stalls_expected = 0     # EP0 STALLs this gate elicits on purpose (SET CUR of an unoffered rate)
 
     def check(what, ok, detail=""):
         print(f"  [{'PASS' if ok else 'FAIL'}] {what}{'  ' + detail if detail else ''}")
@@ -166,6 +167,33 @@ def main():
             # the clock source answers its sample rate; SET_INTERFACE alt 1 brings EP3 up
             cur = b.ctrl_in(0xa1, 1, 0x0100, 0x1000 | 3, 4)
             check("USB AUDIO: CS_SAM_FREQ_CONTROL CUR = 44100", cur == (44100).to_bytes(4, "little"), cur.hex())
+            # SET CUR of the (fixed, read-only) rate: some UAC2 hosts send it
+            # with the rate they have just read and give the audio function up
+            # if it STALLs (the Elektron Outbox 8: modules/usb-audio-out-tracks-main-cue/README.md).
+            # 44100 is acknowledged; any other rate STALLs the status stage.
+            # Before the fix the stock handler STALLed only EP0 IN, so the
+            # data stage was never accepted and the host timed out.
+            def set_cur_freq(rate):
+                b.setup(0x21, 1, 0x0100, 0x1000 | 3, 4)
+                try:
+                    b.ep_out(0, rate.to_bytes(4, "little"), timeout=10.0)   # a data-stage STALL raises
+                except TimeoutError:
+                    return "data stage never accepted (timeout)"
+                try:
+                    b.ep_in(0, 64)                          # status stage
+                    return "ACK"
+                except usb_host.Stall:
+                    return "status STALL"
+            for rate, want in ((44100, "ACK"), (48000, "status STALL")):
+                stalls_expected += want == "status STALL"
+                try:
+                    got = set_cur_freq(rate)
+                except usb_host.Stall as e:
+                    got = f"data-stage STALL ({e})"
+                check(f"USB AUDIO: SET CUR sample frequency {rate} -> {want}", got == want, got)
+                cur = b.ctrl_in(0xa1, 1, 0x0100, 0x1000 | 3, 4)
+                check(f"USB AUDIO: EP0 answers after SET CUR {rate} (CUR = 44100)",
+                      cur == (44100).to_bytes(4, "little"), cur.hex())
             b.ctrl_nodata(0x01, 0x0b, 1, 4)
             alt = b.ctrl_in(0x81, 0x0a, 0, 4, 1)
             check("USB AUDIO: GET_INTERFACE reports alt 1", alt == b"\x01", alt.hex())
@@ -180,15 +208,11 @@ def main():
             c = usb_host.counters(b)
             print("  counters: " + " ".join(f"{k}={v}" for k, v in c.items()))
             # An overrun is the ring lapping a host that stopped draining. The
-            # port logs every run of polls the bench host failed to make; on a
-            # loaded machine (four shards, 28 Sep 2026) those are the bench's,
-            # so an overrun with such a run logged is the instrument's, not the
-            # device's. On a quiet machine both are zero.
-            lagged = log.read_text(errors="replace").count("with no IN from the bench host")
-            check(f"{audio}: the vendor request reads the counters back: frames produced and consumed, no overrun the bench did not cause",
-                  c["produced"] > c["consumed"] > 0 and (c["overruns"] == 0 or lagged > 0),
-                  f"produced {c['produced']} consumed {c['consumed']} overruns {c['overruns']} underruns {c['underruns']} bankdup {c['bankdup']}"
-                  + (f"; the bench host lagged {lagged} time(s)" if lagged else ""))
+            # port holds device time for the bench's next IN (usb.h, isoPoll),
+            # so a slow bench never shows as one.
+            check(f"{audio}: the vendor request reads the counters back: frames produced and consumed, no overrun",
+                  c["produced"] > c["consumed"] > 0 and c["overruns"] == 0,
+                  f"produced {c['produced']} consumed {c['consumed']} overruns {c['overruns']} underruns {c['underruns']} bankdup {c['bankdup']}")
             # (after the counters: re-poking between polls slows the bench's
             # polling, and the port counts the polls it skips as overruns)
             # Which taps stream: the read-back arena (both banks) and MAIN/CUE
@@ -231,8 +255,8 @@ def main():
             first = [len(b.ep_in(3, 1024)) for _ in range(4)]
             c1 = usb_host.counters(b)
             gap = c1["produced"] - c0["produced"]
-            check(f"{audio}: a first poll {gap} frames after alt 1 re-anchors the cushion at {AUD_TARGET}: {c1['anchor']} frames skipped",
-                  480 <= c1["anchor"] <= gap + 32 and abs(c1["lastfill"] - AUD_TARGET) <= 64 and any(first),
+            check(f"{audio}: a first poll {gap} frames after alt 1 re-anchors the cushion at {AUD_TARGET}: {c1['anchor']} frames skipped, lastfill {c1['lastfill']}",
+                  480 <= c1["anchor"] <= gap + 32 and abs(c1["lastfill"] - AUD_TARGET) <= AUD_TARGET // 2 and any(first),
                   f"anchor {c1['anchor']} gap {gap} lastfill {c1['lastfill']} first polls {first}")
             for _ in range(400):
                 b.ep_in(3, 1024)
@@ -240,11 +264,26 @@ def main():
             # The floor only: a poll the bench host misses drains nothing, so
             # bench lag can only RAISE the fill (maxfill 678 and 698 with 106
             # and 351 missed polls, four shards, 28 Sep 2026). maxfill is printed.
-            # The proportional servo holds the target within a packet or two;
-            # 64 below it is a failure.
-            check(f"{audio}: 400 polls on, the fill held near the target: min {c2['minfill']} (floor {AUD_TARGET - 64}), max {c2['maxfill']}, no underrun",
-                  c2["underruns"] == 0 and c2["minfill"] >= AUD_TARGET - 64,
+            # Floor AUD_TARGET / 2. Measured under the port (usb-out-tracks-main-cue,
+            # AUD_TARGET 64, 5 Oct 2026, three runs): lastfill 79, 63, 63 (band
+            # 32..96); minfill 64, 53, 63 (floor 32).
+            check(f"{audio}: 400 polls on, the fill held near the target: min {c2['minfill']} (floor {AUD_TARGET // 2}), max {c2['maxfill']}, no underrun",
+                  c2["underruns"] == 0 and c2["minfill"] >= AUD_TARGET // 2,
                   f"minfill {c2['minfill']} maxfill {c2['maxfill']} underruns {c2['underruns']}")
+            # Bus reset with the stream open and no alt 0 from the host (a
+            # cable pull or a host crash): USB 2.0 9.1.1.5 puts the interface
+            # back to alt 0. The stock URI handler writes no alt byte
+            # (audio_reset_shim does), so before it GET_INTERFACE(4) answered
+            # 1 and the stream went on.
+            b.reset()
+            alt = b.ctrl_in(0x81, 0x0a, 0, 4, 1)
+            check("USB AUDIO: GET_INTERFACE reports alt 0 after a bus reset", alt == b"\x00", alt.hex())
+            after = [len(b.ep_in(3, 1024)) for _ in range(8)]
+            check("USB AUDIO: a bus reset stops the stream (empty polls)", all(a == 0 for a in after[2:]), str(after))
+            b.ctrl_nodata(0x01, 0x0b, 1, 4)
+            got = [len(b.ep_in(3, 1024)) for _ in range(400)]
+            check("USB AUDIO: SET_INTERFACE alt 1 after the reset brings the stream back, none of the last 300 polls empty",
+                  all(g > 0 for g in got[100:]), f"empty polls after the first 100: {sum(1 for g in got[100:] if g == 0)}")
             b.ctrl_nodata(0x01, 0x0b, 0, 4)
             # Full speed: the same device re-enumerated. The stereo sum of the
             # tracks (OUT TRACKS MAIN CUE, OUT TRACKS) or track 8's L/R (OUT MASTER) in 44/45-frame
@@ -297,7 +336,8 @@ def main():
         s = summary[-1]
         print("  " + s)
         check("no uninitialised queue head was primed", "UNINITIALIZED" not in s)
-        check("no EP0 stall during enumeration", " 0 stall(s)" in s)
+        check("no EP0 stall during enumeration" + (f" (only the {stalls_expected} the gate asks for)" if stalls_expected else ""),
+              f" {stalls_expected} stall(s)" in s)
     print(f"verify_usb: {'OK' if not fails else str(len(fails)) + ' FAILED'} ({log})")
     return 1 if fails else 0
 

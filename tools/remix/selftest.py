@@ -11,6 +11,7 @@ the ledger names both; a clean pair must stay clean.
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
@@ -18,11 +19,15 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import too
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 from remix import ledger, registry, schema, state, stock  # noqa: E402
-from remix.schema import (CavePatch, Claims, Detour, DramRegion, DspHook, DspSection,  # noqa: E402
-                          Kind, Linked, MenuEntry, Module, Param, YBase)
+from remix.schema import (BusRole, CavePatch, Claims, Detour, DramRegion, DspHook,  # noqa: E402
+                          DspRange, DspSection, Formatter, Keep, Kind, Linked, MenuEntry,
+                          Module, Param, Poke, SymbolRef, TableGrow, YBase)
 
 
-def _effect(name, fx2_id, priority=0, reserved=(), buffers=False,
+_PRIORITY = iter(range(100, 1000))      # distinct unless a case sets one
+
+
+def _effect(name, fx2_id, priority=None, reserved=(), buffers=False,
             ybase=YBase.NEVER, ptable=(), asm="does/not/exist.asm"):
     return Module(
         name=name, key=name.upper(), kind=Kind.DSP_EFFECT,
@@ -33,7 +38,9 @@ def _effect(name, fx2_id, priority=0, reserved=(), buffers=False,
         # No asm path on disk, so the ledger's scan finds nothing and only
         # the reserved words below are claimed -- which is what lets these
         # fixtures test the claim path in isolation.
-        dsp=DspSection(asm=asm, priority=priority, ybase=ybase,
+        dsp=DspSection(asm=asm,
+                       priority=next(_PRIORITY) if priority is None else priority,
+                       ybase=ybase,
                        ptable=ptable),
         claims=Claims(reserved_private_y=reserved,
                       owns_fx2_buffers=buffers),
@@ -50,12 +57,14 @@ _HARD_ASM.write_text("        move    x:>$4a40,x0             ; curve 4's base\n
                      "        rts\n")
 
 
-def _hooked(name, site=0x88, payloads=frozenset({"A"}), sram=()):
+def _hooked(name, site=0x88, payloads=frozenset({"A"}), sram=(), priority=None):
     """A DSP section with no chooser row, reached by a jsr planted in stock
     P code (USB AUDIO IN's RX inject)."""
     return Module(
         name=name, key=name.upper(), kind=Kind.HYBRID, doc="fixture",
-        dsp=DspSection(asm="does/not/exist.asm", priority=20, payloads=payloads,
+        dsp=DspSection(asm="does/not/exist.asm",
+                       priority=next(_PRIORITY) if priority is None else priority,
+                       payloads=payloads,
                        hooks=(DspHook(site, (0x627000, 0x000204), "inject"),)),
         claims=Claims(sram=sram) if sram else None,
     )
@@ -97,7 +106,28 @@ def _detour(name, site):
     )
 
 
+def _cf(name, **kw):
+    """A ColdFire module declaring fixed-address writes and claims."""
+    return Module(name=name, key=name.upper(), kind=Kind.CF_PATCH, doc="fixture", **kw)
+
+
+def _poke(addr, n=2):
+    return Poke(addr, b"\x00" * n, b"\x4e\x71"[:n] * (n // 2 or 1))
+
+
+def _ranged(name, *ranges, payloads=frozenset({"A"}), role=BusRole.NONE, buffers=False):
+    """A hooked DSP section declaring data ranges."""
+    return Module(
+        name=name, key=name.upper(), kind=Kind.HYBRID, doc="fixture",
+        dsp=DspSection(asm="does/not/exist.asm", priority=20, payloads=payloads, bus_role=role,
+                       hooks=(DspHook(0x88 + len(name), (0x627000, 0x000204), "inject"),)),
+        claims=Claims(dsp_ranges=tuple(ranges), owns_fx2_buffers=buffers))
+
+
 CASES = [
+    ("two DSP sections on one priority and one payload",
+     [_effect("alpha", 0x07, priority=15), _effect("beta", 0x1e, priority=15)],
+     "DSP priority"),
     ("two modules claiming one FX2 id",
      [_effect("alpha", 0x07), _effect("beta", 0x07)], "fx2 id"),
     ("two caves overlapping in memory",
@@ -108,6 +138,10 @@ CASES = [
       _cave("beta", 0x400d7100, hook_addr=0x40004d40)], "hook site"),
     ("two DSP sections hooking one stock P word on one payload",
      [_hooked("alpha"), _hooked("beta")], "DSP hook site"),
+    ("two per-payload DSP hooks sharing one word on payload B",
+     [_hooked("alpha", site={"A": 0x88, "B": 0x29c}, payloads=frozenset({"A", "B"})),
+      _hooked("beta", site={"A": 0x4a7, "B": 0x29d}, payloads=frozenset({"A", "B"}))],
+     "DSP hook site"),
     ("two modules claiming one on-chip SRAM window",
      [_hooked("alpha", sram=((0x80007c00, 1024, "dTDs"),)),
       _hooked("beta", site=0x90, sram=((0x80007e00, 512, "reply"),))], "on-chip SRAM"),
@@ -138,6 +172,65 @@ CASES = [
     ("a table module beside a module addressing the stock curve bank",
      [_effect("alpha", 0x07, ptable=(1, 2, 3)),
       _effect("beta", 0x1e, asm=str(_HARD_ASM))], "X:0x4840 curve bank"),
+    # ---- fixed-address spans, plain against plain ----------------------
+    ("two plain pokes overlapping by one byte",
+     [_cf("alpha", pokes=(_poke(0x4001f322, 4),)), _cf("beta", pokes=(_poke(0x4001f324, 2),))],
+     "poke site"),
+    ("a linked cave's reserve over another's cave",
+     [_cf("alpha", cf_patches=(CavePatch("alpha cave", 0x400d7000, b"", reserve=96),)),
+      _cave("beta", 0x400d7040, 64)], "ColdFire cave"),
+    ("a plain poke inside a pinned cave",
+     [_cave("alpha", 0x400d7000, 64), _cf("beta", pokes=(_poke(0x400d7010),))], "ColdFire cave"),
+    ("a plain poke inside a cave hook's span",
+     [_cave("alpha", 0x400d7000, hook_addr=0x40004d40), _cf("beta", pokes=(_poke(0x40004d46),))],
+     "hook site"),
+    ("two symbol refs on one pointer (synth and Analog BD's FLEX renderer)",
+     [_cf("alpha", symbol_refs=(SymbolRef(0x400d6438, 0x40004008, "u", "a"),)),
+      _cf("beta", symbol_refs=(SymbolRef(0x400d6438, 0x40004008, "u", "b"),))], "poke site"),
+    ("a table ref on a plain poke",
+     [_cf("alpha", tables=(TableGrow("t", 0x40100000, 4, (("u", "s"),), ((0x40065bd8, 0x40100000),)),)),
+      _cf("beta", pokes=(_poke(0x40065bda),))], "poke site"),
+    ("a detour's pad_to span over another's site",
+     [_cf("alpha", detours=(Detour(0x40079816, b"\x00" * 8, "u", "a", pad_to=8),)),
+      _cf("beta", detours=(Detour(0x4007981c, b"\x00" * 6, "u", "b"),))], "hook site"),
+    # ---- kept bytes ------------------------------------------------------
+    ("a poke on bytes another module keeps",
+     [_cf("alpha", keeps=(Keep(0x4001f322, bytes.fromhex("48780064"), "pea 0x64"),)),
+      _cf("beta", pokes=(Poke(0x4001f322, bytes.fromhex("48780064"), bytes.fromhex("48780070")),))],
+     "kept bytes"),
+    ("a detour over kept bytes",
+     [_cf("alpha", keeps=(Keep(0x4001f324, bytes.fromhex("0064"), "pea operand"),)),
+      _cf("beta", detours=(Detour(0x4001f322, b"\x00" * 6, "u", "b"),))], "kept bytes"),
+    ("two keepers expecting different stock",
+     [_cf("alpha", keeps=(Keep(0x4001f322, bytes.fromhex("48780064")),)),
+      _cf("beta", keeps=(Keep(0x4001f322, bytes.fromhex("48780070")),))], "kept bytes"),
+    # ---- grown tables ----------------------------------------------------
+    ("two modules growing one stock array",
+     [_cf("alpha", tables=(TableGrow("t", 0x40100000, 4, (("u", "a"),), ((0x40065bd8, 0x40100000),)),)),
+      _cf("beta", tables=(TableGrow("t", 0x40100008, 2, (("u", "b"),), ((0x40065d3e, 0x40100008),)),))],
+     "grown table"),
+    # ---- declared conflicts ----------------------------------------------
+    ("two designs of one behaviour",
+     [_cf("alpha", pokes=(_poke(0x40100000),), conflicts=(("BETA", "both retime a cued pattern"),)),
+      _cf("beta", pokes=(_poke(0x40100010),))], "declared conflict"),
+    # ---- DSP data ranges -------------------------------------------------
+    ("two modules on one shared-window range from different payloads",
+     [_ranged("alpha", DspRange("y", 0x3a000, 0x100, "buf")),
+      _ranged("beta", DspRange("y", 0x3a080, 0x100, "buf"), payloads=frozenset({"B"}))], "DSP data"),
+    ("two modules on one private X range on one payload",
+     [_ranged("alpha", DspRange("x", 0x6000, 0x10, "table")),
+      _ranged("beta", DspRange("x", 0x6008, 0x10, "table"))], "DSP data"),
+    ("a declared range in another module's FX2 buffer region",
+     [_ranged("alpha", DspRange("y", 0x8000, 0x10, "state")),
+      _ranged("beta", buffers=True)], "DSP data"),
+    ("a non-bus module's range in the bus scratch",
+     [_ranged("alpha", DspRange("y", 0x36100, 0x10, "state")),
+      _ranged("beta", role=BusRole.CLIENT)], "DSP data"),
+    ("a range over stock's core 1 -> core 0 mailbox",
+     [_ranged("alpha", DspRange("y", 0x7e00, 0x200, "line", half_relative=True))], "DSP data"),
+    ("a range on another module's core-private Y word",
+     [_ranged("alpha", DspRange("y", 0x0900, 0x10, "state")),
+      _effect("beta", 0x1e, reserved=(0x0905,))], "DSP data"),
     ("two modules claiming one DRAM region symbol",
      [_region("alpha", "ring"), _region("beta", "ring")], "DRAM region"),
     # A hook site is a fixed address whether or not its cave floats. Every
@@ -160,11 +253,28 @@ CLEAN = [_effect("alpha", 0x07, reserved=(0x0905,)),
          # keeps them apart -- that is what it is for).
          _stock("filter", 0x04, False),
          _stock("compressor", 0x18, False)]
+# One priority on disjoint payloads: the two are never sorted together.
+CLEAN_PRIORITY_PAIR = [_hooked("alpha", payloads=frozenset({"A"}), priority=15),
+                       _hooked("beta", payloads=frozenset({"B"}), priority=15)]
 CLEAN_STOCK_PAIR = [_stock("chorus", 0x12, True), _stock("comb", 0x13, True),
                     _effect("alpha", 0x07)]
 # One site, two payloads: no clash, each core has its own P.
 CLEAN_HOOK_PAIR = [_hooked("alpha", payloads=frozenset({"A"})),
-                   _hooked("beta", payloads=frozenset({"B"}))]
+                   _hooked("beta", payloads=frozenset({"B"})),
+                   # per-payload sites: one address, a different payload each
+                   _hooked("gamma", site={"A": 0x4a7, "B": 0x29c}, payloads=frozenset({"A", "B"})),
+                   _hooked("delta", site={"A": 0x29c, "B": 0x4a7}, payloads=frozenset({"A", "B"}))]
+# Adjacent pokes, matching keepers, one half-relative range on each half, a
+# private X range on two payloads, and a conflict naming a module that is absent.
+CLEAN_CLAIMS = [_cf("alpha", pokes=(_poke(0x4001f322, 4),),
+                    keeps=(Keep(0x40100000, bytes.fromhex("48780064")),),
+                    conflicts=(("ABSENT", "fixture"),)),
+                _cf("beta", pokes=(_poke(0x4001f326, 2),),
+                    keeps=(Keep(0x40100002, bytes.fromhex("0064")),)),
+                _ranged("gamma", DspRange("y", 0x0800, 0x100, "buf", half_relative=True),
+                        DspRange("x", 0x6000, 0x10, "table")),
+                _ranged("delta", DspRange("y", 0x0800, 0x100, "buf", half_relative=True),
+                        DspRange("x", 0x6000, 0x10, "table"), payloads=frozenset({"B"}))]
 
 
 def _submodule_preflight() -> int:
@@ -172,9 +282,9 @@ def _submodule_preflight() -> int:
 
     `make check` runs EVERY remix, so a clone without submodules fails on
     somebody else's module even when the remix under test has nothing to do
-    with it -- and it failed as a bare FileNotFoundError traceback out of
-    ledger.runtime_write_spans (octakit's firmware.json) or as an assembler
-    "can't open" from midi-scenes' sources. Measured on a fresh
+    with it -- and it failed as a bare FileNotFoundError traceback (Octakit's
+    firmware.json, until 6 Oct 2026) or as an assembler "can't open" from
+    midi-scenes' sources. Measured on a fresh
     clone: `make bus REMIX=recfix` succeeds, `make check REMIX=recfix` dies.
     That is a wall in front of the first thing an outside contributor is
     asked to run, so it gets a message instead of a traceback.
@@ -241,8 +351,12 @@ def main():
     for label, mods in (("modules that do not collide", CLEAN),
                         ("two buffered stock effects + a zero-buffer insert",
                          CLEAN_STOCK_PAIR),
+                        ("two DSP sections on one priority on different payloads",
+                         CLEAN_PRIORITY_PAIR),
                         ("two DSP sections hooking one site on different payloads",
-                         CLEAN_HOOK_PAIR)):
+                         CLEAN_HOOK_PAIR),
+                        ("adjacent pokes, agreeing keepers, ranges on different payloads",
+                         CLEAN_CLAIMS)):
         found = ledger.check(mods)
         if found:
             bad += 1
@@ -257,12 +371,130 @@ def main():
     except ValueError:
         print("  [PASS] a module on a stock FX2 id is refused")
 
+    for label, make in (
+            ("a module keeping bytes it pokes",
+             lambda: _cf("k", pokes=(_poke(0x40100000, 4),), keeps=(Keep(0x40100002, b"\x00\x00"),))),
+            ("a key in both requires and conflicts",
+             lambda: _cf("k", requires=("X",), conflicts=(("X", "fixture"),))),
+            ("a conflict with itself", lambda: _cf("k", conflicts=(("K", "fixture"),))),
+            ("TableGrow.insert_at past the stock count",
+             lambda: TableGrow("t", 0x40100000, 4, (), (), insert_at=5)),
+            ("a DspRange straddling the shared window", lambda: DspRange("y", 0x2ff00, 0x200, "x")),
+            ("a half-relative DspRange past its half",
+             lambda: DspRange("y", 0x7f00, 0x200, "x", half_relative=True)),
+            ("a per-payload DspHook site naming a payload the section is not on",
+             lambda: _hooked("h", site={"A": 0x4a7, "B": 0x29c})),
+            ("a per-payload DspHook site missing one of the section's payloads",
+             lambda: _hooked("h", site={"A": 0x4a7}, payloads=frozenset({"A", "B"}))),
+            ("MenuEntry.stock_dsp without replaces",
+             lambda: MenuEntry(fx2_id=0x1f, donor_desc=0x400d58b8, abbr=b"F",
+                               fullname=b"F", stock_dsp=True)),
+            ("a stock_dsp module with no DspHook",
+             lambda: Module(name="sd", key="SD", kind=Kind.DSP_EFFECT, doc="fixture",
+                            menu=MenuEntry(fx2_id=0x18, donor_desc=0x400d5a4a,   # COMPRESSOR
+                                           abbr=b"SD", fullname=b"SD",
+                                           replaces="COMPRESSOR", stock_dsp=True),
+                            params=tuple([Param(b"A", 0, active=True)] + [Param()] * 11),
+                            dsp=schema.DspSection(asm="does/not/exist.asm", priority=0))),
+            ("a Param with a formatter and raw descriptor words",
+             lambda: Param(b"MON", 0, count=2, active=True, formatter=Formatter.STEPPED,
+                           labels=("OFF", "ON"), widget_word=0x40046f10)),
+            ("a raw descriptor word that is neither a u32 nor a (unit, symbol)",
+             lambda: Param(b"KEY", 0, active=True, formatter_word=("unit",))),
+            ("DspSection.subst on a payload the section is not placed on",
+             lambda: schema.DspSection(asm="x.asm", priority=0, payloads=frozenset({"A"}),
+                                subst={"A": {"@S@": "$1"}, "B": {"@S@": "$2"}})),
+            ("DspSection.subst with different keys per payload",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"@S@": "$1"}, "B": {"@T@": "$2"}})),
+            ("DspSection.subst key overlapping the build's $30000 rewrite",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"$3000": "$1"}, "B": {"$3000": "$2"}})),
+            ("DspSection.subst value carrying a build marker",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"@S@": "; ROTLATCH"}, "B": {"@S@": "$2"}})),
+            ("DspSection.subst on a source without the key",
+             lambda: schema.DspSection(asm="x.asm", priority=0,
+                                subst={"A": {"@S@": "$1"}, "B": {"@S@": "$2"}}
+                                ).source_for("A", "        nop\n"))):
+        try:
+            make()
+            bad += 1
+            print(f"  [FAIL] {label} was accepted")
+        except ValueError:
+            print(f"  [PASS] {label} is refused")
+    got = registry.validate_keys({"ALPHA": _cf("alpha", conflicts=(("NOPE", "fixture"),))})
+    if got:
+        print(f"  [PASS] an unknown conflicts key is refused -> {got[0]}")
+    else:
+        bad += 1
+        print("  [FAIL] an unknown conflicts key was accepted")
+    grown = TableGrow("t", 0, 3, (), (), insert_at=1).entries([1, 2, 3], [9, 8])
+    if grown == [1, 9, 8, 2, 3] and TableGrow("t", 0, 3, (), ()).entries([1, 2, 3], [9]) == [1, 2, 3, 9]:
+        print("  [PASS] TableGrow inserts a block at insert_at and appends by default")
+    else:
+        bad += 1
+        print(f"  [FAIL] TableGrow.entries gave {grown}")
+    # The real pair the plain-span pass newly refuses: both rewrite the FLEX
+    # renderer pointer 0x400d6438, and synth's machine-window detour spans
+    # Analog BD's at 0x4007981c.
+    pair = ledger.check([registry.by_key("SYNTH MACHINE"), registry.by_key("ANALOG BD")])
+    if any(p.startswith(("poke site", "hook site")) for p in pair):
+        print(f"  [PASS] SYNTH MACHINE + ANALOG BD are refused -> {pair[0]}")
+    else:
+        bad += 1
+        print(f"  [FAIL] SYNTH MACHINE + ANALOG BD: {pair}")
+
     try:
         Param(b"SIXSIX")
         bad += 1
         print("  [FAIL] a six-character parameter name was accepted without a terminator")
     except ValueError:
         print("  [PASS] a six-character parameter name is refused")
+
+    # ---- Param.active = None: the donor's enable nibble ------------------
+    # Only on a MenuEntry(stock_dsp=True) clone; elsewhere None is not drawn.
+    _donor = (0x13311111, 0x00001111)      # slots 0-11 drawn, links on 4-6
+    _sd_params = tuple([Param(b"A", 0, active=True), Param(active=False)]
+                       + [Param()] * 10)
+    _sd = Module(name="sd", key="SD", kind=Kind.DSP_EFFECT, doc="fixture",
+                 menu=MenuEntry(fx2_id=0x18, donor_desc=0x400d5a4a,   # COMPRESSOR
+                                abbr=b"SD", fullname=b"SD",
+                                replaces="COMPRESSOR", stock_dsp=True),
+                 params=_sd_params,
+                 dsp=schema.DspSection(asm="does/not/exist.asm", priority=0,
+                                hooks=(DspHook(0x88, (0x627000, 0x000204), "t"),)))
+    _got = schema.enable_words(_sd.active_params, _sd.linked_params,
+                               _sd.inherited_enable, _donor)
+    if _sd.inherited_enable == tuple(range(2, 12)) and _got == (0x13311101, 0x00001111):
+        print("  [PASS] a stock_dsp clone's Param() keeps the donor's enable nibble")
+    else:
+        bad += 1
+        print(f"  [FAIL] stock_dsp Param(): inherited {_sd.inherited_enable}, "
+              f"words {tuple(hex(w) for w in _got)}")
+    _fx = Module(name="fx", key="FX", kind=Kind.DSP_EFFECT, doc="fixture",
+                 menu=MenuEntry(fx2_id=0x1f, donor_desc=0x400d58b8,
+                                abbr=b"FX", fullname=b"FX"),
+                 params=_sd_params, dsp=schema.DspSection(asm="does/not/exist.asm", priority=0))
+    _got = schema.enable_words(_fx.active_params, _fx.linked_params,
+                               _fx.inherited_enable, _donor)
+    if _fx.inherited_enable == () and _got == (0x00000001, 0):
+        print("  [PASS] Param() on a clone without stock_dsp is not drawn")
+    else:
+        bad += 1
+        print(f"  [FAIL] non-stock_dsp Param(): inherited {_fx.inherited_enable}, "
+              f"words {tuple(hex(w) for w in _got)}")
+    # ---- labels on a raw-word slot are display-only ----------------------
+    _raw = Param(b"MON", 0, count=2, active=True, labels=("OFF", "ON"),
+                 widget_word=0x40046f10)
+    _plain = Param(b"MON", 0, count=2, active=True, labels=("OFF", "ON"),
+                   formatter=Formatter.STEPPED)
+    if not _raw.prints_labels and _plain.prints_labels:
+        print("  [PASS] a raw-word slot with labels gets no label formatter")
+    else:
+        bad += 1
+        print(f"  [FAIL] prints_labels: raw-word slot {_raw.prints_labels}, "
+              f"plain select {_plain.prints_labels}")
 
     # ---- the rig's derivations (tools/remix/rig.py) ---------------------
     # The track model is DERIVED, so hold the derivation to the measured
@@ -332,22 +564,16 @@ def main():
         print("  [PASS] a server with undeclared payload is refused")
 
     # ---- one knob-name universe -----------------------------------------
-    # The audition path drives render_reverb, whose PARAMS list predates the
-    # manifest and keeps two historical labels (MIX for IN, SPEED for SHMR).
-    # The bridge is positional -- manifest slot -> PARAMS[slot] -- so prove
-    # the two tables stay slot-for-slot aligned; a slot that moves in one and
-    # not the other is exactly the wrapper drift that has burned renders
-    # before (the harness-knob-drift rule).
+    # The audition path drives render_reverb: manifest slot -> PARAMS[slot]
+    # -> `-p NAME=`. render_reverb builds PARAMS from the manifest; this
+    # holds the name at every slot equal to the manifest's, so a hand-copied
+    # table cannot return (harness-knob-drift rule).
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1])); import toolpath  # noqa: E402,F401  (every tools/ dir on sys.path)
     import render_reverb
     cv = registry.by_key("REVERB SERVER")
     for name, slot in sorted(cv.knob_map().items(), key=lambda kv: kv[1]):
-        if name == "MODE":                               # goes via --mode
-            ok = render_reverb.PARAMS[slot][0] == "_C"   # (slot 6 since v7)
-        else:
-            rr_name = render_reverb.PARAMS[slot][0]
-            ok = rr_name in render_reverb.NAMES and \
-                render_reverb.NAMES[rr_name] == slot
+        rr_name = render_reverb.PARAMS[slot][0]
+        ok = rr_name == name and render_reverb.NAMES[name] == slot
         if not ok:
             bad += 1
             print(f"  [FAIL] busverb {name}@{slot} has no aligned "
@@ -577,6 +803,25 @@ def main():
         elif not _wrong:
             print(f"  [PASS] payload {_pay}: {len(_sp)} effects contiguous, "
                   f"P:0x{_lo:05x}..0x{_hi:05x} = {_hi - _lo:,} words")
+    # Routines a kept effect calls inside a harvested span (stock.pinned):
+    # the scan must find the measured four on each payload, and nothing for
+    # the default harvest. An empty scan (no disassembler, a decode change)
+    # would otherwise read as "nothing to keep".
+    _pin_want = {
+        "A": {("SPRING REV",): ((0x1586, 35),), ("DARK REV",): ((0x1a47, 93),),
+              ("FILTER",): ((0x09ad, 12), (0x09c6, 15)), stock.CONSUMED: ()},
+        "B": {("SPRING REV",): ((0x1346, 35),), ("DARK REV",): ((0x1807, 93),),
+              ("FILTER",): ((0x076d, 12), (0x0786, 15)), stock.CONSUMED: ()},
+    }
+    for _pay, _cases in _pin_want.items():
+        for _h, _exp in _cases.items():
+            _got = tuple((a, n) for a, n, _k, _c in stock.pinned(_pay, _h))
+            if _got != _exp:
+                bad += 1
+                print(f"  [FAIL] payload {_pay}: pinned({_h}) = {_got}, "
+                      f"expected {_exp}")
+    print("  [PASS] the routines kept effects call inside a harvest are "
+          "found on both payloads")
     # ⚠️ AND THE DERIVED HARVEST MUST REPRODUCE WHAT THE BUILD HAS ALWAYS
     # DONE. "On neither chooser" gives every shipped remix exactly the three
     # reverbs -- FX1 lists ten of the thirteen and the reverbs are FX2-only
@@ -595,14 +840,24 @@ def main():
                  "DJ EQ", "COMB FILTER")
     _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
              "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (), "stems": (),     # stock effects + ColdFire modules, no DSP words
-             "repitch": (), "analog-bassdrum": ("SPRING REV",),
+             "repitch": (), "plocks-p2": (), "kits": (), "analog-bassdrum": ("SPRING REV",),
+             "sidechain-compressor": ("SPRING REV",), "kyoti-mute-sidechain": ("SPRING REV",),   # its DSP section in SPRING's words
+             # Zac Kyoti's ColdFire modules on the stock effects, no DSP words
+             **{_k: () for _k in ("direct-jump-kyoti", "batch-bugfixes", "reload-from-project",
+                                  "quantize-live-rec-toggle", "erase-empty-trigless-locks",
+                                  "mute-modes", "kyoti-mute-jump", "kyoti-fixes", "rec-trig-mute")},
              # the twelve io remixes: the IN module's RX inject is placed in SPATIALIZER's words
              **{f"usb-io-{o}-{i}": ("SPATIALIZER",) for o in ("tracks", "tracks-main-cue", "main-cue", "main") for i in ("ab", "cd", "abcd")},
              "octatrick": ("SPATIALIZER",),   # USB AUDIO IN ABCD's inject, as in the io remixes
              "sos-capture": ("SPATIALIZER",),   # usb-io-tracks-ab + the recorder fixes
              "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
+             "waveload": ("DARK REV",), "waveload-port": ("DARK REV",),   # CF METER's readout insert, as cfmeter
+             "wave": ("SPRING REV", "DARK REV"),   # WAVE runs in their words
+             "transient": ("PLATE REV",),   # TRANSIENT runs in its words; the other 13 stay
+             "testgen": ("PLATE REV",),     # TESTGEN runs in its words; the other 13 stay
              "euclid": ("SPATIALIZER", "FLANGER", "CHORUS", "COMB FILTER"),
-             "rig": _rig, "bottleservice": _rig}
+             "rig": _rig, "bottleservice": _rig,
+             "character-txtr": _rig}   # bottleservice with the TXTR station
     for _n in registry.remix_names():
         _r = registry.remix(_n)
         _hv = stock.region_of(stock.harvested(
@@ -685,10 +940,18 @@ def main():
                 _in = {k: next((i for i, (lo, hi) in enumerate(_rs)
                                 if lo <= a < hi), None)
                        for k, a in _at.items()}
+                # PLATE, kept, calls the last 93 words of DARK's span
+                # (stock.pinned), so the SPRING+DARK run ends where they start.
+                _pin = stock.pinned(_p, ("FLANGER", "CHORUS", "SPRING REV",
+                                         "DARK REV"))
                 if len(_rs) != 2:
                     bad += 1; _ok = False
                     print(f"  [FAIL] 'placer probe' payload {_p}: {len(_rs)} "
                           f"runs, expected 2")
+                elif len(_pin) != 1 or _rs[1][1] != _pin[0][0]:
+                    bad += 1; _ok = False
+                    print(f"  [FAIL] 'placer probe' payload {_p}: run 2 ends "
+                          f"at 0x{_rs[1][1]:05x}, the pinned routine is {_pin}")
                 elif sorted(_at) != ["EUCLID", "MINIVERB"]:
                     bad += 1; _ok = False
                     print(f"  [FAIL] 'placer probe' payload {_p}: placed "
@@ -710,10 +973,173 @@ def main():
                     print(f"  [FAIL] 'placer probe' payload {_p}: MINIVERB went "
                           f"to run {_in['MINIVERB'] + 1}, not the 618-word "
                           f"opening it fits")
+            # The pinned routine is still stock in the image.
+            import dsp_modmap as _dm
+            _out = (ROOT / "out/mainos_bus.bin").read_bytes()
+            _stk = (ROOT / _dm.IMG).read_bytes()
+            for _p, _va, _ln in _dm.PAYLOADS:
+                _recs, _b = _dm.modules(_stk, _va, _ln)
+                _hv = ("FLANGER", "CHORUS", "SPRING REV", "DARK REV")
+                for _a, _n, _k, _c in stock.pinned(_p, _hv):
+                    for _sp_, _ra, _rc, _ro in _recs:
+                        if _sp_ == 0 and _ra <= _a and _a + _n <= _ra + _rc:
+                            _o = _va - _dm.BASE + _ro + (_a - _ra) * 3
+                            if _out[_o:_o + _n * 3] != _stk[_o:_o + _n * 3]:
+                                bad += 1; _ok = False
+                                print(f"  [FAIL] 'placer probe' payload {_p}: "
+                                      f"P:0x{_a:05x}+{_n} ({_k}, called by "
+                                      f"{_c}) is not stock in the image")
             if _ok:
-                print(f"  [PASS] 'placer probe' fills both of its "
-                      f"non-contiguous runs in BOTH payloads (MiniVerb into "
-                      f"the 618-word opening, Euclid into the big run)")
+                print(f"  [PASS] 'placer probe' fills its non-contiguous "
+                      f"runs in BOTH payloads (MiniVerb into the 618-word "
+                      f"opening, Euclid into the big run) and leaves PLATE's "
+                      f"routine in DARK's span stock")
+
+    # ---- XHARVEST: a table in a given-up effect's own X data ------------
+    # DJ EQ kept (the curve bank is not free), SPRING REV given up, and a
+    # fixture whose two table blocks (145 + 448 words) and 508 words of code
+    # fit no P run together. Each block must land in SPRING's X data on
+    # BOTH payloads (X:0x89a4 / X:0x8464, one 844-word run each), whole,
+    # first-fit, and the image must carry its words there.
+    _fx_dir = ROOT / "modules/xhfixture"
+    _fx_probe = ROOT / "remixes/_selftest_xh.py"
+    _t1 = tuple(0x100000 + i for i in range(145))
+    _t2 = tuple(0x200000 + i for i in range(448))
+    try:
+        _fx_dir.mkdir(exist_ok=True)
+        (_fx_dir / "fixture.asm").write_text(
+            "init:\n        rts\nproc:\n"
+            "        move    #>$fab1e0,r5\n        move    #>$fab2e0,r4\n"
+            "        move    p:(r5),x0\n        move    p:(r4),x1\n"
+            + "        nop\n" * 500 + "        rts\n")
+        (_fx_dir / "manifest.py").write_text(
+            "from remix.schema import DspSection, Kind, MenuEntry, Module, Param, YBase\n"
+            "MODULE = Module(name='xhfixture', key='XHFIXTURE', kind=Kind.DSP_EFFECT,\n"
+            "    doc='fixture', menu=MenuEntry(fx2_id=0x1e, donor_desc=0x400d58b8,\n"
+            "    abbr=b'XHF', fullname=b'XhFixture'),\n"
+            "    params=tuple([Param(b'A', 0, active=True)] + [Param()] * 11),\n"
+            "    dsp=DspSection(asm='modules/xhfixture/fixture.asm', priority=40,\n"
+            "        ybase=YBase.NEVER,\n"
+            f"        ptable={_t1!r},\n        ptable2={_t2!r}))\n")
+        _fx_probe.write_text(
+            "from remix.schema import Remix\n"
+            "REMIX = Remix(name='_selftest_xh', doc='scratch', fallback='NONE',\n"
+            "    modules=('XHFIXTURE', 'FILTER', 'SPATIALIZER', 'EQUALIZER', 'PHASER',\n"
+            "             'FLANGER', 'CHORUS', 'PLATE REV', 'DARK REV', 'COMPRESSOR',\n"
+            "             'LO-FI', 'DJ EQ', 'COMB FILTER'))\n")
+        r = subprocess.run([sys.executable, "tools/build/build_bus.py"],
+                           cwd=ROOT, capture_output=True, text=True,
+                           env={**os.environ, "REMIX": "_selftest_xh",
+                                "XBUS": "1", "SPEC": "1"})
+        _img = (ROOT / "out/mainos_bus.bin").read_bytes() if not r.returncode else b""
+    finally:
+        _fx_probe.unlink(missing_ok=True)
+        shutil.rmtree(_fx_dir, ignore_errors=True)
+        for junk in (ROOT / "remixes/__pycache__").glob("_selftest_xh*"):
+            junk.unlink(missing_ok=True)
+    if r.returncode:
+        bad += 1
+        print(f"  [FAIL] 'XHARVEST probe' does not build:\n"
+              f"{r.stdout[-600:]}{r.stderr[-400:]}")
+    else:
+        _want = {"A": (0x89a4, 0x89a4 + 145), "B": (0x8464, 0x8464 + 145)}
+        _seen, _pay, _ok = {}, None, True
+        for line in r.stdout.splitlines():
+            m = re.match(r"-- payload (\w+) --", line.strip())
+            if m:
+                _pay = m.group(1)
+            m = re.match(r"\s+(PTABLE2?)\s+X:0x([0-9a-f]+)\.\..*SPRING REV's X data", line)
+            if m and _pay:
+                _seen[(_pay, m.group(1))] = int(m.group(2), 16)
+        for _p, (_a1, _a2) in _want.items():
+            if (_seen.get((_p, "PTABLE")), _seen.get((_p, "PTABLE2"))) != (_a1, _a2):
+                bad += 1; _ok = False
+                print(f"  [FAIL] 'XHARVEST probe' payload {_p}: blocks at "
+                      f"{_seen.get((_p, 'PTABLE'))}/{_seen.get((_p, 'PTABLE2'))}, "
+                      f"expected 0x{_a1:05x}/0x{_a2:05x}")
+                continue
+            import dsp_modmap as _dm
+            _recs = stock.x_records(_img, _p)
+            for _a, _t in ((_a1, _t1), (_a2, _t2)):
+                for _k, _w in enumerate(_t):
+                    _r = next(x for x in _recs if x[0] <= _a + _k < x[0] + x[1])
+                    _o = _r[2] + (_a + _k - _r[0]) * 3
+                    if _dm.w24(_img, _o) != _w:
+                        bad += 1; _ok = False
+                        print(f"  [FAIL] 'XHARVEST probe' payload {_p}: "
+                              f"X:0x{_a + _k:05x} is not the table's word")
+                        break
+        if _ok:
+            print("  [PASS] 'XHARVEST probe' puts both table blocks in SPRING "
+                  "REV's X data on both payloads, first-fit, words in the image")
+    # ---- a chooser module's declared payloads under SPEC ----------------
+    # A module declaring payloads={"B"} and owns_fx2_buffers beside BusVerb
+    # passes the ledger (disjoint payloads) and must be placed on B only.
+    _pf_dir = ROOT / "modules/pbfixture"
+    _pf_remix = ROOT / "remixes/_selftest_pb.py"
+    try:
+        _pf_dir.mkdir(exist_ok=True)
+        (_pf_dir / "fixture.asm").write_text("init:\n        rts\nproc:\n        rts\n")
+        (_pf_dir / "manifest.py").write_text(
+            "from remix.schema import Claims, DspSection, Kind, MenuEntry, Module, Param, YBase\n"
+            "MODULE = Module(name='pbfixture', key='PBFIXTURE', kind=Kind.DSP_EFFECT,\n"
+            "    doc='fixture', menu=MenuEntry(fx2_id=0x1e, donor_desc=0x400d58b8,\n"
+            "    abbr=b'PBF', fullname=b'PbFixture'),\n"
+            "    params=tuple([Param(b'A', 0, active=True)] + [Param()] * 11),\n"
+            "    claims=Claims(owns_fx2_buffers=True),\n"
+            "    dsp=DspSection(asm='modules/pbfixture/fixture.asm', priority=40,\n"
+            "        payloads=frozenset({'B'}), ybase=YBase.NEVER))\n")
+        _pf_remix.write_text(
+            "from remix.schema import Remix\n"
+            "REMIX = Remix(name='_selftest_pb', doc='scratch', fallback='SEND',\n"
+            "    modules=('REVERB SERVER', 'SEND', 'PBFIXTURE'))\n")
+        r = subprocess.run([sys.executable, "tools/build/build_bus.py"],
+                           cwd=ROOT, capture_output=True, text=True,
+                           env={**os.environ, "REMIX": "_selftest_pb",
+                                "XBUS": "1", "SPEC": "1"})
+        _pn = subprocess.run([sys.executable, "tools/build/build_bus.py"],
+                             cwd=ROOT, capture_output=True, text=True,
+                             env={**os.environ, "REMIX": "_selftest_pb",
+                                  "XBUS": "1"})
+    finally:
+        _pf_remix.unlink(missing_ok=True)
+        shutil.rmtree(_pf_dir, ignore_errors=True)
+        for junk in (ROOT / "remixes/__pycache__").glob("_selftest_pb*"):
+            junk.unlink(missing_ok=True)
+    if _pn.returncode and "PBFIXTURE owns the FX2 instance buffers" in (_pn.stdout + _pn.stderr):
+        print("  [PASS] 'payload probe': without SPEC the same remix is refused by name")
+    else:
+        bad += 1
+        print(f"  [FAIL] 'payload probe': non-SPEC build rc={_pn.returncode}, not refused by name")
+    if r.returncode:
+        bad += 1
+        print(f"  [FAIL] 'payload probe' does not build:\n"
+              f"{r.stdout[-600:]}{r.stderr[-400:]}")
+    else:
+        _pl, _placed, _alias = None, {}, {}
+        for line in r.stdout.splitlines():
+            m = re.match(r"-- payload (\w+) --", line.strip())
+            if m:
+                _pl = m.group(1)
+            if (_pl and "NOT PLACED" not in line
+                    and re.match(r"\s+PBFIXTURE\s.*\bid 0x1e\b", line)):
+                _placed.setdefault(_pl, []).append(line)
+            if _pl and re.match(r"\s+PBFIXTURE\s+NOT PLACED", line):
+                _alias[_pl] = line
+        if sorted(_placed) == ["B"] and sorted(_alias) == ["A"]:
+            print("  [PASS] 'payload probe': a payloads={'B'} module with "
+                  "owns_fx2_buffers is placed on B only under SPEC and its id "
+                  "is aliased on A")
+        else:
+            bad += 1
+            print(f"  [FAIL] 'payload probe': placed on {sorted(_placed)}, "
+                  f"aliased on {sorted(_alias)}; expected B / A")
+    try:
+        DspSection(asm="x.asm", priority=0, ptable2=(1,))
+        bad += 1
+        print("  [FAIL] DspSection accepted ptable2 without ptable")
+    except ValueError:
+        print("  [PASS] DspSection refuses ptable2 without ptable")
 
     # ---- FX1 rows (Remix.fx1) -------------------------------------------
     # The schema half. The BUILD half -- the relocated list, FX1's own id and
@@ -726,6 +1152,31 @@ def main():
         print("  [FAIL] Remix(fx1=...) accepted a duplicate key")
     except ValueError:
         print("  [PASS] Remix(fx1=...) refuses a duplicate key")
+    for _field in ("hidden", "locked"):
+        try:
+            schema.Remix(name="_x", doc="_", modules=("SPECTRUM",),
+                         fallback=schema.NO_FALLBACK, **{_field: ("ABSENT",)})
+            bad += 1
+            print(f"  [FAIL] Remix({_field}=...) accepted a key outside modules")
+        except ValueError:
+            print(f"  [PASS] Remix({_field}=...) refuses a key outside modules")
+    try:
+        schema.Remix(name="_x", doc="_", modules=("SPECTRUM",),
+                     fallback=schema.NO_FALLBACK, hidden=("SPECTRUM",))
+        print("  [PASS] Remix(hidden=...) accepts a key in modules")
+    except ValueError as e:
+        bad += 1
+        print(f"  [FAIL] Remix(hidden=...) refused a key in modules: {e}")
+    # A detour writes pad_to (or six) bytes; `expect` must cover them all.
+    for _kw, _n in (({}, 4), ({"pad_to": 10}, 8)):
+        try:
+            Detour(0x40100000, b"\x00" * _n, "u", "s", **_kw)
+            bad += 1
+            print(f"  [FAIL] Detour({_kw}) accepted {_n} expected bytes")
+        except ValueError:
+            print(f"  [PASS] Detour({_kw}) refuses {_n} expected bytes")
+    Detour(0x40100000, b"\x00" * 10, "u", "s", pad_to=8)
+    print("  [PASS] Detour asserting more bytes than it writes is accepted")
     # A STOCK effect may be on the FX1 list without an FX2 row -- the two
     # lists are independent -- so the schema deliberately does NOT require
     # every fx1 key to be in `modules`. Pinned, because it was required for

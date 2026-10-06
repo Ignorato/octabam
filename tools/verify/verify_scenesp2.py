@@ -14,7 +14,7 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           snap to the A side (1) and TIME lerp to 60; at fader 0 the B side
           alone: MODE the knob (measured by a run with the pool's count 0),
           TIME 20. The three runs are three boots side by side (each is one
-          LOAD PROJECT, ~32 s under Octakit): a pool poked once the
+          LOAD PROJECT): a pool poked once the
           transport has started never reaches the live lane, with or
           without a transport restart (measured 28 Sep 2026), so each
           needs the machine as it was after the load: the port loads once
@@ -29,10 +29,7 @@ Stages the project's card, boots the remix's image in `ot_emu`, and:
           call repeated: the same entry updated, count 1.
 
 SKIPs without a project, without the port, or for a remix without SCENES
-P2. Under a remix with Octakit the editor call runs through her wrapper
-(SCENES P2 KITS): until 28 Sep 2026 SCENES P2's entry detour displaced
-twelve bytes and her trampoline continued at entry+8 into a nop, so the
-body read a garbage slot and her marker check halted every page-2 turn.
+P2.
 """
 import argparse, os, pathlib, shutil, subprocess, sys
 
@@ -178,8 +175,8 @@ def main():
     # OCTABAM89_setgate's (a literal 0 failed `make accept`, 26 Sep 2026)
     # ONE load, four scenarios forked from it (ot_emu --scenario, 29 Sep
     # 2026): the three frame runs and the editor pass each start from the
-    # same loaded machine. Until then each was its own LOAD PROJECT (~32 s
-    # emulated under Octakit), three side by side and one after.
+    # same loaded machine. Until then each was its own LOAD PROJECT, three
+    # side by side and one after.
     specs = {tag: frames(tag, pl, xf)
              for tag, pl, xf in (("knob", pool[:2] + [0] + pool[3:], 0), ("fader 64", pool, 64), ("fader 0", pool, 0))}
     elog, eargs = editor()

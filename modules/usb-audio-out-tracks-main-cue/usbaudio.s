@@ -74,6 +74,11 @@
 .set EPPRIME,    0xfc0b01b0
 .set EPFLUSH,    0xfc0b01b4
 .set EPCOMPLETE, 0xfc0b01bc
+.set SETUPSTAT,  0xfc0b01ac         | ENDPTSETUPSTAT
+.set EP0CTRL,    0xfc0b01c0         | ENDPTCTRL0: bit 16 = EP0 IN (TX) stall
+.set EP0OUT_DTD, 0x4ec95000         | the stock EP0 OUT dTD (usb_ep0_send's status OUT)
+.set EP0_BUF,    0x4ec96000         | ... and its 64-byte buffer
+.set QH0_OUT_PTR,0x46c8ce18         | -> EP0 OUT dQH
 .set ENDPTCTRL3, 0xfc0b01cc
 .set USBCMD,     0xfc0b0140
 .set ATDTW,      0x00004000         | USBCMD bit 14: the add-dTD tripwire
@@ -111,8 +116,8 @@
 | measured under the port at 16 samples on every tone that reaches MAIN
 | (tools/harness/usb_align.py, 28 Sep 2026; heard as MAIN lagging on Bryan
 | T's unit, 25 Sep). The producer writes the pair this many blocks behind
-| the tracks' slot; the consumer runs 512 frames behind, so that slot is
-| unread when it is written.
+| the tracks' slot; the consumer runs AUD_TARGET (64) frames behind, more
+| than one 16-frame block, so that slot is unread when it is written.
 .set MAIN_CUE_LAG_BLOCKS, 1
 | With MASTER TRACK on, CUE leads MAIN. The mixdown (payload A, P:0x257:
 | brset #$a on x:(X:$207+$7e)) takes the master path at P:0x292: the cue bus
@@ -319,6 +324,48 @@ audio_getiface_shim:
     pea     GETIFACE_STOCKP
     jmp     GETIFACE_REJOIN
 
+| ---- bus reset and session end (installed at 0x4001e91c and 0x4001e952) -------
+| The stock USBSTS.URI handler (jsr 0x4001d6b8: flush, dTD tokens cleared,
+| ENDPTCTRL1 cleared) and the OTGSC.BSVIS session-end path (USBCMD.RS and
+| USBINTR cleared) write neither this unit's alt bytes nor ENDPTCTRL3. USB
+| 2.0 9.1.1.5 puts every interface back to alternate setting 0 on a reset;
+| without these two shims a cable pull or a host crash with the stream open
+| left usbaudio_alt (and USB AUDIO IN's in_alt) at 1: the producer kept
+| running, the kick re-primed EP3 IN before the device was configured, the
+| next SET_INTERFACE took .Lep3_same, and GET_INTERFACE answered 1.
+| Both shims record the alt 0 request, the way audio_setiface_shim does for
+| alt 0, and the frame ISR tears EP3 down. The ISR prologue has saved
+| d0-d2/a0-a4 (the epilogue at 0x4001e98e restores them); a2 is live in the
+| session-end path (0x4001e93a, used at 0x4001e974) and is not touched.
+|
+| Reset: displaced jsr %pc@(0x4001d6b8); moveq #64,%d0 (6 bytes); the next
+| instruction is 0x4001e922.
+    .global audio_reset_shim
+audio_reset_shim:
+    jsr     0x4001d6b8              | displaced
+    bsr     audio_alt0_request
+    moveq   #64,%d0                 | displaced: USBSTS.URI, written back at 0x4001e922
+    jmp     0x4001e922
+
+| Session end: displaced movel 0xfc0b0140,%d0 (USBCMD, 6 bytes); the next
+| instruction is 0x4001e958. The request is recorded before the stock code
+| clears USBCMD.RS.
+    .global audio_sessend_shim
+audio_sessend_shim:
+    bsr     audio_alt0_request
+    movel   0xfc0b0140,%d0          | displaced
+    jmp     0x4001e958
+
+| Alt 0 requested on every interface this unit and USB AUDIO IN own. The
+| request bytes only: the frame ISR flushes, disables EP3 and clears the
+| dTDs. Clobbers nothing.
+audio_alt0_request:
+    clrb    usbaudio_alt
+.if USB_IN
+    clrb    in_alt
+.endif
+    rts
+
 | ---- EP0 buffer-page fix (installed at 0x4001d4b2 inside usb_ep0_send) -------
 | usb_ep0_send sets only the dTD's buffer PAGE 0 (0x4ec95028), never PAGE 1.
 | A descriptor whose buffer crosses a 4 KB page then transmits only the bytes
@@ -340,12 +387,28 @@ audio_ep0page_shim:
     jmp     0x4001d4b8
 
 | ---- usb_isr shim (installed at 0x4001e606, USB MIDI's site) ---------------
-| Retires EP3 IN completions, then chains to USB MIDI's ISR shim, which
-| handles EP2 and runs the original displaced instruction.
+| Retires EP3 IN completions, then chains to USB MIDI's receive shim
+| (usbmidi_rx.s), which takes the EP2 OUT completion and hands on to
+| usbmidi.s's, which handles EP2 IN and runs the original displaced instruction.
     .global audio_isr_shim
 audio_isr_shim:
-    lea     %sp@(-8),%sp
-    moveml  %d0-%d1,%sp@            | all this shim touches
+    lea     %sp@(-16),%sp
+    moveml  %d0-%d1/%a0-%a1,%sp@    | all this shim touches
+    | A clock SET_CUR whose data stage outlived audio_ctrl_shim's wait: a new
+    | SETUP means the host gave it up; otherwise its OUT completion is ours,
+    | taken before the stock completion loop can see it.
+    tstb    uac2_set_pending
+    beqs    4f
+    movel   SETUPSTAT,%d0
+    btst    #0,%d0
+    beqs    3f
+    clrb    uac2_set_pending        | superseded by a new SETUP
+    bras    4f
+3:  movel   EPCOMPLETE,%d0
+    btst    #0,%d0                  | EP0 OUT
+    beqs    4f
+    bsr     uac2_set_done
+4:
     | Exactly ONE place queues packets on EP3: the per-block producer in
     | frame_isr. This shim only retires the completion bit so it cannot go
     | stale; the queue's own state is the ACTIVE bit of each dTD, which the
@@ -358,9 +421,9 @@ audio_isr_shim:
     beqs    2f
     movel   #EP3IN_BIT,%d1
     movel   %d1,EPCOMPLETE          | W1C EP3 IN
-2:  moveml  %sp@,%d0-%d1
-    lea     %sp@(8),%sp
-    jmp     usbmidi_isr_shim         | USB MIDI's shim, whose detour this one stands in for
+2:  moveml  %sp@,%d0-%d1/%a0-%a1
+    lea     %sp@(16),%sp
+    jmp     usbmidi_rx_isr_shim      | USB MIDI's shim, whose detour this one stands in for
 
 | ---- the iso packet builder -------------------------------------------------
 | Each packet holds the next n frames from the ring: n = 11/12 at high speed
@@ -922,18 +985,24 @@ audio_ep3_down:
 | frame ISR and a controller that never answers must not wedge the machine.
 | Clobbers d0/d1.
 audio_ep3_flush:
+    movel   %d2,%sp@-
     moveq   #16,%d1                 | attempts
 1:  movel   #EP3IN_BIT,%d0
     movel   %d0,EPFLUSH
-2:  movel   EPFLUSH,%d0             | complete when the bit clears
+    movel   #0x10000,%d2            | bound: a flush with USBCMD.RS clear (session end) may never complete
+2:  movel   EPFLUSH,%d0
     andil   #EP3IN_BIT,%d0
+    beqs    4f
+    subql   #1,%d2
     bnes    2b
+4:
     movel   ENDPTSTAT,%d0
     andil   #EP3IN_BIT,%d0
     beqs    3f                      | idle: done
     subql   #1,%d1
     bnes    1b
-3:  rts
+3:  movel   %sp@+,%d2
+    rts
 
 | ---- the per-block producer (installed at 0x4000d9a0, inside frame_isr) ----
 | frame_isr runs once per 16-frame block: the block clock, the audio and the
@@ -962,10 +1031,36 @@ audio_ep3_flush:
 
     .global audio_frame_shim
 audio_frame_shim:
-    | The producer runs whether or not the host has opened the stream, so the
-    | ring is full at alt 1 and the stream starts with no underruns (his build
-    | idled until alt 1: 127 underruns at startup on hardware). aud_running
-    | gates the sending, not the producing.
+    | The producer runs only while the host asks for the stream (usbaudio_alt,
+    | the SET_INTERFACE request, so from the block after it). His build idled
+    | until alt 1 and had 127 underruns at startup on hardware, which is why
+    | it ran every block here until 5 Oct 2026; the first-poll anchor
+    | (usbaudio_kick) now re-sets the cursor AUD_TARGET behind the producer
+    | at the host's first poll, 460 frames after alt 1 on macOS, so the ring
+    | needs nothing from before the request. What it does need: the
+    | AUD_TARGET slots bring-up starts the cursor in must not hold the
+    | previous session's tail, so they are zeroed once at the first produced
+    | block (audio_cushion_zero), and the stream starts with silence until
+    | the anchor (or, for a host that polls within AUD_TARGET frames, up to
+    | that many zero frames). Measured on Bryan T's MKII (4 Oct 2026): the
+    | always-on producer cost 13-25 us of frame interrupt per frame with no
+    | host attached (OUT TRACKS MAIN CUE against OUT MAIN CUE). Not on a
+    | unit since.
+    tstb    usbaudio_alt
+    bnes    .Lproduce
+    tstb    aud_force               | the harness's switch (usb_align): produce
+    bnes    .Lproduce               | with no host and EP3 left alone
+    moveq   #1,%d0
+    moveb   %d0,aud_closed
+    movel   RB_PREV,%d0             | keep the bank record current: bankdup
+    movel   %d0,usbaudio_lastbank   | counts producing blocks only
+    bra     .Lep3
+.Lproduce:
+    tstb    aud_closed
+    beqs    .Lproduce_go
+    clrb    aud_closed
+    bsr     audio_cushion_zero
+.Lproduce_go:
 .if USB_LAYOUT == LAYOUT_MASTER
     | ---- two channels: track 8's (L,R), one 8-byte slot per frame -----------
     | The same read-back words as the twenty-channel build's channels 15/16,
@@ -1273,6 +1368,7 @@ audio_frame_shim_body:
     | usbaudio_alt is what the host asked for (SET_INTERFACE); aud_running is
     | what EP3 currently is. Bring it up or down when they differ, and when
     | it is up the block clock IS the send clock: top the queue up now.
+.Lep3:
     mvzb    usbaudio_alt,%d0
     mvzb    aud_running,%d1
     cmpl    %d0,%d1
@@ -1286,11 +1382,42 @@ audio_frame_shim_body:
     bras    9f
 .Lep3_same:
     tstl    %d1
-    beqs    9f                      | nobody listening: produce, but do not send
+    beqs    9f                      | nobody listening: nothing to send
 .Lep3_kick:
     bsr     usbaudio_kick
 9:  clrl    0x46104d4e              | displaced
     jmp     0x4000d9a6
+
+| The AUD_TARGET ring slots behind the producer, zeroed: the stream's first
+| packets are built from them before the anchor. Both rings (one ring in the
+| SLOT8 layouts, where aud_sum is aud_ring). May clobber d0-d7/a0-a6.
+audio_cushion_zero:
+    movel   aud_produced,%d0
+    cmpil   #AUD_TARGET,%d0
+    bccs    0f
+    addil   #AUD_FRAMES,%d0         | fewer frames ever produced than the cushion
+    movel   %d0,aud_produced        | (boot): count one lap ahead, same slots, so
+0:  subil   #AUD_TARGET,%d0         | bring-up's cursor is not clamped at 0
+    moveq   #AUD_TARGET-1,%d1
+1:  movel   %d0,%d2
+    andil   #AUD_FRAMES-1,%d2
+    movel   %d2,%d3
+    MUL_SLOT %d3, %d4
+    lea     aud_ring,%a0
+    addal   %d3,%a0
+    moveq   #SLOT_BYTES/4-1,%d4
+2:  clrl    %a0@+
+    subql   #1,%d4
+    bpls    2b
+    lsll    #3,%d2
+    lea     aud_sum,%a0
+    addal   %d2,%a0
+    clrl    %a0@+
+    clrl    %a0@
+    addql   #1,%d0
+    subql   #1,%d1
+    bpls    1b
+    rts
 
 | ---- UAC2 class-request shim (installed at 0x4001de64) ----------------------
 | Displaced: movel 0xfc0b01c0,%d0 — the first instruction of the stock
@@ -1299,8 +1426,9 @@ audio_frame_shim_body:
 | rate before it will publish a device (RANGE + CUR of CS_SAM_FREQ_CONTROL,
 | CUR of CS_CLOCK_VALID_CONTROL, all class GET to the AudioControl interface
 | with the entity id in wIndex's high byte), and a STALL there means no
-| audio device. Everything else falls through to the stock STALL, which is
-| the legal answer for a control we do not implement.
+| audio device. A SET CUR of that rate is taken too (.Lctrl_set). Everything
+| else falls through to the stock STALL, which is the legal answer for a
+| control we do not implement.
 |
 | Reply the way the stock string-descriptor path does: push the buffer and
 | min(wLength, len) and jump to the shared usb_ep0_send tail. d2 still holds
@@ -1325,6 +1453,8 @@ audio_ctrl_shim:
     moveq   #60,%d0
     bra     .Lctrl_send
 .Lctrl_class:
+    cmpil   #0x21,%d0               | class SET, interface recipient
+    beq     .Lctrl_set
     cmpil   #0xa1,%d0               | class GET, interface recipient
     bne     .Lctrl_stock
     mvzb    SETUP_IFACE,%d0
@@ -1361,9 +1491,80 @@ audio_ctrl_shim:
     movel   %d2,%d0
 1:  movel   %d0,%sp@-
     jmp     EP0_SEND_TAIL
+| ---- SET CUR of the clock's sample frequency ---------------------------------
+| The clock is fixed and its frequency control is declared read-only, but a
+| UAC2 host may still SET it to the rate it has just read back (CUR, 4
+| bytes), and some hosts give the audio function up when that STALLs. So a
+| SET CUR of CS_SAM_FREQ_CONTROL on this clock is taken: 44100, the one rate
+| RANGE offers, is acknowledged and changes nothing; any other rate STALLs
+| the status stage. Every other class SET still STALLs at once (stock).
+| The stock EP0 stack has no control OUT data stage, so this primes EP0's OUT
+| dTD for it exactly as usb_ep0_send primes its status OUT, and waits here
+| for the data: returning first races the stock completion loop that runs
+| right after this request in the same interrupt, which would take a data
+| stage that lands by then for the previous transfer's status OUT. A host
+| sends it in the next microframe; 100,000 polls (~10 ms) is the bound, and
+| audio_isr_shim finishes it for a host slower than that.
+.Lctrl_set:
+    mvzb    SETUP_IFACE,%d0
+    cmpil   #UAC2_AC_IFACE,%d0      | the audio function's AudioControl
+    bne     .Lctrl_stock
+    mvzb    SETUP_WIDXH,%d0
+    cmpil   #UAC2_CLOCK_ID,%d0      | the clock source entity
+    bne     .Lctrl_stock
+    mvzb    SETUP_WVALH,%d0
+    cmpil   #1,%d0                  | CS_SAM_FREQ_CONTROL
+    bne     .Lctrl_stock
+    mvzb    SETUP_BREQ,%d0
+    cmpil   #1,%d0                  | CUR
+    bne     .Lctrl_stock
+    moveq   #4,%d0
+    cmpl    %d0,%d2                 | wLength
+    bne     .Lctrl_stock
+    movel   #0x00408080,%d0         | 64 bytes, IOC, ACTIVE (usb_ep0_send's status OUT)
+    movel   %d0,EP0OUT_DTD+4
+    movel   #EP0_BUF,%d0
+    movel   %d0,EP0OUT_DTD+8
+    movel   #0xdead0001,%d0         | next: terminate
+    movel   %d0,EP0OUT_DTD
+    moveal  QH0_OUT_PTR,%a0
+    movel   #EP0OUT_DTD,%d0
+    movel   %d0,%a0@(8)             | dQH next dTD
+    movel   EPPRIME,%d0
+    moveq   #1,%d1                  | EP0 OUT
+    orl     %d1,%d0
+    movel   %d0,EPPRIME
+    movel   #100000,%d1
+5:  movel   EP0OUT_DTD+4,%d0
+    btst    #7,%d0                  | ACTIVE
+    beqs    6f
+    subql   #1,%d1
+    bnes    5b
+    moveq   #1,%d0
+    moveb   %d0,uac2_set_pending
+    jmp     SETIFACE_DONE
+6:  bsr     uac2_set_done
+    jmp     SETIFACE_DONE
 .Lctrl_stock:
     movel   0xfc0b01c0,%d0          | displaced
     jmp     CTRL_STOCK
+
+| The data stage of a clock SET CUR has landed in EP0_BUF: take the OUT
+| completion (before the stock loop sees it), then ACK 44100 (status IN) or
+| STALL the status stage. Clobbers d0-d1/a0-a1.
+uac2_set_done:
+    moveq   #1,%d0
+    movel   %d0,EPCOMPLETE          | W1C EP0 OUT
+    clrb    uac2_set_pending
+    movel   EP0_BUF,%d0             | wire order: 44 ac 00 00 = 44100
+    cmpil   #0x44ac0000,%d0
+    bnes    1f
+    jsr     EP0_STATUS_IN
+    rts
+1:  movel   EP0CTRL,%d0
+    bset    #16,%d0                 | STALL EP0 IN: the status stage
+    movel   %d0,EP0CTRL
+    rts
 
     .data
 | UAC2 clock-source replies, little-endian on the wire (his; constant, the
@@ -1409,10 +1610,13 @@ aud_ring:          .space AUD_FRAMES*SLOT_BYTES  | 1024 x 20 ch (16 OUT TRACKS, 
 aud_sum:           .space AUD_FRAMES*SUM_BYTES   | 1024 x stereo sum (MAIN alone in OUT MAIN CUE), 24 in 4 B LE
 .endif
 usbaudio_alt:      .byte 0          | alt setting the host asked for
+uac2_set_pending:  .byte 0          | a clock SET CUR's data stage is primed
 aud_running:       .byte 0          | EP3 is up (frame-ISR owned)
 aud_await:         .byte 0          | 1 = queue for the first poll, 2 = queued, 0 = anchored
 aud_hs:            .byte 0          | 1 = high speed (20 ch), 0 = full (sum)
 aud_tail:          .byte 0          | next dTD slot to fill (0..NSLOT-1)
+aud_closed:        .byte 0          | 1 = blocks have passed with no stream asked for: zero the cushion before producing again
+aud_force:         .byte 0          | harness only (tools/harness/usb_align.py pokes it): produce with no host; nothing on a unit sets it
 
 | Everything the USB controller reads by DMA is read and written by the
 | CPU ONLY through the uncached alias (address + UNCACHED). The unit runs

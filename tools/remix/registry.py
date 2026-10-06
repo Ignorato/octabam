@@ -116,8 +116,26 @@ def modules() -> dict[str, object]:
             continue
         seen_ids[m.menu.fx2_id] = m.key
         found[m.key] = m
+    bad = validate_keys(found)
+    if bad:
+        raise SystemExit("\n".join(bad))
     _cache = found
     return found
+
+
+def validate_keys(mods: dict[str, object]) -> list[str]:
+    """Every module key a manifest names -- in `conflicts`, `requires` or an
+    Override -- must be a module's. A typo in `requires` refuses every remix
+    carrying the module; one in `conflicts` would never refuse anything."""
+    bad = []
+    for m in mods.values():
+        named = [("conflicts", k) for k, _why in getattr(m, "conflicts", ())]
+        named += [("requires", k) for k in getattr(m, "requires", ())]
+        named += [("overrides", o.module) for o in getattr(m, "overrides", ())]
+        for field, key in named:
+            if key not in mods:
+                bad.append(f"{m.name}: {field} names {key!r}, which no module has")
+    return bad
 
 
 def by_key(key: str):
@@ -276,26 +294,20 @@ def selected(r) -> list:
     return [modules()[k] for k in r.modules]
 
 
-def fixture(*keys: str, without_runtime: bool = False, grains: int | None = None) -> str:
+def fixture(*keys: str, grains: int | None = None) -> str:
     """The name of the smallest remix carrying every module in `keys` (fewest
     modules, then name), for a gate that needs a particular image rather
     than the selected one: the one-aux rig for the bus gates, the plain
-    two-server image for the two-core gate. `without_runtime` excludes a
-    remix with a DRAM runtime (a gate under unicorn); `grains` pins
-    Remix.grains. Refuses, naming the requirement, when no remix fits."""
-    known = modules()
+    two-server image for the two-core gate. `grains` pins Remix.grains. Refuses, naming the requirement, when no remix fits."""
     fits = []
     for name in remix_names():
         r = remix(name)
         if not set(keys) <= set(r.modules):
-            continue
-        if without_runtime and any(known[k].runtime is not None for k in r.modules):
             continue
         if grains is not None and r.grains != grains:
             continue
         fits.append((len(r.modules), name))
     if not fits:
         raise SystemExit(f"no remix carries {', '.join(keys)}"
-                         + (" without a DRAM runtime" if without_runtime else "")
                          + (f" at {grains} grains" if grains is not None else ""))
     return min(fits)[1]

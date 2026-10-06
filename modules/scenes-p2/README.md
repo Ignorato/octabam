@@ -34,9 +34,18 @@ Under the port, 26 Sep 2026 (`tools/verify/verify_scenesp2.py`):
   from the paste row's shape; the write hook was exercised with that call.
 
 - A knob PRESS with a scene held toggles the page-1 lock of that knob
-  (stock, `0x40053a68`, a function Octakit wraps); page 2 has FUNC+turn to
+  (stock, `0x40053a68`); page 2 has FUNC+turn to
   remove a lock instead.
 - The pool holds 47 locks a part.
+
+- **Pool store order.** The frame pass (inside the frame ISR) walks the
+  pool without a lock. `pappend` writes the entry's three bytes (track,
+  slot, value) and then the count; `premove` moves the tail down and then
+  drops the count. An ISR between two stores sees the old count, a whole
+  new entry, or a duplicated entry; it does not see an unwritten one. The
+  order is by reading the code; the port is lock-step and cannot interleave
+  the ISR with the task, so it is not measured on the port or the unit. The
+  store order is checked under the port with `--watch-mem`.
 
 ## Gates
 
@@ -78,8 +87,7 @@ position.
   magic `P2`, `u8` count, then 3-byte entries `scene<<3 | track`,
   `fx1<<3 | slot2`, `value`; 47 at most. The window is copied whole by
   Part Save, Part Reload and Project Save (`docs/firmware/STORAGE.md` section 3)
-  and by Octakit's Kit operations (`gk_copy_payload_interruptible`,
-  `GK_PART_PAYLOAD_SIZE / 4` longs; no digest over it), so the pool travels
+  and by KITS's Kit loads and saves (whole Parts), so the pool travels
   with the part. midisc's MIDI-track lock blob lives at the same offset:
   `Claims.part_window` makes the ledger refuse the pair.
 - **The frame pass** (`frame_hook`, at the join after the stock morph,
@@ -101,8 +109,8 @@ position.
   the lock's value, or the Part's byte when unlocked; the pool in the
   working window and its SRAM twin (`0x100a4ece + part*0x18b2`); the stock
   scene editor's dirty marks; the slot's redraw flag. With FUNC held the
-  turn removes the lock. No scene held: on to the stock body (or Octakit's
-  wrapper, see below) with the entry state untouched.
+  turn removes the lock. No scene held: on to the stock body with the entry
+  state untouched.
 - **Scene copy / paste / clear / undo.** A copy (`0x400274cc`) snapshots
   the scene's entries beside the stock clipboard; the undo snapshot
   (`0x400275a0`) does the same for its buffer; a scene write
@@ -112,30 +120,22 @@ position.
   (`0x40038c30(scene)`) drops them.
 - **The dial.** The page-2 knob draw reads the Part byte at `0x40037840`
   (FX2) and `0x40037bdc` (FX1); with a scene held it shows that scene's
-  lock instead, as the page-1 dials do.
+  lock instead, as the page-1 dials do. With PLOCKS P2 in the remix and
+  no scene held, trigs held show the first held step's page-2 lock
+  (`plk_dial`).
 
-## Octakit
+## Octakit (until 6 Oct 2026)
 
-Her recipe replaces both page-2 editor entries with jumps to wrappers that
-open a kit-write token, call the stock body, validate at a marker inside
-it that the body stored what she expected, and commit; a body that is
-skipped is fatal. `modules/scenes-p2-kits` overrides her two writes and
-the build defines `P2_NEXT2` / `P2_NEXT1` as her wrappers, so this unit's
-stubs sit at the entries: a held-scene turn writes the pool and never
-enters her wrapper; every other turn reaches her wrapper with the entry
-state untouched. A held-scene edit alone does not mark the Kit dirty in
-her bookkeeping (the stock Part dirty bits are set). Her writes touch none
-of the other seven sites.
+Her recipe replaced both page-2 editor entries with wrappers that opened a
+kit-write token, called the stock body and validated at a marker inside
+it; `modules/scenes-p2-kits` overrode her two writes so this unit's stubs
+sat at the entries in front of her wrappers. KITS leaves the editors
+stock, so `P2_NEXT2` / `P2_NEXT1` are always the stock bodies.
 
-The entry detours displace eight bytes (`lea` + `movem`), the span her
-own entry write takes, and `fx2_stock` / `fx1_stock` continue at entry+8
-where the stock `moveal %sp@(32),%a2` still stands. Until 28 Sep 2026 they
-displaced twelve and the build nopped that instruction: her trampoline
-replays eight bytes and continues at entry+8, so under her the body ran
-with a garbage slot in a2, took its slot>5 exit before the store, her
-marker count read 0 and `gk_track_setup_byte_fatal` halted the unit on
-every page-2 knob turn (rig-kits, bottleservice; measured under the port
-from the panel; the twelve-byte build was carried by image 88 on Sam's
-MKII and the halt was not reported from the unit). The same halt was what the direct `--call`
-of the editors met, which had been read as her wrapper refusing a call
-without UI context.
+The entry detours displace eight bytes (`lea` + `movem`), and `fx2_stock`
+/ `fx1_stock` continue at entry+8 where the stock `moveal %sp@(32),%a2`
+still stands. Until 28 Sep 2026 they displaced twelve and the build
+nopped that instruction: under Octakit's trampoline the body ran with a
+garbage slot in a2 and her marker check halted the unit on every page-2
+knob turn (rig-kits, bottleservice; measured under the port; image 88
+carried it and the halt was not reported from the unit).

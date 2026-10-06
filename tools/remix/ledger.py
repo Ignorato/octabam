@@ -5,21 +5,33 @@ resource, and says which two.
 
 Checked, and how it knows:
 
+  DSP priority       declared (DspSection.priority). Two sections on one
+                     priority and one payload are packed in the remix's
+                     module order; the number must say it.
   fx2 ids            declared. Two modules on one id would overwrite each
                      other's descriptor and dispatch.
-  ColdFire caves     declared. Overlapping machine code is silent and fatal.
-  hook sites         declared. Two modules hooking one instruction: the
-                     second overwrites the first's jsr and the first never
-                     runs.
-  detours, pokes,    declared. Fixed-address rewrites, checked against every
-  table refs,        cave, hook site and emit poke; a runtime's recipe
-  runtime writes     writes are claims of the same kind.
+  declared conflicts declared (Module.conflicts). Two modules that touch no
+                     common byte but must not share an image.
+  fixed-address      declared. Every byte span a module rewrites at a fixed
+  writes             address -- pinned caves, cave hooks and detours (their
+                     whole written span: hook_stock, pad_to), table refs,
+                     symbol refs, plain pokes and emit() pokes -- against
+                     every other module's. Two
+                     hooks on one instruction: the second jsr overwrites the
+                     first and the first never runs; two pokes on one word:
+                     the build's second expect assert fails.
+  kept bytes         declared (Module.keeps). Stock bytes a module relies on
+                     and does not write, against every other module's
+                     writes; two keepers must expect the same stock.
+  grown tables       declared (TableGrow). Two modules relocating one stock
+                     array would each carry a copy, and the refs disagree.
   overrides          a bridge's claim stands in for the overridden module's
                      at that site; a bridge naming a module the remix does
                      not carry is refused.
-  DSP hook sites     declared (DspSection.hooks). Two sections hooking one
-                     stock P word on one payload: the second jsr overwrites
-                     the first.
+  DSP hook sites     declared (DspSection.hooks), per payload (DspHook.site
+                     may differ per payload). Two hooks whose two-word jsr
+                     spans share a stock P word on one payload: the second
+                     jsr overwrites the first.
   on-chip SRAM       declared (Claims.sram). A DMA engine's descriptors and
                      buffers there; two modules on one window corrupt each
                      other's transfers.
@@ -33,17 +45,25 @@ Checked, and how it knows:
                      is one list for all eight tracks, so the build cannot
                      know which track it lands on. Refused beside any module
                      with fixed Y buffers.
-  appended runtimes  one per image (the end of the OS and the loader's
-                     window).
-  arena reserves     the total must leave the unit sample memory.
+  DSP data ranges    declared (Claims.dsp_ranges), per payload below the
+                     shared window and across both cores inside it (X, Y
+                     and P alias there), against every other module's
+                     ranges, FX2 buffer region and core-private Y words,
+                     the bus scratch Y:0x36000-0x361FF (bus participants
+                     share it by protocol), stock's per-frame staging
+                     0x30000-0x30047 and stock's core 1 -> core 0 mailbox
+                     0x37F00-0x37F0F. verify_set measures the shared
+                     window's writes under the port and holds them to these
+                     (tools/remix/dsp_ranges.py).
+  arena reserve      the platform's pages must leave the unit sample memory.
 
 Derived beats declared where possible: a scan cannot go stale. Its limit is
 that it sees only what the code references, so a word a module means to
 reserve but does not yet touch is declared (Claims.reserved_private_y).
 
-Not checked: the shared 64K window (Y:0x30000-0x3FFFF); the two servers'
-buffer extents there are not established well enough to write down. The P
-donor region is not here either: placement refuses to overrun it, exactly.
+Not checked: the P donor region, where placement refuses to overrun,
+exactly; writes the build itself makes (menu clones, label caves, arena
+literals), which the build's final Keep assert covers.
 """
 
 from __future__ import annotations
@@ -93,26 +113,16 @@ def curve_bank_claims(selected) -> tuple[list[str], list[str]]:
                              for l in src.read_text().splitlines())
         if m.dsp.ptable or "$facade" in code:
             tables.append(m.name)
-        for g in _X_ADDR.findall(code):
-            if lo <= int(next(h for h in g if h), 16) < hi:
-                hard.append(m.name)
-                break
+        declared = any(r.space == "x" and not r.half_relative and _overlap(r.start, r.length, lo, hi - lo)
+                       for r in (m.claims.dsp_ranges if m.claims is not None else ()))
+        if declared or any(lo <= int(next(h for h in g if h), 16) < hi
+                           for g in _X_ADDR.findall(code)):
+            hard.append(m.name)
     return tables, hard
 
 
 def _overlap(a_start, a_len, b_start, b_len) -> bool:
     return a_start < b_start + b_len and b_start < a_start + a_len
-
-
-def runtime_write_spans(m) -> list[tuple[int, int, str]]:
-    """(vaddr, length, patch name) for every sparse write a runtime's recipe
-    makes into the OS image -- its fixed-address claims, read from the
-    recipe itself so a claim cannot drift from what the build writes."""
-    import json
-    spec = json.loads((ROOT / m.runtime.recipe).read_text())
-    base = spec["format"]["os_load_address"]
-    return [(base + w["offset"], len(bytes.fromhex(w["data"])), p["name"])
-            for p in spec["patches"] for w in p["writes"]]
 
 
 def check(selected) -> list[str]:
@@ -132,6 +142,17 @@ def check(selected) -> list[str]:
                   f"0x{m.menu.fx2_id:02x}")
         ids[m.menu.fx2_id] = m.name
 
+    # ---- DSP priority (DspSection.priority) -------------------------------
+    # The build packs each payload's sections in priority order with a stable
+    # sort, so a tie falls back to the remix's module order.
+    dsp_mods = [m for m in selected if getattr(m, "dsp", None) is not None]
+    for i, a in enumerate(dsp_mods):
+        for b in dsp_mods[i + 1:]:
+            if a.dsp.priority == b.dsp.priority and a.dsp.payloads & b.dsp.payloads:
+                clash("DSP priority", a.name, b.name,
+                      f"priority {a.dsp.priority} on payload "
+                      f"{'/'.join(sorted(a.dsp.payloads & b.dsp.payloads))}")
+
     # ---- bridges: what they stand in for must be there ---------------------
     keys = {m.key for m in selected}
     for m in selected:
@@ -139,6 +160,17 @@ def check(selected) -> list[str]:
             if need not in keys:
                 problems.append(f"{m.name} requires {need} in the remix (its overrides "
                                 f"leave a site with nothing at it otherwise)")
+
+    # ---- declared conflicts (Module.conflicts) ------------------------------
+    by_key = {m.key: m for m in selected}
+    seen_pairs: set[frozenset[str]] = set()
+    for m in selected:
+        for other, why in getattr(m, "conflicts", ()):
+            pair = frozenset((m.key, other))
+            if other in by_key and pair not in seen_pairs:
+                seen_pairs.add(pair)
+                problems.append(f"declared conflict: {m.name} cannot share an image with "
+                                f"{by_key[other].name} -- {why}")
 
     # ---- Part-window bytes (Claims.part_window) -----------------------------
     regions: list[tuple[int, int, str, str]] = []
@@ -151,15 +183,20 @@ def check(selected) -> list[str]:
             regions.append((off, length, m.name, what))
 
     # ---- DSP hook sites (DspSection.hooks), per payload ---------------------
+    # A hook writes two words (jsr >label), so two hooks clash when their
+    # word pairs share a word.
     dsp_hooks: dict[tuple[str, int], str] = {}
     for m in selected:
         for h in (m.dsp.hooks if m.dsp is not None else ()):
             for pl in sorted(m.dsp.payloads):
-                if (pl, h.site) in dsp_hooks:
-                    clash("DSP hook site", dsp_hooks[(pl, h.site)], m.name,
-                          f"P:0x{h.site:05x} on payload {pl} -- the second jsr "
+                site = h.site_on(pl)
+                hit = next((w for w in (site, site + 1) if (pl, w) in dsp_hooks), None)
+                if hit is not None:
+                    clash("DSP hook site", dsp_hooks[(pl, hit)], m.name,
+                          f"P:0x{site:05x} on payload {pl} -- the second jsr "
                           f"overwrites the first, so the first section never runs")
-                dsp_hooks[(pl, h.site)] = m.name
+                for w in (site, site + 1):
+                    dsp_hooks[(pl, w)] = m.name
 
     # ---- on-chip SRAM windows (Claims.sram) --------------------------------
     sram: list[tuple[int, int, str, str]] = []
@@ -178,11 +215,11 @@ def check(selected) -> list[str]:
         for c in m.cf_patches:
             if c.cave_addr is not None:  # pinned: check for overlap against
                 for start, length, owner, label in caves:  # every pinned cave
-                    if _overlap(start, length, c.cave_addr, len(c.pinned)):
+                    if _overlap(start, length, c.cave_addr, c.claim_len):
                         clash("ColdFire cave", f"{owner}'s {label}",
                               f"{m.name}'s {c.label}",
                               f"0x{max(start, c.cave_addr):08x}")
-                caves.append((c.cave_addr, len(c.pinned), m.name, c.label))
+                caves.append((c.cave_addr, c.claim_len, m.name, c.label))
             # A hook site is a fixed address whether or not the CAVE that
             # receives the jsr floats. Until this fix a `continue` for a
             # floating cave returned before this check too, so its hook_addr
@@ -214,17 +251,13 @@ def check(selected) -> list[str]:
     # the remix does not carry is refused: there is nothing to bridge.
     keys = {m.key for m in selected}
     overridden_detours: set[tuple[int, str]] = set()      # (site, module key)
-    overridden_writes: set[tuple[str, str]] = set()       # (module key, write name)
     for m in selected:
         for o in getattr(m, "overrides", ()):
             if o.module not in keys:
                 clash("override", m.name, f"(no {o.module})",
                       f"0x{o.site:08x} -- it bridges {o.module}, which this remix "
                       f"does not carry")
-            if o.write is None:
-                overridden_detours.add((o.site, o.module))
-            else:
-                overridden_writes.add((o.module, o.write))
+            overridden_detours.add((o.site, o.module))
 
     for m in selected:
         for u in getattr(m, "linked", ()):
@@ -255,17 +288,16 @@ def check(selected) -> list[str]:
             pokes.append((p.addr, len(p.expect), m.name, f"poke {p.note or hex(p.addr)}"))
     # A FLOATING emit cave's poke ADDRESSES do not depend on where the cave
     # lands -- only the values written do -- so it is evaluated at a probe
-    # address purely to learn its sites. Until it was skipped,
-    # and the matrix said Octakit and CC MAP compose while the build
-    # refused them: both rewrite the MIDI control-parameter dispatch entry
-    # at 0x400d64a0 (her seven midi-control-parameter writes, its repoint).
+    # address purely to learn its sites.
     PROBE_ADDR = 0x400D7000
+    emit_spans: list[tuple[str, int, int, str, str]] = []   # (kind, start, length, owner, label)
     for m in selected:
         for c in m.cf_patches:
             if c.emit is None:
                 continue
             _, cpokes = c.emit(c.cave_addr if c.cave_addr is not None else PROBE_ADDR)
             for pa, expect, _write in cpokes:
+                emit_spans.append(("emit poke", pa, len(expect), m.name, c.label))
                 span = (pa, len(expect), m.name, c.label)
                 for start, length, owner, label in caves:
                     if owner != m.name and _overlap(start, length, pa, len(expect)):
@@ -282,55 +314,12 @@ def check(selected) -> list[str]:
                               f"0x{max(ostart, pa):08x} -- both rewrite the same bytes")
                 pokes.append(span)
 
-    # ---- pinned return addresses (schema.Runtime.pinned_returns) ----------
-    # A runtime's replacement routine may validate its CALLER: Octakit's
-    # part reload reads the return address off the stack and traps on any
-    # but the two stock sites' own. A detour of that `jsr` whose stub
-    # returns the callee through its own continuation (Detour.subst_return
-    # -- midisc's `reload`) trips it, and no byte overlaps: OKMS1 ran until
-    # the first Part Reload (14 Sep 2026, VEC:04 in her report_fatal with
-    # D0 = his rel_after). Refused by name unless a bridge overrides the
-    # detour (modules/kits-reload).
-    for r in selected:
-        pins = getattr(getattr(r, "runtime", None), "pinned_returns", ())
-        if not pins:
-            continue
-        for m in selected:
-            if m is r:
-                continue
-            for d in getattr(m, "detours", ()):
-                if not d.subst_return or (d.site, m.key) in overridden_detours:
-                    continue
-                span = d.pad_to or len(d.expect)
-                for ret in pins:
-                    if d.site < ret <= d.site + span:
-                        clash("pinned return", r.name, m.name,
-                              f"0x{ret:08x} -- {r.name}'s callee validates the return "
-                              f"address of the jsr at 0x{d.site:08x} and traps on any "
-                              f"other; {m.name}'s stub ({d.note or d.symbol}) returns it "
-                              f"through its own -- bridge the site")
-
-    # ---- loader-appended runtimes (schema.Runtime) ------------------------
-    # The append sits at the end of the OS image and its loader owns one
-    # DRAM window, so an image carries at most one. Its recipe's sparse
-    # writes are fixed-address byte claims like any pinned cave, so they are
-    # checked against every pinned cave, hook site and emit poke above --
-    # the apply_part entry (0x40009094) is a real three-way conflict between
-    # midi-scenes, octamax and octakit, and this is where it is refused.
-    runtimes = [m for m in selected if getattr(m, "runtime", None) is not None]
-    hosts = {m.key for m in runtimes}
-    for i, a in enumerate(runtimes):
-        for b in runtimes[i + 1:]:
-            clash("appended runtime", a.name, b.name,
-                  "the end of the OS image and the loader's DRAM window -- "
-                  "one runtime per image")
-    # ---- the audio page arena (schema.ArenaReserve) -----------------------
-    # Every reservation is stacked by the build; the one thing to refuse
-    # here is a total that leaves the unit too little for samples and
-    # recorders. The platform's own pages count whenever DRAM units exist.
+    # ---- the audio page arena ---------------------------------------------
+    # The one thing to refuse here is a reservation that leaves the unit
+    # too little for samples and recorders. The platform's pages count
+    # whenever DRAM units exist.
     from remix import arena
-    reservations = [(m.name, m.arena.where, m.arena.pages)
-                    for m in selected if getattr(m, "arena", None) is not None]
+    reservations = []
     if any(u.dram for m in selected for u in getattr(m, "linked", ())):
         reservations.append(("octabam platform", "bottom", arena.PLATFORM_PAGES))
     if reservations:
@@ -339,26 +328,84 @@ def check(selected) -> list[str]:
         except SystemExit as e:
             problems.append(str(e))
 
-    for m in runtimes:
-        skip = set(getattr(getattr(m, "arena", None), "recipe_writes", ()))
-        skip |= {w for k, w in overridden_writes if k == m.key}
-        for start, length, label in runtime_write_spans(m):
-            if label in skip:
-                continue                 # computed by the build (arena geometry), or bridged
-            for cstart, clength, owner, clabel in caves:
-                if _overlap(cstart, clength, start, length):
-                    clash("ColdFire cave", f"{owner}'s {clabel}",
-                          f"{m.name}'s runtime write {label}",
-                          f"0x{max(cstart, start):08x}")
-            for haddr, owner in hooks.items():
-                if _overlap(haddr, 6, start, length):
-                    clash("hook site", owner, f"{m.name} (runtime write {label})",
-                          f"0x{haddr:08x} -- both rewrite the same instruction")
-            for pstart, plength, powner, plabel in pokes:
-                if _overlap(pstart, plength, start, length):
-                    clash("poke site", f"{powner} ({plabel})",
-                          f"{m.name} (runtime write {label})",
-                          f"0x{max(pstart, start):08x} -- both rewrite the same bytes")
+    # ---- every fixed-address span against every other module's -------------
+    # The passes above compare emit pokes with everything,
+    # caves with caves and hooks by their first address. This one compares
+    # the rest by the bytes each claim actually writes: plain pokes, table
+    # and symbol refs against each other and against caves and hooks, and
+    # hooks and detours by their whole span (hook_stock, pad_to). A pair the
+    # passes above already reported is not reported twice.
+    spans: list[tuple[str, int, int, str, str]] = []          # (kind, start, length, owner, label)
+    for m in selected:
+        for kind, start, length, label in m.write_spans():
+            if kind == "detour" and (start, m.key) in overridden_detours:
+                continue
+            spans.append((kind, start, length, m.name, label))
+        for u in getattr(m, "linked", ()):
+            if u.cave_addr is not None:
+                spans.append(("cave", u.cave_addr, 6, m.name, f"linked unit {u.label}"))
+    spans += emit_spans
+
+    _HOOKS = ("hook", "detour")
+    _POKES = ("poke", "table ref", "symbol ref", "emit poke")
+
+    def _reported(a, b) -> bool:
+        """Did a pass above already report this overlapping pair?"""
+        ka, kb = a[0], b[0]
+        if ka == "cave" and kb == "cave":
+            return True
+        if ka in _HOOKS and kb in _HOOKS and a[1] == b[1]:
+            return True
+        for x, y in ((a, b), (b, a)):
+            if x[0] == "emit poke":
+                if y[0] == "cave" or y[0] in _POKES:
+                    return True
+                if y[0] in _HOOKS:
+                    return _overlap(y[1], 6, x[1], x[2])
+        return False
+
+    for i, a in enumerate(spans):
+        for b in spans[i + 1:]:
+            if a[3] == b[3] or not _overlap(a[1], a[2], b[1], b[2]) or _reported(a, b):
+                continue
+            at = f"0x{max(a[1], b[1]):08x}"
+            if "cave" in (a[0], b[0]):
+                clash("ColdFire cave", f"{a[3]}'s {a[0]} {a[4]}", f"{b[3]}'s {b[0]} {b[4]}", at)
+            elif a[0] in _HOOKS or b[0] in _HOOKS:
+                clash("hook site", f"{a[3]} ({a[0]} {a[4]})", f"{b[3]} ({b[0]} {b[4]})",
+                      f"{at} -- both rewrite the same instruction")
+            else:
+                clash("poke site", f"{a[3]} ({a[0]} {a[4]})", f"{b[3]} ({b[0]} {b[4]})",
+                      f"{at} -- both rewrite the same bytes")
+
+    # ---- kept bytes (Module.keeps) -----------------------------------------
+    kept = [(k.addr, k.expect, m.name, k.note or f"kept bytes at 0x{k.addr:08x}")
+            for m in selected for k in getattr(m, "keeps", ())]
+    for i, (ka, kexp, kowner, knote) in enumerate(kept):
+        for oa, oexp, oowner, onote in kept[i + 1:]:
+            if oowner == kowner or not _overlap(ka, len(kexp), oa, len(oexp)):
+                continue
+            lo, hi = max(ka, oa), min(ka + len(kexp), oa + len(oexp))
+            if kexp[lo - ka:hi - ka] != oexp[lo - oa:hi - oa]:
+                clash("kept bytes", f"{kowner}'s {knote}", f"{oowner}'s {onote}",
+                      f"0x{lo:08x} -- they expect different stock bytes there, "
+                      f"so one of them is wrong about 1.40C")
+        for kind, start, length, owner, label in spans:
+            if owner != kowner and _overlap(ka, len(kexp), start, length):
+                clash("kept bytes", f"{kowner}'s {knote}", f"{owner} ({kind} {label})",
+                      f"0x{max(ka, start):08x} -- {kowner} relies on these bytes "
+                      f"staying stock")
+
+    # ---- grown tables (TableGrow) ------------------------------------------
+    grown: list[tuple[int, int, str, str]] = []
+    for m in selected:
+        for t in getattr(m, "tables", ()):
+            for start, length, owner, label in grown:
+                if owner != m.name and _overlap(start, length, t.old, 4 * t.count):
+                    clash("grown table", f"{owner}'s {label}", f"{m.name}'s {t.label}",
+                          f"stock array 0x{max(start, t.old):08x} -- each would relocate "
+                          f"its own copy and repoint different refs")
+            grown.append((t.old, 4 * t.count, m.name, t.label))
 
     # ---- the per-core FX2 instance buffer region --------------------------
     # Y:0x4000-0xBFFF is TWO FX2 instance slots of 16,384 words, per core and
@@ -481,5 +528,28 @@ def check(selected) -> list[str]:
                 clash("DRAM region", dram_owner[r.symbol], m.name,
                       f"the symbol {r.symbol}")
             dram_owner[r.symbol] = m.name
+
+    # ---- DSP data ranges (Claims.dsp_ranges) -------------------------------
+    # Each declared range against everything else that owns DSP data words:
+    # other modules' declared ranges, FX2 buffer regions and core-private Y
+    # words (on the payloads both run on), the bus scratch (when the remix
+    # has a bus and the module is not part of it), stock's per-frame staging
+    # and its mailbox. The derived claims are checked among themselves above.
+    from remix import dsp_ranges
+    owned = dsp_ranges.owners(selected)
+    for i, a in enumerate(owned):
+        if not a.declared:
+            continue
+        for j, b in enumerate(owned):
+            if i == j or a.owner == b.owner or a.domain != b.domain:
+                continue
+            if b.declared and j < i:
+                continue                 # reported from the other side
+            if b.bus_shared and a.bus_member:
+                continue                 # the bus scratch is shared by protocol
+            if _overlap(a.start, a.end - a.start, b.start, b.end - b.start):
+                where = "shared window" if a.domain == "shared" else f"payload {a.domain}"
+                clash("DSP data", f"{a.owner}'s {a.what}", f"{b.owner}'s {b.what}",
+                      f"{where} 0x{max(a.start, b.start):05x}.. -- both write these words")
 
     return problems

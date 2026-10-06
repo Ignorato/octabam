@@ -8,16 +8,19 @@ etiquette for building from somebody else's repository.
 **Never an Elektron byte.** Not an OS image, not a `.syx`, not a slice of
 either, not in a commit and not attached to an issue or PR. Describe it,
 hash it, or name the commit that built it. Anything a module needs from
-the stock firmware is taken from the user's copy at build time (Octakit
-`.incbin`s 411 stock routines that way). `.gitignore` refuses `*.bin`,
+the stock firmware is taken from the user's copy at build time (Octakit,
+until 6 Oct 2026, `.incbin`'d 459 distinct `stock/NNNN.bin` files that
+way). `.gitignore` refuses `*.bin`,
 `*.syx`, `downloads/` and `out/`.
 
 What the rule does not cover (decided 16 Sep 2026): the few displaced
 instructions at a cave's hook site. A `CfPatch.hook_stock` is the six to
 ten bytes the installer overwrites with its `jsr` and the cave replays; the
 build refuses an image that does not hold them, which is the check that
-keeps a cave off the wrong OS. Those opcodes (four sites, 30 bytes in all,
-across `tempo-sync`, `recorder-spacing`, `flex-seekbind*`) are an
+keeps a cave off the wrong OS. Those opcodes (ten sites, 70 bytes in all: `recorder-loop-fix` eight
+sites and 54 bytes, `tempo-sync` one site and 10 bytes, `rlen-plen` one
+site and 6 bytes; the Kyoti upstream's `TS_HOOK_STOCK` in
+`batch-bugfixes` is a further 18) are an
 instruction, not a firmware, and every ColdFire module carries its own
 the same way. Keep a hook to whole instructions and the minimum span; data
 tables, routines and anything longer than the displaced instructions come
@@ -97,10 +100,9 @@ units (GNU-as, symbols, no absolute addresses of its own) reached by
 OS-image edits — each asserted against stock before anything is written.
 `dram=True` is the default place for code: a 10 MB reserve carved off the
 unit's sample/recorder pool, placed by the build, the way midisc and
-Octakit live (`docs/contributing/PLACEMENT.md`). The ~8 KB of free ROM
+KITS live (`docs/contributing/PLACEMENT.md`). The ~8 KB of free ROM
 inside the OS image is for what must be ROM-resident, and it is shared
-with everyone. A module that keeps its own DRAM (a `Runtime`) declares
-the pages it takes with `ArenaReserve`, and the build composes everyone's.
+with everyone.
 
 **`key` is API.** It appears in the build report, and tools parse the
 report. Renaming a key, or rewording a report line, is a breaking change.
@@ -115,10 +117,9 @@ The form depends on the module:
 | ratified hex (`CavePatch.pinned`) with a `.s` | the build assembles and links the source at its resolved address and refuses if the bytes differ |
 | a floating source-linked cave | `reference(addr)` — the ratified bytes *at that address*, checked every build |
 | `Linked` units | `reference=(addr, sha256)`: the unit re-linked at the author's own address, compared every build |
-| a `Runtime` recipe | every identity the recipe pins — rebuilt runtime, packed runtime, append — re-derived and compared |
 
-`tools/verify/verify_midiscenes.py` and `verify_octakit.py` are the two
-standing proofs; write the equivalent for yours. When you port someone
+`tools/verify/verify_midiscenes.py` is the standing proof; write the
+equivalent for yours. When you port someone
 else's mod, run their build against the shared stock image first and use
 its output as the oracle.
 
@@ -234,8 +235,10 @@ is a PR that changes the SHA and the version comment beside it.
 - Read the traps in `AGENTS.md` before trusting an assembler, an
   emulator, or a null result.
 - Collisions are refused by name; `make modules` prints the matrix. If
-  your module cannot share an image with another, say so in its README
-  and say why (a shared hook site, a shared data structure).
+  your module cannot share an image with another although no claim
+  overlaps (two designs of one behaviour), declare it:
+  `conflicts=(("<KEY>", "<why>"),)`. Bytes your module relies on staying
+  stock are a `Keep`, not a poke that writes what it expects.
 - Keep the report text stable, keep `priority` stable (it is
   byte-load-bearing), keep `key` stable.
 - A PR that touches a submodule pin says which upstream commit and why.

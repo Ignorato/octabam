@@ -12,7 +12,9 @@ worse than none, so a field exists only where a check consumes it.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from enum import Enum
 
 
@@ -135,7 +137,10 @@ class Param:
     """One of the twelve parameter slots on an effect's two pages.
 
     `None` means "do not write this field", which leaves the donor's value in
-    place. That is a real and different thing from writing a zero.
+    place. That is a real and different thing from writing a zero. The
+    exception is `active`: None keeps the donor's enable nibble only on a
+    `MenuEntry(stock_dsp=True)` clone, and is written as not drawn on every
+    other clone.
 
     Page 1 is slots 0-5 (r6+0..5). Page 2 is slots 6-11: even slots are
     delivered in the KNOB field (bits 16-23) of r6+$c/$d/$e, odd slots in the
@@ -149,7 +154,10 @@ class Param:
     name: bytes | None = None          # <=5 chars in a 6-byte NUL-terminated field; b"" blanks it
     default: int | None = None         # u8 written at P+0x5e+idx
     count: int | None = None           # value count; None leaves the donor's
-    active: bool = False               # drawn at all (the enable bitmap)
+    # Drawn at all (the slot's nibble in the enable bitmap). None on a
+    # MenuEntry(stock_dsp=True) clone keeps the donor's nibble, link bit
+    # included; everywhere else None is written as not drawn, as False is.
+    active: bool | None = None
     formatter: Formatter = Formatter.INHERIT
     # Display-only, consumed by the remixer and never by the build (the
     # refhash gate proves it): one line saying what the knob DOES, and for a
@@ -165,8 +173,48 @@ class Param:
     # (slots 0-1, 1-2, 3-4, 4-5 and the page-2 equivalents); stock never
     # links across 2-3.
     link: bool = False
+    # The slot's three descriptor words written as declared, for a drawing
+    # no Formatter names: P+0x0ca formatter A, P+0x0fa widget B, P+0x12a
+    # (docs/firmware/PARAM_PAGES.md section 7). Each is None (the donor's
+    # word), an int (a stock address or a literal; 0 included), or a
+    # (unit, symbol) pair resolved like a Detour's: a Linked or CavePatch
+    # label in this remix and a symbol it exports. A slot with any of the
+    # three set takes no `formatter` and is checked by verify_menu against
+    # these words instead of the count rule.
+    formatter_word: int | tuple[str, str] | None = None
+    widget_word: int | tuple[str, str] | None = None
+    word_12a: int | tuple[str, str] | None = None
+
+    @property
+    def raw_words(self) -> tuple:
+        """(formatter_word, widget_word, word_12a)."""
+        return (self.formatter_word, self.widget_word, self.word_12a)
+
+    @property
+    def has_raw_words(self) -> bool:
+        return any(w is not None for w in self.raw_words)
+
+    @property
+    def prints_labels(self) -> bool:
+        """The build emits a label formatter for this slot. A slot with raw
+        descriptor words is drawn by those words, which take P+0x0ca: its
+        labels are display-only (the remixer's help row, the BCR map)."""
+        return bool(self.active and self.labels) and not self.has_raw_words
 
     def __post_init__(self):
+        for _f, _w in zip(("formatter_word", "widget_word", "word_12a"), self.raw_words):
+            if _w is None or (isinstance(_w, int) and not isinstance(_w, bool)
+                              and 0 <= _w <= 0xFFFFFFFF):
+                continue
+            if (isinstance(_w, tuple) and len(_w) == 2
+                    and all(isinstance(x, str) and x for x in _w)):
+                continue
+            raise ValueError(f"param {self.name!r}: {_f} is {_w!r} -- an int "
+                             f"(u32) or a (unit, symbol) pair")
+        if self.has_raw_words and self.formatter is not Formatter.INHERIT:
+            raise ValueError(
+                f"param {self.name!r}: formatter={self.formatter.value} and raw "
+                f"descriptor words together -- the raw words are the drawing")
         if self.link and not self.active:
             raise ValueError(f"param {self.name!r}: link on a slot that is not drawn")
         if self.name is not None and len(self.name) > 5:
@@ -192,6 +240,28 @@ class Param:
                 raise ValueError(
                     f"default {self.default} is outside its value count "
                     f"{self.count} -- the panel uses it as an index")
+
+
+def enable_words(active, linked=(), inherited=(), donor=(0, 0)):
+    """A descriptor's two enable words (P+0x18e slots 0-7, P+0x18a slots
+    8-11, one nibble each): bit 0 draws the slot, bit 1 draws the link
+    element to its left neighbour (PARAM_PAGES.md 3b). A slot in `inherited`
+    takes its whole nibble from `donor`, the donor's (lo, hi)."""
+    lo = hi = 0
+    for i in active:
+        bits = 3 if i in linked else 1
+        if i < 8:
+            lo |= bits << (4 * i)
+        else:
+            hi |= bits << (4 * (i - 8))
+    for i in inherited:
+        sh = 4 * (i if i < 8 else i - 8)
+        m = 0xf << sh
+        if i < 8:
+            lo = (lo & ~m) | (donor[0] & m)
+        else:
+            hi = (hi & ~m) | (donor[1] & m)
+    return lo, hi
 
 
 @dataclass(frozen=True)
@@ -256,8 +326,17 @@ class MenuEntry:
     # FX1's tables (its id lookup and the row the encoder scrolls), in place,
     # and verify_replaces.py checks both menus in both directions.
     replaces: str | None = None
+    # The replaced effect's own DSP stays its dispatch entry: init/proc are
+    # stock's, and the module's DspSection is code reached from its
+    # DspHooks only (SIDECHAIN_COMPRESSOR: stock COMPRESSOR plus a detector
+    # tap). Requires `replaces`; the build leaves both dispatch words of
+    # the id as the pristine image has them and verify_replaces checks it.
+    stock_dsp: bool = False
 
     def __post_init__(self):
+        if self.stock_dsp and not self.replaces:
+            raise ValueError(f"stock_dsp keeps the donor's dispatch entry, so "
+                             f"it needs replaces=<the stock effect's key>")
         # 0x00-0x03 are the ids stock treats as bare synonyms for "no effect";
         # the first hardware test used them and got correct names with dead
         # knobs and garbage audio.
@@ -292,10 +371,25 @@ class DspHook:
     inject at the frame head, P:0x88.
     """
 
-    site: int                                  # P address of the displaced instruction
+    # P address of the displaced instruction: one int for every payload,
+    # or {"A": addr, "B": addr} naming exactly the section's payloads when
+    # the stock code sits at a different address on each (the two payloads
+    # are linked separately; AGENTS.md "payload-relative addresses").
+    site: int | Mapping[str, int]
     stock: tuple[int, int]                     # its two words, as the image has them
     label: str                                 # the section's entry for this site
     note: str = ""
+
+    def __post_init__(self):
+        if isinstance(self.site, Mapping):
+            object.__setattr__(self, "site", MappingProxyType(dict(self.site)))
+            if not self.site or set(self.site) - {"A", "B"}:
+                raise ValueError(f"DspHook {self.label!r}: site keys are payload "
+                                 f"tags A/B, got {sorted(self.site)}")
+
+    def site_on(self, payload: str) -> int:
+        """The hook's P address on one payload."""
+        return self.site[payload] if isinstance(self.site, Mapping) else self.site
 
 
 @dataclass(frozen=True)
@@ -330,13 +424,87 @@ class DspSection:
     # nothing; or, when a reader of that record survives in the image, in
     # P immediately BEFORE the module's code, out of its own budget, as it
     # always was (build_bus.py XTABLE; stock.CURVE_BANK for the scan and
-    # its limits). ⚠️ So a module with a table may read P for NOTHING
+    # its limits); or, when neither fits, in the exclusive X data of a
+    # stock effect on neither chooser (stock.x_exclusive_runs), read through
+    # `x:(` the same way. ⚠️ So a module with a table may read P for NOTHING
     # ELSE: every `p:(` in its code is the table.
     ptable: tuple[int, ...] = ()
+    # A SECOND table block with its own `$fab2e0` base literal. In P and in
+    # the curve bank it follows `ptable` directly; in a given-up effect's
+    # X data each block goes into the first run it fits, so a table larger
+    # than any one run is declared as two blocks. Requires `ptable`.
+    ptable2: tuple[int, ...] = ()
     # Entries into this section from STOCK code (schema.DspHook). A section
     # with hooks and no MenuEntry is placed on `payloads` only and takes no
     # dispatch entry; one with a menu may carry hooks as well.
     hooks: tuple[DspHook, ...] = ()
+    # Per-payload text substitutions applied to the source before anything
+    # else the build does to it: {"A": {"@SBASE@": "$33e00"}, "B":
+    # {"@SBASE@": "$3be00"}}. dsp_asm has no equ and no expressions, so a
+    # value that differs per core is written per core. Both payloads name
+    # the same keys; every key occurs in the source (refused at build); no
+    # key may overlap a marker the build substitutes itself (SUBST_RESERVED).
+    subst: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
+    # Declared ceiling on instances of this module per core, 1..4 (a core has
+    # four FX2 slots). None = unlimited: the cycle counter prices four copies.
+    # With a value, `tools/build/cycle_count.py` prices that many copies. The
+    # unit does not enforce it: nothing stops a fifth..third selection, so the
+    # remix README must state the ceiling.
+    max_per_core: int | None = None
+
+    def __post_init__(self):
+        if self.max_per_core is not None and not 1 <= self.max_per_core <= 4:
+            raise ValueError(f"{self.asm}: max_per_core {self.max_per_core} "
+                             f"outside 1..4 (a core has four FX2 slots)")
+        if self.ptable2 and not self.ptable:
+            raise ValueError(f"{self.asm}: ptable2 without ptable -- the "
+                             f"second block follows the first")
+        object.__setattr__(self, "subst", MappingProxyType(
+            {pl: MappingProxyType(dict(kv)) for pl, kv in self.subst.items()}))
+        for h in self.hooks:
+            if isinstance(h.site, Mapping) and set(h.site) != set(self.payloads):
+                raise ValueError(
+                    f"DspHook {h.label!r}: site names payloads {sorted(h.site)}, "
+                    f"the section is placed on {sorted(self.payloads)}")
+        if self.subst:
+            if set(self.subst) != set(self.payloads):
+                raise ValueError(f"subst names payloads {sorted(self.subst)}, "
+                                 f"the section is placed on {sorted(self.payloads)}")
+            keys = [frozenset(kv) for kv in self.subst.values()]
+            if len(set(keys)) != 1:
+                raise ValueError("subst: every payload names the same keys "
+                                 + "; ".join(f"{pl}: {sorted(kv)}" for pl, kv
+                                             in sorted(self.subst.items())))
+            for k in keys[0]:
+                if not k.strip():
+                    raise ValueError(f"subst: empty key {k!r}")
+                hit = [r for r in SUBST_RESERVED if r in k or k in r]
+                if hit:
+                    raise ValueError(f"subst key {k!r} overlaps the build's own "
+                                     f"marker {hit[0]!r}")
+            for pl, kv in self.subst.items():
+                for k, v in kv.items():
+                    if any(r in v for r in SUBST_RESERVED):
+                        raise ValueError(f"subst {pl} {k!r}: value {v!r} carries "
+                                         f"a marker the build substitutes")
+
+    def source_for(self, payload: str, src: str) -> str:
+        """`src` with this payload's subst applied (refuses a key the source
+        does not carry)."""
+        for k, v in self.subst.get(payload, {}).items():
+            if k not in src:
+                raise ValueError(f"{self.asm}: subst key {k!r} does not occur "
+                                 f"in the source")
+            src = src.replace(k, v)
+        return src
+
+
+# Text the build substitutes in DSP sources itself (build_bus.py), which a
+# DspSection.subst key or value may not overlap. AGENTS.md "build-time
+# markers and base literals count when they appear in COMMENTS".
+SUBST_RESERVED = ("$30000", "$facade", "$fab1e0", "$fab2e0", "; ROTLATCH", "; ROTINIT",
+                  "_OVERRIDE", "XBUS_GATE", "; HOSTGUARD",
+                  "LFO lines 0-1: ROLLED TOO")
 
 
 @dataclass(frozen=True)
@@ -405,8 +573,10 @@ class CavePatch:
     # the ratified reference and must match, or the build refuses. A source
     # may therefore hold absolute references to itself, and symbols it needs
     # from the build (the address of a data field, a clone's slot) arrive as
-    # `defsyms` -- `ld --defsym NAME=value` -- instead of placeholder words
-    # patched into hand-assembled hex (busscreen's MARKS, cc-map's VCOUNT).
+    # `defsyms` -- `--defsym NAME=value` to both the assembler (so `.ifdef`
+    # sees it) and the linker -- instead of placeholder words patched into
+    # hand-assembled hex (busscreen's MARKS, cc-map's VCOUNT). A name the
+    # source itself defines is refused.
     # An emit() that returns b"" for its bytes says "the source is the only
     # truth"; an emit() that still returns bytes takes the legacy path,
     # unlinked and unchecked, exactly as before. Without a toolchain the
@@ -420,6 +590,64 @@ class CavePatch:
     # address -- cc-map keeps its hand-patched legacy form for exactly this.
     # Checked on every build; a drift refuses.
     reference: object | None = None
+    # Bytes the cave may occupy when `pinned` is empty (its bytes come from
+    # the link at build time). The ledger sizes the claim by the larger of
+    # this and len(pinned); the build refuses a linked cave past it.
+    reserve: int = 0
+
+    @property
+    def claim_len(self) -> int:
+        return max(len(self.pinned), self.reserve)
+
+
+SHARED_WINDOW = (0x30000, 0x40000)      # Y:0x30000-0x3FFFF, both cores; X, Y and P alias
+HALF_BASE = {"A": 0x30000, "B": 0x38000}  # each payload's half of the shared window
+
+
+@dataclass(frozen=True)
+class DspRange:
+    """DSP data words a module writes, on every payload its section runs on.
+
+    `space` is "x" or "y". `start` is an absolute address, or with
+    `half_relative` an offset from the payload's own half of the shared
+    window (`HALF_BASE`: 0x30000 on A, 0x38000 on B -- the per-payload
+    `$30000` rewrite, schema.YBase). A range lies wholly inside the shared
+    window or wholly below it. Inside it, X, Y and P are one memory shared
+    by both cores, so the ledger compares the range against every module's
+    on either payload; below it, only against the same space on the same
+    payload (each core has its own).
+    """
+
+    space: str
+    start: int
+    length: int
+    what: str
+    half_relative: bool = False
+
+    def __post_init__(self):
+        if self.space not in ("x", "y"):
+            raise ValueError(f"DspRange({self.what!r}): space must be 'x' or 'y', not {self.space!r}")
+        if self.length <= 0:
+            raise ValueError(f"DspRange({self.what!r}): length must be positive")
+        if self.half_relative:
+            if not (0 <= self.start and self.start + self.length <= 0x8000):
+                raise ValueError(f"DspRange({self.what!r}): a half-relative range lies "
+                                 f"inside one half, 0x0000-0x7FFF")
+            return
+        lo, hi = SHARED_WINDOW
+        end = self.start + self.length
+        if self.start < 0 or end > hi or (self.start < lo < end):
+            raise ValueError(f"DspRange({self.what!r}): 0x{self.start:05x}..0x{end - 1:05x} "
+                             f"must lie wholly below 0x{lo:05x} or wholly in the shared window")
+
+    def resolve(self, payload: str) -> tuple[str, int, int]:
+        """(domain, start, end) on `payload`: domain "shared" in the window,
+        else "<payload>:<space>"."""
+        start = self.start + (HALF_BASE[payload] if self.half_relative else 0)
+        end = start + self.length
+        if start >= SHARED_WINDOW[0]:
+            return "shared", start, end
+        return f"{payload}:{self.space}", start, end
 
 
 @dataclass(frozen=True)
@@ -481,8 +709,19 @@ class Claims:
     # what). 32 KB at 0x80000000; stock's highest static use ends at
     # 0x80007874 (a 768-byte buffer at 0x80007574). USB AUDIO IN keeps its
     # dTDs and packet buffers in the top 1 KB. The ledger refuses an overlap
-    # between two modules; the stock extent is the author's census.
+    # between two modules; the stock extent is the author's census. The
+    # check is on address overlap, so a range in CS1 (battery SRAM at
+    # 0x10000000) is declared here too: PLOCKS P2 keeps the current bank's
+    # page 2 in 0x100f8600..0x100ffe00.
     sram: tuple[tuple[int, int, str], ...] = ()
+    # DSP DATA a module writes outside its r7 block and the regions the
+    # fields above cover (schema.DspRange): shared-window buffers, fixed X
+    # or Y tables. The ledger compares them with every other module's
+    # ranges, FX2 buffer region and core-private Y words, the bus scratch
+    # and stock's per-frame staging; with a project, verify_set holds every
+    # shared-window write the port measures against them
+    # (tools/remix/dsp_ranges.py).
+    dsp_ranges: tuple[DspRange, ...] = ()
 
     def __post_init__(self):
         if self.buffer_words is not None and not self.stock_instance_buffer:
@@ -534,16 +773,27 @@ class Gate:
     `make bus REMIX=<name>` and the shared set gates (a gate that needs
     verify_set's staged card is an image gate). The runner exports REMIX
     and BUILD to every gate.
+
+    `once` is for a gate whose subject is the module's own code, the same
+    in every carrier (a ColdFire module's panel scenarios under the port):
+    it takes a remix name but runs once per run, in the shared half, on
+    the named remix with the fewest modules that carries the module,
+    instead of once per carrying remix (KITS: 29 port scenarios, 371 s
+    emulated, on bottleservice AND ok-ms, 6 Oct 2026).
     """
 
     script: str                      # repo-relative
     remix_arg: bool = True           # pass the remix name as argv[1]
     venv: bool = False               # prefer .venv/bin/python3 (the port's python) when present
     stage: str = "isolated"          # "isolated" | "image"
+    once: bool = False               # once per run, on one carrying remix of the selection (the shared half)
 
     def __post_init__(self):
         if self.stage not in ("isolated", "image"):
             raise ValueError(f"Gate({self.script!r}): stage must be 'isolated' or 'image', not {self.stage!r}")
+        if self.once and (not self.remix_arg or self.stage != "isolated"):
+            raise ValueError(f"Gate({self.script!r}): once=True needs remix_arg=True and the isolated stage "
+                             "(it runs in the shared half, which has no image)")
         if not self.script.startswith("tools/") and not self.script.startswith("modules/"):
             raise ValueError(f"Gate({self.script!r}): a repo-relative path under tools/ or modules/")
 
@@ -618,14 +868,18 @@ class Linked:
     linked it: the build links a second copy at that address every time
     and compares, so a source or toolchain drift from the bytes the author
     ratified fails loudly, even though the unit the image carries is
-    linked somewhere else.
+    linked somewhere else. The oracle links with the declared `defsyms`
+    and this remix's `remix.inc`. A unit whose bytes depend on the remix
+    (its `include`) gives a callable instead: reference(modules) ->
+    (address, sha256), given the same modules `include` gets, naming the
+    variant the author ratified for that selection.
     """
 
     label: str
     source: str                          # .s, repo-relative
     cave_addr: int | None = None         # None = floating
     cpu: str = "5407"                    # m68k-elf-as -mcpu= for the ROM-cave form; a DRAM unit is assembled for the chip (54455)
-    reference: tuple[int, str] | None = None
+    reference: object | None = None      # (address, sha256), or a callable (see above)
     # DRAM: the unit is linked into octabam's PLATFORM RUNTIME -- one image
     # of every such unit in the remix, linked together (cross-unit symbols
     # resolve in the one link), packed, appended after the OS with the
@@ -642,6 +896,38 @@ class Linked:
     # on which modules are in the image (mode-defaults' view table) is
     # otherwise unlinkable: the source cannot know the remix.
     include: object | None = None
+    # (name, value) pairs passed to both `m68k-elf-as --defsym` (so
+    # `.ifdef NAME` sees them) and `m68k-elf-ld --defsym`, as
+    # CavePatch.defsyms. Each value resolves to a global of a unit or cave
+    # linked before this one, else the declared value; the `reference`
+    # oracle uses the declared values. A name the source itself defines is
+    # refused. DRAM units share one link, so two declaring one name must
+    # resolve it to one value.
+    defsyms: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self):
+        names = [n for n, _v in self.defsyms]
+        if len(names) != len(set(names)):
+            raise ValueError(f"Linked({self.label!r}): a defsym name declared twice")
+        if self.reference is not None and not callable(self.reference):
+            reference_shape(self.label, self.reference)
+
+    def reference_for(self, modules) -> tuple[int, str] | None:
+        """(address, sha256) of the author's build for this selection."""
+        if self.reference is None:
+            return None
+        ref = self.reference(modules) if callable(self.reference) else self.reference
+        return reference_shape(self.label, ref)
+
+
+def reference_shape(label: str, ref) -> tuple[int, str]:
+    """`ref` as (address, sha256), or ValueError naming the unit."""
+    if not (isinstance(ref, tuple) and len(ref) == 2 and isinstance(ref[0], int)
+            and isinstance(ref[1], str) and len(ref[1]) == 64
+            and all(c in "0123456789abcdef" for c in ref[1])):
+        raise ValueError(f"Linked({label!r}): reference must be (address, sha256 hex), "
+                         f"got {ref!r}")
+    return ref
 
 
 @dataclass(frozen=True)
@@ -666,29 +952,50 @@ class Detour:
     kind: str = "jmp"
     target: int | None = None
     pad_to: int | None = None
-    # The stub reaches the stock callee with a return address of its OWN
-    # on the stack (midisc's `reload`, `apply_bridge`: the site's return
-    # parked in apply_ret, the stub's continuation in its place). A callee
-    # another module replaces may validate that address -- Octakit's
-    # part reload traps on any but the stock sites' (Runtime.pinned_returns)
-    # -- and the ledger refuses the pair by name.
-    subst_return: bool = False
+
+    def __post_init__(self):
+        written = self.pad_to or 6
+        if len(self.expect) < written:
+            raise ValueError(
+                f"Detour at 0x{self.site:08x} ({self.note or self.symbol}): "
+                f"expect is {len(self.expect)} bytes, the detour writes "
+                f"{written}; the build asserts only `expect`, so the other "
+                f"{written - len(self.expect)} would be overwritten unchecked")
 
 
 @dataclass(frozen=True)
 class TableGrow:
-    """A stock pointer array relocated into free space with entries
-    appended, and every reference to the old array repointed --
-    busscreen's menu-state-table move, generalised. `old` is the stock
-    array (`count` u32 entries), `symbols` the (unit, symbol) pairs to
-    append, `refs` the (address, expected old-array u32) sites rewritten
-    to the new address. The new array floats."""
+    """A stock pointer array relocated into free space with entries added,
+    and every reference to the old array repointed -- busscreen's
+    menu-state-table move, generalised. `old` is the stock array (`count`
+    u32 entries), `symbols` the (unit, symbol) pairs to add, `refs` the
+    (address, expected old-array u32) sites rewritten to the new address.
+    The new array floats.
+
+    `insert_at` places the symbols, as one block in declared order, before
+    stock entry `insert_at`; None (or `count`) appends them. An insert
+    renumbers every stock entry from `insert_at` up: stock code that
+    indexes the array by a constant, and an index stored in a Part or a
+    project, then names a different entry. The ledger refuses two modules
+    growing one stock array."""
 
     label: str
     old: int
     count: int
     symbols: tuple[tuple[str, str], ...]
     refs: tuple[tuple[int, int], ...]
+    insert_at: int | None = None
+
+    def __post_init__(self):
+        if self.insert_at is not None and not 0 <= self.insert_at <= self.count:
+            raise ValueError(f"TableGrow({self.label!r}): insert_at {self.insert_at} is "
+                             f"outside 0..{self.count}")
+
+    def entries(self, stock: list[int], added: list[int]) -> list[int]:
+        """The grown array: `stock` (the `count` entries read from the
+        image) with `added` (the resolved symbols) placed at `insert_at`."""
+        at = self.count if self.insert_at is None else self.insert_at
+        return list(stock[:at]) + list(added) + list(stock[at:])
 
 
 @dataclass(frozen=True)
@@ -698,6 +1005,24 @@ class Poke:
     addr: int
     expect: bytes
     write: bytes
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class Keep:
+    """Bytes this module relies on staying stock, claimed without writing.
+
+    The ledger refuses any other module's write that overlaps them (a
+    poke, detour, hook, cave, table or symbol ref, emit poke or runtime
+    write); two modules keeping overlapping bytes compose when their
+    `expect` agrees. The build asserts `expect` against the stock image and
+    again against the finished image, so a write the ledger cannot see --
+    a floating cave or grown table landing here, a menu clone, an arena
+    literal -- is refused too. Writes made at run time by DRAM code are
+    not in the image and are not checked."""
+
+    addr: int
+    expect: bytes
     note: str = ""
 
 
@@ -719,84 +1044,18 @@ class SymbolRef:
 
 
 @dataclass(frozen=True)
-class Runtime:
-    """A loader-appended runtime: code and state that live in DRAM, not in
-    the OS image's free zero runs.
-
-    The third placement class, after ColdFire caves and DSP payload words,
-    and the only one that scales past a few kilobytes. The OS image grows
-    by an APPEND (a small early loader, a stage anchor and the runtime,
-    packed with the firmware's own aPLib variant); one of the recipe's
-    sparse writes detours the boot path into the loader, which depacks the
-    runtime into a reserved DRAM window and installs its hooks from there.
-    Everything the runtime needs from Elektron's own code is `.incbin`'d
-    out of the USER'S stock image at build time (copied or PC-relative-
-    relocated per the recipe), so the repo carries none of it.
-
-    This is Em's design (emuyia/ems-octakit) adopted whole:
-    `recipe` is her `firmware.json` (interface_version 1) and `sources` her
-    `runtime/` -- both live in a git SUBMODULE so she keeps developing in
-    her own repo and octabam builds from it. The build re-derives every
-    identity the recipe pins (rebuilt runtime, packed runtime, append, the
-    combined OS) and refuses on any mismatch; that identity check, not a
-    compiler-version string, is what proves the toolchain reproduced her
-    bytes (gcc 16.2.0 does, measured against her 16.1.0 pin).
-    """
-
-    recipe: str        # firmware.json, repo-relative
-    sources: str       # directory holding the .S/.c sources it names
-    report_note: str = ""
-    # Return addresses the runtime's replacement routines validate: they
-    # compare the caller's return address on the stack against these and
-    # trap (`illegal`, VEC:04) on any other. A detour of the `jsr` that
-    # pushes one of them, whose stub returns the callee through its own
-    # continuation (Detour.subst_return), reaches that trap on the unit
-    # -- OKMS1's Part Reload, 14 Sep 2026. Derived from the sources
-    # (Octakit: abi.inc's *_RETURN equates), never typed.
-    pinned_returns: tuple[int, ...] = ()
-
-
-@dataclass(frozen=True)
-class ArenaReserve:
-    """Pages of stock's audio page arena taken for this module's DRAM.
-
-    The arena (tools/remix/arena.py) is the 85.5 MB stock shares between
-    Flex samples and the track recorders, and shrinking it is the one DRAM
-    placement with a hardware record: Octakit takes its top 528 pages,
-    octamax 2.0 its bottom 64. The build stacks every reservation in the
-    remix -- `where="bottom"` from the stock base upward (the base literal
-    moves), `where="top"` from the end downward (the count shrinks) -- and
-    computes the four geometry literals from the total, so two modules
-    that each take pages compose instead of both rewriting the same words.
-
-    `recipe_writes` names the writes in a Runtime recipe that ARE those
-    geometry literals (Octakit's four): the build skips them and computes
-    the combined values, which for her alone are byte-identical to hers.
-    """
-
-    pages: int
-    where: str = "top"                   # "top" | "bottom"
-    recipe_writes: tuple[str, ...] = ()
-
-    def __post_init__(self):
-        if self.where not in ("top", "bottom"):
-            raise ValueError(f"ArenaReserve.where must be 'top' or 'bottom', not {self.where!r}")
-        if self.pages <= 0:
-            raise ValueError("ArenaReserve.pages must be positive")
-
-
-@dataclass(frozen=True)
 class DramRegion:
     """Uninitialised DRAM a module's DRAM units name by `symbol`.
 
     Placed by the platform build at the TOP of the platform's arena reserve
     (arena.PLATFORM_PAGES, which any remix with DRAM units already pays
     for), stacked downward in declaration order, and handed to the link as
-    `--defsym symbol=address`. The build refuses when the runtime and its
-    loader stage reach the lowest region. The loader never writes these
-    bytes and nothing clears them: a region must not need initial contents.
-    STEM REC's 4 MiB ring and its task's stack are the first users (docs/
-    superpowers/specs/2026-09-10-stem-rec-poc-design.md, section 5)."""
+    `--defsym symbol=address`. The build refuses when the runtime, its
+    loader stage or its .bss reach the lowest region. The loader never
+    writes these bytes and nothing clears them: a region must not need
+    initial contents. STEM REC's ring (8 MiB since piece 5) and its task's
+    stack are the first users (docs/superpowers/specs/
+    2026-09-10-stem-rec-poc-design.md, section 5)."""
 
     symbol: str
     size: int
@@ -811,26 +1070,18 @@ class DramRegion:
 
 @dataclass(frozen=True)
 class Override:
-    """This module's own claim at `site` stands in for another module's --
-    the way two mods that hook one stock instruction get to share it.
-
-    A BRIDGE module (modules/scenes-kits is the first) carries a stub that
-    does what both hooks did, in an order that respects each one's
-    protocol, and declares an Override per claim it replaces: `module` is
-    the other module's key, `write` the name of its Runtime recipe write
-    at that site (None for a Detour). The build then skips the overridden
-    detour or write and, when `defsym` is given, defines that symbol for
-    every unit and cave it links as the overridden claim's TARGET -- the
-    address a `jmp abs.l` write jumped to, or the pointer a 4-byte table
-    write installed -- so the stub knows where to continue. The ledger
-    treats the site as the bridge's; the overridden module must be in the
-    remix, or the override is refused.
+    """This module's own claim at `site` stands in for another module's
+    Detour there -- the way two mods that hook one stock instruction get to
+    share it. A BRIDGE module carries a stub that does what both hooks did,
+    in an order that respects each one's protocol, and declares an
+    Override per detour it replaces: `module` is the other module's key.
+    The build skips the overridden detour; the ledger treats the site as
+    the bridge's; the overridden module must be in the remix, or the
+    override is refused.
     """
 
     site: int
     module: str
-    write: str | None = None
-    defsym: str | None = None
 
 
 @dataclass(frozen=True)
@@ -850,10 +1101,6 @@ class Module:
     cf_patches: tuple[CavePatch, ...] = ()
     claims: Claims | None = None
     harness: Harness | None = None
-    # A loader-appended DRAM runtime (schema.Runtime). At most one per image
-    # today: the append sits at the end of the OS and the loader owns one
-    # DRAM window; the ledger refuses a second.
-    runtime: Runtime | None = None
     # Linker-backed ColdFire code (schema.Linked): units the build assembles
     # and links where it places them, wired in by symbol (Detour), plus
     # relocated-and-grown stock tables and plain asserted pokes.
@@ -866,10 +1113,8 @@ class Module:
     tables: tuple[TableGrow, ...] = ()
     symbol_refs: tuple[SymbolRef, ...] = ()
     pokes: tuple[Poke, ...] = ()
-    # Pages of the audio page arena this module's DRAM lives in
-    # (schema.ArenaReserve). DRAM units need none: the platform reserves
-    # its own (arena.PLATFORM_PAGES) whenever a remix carries any.
-    arena: ArenaReserve | None = None
+    # Stock bytes this module relies on and does not write (schema.Keep).
+    keeps: tuple[Keep, ...] = ()
     # Claims of OTHER modules this module's own stand in for
     # (schema.Override) -- a bridge chaining two mods' hooks at one site.
     overrides: tuple[Override, ...] = ()
@@ -878,6 +1123,11 @@ class Module:
     # stubs stand at those sites (scenes-p2-kits). The ledger refuses a
     # remix that selects it without them.
     requires: tuple[str, ...] = ()
+    # (module KEY, why) for modules this one must never share an image with
+    # although no byte overlaps -- two designs of one behaviour. The ledger
+    # refuses the pair by name with the reason; the registry refuses a key
+    # no module has.
+    conflicts: tuple[tuple[str, str], ...] = ()
     # Which slot carries the MODE select, and what each of its positions
     # renames and re-defaults. Empty for a single-engine module.
     mode_slot: int | None = None
@@ -911,7 +1161,41 @@ class Module:
     # An explicit gap must block pressure qualification, never report N/A.
     pressure_blocker: str = ""
 
+    def write_spans(self):
+        """Every fixed-address write this module declares, as (kind, start,
+        length, label): pinned caves (`len(pinned)`), cave hooks
+        (`len(hook_stock)`, at least the six-byte jsr), detours (the
+        larger of `expect` and `pad_to` or six), table refs and symbol refs
+        (four bytes), plain pokes. Floating caves and emit() pokes depend on
+        placement and are the ledger's to evaluate."""
+        for c in self.cf_patches:
+            if c.cave_addr is not None:
+                yield "cave", c.cave_addr, c.claim_len, c.label
+            if c.hook_addr is not None:
+                yield "hook", c.hook_addr, max(len(c.hook_stock), 6), c.label
+        for d in self.detours:
+            yield "detour", d.site, max(len(d.expect), d.pad_to or 6), d.note or d.symbol
+        for t in self.tables:
+            for addr, _old in t.refs:
+                yield "table ref", addr, 4, t.label
+        for r in self.symbol_refs:
+            yield "symbol ref", r.addr, 4, f"{r.unit}:{r.symbol} ({r.note or hex(r.addr)})"
+        for p in self.pokes:
+            yield "poke", p.addr, len(p.expect), p.note or hex(p.addr)
+
     def __post_init__(self):
+        for need in self.requires:
+            if need in {k for k, _why in self.conflicts}:
+                raise ValueError(f"{self.name}: {need!r} is in both requires and conflicts")
+        for other, _why in self.conflicts:
+            if other == self.key:
+                raise ValueError(f"{self.name}: declares a conflict with itself")
+        for k in self.keeps:
+            for kind, start, length, label in self.write_spans():
+                if start < k.addr + len(k.expect) and k.addr < start + length:
+                    raise ValueError(
+                        f"{self.name}: keeps 0x{k.addr:08x} ({k.note or 'kept bytes'}) "
+                        f"and writes it ({kind} {label} at 0x{start:08x})")
         if self.params and len(self.params) != 12:
             raise ValueError(f"{self.name}: expected 12 param slots, "
                              f"got {len(self.params)}")
@@ -984,6 +1268,11 @@ class Module:
                     f"0x{self.menu.fx2_id:02x} is not a stock effect's -- a "
                     f"replacement must carry the id it replaces, or the stock "
                     f"effect stays and yours is a separate row")
+        if self.menu is not None and self.menu.stock_dsp and (
+                self.dsp is None or not self.dsp.hooks):
+            raise ValueError(f"{self.name}: stock_dsp keeps {self.menu.replaces}'s "
+                             f"dispatch entry, so its DspSection is reached only "
+                             f"through DspHooks and must declare at least one")
         if self.dsp is not None and self.menu is None and not self.dsp.hooks:
             raise ValueError(f"{self.name}: DSP code with no menu entry and no "
                              f"DspHook is unreachable -- nothing dispatches it")
@@ -1068,8 +1357,20 @@ class Module:
 
     @property
     def active_params(self) -> list[int]:
-        """Slots the panel draws -- the enable bitmap, in index order."""
+        """Slots the manifest declares drawn (active=True), in index order.
+        A slot in inherited_enable is drawn or not as its donor's is."""
         return [i for i, p in enumerate(self.params) if p.active]
+
+    @property
+    def inherited_enable(self) -> tuple[int, ...]:
+        """Slots whose enable nibble (draw and link bits) is the donor's:
+        active=None on a MenuEntry(stock_dsp=True) clone. Empty params are
+        twelve Param()s."""
+        if self.menu is None or not self.menu.stock_dsp:
+            return ()
+        if not self.params:
+            return tuple(range(12))
+        return tuple(i for i, p in enumerate(self.params) if p.active is None)
 
     @property
     def linked_params(self) -> list[int]:
@@ -1089,6 +1390,15 @@ class Module:
     def stepped_slots(self) -> tuple[int, ...]:
         return tuple(i for i, p in enumerate(self.params)
                      if p.formatter in (Formatter.STEPPED, Formatter.WIDE_STEPPED))
+
+    @property
+    def plain_slots(self) -> tuple[int, ...]:
+        """Knobs drawn as the stock numeric dial: the build zeroes both
+        formatter words whatever the donor's slot drew. Until 5 Oct 2026 the
+        zeroing ran only for a module with a stepped slot; CF METER's SRC on
+        FILTER's bipolar slot 3 drew as a balance dial."""
+        return tuple(i for i, p in enumerate(self.params)
+                     if p.formatter is Formatter.PLAIN)
 
     @property
     def wide_stepped_slots(self) -> tuple[int, ...]:
@@ -1343,6 +1653,9 @@ class Remix:
         bad = [k for k in self.locked if k not in self.modules]
         if bad:
             raise ValueError(f"remix {self.name!r}: locked={bad} are not in the remix")
+        bad = [k for k in self.hidden if k not in self.modules]
+        if bad:
+            raise ValueError(f"remix {self.name!r}: hidden={bad} are not in the remix")
         bad = [k for k in self.named if k not in self.hidden]
         if bad:
             raise ValueError(

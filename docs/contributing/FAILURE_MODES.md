@@ -3,7 +3,61 @@
 Symptom → cause (measured, inferred or open) → fix. Add an entry the moment
 a mode is seen on hardware.
 
-Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.md`.
+`git show 666b6154:docs/remixer/FAILURE_MODES.md` holds the earlier text of
+the entries that existed at that commit. These entries are newer than it and
+are not in that blob: "PLAY or a sample load halts the unit in Octakit's
+pattern-apply check", "Unattended halt in Octakit's Part-refresh wrapper",
+"A BCR2000 goes dark or deaf", "Octakit stranded for the session",
+"A bank file written by the unit that the firmware then rejects", "A UAC2
+host stops audio setup", "A track button pressed within about 250 ms of a pattern
+change halts in Octakit's Part-refresh wrapper", and every entry after the line "Entries from here to the end of the file (5 Oct 2026)".
+
+## STOP, a pattern switch while stopped, PLAY halts in Octakit's pattern-event retry bridge, D0 = CORRUPT (image A5, bottleservice) ✅ closed by removal (6 Oct 2026)
+
+- **Seen:** Sam's MKII, image A5 (bottleservice at main `f80ecfea`, 5 Oct 2026, USB and the BCR2000 connected): `EXCEPTION SSP:4 VEC:04 FS:0 SR:2008 ADDR:45D27CBC D0:FFFFFFFA SP:460D8D34` = `gk_pattern_event_retry_corrupt_fatal` (`part_event_retry.S`, her bridge on the stock pattern-event refresh, D0 = `GK_ERR_CORRUPT`), after STOP, a change to A2 while stopped (A1 and A2 on different Kits), PLAY, the transport and the pattern changes driven over MIDI from an Analog Rytm (start/stop and program change). Rare: many tries per halt. One halt with the BCR2000 unplugged, so the BCR is ruled out; USB is not. The same stop/start habit ran on A4.
+- **Cause:** open. Her bridge takes that `illegal` when `gk_ui_carried_pattern_lag_event_finish` returns CORRUPT (the current and primary pattern bytes disagree, or `gk_stock_current_context_validate` returns any negative, BUSY during a queue handoff included; STOP starts one) or `gk_ui_transition_context_retry_ensure` returns CORRUPT. Not reached by patch 0002, which touches the Part-refresh writer only. Under the port (A5 bus, `--mkii`, keys only), every variant ran clean on both the gate project and the 4 Oct Bottleservice26 backup: stop/PLAY, double stop/PLAY, fast, six repeats, a timing sweep, the session (A2, knobs, A1, A2, stop/starts), and six stop, switch-while-stopped, PLAY variants including a cold switch and three rounds. With BCR-like CC traffic on the port's MIDI in (24-message bursts around the stop, the switch and PLAY; a message every 40 ms through the sequence; page-1 knob edits before it) the same sequence ran clean on both projects; so did stop, switch, PLAY on the Bottleservice26 backup with the port's USB bench enumerated and streaming the master out (`--usb-host`, 121,718 IN transfers over the run). Driven the Rytm's way, MIDI start, stop and program change on every channel, with and without a 24 ppqn clock stream: six sequences (stop, PC, start; the fast form; a PC while playing then stop, PC, start; a double stop; five rounds; a cold PC then start), 24 runs on both projects, every one clean, the current-pattern byte confirming each PC landed. The BCR itself is not modelled. Between A4 and A5 the image also took USB AUDIO OUT changes (#597, #602) and build changes (#603, #609, #612); A4's commit is not recorded.
+- **Fix:** open. To find out: whether it recurs with USB and the BCR unplugged, and on A4; the same sequence under the port with CC traffic and the USB model; which of the bridge's two CORRUPT sources fired (a ring under the port, or her diag word `__gk_ui_transition_reserved`).
+- **Closed:** Octakit is not in octabam since 6 Oct 2026; KITS (`modules/kits`) replaces it in bottleservice and has no pattern-event bridge (the stock refresh runs as stock). On the unit, image A6 (6 Oct 2026): STOP on the Rytm, PTN+TRIG, PLAY on the Rytm, about ten times with bank changes, no halt.
+
+## A track button pressed within about 250 ms of a pattern change halts in Octakit's Part-refresh wrapper (a chain or a single switch) ✅ closed by removal (6 Oct 2026)
+
+- **Seen:** a Discord user's MKII, bottleservice image 88 (Octakit c6d3f39), 5 Oct 2026: `EXCEPTION SSP:4 VEC:04 FS:0 SR:2009 ADDR:45D2DFEC D0:00000001 SP:460D8D3C` = `gk_pattern_queue_request_ipl_fatal` (Octakit's wrapper on the stock pattern-schedule request at `0x400a1030`, `queue_commit_deferral.S`), after two pattern trig keys pressed during a pattern switch, which makes a chain. Em's ems-octakit#5 (a chain playing, any track button, reported on c6d3f39 inside ok-ms, reproduced by her, no fix pushed as of 5 Oct 2026). The unattended BUSY halt below is the same wrapper's sibling fatal (`45D2803C`, workspace).
+- **Cause:** measured under the port (`remixes/test/octakit` and bottleservice at main `4bdeaa79`, identical instruction paths), project OCTABAM89_setgate: PLAY, a queued pattern change ([PTN] + [TRIG] 2 or a chain of 2, 3, 4, both halt), then one track-button press at 17.05–17.275 s after the script start, where the playing-pattern byte (`0x800065be`) changes at about 17.1 s, halts at `0x45d28038` = `gk_stock_part_refresh_writer_report_fatal_part_refresh_fatal_context`; presses at 17.00 s and 17.30 s run clean (sweep at 25 ms steps). A press of the current track (T1) halts as well. PC ring: `gk_stock_part_refresh_writer+0xe8` after `gk_stock_current_context_validate` returned `GK_ERR_BUSY` (−3) at `+0x11c`: `__gk_sequencer_latch_queue_handoff` is set while the handoff is pending, `gk_stock_staged_audio_handoff_validate` and `gk_physical_validate` had returned 0, and the writer takes any negative as the context fatal. No octabam module references `0x400a1000`–`0x400a13ff`; the only SR writers outside Octakit are usb-midi's mask and restore pairs. The user's own fatal did not appear in 60 scenarios; its SR shows interrupt level 0 with N and C set, which excludes a caller in DRAM (PR #595's patch) and leaves the IPL, latch and guard-depth checks of the same handoff: a timing the lock-step port did not reach (inferred). Runtime addresses hold for every image since 15 Sep 2026: pins 7ba0ad6 and c6d3f39 have identical runtime sources, resolved with `m68k-elf-nm -n out/runtime/octakit/runtime.elf`.
+- **Fix:** `modules/octakit/patches/0002-part-refresh-busy-runs-stock.patch` (5 Oct 2026, measured under the port, unflashed): on BUSY the writer runs stock unwrapped, as her QUIESCED path does (`git show 2063370f:modules/octakit/README.md` "Patches on her runtime"); every halting scenario and the controls end clean on both images, the unwrapped path seen running at the press. The user's `request_ipl` fatal is a different check in the same handoff and is not covered. Live script that halts without the patch (`ot_emu --mkii --live-script`, key codes from `tools/panel/key_map.json`: PLAY 0x28, PTN 0x2e, TRIG n = n−1, T n = 0x10 + n−1): `1500 key 0x28 down / 1560 up`, `3500 key 0x2e down / 3620 key 0x1 down / 3740 key 0x2 down / 3860 key 0x3 down`, release in reverse at 120 ms, `17250 key 0x12 down / 17310 key 0x12 up`, `22250 quit`. To find out: the window on hardware; whether the user's `request_ipl` fatal is the same press at another phase.
+- **Closed:** Octakit is not in octabam since 6 Oct 2026. KITS wraps no stock writer; `verify_kits` runs a three-pattern chain with a track key every 25 ms for 3 s across its first switch, and 250 track presses at 180 ms over the chain, clean under the port (`trackbtn`, `presses`). On the unit, image A6 (6 Oct 2026): a four-pattern chain with the track buttons pressed through each switch for two to three passes, and across a single PTN+TRIG switch, no halt.
+
+## PLAY or a sample load halts the unit in Octakit's pattern-apply check with a computer on USB (bottleservice, USB AUDIO IN CD) ✅ closed by removal (6 Oct 2026)
+
+- **Seen:** Sam's MKII, images 95 and 97 (bottleservice with USB AUDIO IN CD + USB CROSSBAR), 3–4 Oct 2026. `EXCEPTION VEC:04 ADDR:45D114DE` = `gk_stock_audio_pattern_primary_begin_report_fatal` in Octakit's runtime, on a sample load and on PLAY in a new project, with the USB cable to a computer. With the cable unplugged PLAY did not halt. Image 96 (without the two modules and without PLOCKS P2) loaded a sample without a halt; PLAY there with USB plugged was not tried.
+- **Cause:** inferred from the cable test: something live only with a USB host breaks the state Octakit checks when the sequencer applies a pattern's Part (`gk_selector_begin_physical` fails outside her quiesced state). USB AUDIO IN does its per-frame work in the frame interrupt's state machine beside Octakit's audio patches. Not reproduced under the port (no USB host streams into it).
+- **Fix:** USB AUDIO IN CD and USB CROSSBAR removed from bottleservice, 4 Oct 2026. To find out: PLAY with USB plugged on the image without them; whether USB AUDIO OUT MASTER (250 µs since 28 Sep; image 88 polled 1 ms) alone triggers it.
+- **Closed:** Octakit's pattern-apply check is not in any image since 6 Oct 2026 (KITS leaves the sequencer's Part apply as stock). Whether USB AUDIO IN with a host disturbs anything else stays to find out.
+
+## Unattended halt in Octakit's Part-refresh wrapper, D0 = BUSY (image A0, bottleservice) ✅ closed by removal (6 Oct 2026)
+
+- **Seen:** Sam's MKII, image A0, 4 Oct 2026, evening: found halted with `EXCEPTION VEC:04 ADDR:45D2803C D0:FFFFFFFD` = `gk_part_refresh_abort_fatal_report_part_refresh_fatal_workspace`, `GK_ERR_BUSY` (−3), after being left alone with a BCR2000 on MIDI (CC FEEDBACK in the image).
+- **Cause:** open. Her wrapper around the Part page writer found her Kit workspace busy when a Part write arrived with nobody at the panel. Under the port, none of these halted: Bottleservice26 playing 1,500,000 frames; playing with a CC on T8's FX1 every other frame for 60,000 frames; playing with one CC per frame round-robin over every track's FX1/FX2 page-1 and page-2 slots for 60,000 frames. The port has no BCR traffic and does not run her background Kit save on a timer.
+- **Fix:** open. To find out: whether the BCR echoes a received CC (a loop: a p-locked step → CC FEEDBACK → BCR → the OT's Part writer); whether it recurs with MIDI IN disconnected; what her workspace was busy with (the return addresses on the stack at SP 0x460d8cf4 were not read).
+- **Closed:** the wrapper is not in any image since 6 Oct 2026; KITS does nothing in the frame path or on a Part write. Not run on a KITS image (skipped 6 Oct 2026, image A6).
+
+## A BCR2000 goes dark or deaf on some patterns (A02, B1), fine on A01, C1, D1 ✅ measured, closed (4 Oct 2026)
+
+- **Seen:** Sam's MKII, images A0–A3, 4 Oct 2026, BCR2000 on DIN both ways: on A02 no CC reached any track; on B1 every BCR LED went dark and C1/D1 stayed dead until A1; fine with the OT's MIDI OUT unplugged. Reported first as "MIDI stops reaching CHARACTER after a pattern copy and SAVE KIT".
+- **Cause:** the OT's Program Change on a pattern change (PROJECT > MIDI > SYNC > PROG CH SEND; seen on the AMT8 capture as `C0 xx` beside a song-position pointer). The BCR2000 selects its preset from PC 0–31: A01 → PC 0 → preset 1 (the layout), A02 → PC 1 → preset 2 (empty), B1 → PC 16 → preset 17 (empty, dark); C1 (PC 32) and D1 (PC 48) are out of range and ignored, so the BCR keeps whatever preset it had. Not reproduced under the port, whose captures of the OT's output carry the PC but have no BCR on the other end.
+- **Fix:** PROG CH SEND off on the OT (Sam, 4 Oct 2026). Alternatives: the layout written to all 32 BCR presets (`tools/hw/bcr2000.py`), or a PC filter on the path to the BCR. Found on the way: CC FEEDBACK reported the live lane's lock rewrites at step rate and had AMP/LFO swapped (#583), and dumped a Kit change in one burst (#584) — both fixed, neither was this.
+
+## Octakit stranded for the session after a bank file fails to load: pattern paste halts, every Part apply is skipped (silence) ✅ closed by removal (6 Oct 2026)
+
+- **Seen:** Sam's MKII, images 95–99, 3–4 Oct 2026: songs played silent (meters still), and a pattern paste in a fresh project halted with `EXCEPTION VEC:04 ADDR:45D1364E` = `gk_current_pattern_part_set_fatal`. Booting with the remembered project missing from the card halted at `45D173EE` = `gk_stock_empty_project_runtime_initialize_report_fatal`, D0 = −3 (BUSY).
+- **Cause:** measured under the port (Octakit alone). Octakit's lifecycle word (`__gk_lifecycle_state`, `0x45f85c84`) is set QUIESCED by boot init, empty-project init and every bank load, and cleared only by `gk_lifecycle_activate_current` after the load's post step. When the stock bank load returns an error (a bank file the firmware cannot parse, −51; a missing project, −12) `gk_stock_banks_load_work` returns at its error exit without activating; stock carries on with the bank it initialised, Octakit stays QUIESCED: `gk_stock_pattern_payload_store` halts on the next paste and the sequencer's Part apply takes her quiesced path. On Sam's card the remembered project (`PROJECT 261004p`) had a `bank01.work` the firmware rejects (below), so every boot into it stranded the session. A project load or CREATE EMPTY PROJECT that succeeds re-activates (measured; on the unit the paste worked after a project change).
+- **Fix:** `modules/octakit/patches/0001-banks-load-error-applies-current-bank.patch` (5 Oct 2026, measured under the port; on the unit in image A4, commit 494bdd87's title "Octakit patch on the unit"): after a stock load error the current bank is applied the way stock's loop applies a parsed one, then her post step and activation run on the stock result (`git show 2063370f:modules/octakit/README.md` "Patches on her runtime"). Running the post step alone activated and then halted at her engine-bank compare (the stock loop skips the engine apply for a bank whose file failed). Measured on the MKII with the patch and the rejected file staged as `PROJECT STRAND` (image A4, 5 Oct): the load reports PARSE ERROR, then PLAY halts at `gk_stock_audio_pattern_primary_begin_report_fatal` (VEC:04, D0 = −1: `gk_physical_validate` finds no lease for the rejected bank's part; reproduced under the port). With the rejected `bankNN.work` DELETED from the card (stock −12, bank initialised empty) the same project loads, plays 400 frames and pastes clean under the port. So: a missing bank file is handled; a rejected one halts on PLAY instead of on paste — delete the file. Reported to Em with the patch (fork `sambanks/ems-octakit`, branch `banks-load-error-activates`). A project name with no directory on the card (the port's `--project NEWPROJ`; stock −12 on every bank file) still strands: her `gk_v3_first_install_migrate_impl` migrates the resident banks (OK) and then `create_pair_from_canonical(WORK)` returns −10, the open error normalised (`normalize_open_error`: −10/−12 → NOT_FOUND) -- there is no directory to create her work pair in. The unit's LOAD PROJECT lists directories only, so this needs a hand-made card to reach (inferred). Without the patch: never load the bad project; change project after any load that stock reports in its LOG (`Couldn't read bank file ... PARSE ERROR / WRONG CHECKSUM`). To find out: whether Em takes the change upstream.
+- **Closed:** Octakit is not in octabam since 6 Oct 2026. KITS has no lifecycle gate; `verify_kits` loads `PROJECT 261004p` (the rejected `bank01.work`), plays 400 frames and pastes a pattern, clean under the port (`strand`), and a project name with no directory loads with the `kits.work` write counted as failed (`noproj`). On the unit, image A6 (6 Oct 2026): PROJECT STRAND loads, plays, takes a pattern paste and a bank change, no halt.
+
+## A bank file written by the unit that the firmware then rejects: one 64-byte burst dropped from a 16 KiB card write, the card's MBR in its place 🟡 measured file, cause inferred
+
+- **Seen:** Sam's MKII, image 99 (bottleservice with USB AUDIO IN CD + USB CROSSBAR, a computer on USB), 4 Oct 2026 12:42:14: `PROJECT 261004p/bank01.work` written with `project.work`, `markers.work` and `p2lk01.work` in the same second (a project change or SYNC, not SAVE: no `.strd`). Checksum 0x7188 stored, 0x4e8c computed; with the checksum repaired the firmware still rejects it (−51). Content: from 0x2c000 to 0x30000 every byte is 64 earlier than in a good bank, and the last 64 bytes of that span are the card's MBR code (`33 c0 8e d0 bc 00 7c fb 50 07 50 1f …`). Three other saves that day (09:40, 12:45, 14:13) are intact.
+- **Cause:** inferred: a 16 KiB ATA write lost one 64-byte burst at its head and took a 64-byte block from another buffer (sector 0, read at mount) at its tail — a DMA/bus-arbitration fault, not a serialiser error. USB CROSSBAR raises the USB host's crossbar priority on SDRAM; it is the one module in the image that changes bus arbitration under card DMA. Not reproduced under the port (a project SAVE with PLOCKS P2 writes every bank intact; the port has no bus timing).
+- **Fix:** USB CROSSBAR and USB AUDIO IN CD removed from bottleservice (image 100). To find out: whether a bank written on image 100 ever fails again; the bad file is at `~/octa/backups/card_20261004_strand/`.
 
 ## STEM REC: RING FULL ends a 24-bit take on a busy project 🔴 open
 
@@ -21,15 +75,15 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 ## Pops and clicks from T1 with BusDelay when T1 plays its own trigs 🔴 open
 
 - **Seen:** Discord, Arcdmd_, 29 Sep 2026. Image, unit model, T1's machine and trig pattern not stated.
-- **Cause:** open. The rig is tested with T1 and T5 as THRU tracks without trigs. The one earlier test with a trig on every T1 step (21 Sep 2026) gave clicks and no wash. A trig splits the host's block into two dispatcher calls; the delay's glides run on the first call only since 21 Sep 2026 (`modules/busdelay/README.md`).
+- **Cause:** open. The bus (BusDelay on T1, BusVerb on T5) is tested with T1 and T5 as THRU tracks without trigs. The one earlier test with a trig on every T1 step (21 Sep 2026) gave clicks and no wash. A trig splits the host's block into two dispatcher calls; the delay's glides run on the first call only since 21 Sep 2026 (`modules/busdelay/README.md`).
 - **Fix:** open. To find out: the reporter's image, machine and trig pattern; whether the clicks land on T1's trigs; whether they follow the delay (FX2 = SEND on T1, same trigs) or the machine (a THRU host with a trig every step clicks from the THRU's re-open); the same test on T5 with BusVerb.
 
-## Every FX1/FX2 page-2 knob turn halts under Octakit with SCENES P2 (bottleservice) ✅ measured under the port
+## Every FX1/FX2 page-2 knob turn halts under Octakit with SCENES P2 (bottleservice) ✅ measured under the port, fixed; Octakit removed 6 Oct 2026
 
 - **Seen:** under the port, 28 Sep 2026. Image 88 carried the twelve-byte build; the halt was not reported from the unit.
 - **Cause (measured):** SCENES P2's entry detours at `0x4003a9dc` / `0x4003abe4` displaced twelve bytes and nopped the third stock instruction (`moveal %sp@(32),%a2`, the slot argument). Octakit's trampoline replays eight bytes and continues at entry+8, so a2 held a stale code address, the body took its slot>5 exit, and `validate_result` reported corrupt: `illegal` at `gk_track_setup_byte_fatal` (`0x45d28e98` in bottleservice's runtime). kits (Octakit alone) takes the same turn.
 - **Fix:** the detours displace eight bytes (`pad_to=8`), the stubs continue at entry+8 (`modules/scenes-p2`), 28 Sep 2026.
-- **Check:** `verify_modedefaults` and `verify_scenesp2` run their editor calls under bottleservice (Octakit SKIPs removed).
+- **Check:** `verify_modedefaults` and `verify_scenesp2` run their editor calls under bottleservice.
 
 ## Junk on main R for one frame, from T1 with BusDelay, about twice a minute ✅ measured, fixed (image 43)
 
@@ -61,7 +115,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 ## Audio engine wedged, sequencer alive: the master loop ✅ measured
 
-- **Seen:** 5-6 Sep 2026 (tag-93 rig). Sequencer runs, no audio, sample preview silent, record meters B/C/D lit. Distinct from the DSP hang (sequencer frozen).
+- **Seen:** 5-6 Sep 2026 (tag 93, the bus image of that date). Sequencer runs, no audio, sample preview silent, record meters B/C/D lit. Distinct from the DSP hang (sequencer frozen).
 - **Cause (measured 6 Sep 2026):** T8's station (Character, return role) sent into the reverb bus it returns: T8 FX1 -VRB at 71 in bank02's parts; turning it to 0 brought audio back. Why the loop reads as silence is not established.
 - **Fix:** stations have no sends; SEND is refused at track 8's dispatch position on payload A whatever its knob. The refusal outlived the T8 return (20 Sep 2026): with MASTER TRACK on, T8's input includes the hosts' wet.
 - **Check:** `tools/verify/verify_onebus.py`.
@@ -101,7 +155,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 ## Re-selecting an effect zeroes the bus ⚠️
 
-- **Seen:** a rig that measures dead after panel work.
+- **Seen:** the bus measures dead (no wet on T1 or T5) after panel work.
 - **Cause (measured):** a re-select loads manifest defaults, and BusVerb's SEND defaults to 0 (a non-zero default registers every idle host as a client); Character's RET also defaulted to 0.
 - **Fix:** assert SEND `CC 40` per track over MIDI immediately before every measurement (and, until 20 Sep 2026, RET `CC 38` on the master's channel).
 
@@ -120,7 +174,7 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 
 ## The set went silent after a test flash: the firmware reset the project 🟡
 
-- **Seen:** after flashing a test image whose remix omitted Character; silent back on the rig image.
+- **Seen:** after flashing a test image whose remix omitted Character; silent back on the bottleservice image.
 - **Cause:** ✅ the card's bank records had every part reset (FX1 id 4 with FILTER's page-2 bytes, FX2 = stock delay, T1/T2 no longer THRU, T8 = FX1 NONE / FX2 COMPRESSOR 0x18). 🟡 Inferred: the firmware sanitises part records whose FX ids are not in the running image and writes the .work files back. Not reproduced by LOAD PROJECT under the port (15 Sep 2026, OCTABAM88 bank B under `bus`), so the rewrite happens on another action.
 - **Fix:** never load the set under a test image. Recovery: save a copy of the card's project; regenerate (`ot_project.py rigproj … + lfo-clear … all`), copy the banks over in place, keep the project's own `project.work` (a foreign `OS_VERSION` tag gave PARSE ERROR, inferred from the diff).
 
@@ -196,12 +250,12 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 ## A one-sample tick on an exact 2048-sample grid at idle 🔴 open
 
 - **Seen:** image 93, sequencer stopped: a common-mode one-sample downward spike, −45 dBFS, every few hundred ms; present with the reverb's track muted.
-- **Cause:** open. Measured: 23 / 24 ticks per 30 s on a 2048.050 / 2048.049-sample grid (residual 0.29 / 0.25 samples over 631 periods); +24 ppm says the unit generates it; 4 % of wraps spike. Ruled out: the capture rig, Character, the stored project (a reload gave zero ticks), the input path, BusVerb page 1. Page 2 untested (the CC MAP fault). Candidates for 2048: BusVerb's 2048-word modulo buffers (`m5 = $7ff`), Modulation's `buffer_words=2048`, the PCM-pool block (`0x800` in the recorder's table at `0x80003c20`).
+- **Cause:** open. Measured: 23 / 24 ticks per 30 s on a 2048.050 / 2048.049-sample grid (residual 0.29 / 0.25 samples over 631 periods); +24 ppm says the unit generates it; 4 % of wraps spike. Ruled out: the capture setup, Character, the stored project (a reload gave zero ticks), the input path, BusVerb page 1. Page 2 untested (the CC MAP fault). Candidates for 2048: BusVerb's 2048-word modulo buffers (`m5 = $7ff`), Modulation's `buffer_words=2048`, the PCM-pool block (`0x800` in the recorder's table at `0x80003c20`).
 - **Fix:** open. When bisecting by hand, take slots to a stock effect, not NONE (id 0 is SEND). `tools/rec` (built from `tools/hw/rec.swift`) must be the HAL recorder.
 
 ## Sequencer stuck on step 1 with every effect turned off: id 0 is SEND
 
-- **Seen:** image 85B (the first rig-burn image): every FX1 NONE and every FX2 SEND. Second instance, image 32B, 16 Sep 2026: two projects with every stored page byte zero.
+- **Seen:** image 85B (the first RIG BURN probe image): every FX1 NONE and every FX2 SEND. Second instance, image 32B, 16 Sep 2026: two projects with every stored page byte zero.
 - **Cause:** ✅ id 0 is aliased to SEND and FX1 NONE is id 0, so SEND's proc runs on every FX1 NONE slot with r6 on a page whose bytes the last effect left; the burn read a stale slot-1 byte on four extra slots per core. The emulator never instantiates an FX1-NONE slot. Second instance: 🔴 7,111 burn loop iterations at "0" and the frame never finished; the loop count's cause is open. ❌ Retracted (22 Sep 2026): "the firmware computes page-1 slot 1's word" (`0x378f00` was the previous instruction's `a`; a port page dump shows every slot raw, knob << 16).
 - **Fix:** anything in SEND that reads a knob and can cost cycles or write the bus gates on the slot being FX2. Since image 48 SEND keys the refusal on r7 (0x6100/0x6400/0x6700/0x6a00, measured under the port; X:$213 is stale at proc time) and returns before touching state. The burn reads page-2 slot 6 (`$c`, CC 62), unflashed. The stamper writes SEND's defaults into every id-0 slot, FX1 and FX2.
 - **Check:** `verify_burn.py` check 5 (`dsp/burn_send.inc`).
@@ -286,8 +340,71 @@ Each entry's full investigation: `git show 666b6154:docs/remixer/FAILURE_MODES.m
 - **Fix:** open: where between T1's audio block after proc and the read-back words at `X:0x2600` the junk appears, and which part of the delay's per-block decodes or sample loop it needs. Branches `diag91`..`diag98`, `core1scratch99`, `nolock94`, `fix97`; captures `out/hw/v9*.wav` (machine-local). The "dead words at 0x360d3-5" (send_client.asm) are unexplained.
 - **Check:** `tools/harness/burst_census.py` with the aligned-copy check on a `tools/rec` take (T1 BAL hard left, T5 hard right). `tools/rec` needs the device name as its third argument (without it, it looks for EVO4 and exits).
 
+## A UAC2 host stops audio setup after reading the clock: SET CUR of the read-only rate unanswered ✅ measured, fixed
+
+- **Seen:** an Octatrack MKII with USB AUDIO on an Elektron Outbox 8 (allmyfriendsaresynths (@clickysteve)): the Outbox stays GREEN, "no device connected". macOS enumerates and streams the same image.
+- **Cause (measured with a USB request log on the unit):** the Outbox enumerates the unit, sets the configuration, reads GET RANGE and GET CUR of the clock (44100), then sends SET CUR of CS_SAM_FREQ_CONTROL with a 4-byte data stage, and its audio setup stops there. The clock declares the control read-only and the stock EP0 stack has no control OUT data stage: the request fell to the stock STALL tail, which stalls only EP0 IN. Under the port the data stage is never accepted and the host times out. The read-only clock is octemu's design (`custom/usb-audio.py`), carried here.
+- **Fix:** `usbaudio.s` `audio_ctrl_shim` takes the SET (44100 acknowledged, any other rate a status-stage STALL). On the unit, with the SET acknowledged (a build before the rate check), the Outbox completes audio setup and streams.
+- **Check:** `verify_usb`'s SET CUR checks (44100 ACK, 48000 status STALL, EP0 answering after each).
+
 ## USB audio: a burst of reordered samples in the first 1.5 s of every host stream, clean after 🔴 open
 
 - **Seen:** image 64, 25 Sep 2026, macOS recording all sixteen USB channels: four of five takes have one cluster of sample-step events 0.75-1.5 s after stream open, on several channels, none after 2 s (60 s, 60 s, 300 s, and 120 s under a 7,170-message/s USB-MIDI flood with panel work). Device counters (vendor request 0xc0/0x55): 0 underruns, 0 overruns, no bank-duplicate movement. Image 69 (24-bit, four packets queued at a 250 µs poll): still present, 0.51-0.76 s after open, only on the right channel of each pair, in runs 124-380 frames off phase.
 - **Cause:** open. Measured: short runs out of order (−11.6, +10.3, −41 frames off the tone's phase), long-window phase agrees to 0.1 frame, so nothing is lost or repeated. Candidates: the device's packet queue on the first primes after alt 1 (the controller's add-dTD tripwire, not modelled by the port's bench), or the host's stream start. 🟡 Right-only on image 69 points at the host's stream assembly: each USB frame carries a track's L and R in one packet. Likely octemu's "some crackles" (sox opens a fresh stream per run).
 - **Fix:** none. Workaround: discard the first two seconds of every take, or hold the stream open in a DAW. A stream held open across two recordings, or a sequence counter in the packets, decides the cause.
+
+Entries from here to the end of the file (5 Oct 2026) were recorded in other documents first; each cites its source, which holds the full text.
+
+## Line-F exception (VEC:0B) when a parameter is LFO-modulated: a 5-character `abbr` ✅ measured
+
+- **Seen:** 2 Sep 2026, Bryan T's `modules/hello/` (removed 27 Sep): the descriptor drew correctly and behaved under manual knob use; the moment a parameter was LFO-modulated it threw a line-F exception (VEC:0B) at PC `0x48454C4C` = `"HELL"`. Presented as "custom effects can't be modulated". Source: `AGENTS.md`.
+- **Cause:** `abbr` is a 5-byte field holding four characters plus a terminator; `fullname` is 13 bytes holding twelve, and the build tag is appended after the string. A name that fills its field leaves no NUL. A faulting PC made of the field's own ASCII is a smashed return address, so the copy destination is fixed-size (inferred, the copy is not located; the length rule is measured: all 30 stock page descriptors are ≤4 characters with byte 5 zero).
+- **Fix:** `schema.MenuEntry` refuses both over-lengths and `build_bus.py` re-checks the string it writes, tag included (this caught two diagnostic delay names, `BusDlyRPLY` and `BusDlyNOCF`, that had filled all 13 bytes since 24 Aug 2026).
+
+## A cloned descriptor draws as the donor's control: three of six page-2 slots wrong ✅ measured, fixed (17 Aug 2026)
+
+- **Seen:** 17 Aug 2026 flash: BusDelay clones SPRING REV, and the formatter fix-up in `build_bus.py` was gated to the reverb. WOW inherited SPRING TYPE's word-label renderer (a three-entry table), was asked to draw 0..127, and drew no knob at all; MODE inherited SPRING BAL's bipolar pair and drew as a balance dial reading −64…−60 instead of a 5-way select. Source: `AGENTS.md`.
+- **Cause:** a descriptor's display formatter overrides its value count, and a cloned descriptor inherits every field not explicitly written from the donor. Every field the checks examined was right.
+- **Fix:** `verify_menu` checks the renderer against the count (`count < 128` → the enumerated pair with `0x12a` zero; `128` → both formatters zero). `Formatter.PLAIN` zeroes a clone's formatter words (`CHANGELOG.md`, 5 Oct 2026).
+
+## The unit hangs when a module keeps state at r7 `$84` or above ✅ measured
+
+- **Seen:** BusDelay's chain write address, WET glide state, write offset, REVERSE cap and last-seen rotation sat at `$84..$88`; on a host track with a sample playing, the unit hung (images 39–42 per `CHANGELOG.md` image 41; header map in `modules/busdelay/delay_server.asm`). Source: `AGENTS.md`, `docs/firmware/CHIP.md` section 5.
+- **Cause:** `r7 $84..$8a` holds the unit's own per-track state between our calls (a host track with a sample playing); per-call scratch there is fine, state across calls is not.
+- **Fix:** nothing at `$84` or above ("NEVER WRITTEN", 21 Sep 2026); new per-track state goes in a free slot of the module's own block (`$00..$83`) or the Y state table.
+
+## OKMS1: EXCEPTION VEC:04 at the first Part Reload ✅ measured, fixed (KITS RELOAD)
+
+- **Seen:** `ok-ms` OKMS1, 14 Sep 2026, midisc's author's unit: scenes following kits until the first Part Reload, then `EXCEPTION SSP:4 VEC:04 FS:0 SR:2000 ADDR:45D167E0 D0:40A96F54 SP:460D8D24` = `gk_stock_part_saved_to_working_reload_report_fatal` (an `illegal` Octakit plants); D0 = midisc's `rel_after`. Part Save and Part Clear worked in the same image. Source: `git show 2063370f:modules/kits-reload/README.md` "The collision is not a byte".
+- **Cause:** midisc's `reload` stub replaces the return address on the stack with `rel_after`; Octakit's replacement of `0x4004aab4` accepts only the two stock return addresses (`0x4002dd5c`, `0x4005e060`) and traps on any other. Every byte the two mods write is disjoint, so the ledger saw nothing.
+- **Fix:** KITS RELOAD keeps the stock `jsr` at both sites and moves midisc's post-work to the return sites (OKMS2, same unit, 14 Sep 2026). The ledger now checks `Runtime.pinned_returns`.
+
+## Tape Echo `Vec:03` (address error) on the first optimised image ✅ measured, fixed
+
+- **Seen:** the first hardware load of an optimised image (before 21 Sep 2026): `Vec:03` at `te_read_linear`'s scaled-index ring read `move.l (a1,d0.l*8),d5`. The emulator accepted it. Source: `modules/tapeecho/README.md` "On the unit".
+- **Cause:** ColdFire raises an address error on scale factor eight.
+- **Fix:** the reader forms the byte offset explicitly; generation rejects any `*8` memory address form. The same README lists a separate hardware freeze as open.
+
+## Image 99: an FX2 change on T5 took the reverb off the track ✅ fixed (FX2 LOCK, 4 Oct 2026)
+
+- **Seen:** image 99, 4 Oct 2026, bottleservice: an FX2 change on T5 took the reverb off the track; with the engines hidden from the chooser there was no row to put it back. Source: `modules/fx2-lock/README.md`.
+- **Cause:** the FX2 chooser's select handler writes the Part's FX2 id for any track.
+- **Fix:** FX2 LOCK: YES's entry in the chooser window's key table points at NO's handler, so the select handler never runs. Measured under the port by `verify_fx2lock`; no hardware result recorded in `modules/fx2-lock/README.md` ("On the unit: Not yet").
+
+## Sound-on-sound plays a zero at each pass (sos-capture BUILD=94 and 95) ✅ measured on the unit (Bryan T), BUILD=95 fixes the cases run
+
+- **Seen:** Bryan T's MKII, 3 Oct 2026, SOSCAP (T1 FLEX on R1, PLAY + REC1 + REC3 with SRC3 = T1 on step 1, 128 BPM, RLEN 16, 24-bit recorders): after a recorder reallocation every long-pass wrap is one sample of zero for the whole take (BUILD=94, three hold caves); in steady state every wrap is an exact repeat. Source: `CHANGELOG.md` "sos-capture BUILD=94 and BUILD=95", `modules/recorder-loop-fix/README.md` section 4.
+- **Cause:** the fetch of index END (`+0x64`) finds no block and returns the empty pool base; after a second transport start the recording stays 82,687 samples on every pass and the recorder is past END when the voice reaches it, where the copy loops cap the voice at END − index = 0, stop it and zero-fill the frame. SRC3 records the zero back into the loop.
+- **Fix:** BUILD=95 (#564, five hold caves: three fetch caves and two guard caves): the last sample is repeated. No zero in any take (16 → 24-bit reallocation, 24-bit off/on + reload, STOP/PLAY three times, steady state, RLEN 4 trigs); not run: STOP/PLAY on BUILD=94. Every 128 / RLEN 16 wrap is a repeat (lag 82,687 → 82,688) or a skip (82,688 → 82,687).
+
+## BCR2000 locks up when the bank changes (image A2, unpaced CC FEEDBACK dump) ✅ fixed (image A3)
+
+- **Seen:** Sam's MKII, image A2, 4 Oct 2026: the BCR2000 died the moment the bank changed; the dump of the new Part was up to 336 messages in about a second (DIN: 344 messages ≈ 1 s at 31.25 kbaud without running status). Source: `modules/cc-feedback/README.md` "On the unit", `modules/cc-feedback/cc_feedback.s`.
+- **Cause:** the sweep put the whole dump on the wire at once. (The dark/deaf BCR on A02 and B1 is a separate cause: the entry "A BCR2000 goes dark or deaf on some patterns".)
+- **Fix:** commit `41765855` (#584): one message per UI tick (120 Hz, `PACE`), about three seconds per full dump; image A3.
+
+## A module calling the page-1 writer `0x40054cd8` bare halts the unit under Octakit ✅ measured under the port, fixed
+
+- **Seen:** under the port, 26 Sep 2026: `bottleservice` halted (`illegal`, `0x45d2128e` in that build) at frame 40 of `verify_set`'s run on CC 68 (a MODE change re-defaulting page-1 knobs); TEMPO BUS and MODE DEFAULTS called the writer bare. Not flashed. Source: `git show 2063370f:modules/octakit/README.md` "Calling the page-1 writer beside her", `modules/tempo-bus/README.md`.
+- **Cause:** Octakit rewrites the writer's dirty store (`0x40054fec`) to check a token long 12 bytes above the arguments (top half `GK_TRACK_PARAMETER_TOKEN_ARMED`, `0x54500000`) and halts on any other; her wrapper sets it and accepts only the three stock return addresses.
+- **Fix:** both modules push the token (`P1TOKEN`, `modules/tempo-bus/helpers.s`, `modules/mode-defaults/modedef.s`).

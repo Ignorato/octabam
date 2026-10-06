@@ -40,7 +40,8 @@ sudo chmod +x /usr/local/bin/afplay
 ## The remixer: three panes
 
 Nothing in it touches hardware. `ok-ms` loaded (`l`), the cursor in
-AVAILABLE, a 118-column terminal:
+AVAILABLE, a 118-column terminal (captured while `ok-ms` carried Octakit
+and KITS RELOAD, before 6 Oct 2026):
 
 ```
  Available                      Choosers · ok-ms                BusDelay
@@ -83,10 +84,10 @@ as in the module table (the bus, on a track, machines and the sequencer,
 Parts/Kits/scenes, MIDI and USB, fixes, reference), then the stock effects
 the unit ships. `✓` marks what the selection holds; for an effect the `FX1+FX2`
 column is which choosers it *can* appear on (`stock.fx1_ids()` from the
-pristine image). A firmware mod (midisc, Octakit, the bridges, the fixes)
+pristine image). A firmware mod (midisc, KITS, the bridges, the fixes)
 has no chooser; its column is the ledger's verdict against what is loaded
-— `✓` shares the image, `x octakit` names what it collides with, and
-`· add Kits Reload` names the bridge that would clear it (the same
+— `✓` shares the image, `x direct-jump` names what it collides with, and
+`· add <bridge>` names the bridge that would clear it (the same
 `ledger.check` the build refuses on). The unit pane lists every ledger
 line the pointed-at module is party to. `enter` adds and displaces
 nothing.
@@ -150,9 +151,13 @@ off **both** choosers is the decision to give up its words
 (`stock.harvested`); removing it from one menu while it still has a row on
 the other frees nothing. The three reverbs are only the default harvest:
 the biggest, and FX2-only, so taking them costs FX1 nothing. The thirteen
-DSP effects are laid out contiguously and each is self-contained, so any
-unbroken run of them is ground a module can be placed into; the map under
-the budget draws a bracket per run.
+DSP effects are laid out contiguously, so any unbroken run of them is
+ground a module can be placed into; the map under the budget draws a
+bracket per run. A routine that a kept effect calls inside a harvested one
+stays where it is and the run is placed around it (DARK REV calls 35 words
+in SPRING's span, PLATE calls 93 in DARK's, five effects call 27 in
+FILTER's; `stock.pinned`, printed by the build as `kept (... called by
+...)`).
 
 A module must fit inside one run: two runs of 1,500 words will not take a
 2,000-word module, so the budget names the largest opening beside the

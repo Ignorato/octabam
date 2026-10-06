@@ -1,6 +1,3 @@
-[submodule "modules/octakit/upstream"]
-	path = modules/octakit/upstream
-	url = https://github.com/emuyia/ems-octakit
 [submodule "modules/midi-scenes/upstream"]
 	path = modules/midi-scenes/upstream
 	url = https://github.com/bkkbrls-del/midisc
@@ -17,3 +14,27 @@
 [submodule "modules/tuner/upstream"]
 	path = modules/tuner/upstream
 	url = https://github.com/timhastie/octatrick-modules
+[submodule "modules/direct-jump-kyoti/upstream"]
+	path = modules/direct-jump-kyoti/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
+[submodule "modules/batch-bugfixes/upstream"]
+	path = modules/batch-bugfixes/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
+[submodule "modules/reload-from-project/upstream"]
+	path = modules/reload-from-project/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
+[submodule "modules/quantize-live-rec-toggle/upstream"]
+	path = modules/quantize-live-rec-toggle/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
+[submodule "modules/erase-empty-trigless-locks/upstream"]
+	path = modules/erase-empty-trigless-locks/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
+[submodule "modules/mute-modes/upstream"]
+	path = modules/mute-modes/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
+[submodule "modules/rec-trig-mute/upstream"]
+	path = modules/rec-trig-mute/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
+[submodule "modules/sidechain-compressor/upstream"]
+	path = modules/sidechain-compressor/upstream
+	url = https://github.com/Zac-Kyoti/octatrack-kyoti-fw
