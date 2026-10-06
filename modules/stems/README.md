@@ -102,7 +102,7 @@ measures the ring against the emulated card's speed (STEM_REC.md 15.4).
 | The frame hook, eight tracks at 16 bits | 5,579 instructions per frame | 18.9 |
 | The frame hook, eight tracks at 24 bits | 6,219 instructions per frame | 18.9 |
 | The frame hook, everything at 24 bits | 7,415 instructions per frame | 18.9 |
-| The writer task's stack peak | 1,052 of 8,192 bytes | 12.2 |
+| The writer task's stack peak | 1,244 of 8,192 bytes | 18.9 |
 
 The hook's figures are instruction counts. Its time on the unit isn't
 measured: whether the unit has room for it is flash C's test

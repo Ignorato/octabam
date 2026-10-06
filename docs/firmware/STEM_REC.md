@@ -7659,7 +7659,10 @@ to D) and the eight-track THRU card (`stems_fixture.py --thru1`,
    labels, `NO CARD`, `SAME MINUTE`, the card that refuses a write, the
    take cut off, the 60-minute cap. On a FAT32 card the mount, the take checks and the overflow pass
    again, the take above cluster 65,535 (at 86,235). The sweep at eight
-   tracks runs, and shows the finding below.
+   tracks runs, and shows the finding below. The writer task's stack
+   peaks at 1,244 of its 8,192 bytes (`full`, under the port's PIO card;
+   1,052 before this piece, 12.2): the writer now formats the labels
+   between chunks too.
 
 **Eight tracks against the port's card** 🟡. `stems_sweep.py --counts 8
 --latencies 8,16,24,32` (`v5-p5-sweep.log`): at the port's default card
