@@ -12,8 +12,8 @@ from remix.schema import Proof, Remix
 
 REMIX = Remix(
     name="stems",
-    family="mods", proof=Proof.HARDWARE, proof_note="Yves's MKII, 1 Oct 2026 (STEMS2)",
-    doc="STEM REC on the stock effects: every track to the card while the sequencer plays, streamed.",
+    family="mods", proof=Proof.HARDWARE, proof_note="Yves's MKII, 6 Oct 2026 (STEMS3)",
+    doc="STEM REC on the stock effects: multitrack recording to the card, each track, MAIN, CUE and the inputs as separate WAV files.",
     modules=("STEM REC",
              "FILTER", "EQUALIZER", "DJ EQ", "PHASER", "FLANGER", "CHORUS",
              "SPATIALIZER", "COMB FILTER", "COMPRESSOR", "LO-FI", "DELAY",
