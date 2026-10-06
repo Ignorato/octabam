@@ -37,7 +37,7 @@ Remixes
 - Removed: `bamsep26` (bottleservice is its superset), `mutables`, `nimbus`, `hello`, `hello-dram` (27 Sep).
 
 Modules
-- KITS (new): 256 Kits per project through the stock Part slots: each pattern's Kit is copied into a slot nothing plays before the pattern is scheduled; LOAD/SAVE KIT on the stock list menu with Octakit's key map, UNDO KIT, list copy/paste/clear/undo, AUTOSAVE and KEEP LEVELS, the pattern clipboard carrying the Kit, FUNC+PASTE+PART, PTN+FUNC+RIGHT, PTN+FUNC+TRIG; kits.work/kits.strd, migration of the stock Parts, import of Octakit's kits3a/b.work; no `illegal` (6 Oct, port: `verify_kits`, 77 checks).
+- KITS (new): 256 Kits per project through the stock Part slots: each pattern's Kit is copied into a slot nothing plays before the pattern is scheduled; LOAD/SAVE KIT on the stock list menu with Octakit's key map, UNDO KIT, list copy/paste/clear/undo, AUTOSAVE and KEEP LEVELS, the pattern clipboard carrying the Kit, FUNC+PASTE+PART, PTN+FUNC+RIGHT, PTN+FUNC+TRIG; kits.work/kits.strd, migration of the stock Parts, import of Octakit's kits3a/b.work; no `illegal` (6 Oct, port: `verify_kits`, 89 checks; on the unit in image A6).
 - OCTAKIT, SCENES KITS, SCENES P2 KITS, KITS RELOAD removed, with the build's Runtime/ArenaReserve machinery (every other remix's image and report bit-identical; refhash 24/24); TEMPO BUS and MODE DEFAULTS no longer push Octakit's token (6 Oct).
 - OCTAKIT: patch 0002, a track button within ~250 ms of a queued pattern change ran her Part-refresh writer into its context fatal (BUSY during the handoff; ems-octakit#5's setting); on BUSY the writer now runs stock unwrapped (5 Oct, port-measured).
 - USB AUDIO OUT (every layout): the producer runs only while the host asks for the stream, with the 64-slot start cushion zeroed at the first produced block (5 Oct, port only); Bryan T measured the always-on producer at 13–25 µs of frame interrupt per frame with no host.
@@ -82,6 +82,16 @@ Docs
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - ColdFire load on a unit: Bryan T's CF METER takes (4 Oct; `docs/firmware/ARCHITECTURE.md` section 6): ~16.5 µs per playing voice at CPI ~4.4 against the port, no first-voice premium (the morning's +37 µs retracted the same evening), the USB stack ~14 µs idle / ~25 µs playing, no crossbar contention; OUT TRACKS MAIN CUE costs 27–50 µs of frame interrupt over OUT MAIN CUE, most of it with no host connected; TSTR and the stock DELAY not measurable; interrupt levels from the ICR writes in `KERNEL.md`.
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
+
+## Image A6 (106) — 6 Oct 2026 (`bottleservice` at `e2e1d60f`)
+
+On the unit (Sam's MKII): KITS in place of Octakit, main `36a056c5` (#627)
+plus gate-only changes. No halt in the import of Bottleservice 2026's
+Octakit Kits, ems-octakit #5's chain and track-button sequence, STOP /
+PTN+TRIG / PLAY with the Rytm as master (A5's halt), PROJECT STRAND's
+rejected bank file (A4's halt), power cycles saved and unsaved, SAVE
+PROJECT, SAVE KIT, quick save, UNDO KIT, FUNC+CUE (`modules/kits/README.md`
+"On the unit"). Not run: an unattended BCR2000 run.
 
 ## sos-capture BUILD=94 and BUILD=95 — 3 Oct 2026 (Bryan T's builds)
 
