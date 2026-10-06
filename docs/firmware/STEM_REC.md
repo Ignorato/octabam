@@ -7289,8 +7289,10 @@ percent of the ring's capacity in frames.
   the slowest round was set by a stall of the card, not by the amount of
   data. Falsifier: a longer take at 24 bits whose PEAK keeps rising.
 - 🔴 **A busy project at 24 bits filled the ring.** The same eleven files
-  at 24 bits, with every track playing audio, all trigs enabled, and
-  scenes set on several parameters: PEAK reached 100%, the status read
+  at 24 bits, with every track playing audio, and scenes set on several
+  parameters. T2 to T8 were Static machines with all 16 trigs on, so
+  seven tracks restarted a sample from the card on every step. PEAK
+  reached 100%, the status read
   SAVING, then RING FULL. The take's files saved and play, cut where the
   ring filled. That's the overflow stop as built (12.0): the take
   ends at the last whole frame. The writer was 2.88 s of audio behind
