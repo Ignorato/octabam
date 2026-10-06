@@ -139,7 +139,25 @@ OCTABAM89_setgate (bank 3), each scenario forked from one load:
 
 ## On the unit
 
-Not flashed.
+Image A6 (bottleservice), Sam's MKII, 6 Oct 2026. No halt in any of:
+
+- Bottleservice 2026 (Em's `kits3a/b.work`, no `kits.work`): the load
+  imports (a pause at its end; not timed), the status line reads `065
+  three`, the LOAD KIT list and the patterns play Octakit's Kits.
+- A four-pattern chain with track buttons pressed through each switch,
+  two to three passes; the same across a single PTN+TRIG switch
+  (ems-octakit #5).
+- The Rytm as clock and transport master: STOP, PTN+TRIG, PLAY about
+  ten times, with bank changes (image A5's halt).
+- PROJECT STRAND (its `bank01.work` rejected): load, PLAY, a pattern
+  paste, a bank change.
+- LOAD KIT then a power cycle without saving; LOAD KIT, SAVE PROJECT,
+  a power cycle and a project reload: the loaded Kit each time.
+- SAVE PROJECT while playing: playback stops for the save and resumes
+  (stock behaviour), no LED flash.
+- SAVE KIT with the name editor, quick save, UNDO KIT, FUNC+CUE.
+
+Not run on the unit: an unattended run with the BCR2000.
 
 ## Open
 
