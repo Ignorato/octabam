@@ -78,6 +78,10 @@
         .set    M_OPEN,     0x4006d94c      | (count, sel, &sel, labels, callbacks)
         .set    M_OBJ,      0x460e5e30      | long: the open callback menu
         .set    M_CBS,      0x460e5e28      | long: its callbacks, stored by M_OPEN
+        .set    M_STATE,    0x460e5e38      | its scroll state
+        .set    M_DOWN,     0x4007eca4      | (&state): one row down
+        .set    M_UP,       0x4007ec7c      | (&state): one row up
+        .set    CTL_DISP,   0x40031944      | (control, delta): the encoders' dispatch
         .set    M_CLOSE,    0x4006d754
         .set    T_OPEN,     0x4007e664      | (max, title, buffer, 1, done(confirmed))
         .set    T_OBJ,      0x460e7612
@@ -124,7 +128,7 @@
         .text
         .globl  kits_sched, kits_chain, kits_loadall, kits_loadmask, kits_newproj
         .globl  kits_bankw, kits_pstore, kits_preload, kits_saved, kits_clear
-        .globl  kits_partkey, kits_savekey, kits_mkisave, kits_funcyes
+        .globl  kits_partkey, kits_savekey, kits_mkisave, kits_funcyes, kits_level
         .globl  kits_lcopy, kits_lpaste, kits_lclear, kits_pcopy, kits_psnap, kits_pstore_ptn
         .globl  kits_fright, kits_ptrig, kits_status
         .globl  KIMG, KSTATE, kits_stage, kits_load_current, kits_save_current
@@ -479,6 +483,41 @@ kits_mkisave:
         movel   %d2,%sp@-
         movel   %sp@(12),%d3
         jmp     0x40058a6c
+
+| 0x40061e00 (jsr CTL_DISP, control, delta): an encoder turn. With a KITS
+| list open, LEVEL (control 6) moves its cursor a row per detent
+| (Octakit's LEVEL scroll); else the stock dispatch.
+kits_level:
+        moveq   #6,%d0
+        cmpl    %sp@(4),%d0
+        bne.s   9f
+        tstl    READY
+        beq.s   9f
+        tstl    M_OBJ
+        beq.s   9f
+        movel   M_CBS,%d0
+        cmpil   #CBTAB,%d0
+        bne.s   9f
+        movel   %d2,%sp@-
+        movel   %sp@(12),%d2            | the delta, signed detents
+        beq.s   8f
+        bpl.s   2f
+        negl    %d2
+1:      pea     M_STATE
+        jsr     M_UP
+        addql   #4,%sp
+        subql   #1,%d2
+        bne.s   1b
+        bra.s   3f
+2:      pea     M_STATE
+        jsr     M_DOWN
+        addql   #4,%sp
+        subql   #1,%d2
+        bne.s   2b
+3:      jsr     M_REDRAW
+8:      movel   %sp@+,%d2
+        rts
+9:      jmp     CTL_DISP
 
 | 0x4005e3d8 (key, pressed): FUNC+YES. With the SAVE KIT list open, the
 | row under the cursor is saved now under its Kit's name (Octakit's

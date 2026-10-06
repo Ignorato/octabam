@@ -84,6 +84,9 @@ pattern content beyond pattern 1 playing.
   k256load  the same, LOAD KIT: the cursor on UNDO KIT.
   drawn     stopped, LOAD KIT two rows up: the screen is the same as after
             a further FUNC tap (drawn by the load itself, as stock FUNC+CUE).
+  lvl       LOAD KIT open, LEVEL +3 then -1: the cursor two rows below
+            where it opened (lvl0: LOAD KIT open alone).
+  lvlstock  LEVEL +3 on the main screen: the current track's level +3 (stock).
   k256rescue  a Part in record 255 (its valid bit and a name poked) and
             pattern 5 noted as on Em's Kit 256: rescue_k256 moves the Part
             to the first empty Kit and assigns pattern 5 to it.
@@ -387,14 +390,23 @@ def main():
     s.down("func", 100); s.tap("yes", 200); s.up("func", 1500); add("quick", s)
 
     lcdd = f";{LCD:#x},1024="
+    menud = f";{MENU:#x},36="
     s = Script(); s.tap("no"); s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500)
     add("drawn", s, more_dumps=lcdd + str(OUT / "drawn_lcd.bin"))
     s = Script(); s.tap("no"); s.tap("part", 800); s.tap("up", 200); s.tap("up", 200); s.tap("yes", 1500)
     s.tap("func", 1500); add("drawnf", s, more_dumps=lcdd + str(OUT / "drawnf_lcd.bin"))
 
+    s = Script(); s.tap("no"); s.tap("part", 800)
+    add("lvl0", s, more_dumps=menud + str(OUT / "lvl0_menu.bin"))
+    s = Script(); s.tap("no"); s.tap("part", 800); s.send("enc 6 3", 300); s.send("enc 6 -1", 600)
+    add("lvl", s, more_dumps=menud + str(OUT / "lvl_menu.bin"))
+    s = Script(); s.tap("no"); s.send("enc 6 3", 600)
+    add("lvlstock", s, more_dumps=f";0x80000c50,16={OUT / 'lvlstock_lev.bin'}")
+    s = Script(); s.tap("no", 600)
+    add("lvlbase", s, more_dumps=f";0x80000c50,16={OUT / 'lvlbase_lev.bin'}")
+
     # ---- record 255 is "no Kit" ---------------------------------------------
     nokit = [(KI + O_RESID + BANK * 4 + i, 0xff) for i in range(4)]
-    menud = f";{MENU:#x},36="
     s = Script(); s.tap("no"); s.hold("func", "part", gap=800)
     add("k256save", s, nokit, more_dumps=menud + str(OUT / "k256save_menu.bin"))
     s = Script(); s.tap("no"); s.tap("part", 800)
@@ -653,6 +665,18 @@ def main():
         a_, b_ = (OUT / "drawn_lcd.bin").read_bytes(), (OUT / "drawnf_lcd.bin").read_bytes()
         check(f"drawn: LOAD KIT while stopped draws the Kit at once (screen equal to after a FUNC tap, "
               f"{sum(x != y for x, y in zip(a_, b_))} bytes differ)", a_ == b_)
+
+    if exists("lvl") and exists("lvl0"):
+        clean("lvl")
+        c0 = struct.unpack(">9I", (OUT / "lvl0_menu.bin").read_bytes())[6]
+        c1 = struct.unpack(">9I", (OUT / "lvl_menu.bin").read_bytes())[6]
+        check(f"lvl: LEVEL scrolls LOAD KIT: +3 then -1 moved the cursor {c0} -> {c1}", c1 == c0 + 2)
+    if exists("lvlstock") and exists("lvlbase"):
+        clean("lvlstock")
+        a_, b_ = (OUT / "lvlbase_lev.bin").read_bytes(), (OUT / "lvlstock_lev.bin").read_bytes()
+        moved = [(i // 2 + 1, a_[i], b_[i]) for i in range(0, 16, 2) if a_[i] != b_[i]]
+        check(f"lvlstock: with no list open LEVEL is stock's: the current track's level moved (track, from, to: {moved})",
+              len(moved) == 1 and moved[0][2] == moved[0][1] + 3)
 
     # ---- record 255 ---------------------------------------------------------------
     def first_empty(im):
