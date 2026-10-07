@@ -9,7 +9,7 @@ The stock chooser plus USB MIDI and USB AUDIO OUT TRACKS POST, for testing the p
 
 ## Status
 
-Smoke-tested on a MKII as P3 (allmyfriendsaresynths (@clickysteve), 5 Oct 2026): sixteen channels, each track on its pair, LEVEL, mute, solo and the crossfader followed in the stems. The module's gain engine was nulled against MAIN on the same unit in a 20-channel diagnostic build; MASTER TRACK and the CPU cost have not been tested on a unit ([the module's README](../../../modules/usb-audio-out-tracks-post/README.md), *On the unit*). Gates: `verify_usb`; `verify_usb_post` with a source project.
+Smoke-tested on a MKII as P3 (allmyfriendsaresynths (@clickysteve), 5 Oct 2026): sixteen channels, each track on its pair, LEVEL, mute, solo and the crossfader followed in the stems. The module's gain engine was nulled against MAIN on the same unit in a 20-channel diagnostic build; on 7 Oct 2026 the tracks-to-MAIN offset read 0 samples (through TRACKS MAIN CUE, the same read-back path) and the streaming cost +2.8 µs a frame over OUT TRACKS (CF METER, `cfmeter-post` against `cfmeter-tracks`); MASTER TRACK and the no-host cost have not been tested on a unit ([the module's README](../../../modules/usb-audio-out-tracks-post/README.md), *On the unit*). Gates: `verify_usb`; `verify_usb_post` with a source project.
 
 ## Build
 

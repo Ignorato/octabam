@@ -73,7 +73,7 @@ def post_inc(modules):
 MODULE = Module(
     name="usb-audio-out-tracks-post", key="USB AUDIO OUT TRACKS POST", kind=usbaudio.MODULE.kind,
     category=Category.MIDI_USB, author="markandrus/octemu", author_url="https://github.com/markandrus/octemu",
-    proof=Proof.HARDWARE, proof_note="allmyfriendsaresynths's MKII, P3 (usb-out-tracks-post), 5 Oct 2026: 16 channels, each track on its pair, LEVEL/mute/solo/crossfader follow; the gain engine nulled against MAIN in a 20-channel diagnostic build; MASTER TRACK and CPU time not on a unit",
+    proof=Proof.HARDWARE, proof_note="allmyfriendsaresynths's MKII, P3 (usb-out-tracks-post), 5 Oct 2026: 16 channels, each track on its pair, LEVEL/mute/solo/crossfader follow; the gain engine nulled against MAIN in a 20-channel diagnostic build; 7 Oct 2026: streaming costs +2.8 µs a frame over OUT TRACKS (CF METER); MASTER TRACK and the no-host cost not on a unit",
     doc="Sixteen 24-bit channels over USB (UAC2): each track after its own MAIN gain (LEVEL, mute, solo, XLV; MAIN_LEVEL left out); the stems' stereo sum at full speed. USB AUDIO OUT TRACKS MAIN CUE's source (markandrus/octemu), the POST layout allmyfriendsaresynths's (@clickysteve).",
     linked=(Linked("usbaudio", usbaudio.SOURCE, cpu="5475", dram=True, include=post_inc),),
     detours=tuple(

@@ -77,10 +77,12 @@ MAIN lag on his unit (25 Sep 2026), the same direction. Since 28 Sep the
 producer writes MAIN/CUE into the ring slot `MAIN_CUE_LAG_BLOCKS` = 1 block
 behind the tracks' slot (the consumer runs `AUD_TARGET` = 64 frames behind (512 until 28 Sep
 2026), which is more than one 16-frame block, so the slot is
-unread), and `verify_usb_align` reads 0 under the port. The size of the lag
-on hardware is inferred from the port's structure, not measured on a unit.
-To measure it: a click on T1, a twenty-channel `tools/rec` take and
-`tools/hw/usb_offset.py take.wav --ref 1 --ch 17`.
+unread), and `verify_usb_align` reads 0 under the port. On a unit the lag is 0:
+a click on T1, three twenty-channel `tools/rec` takes (the USB cable
+replugged between them) through `tools/hw/usb_offset.py take.wav --ref 1
+--ch 17`, 0 samples on all 30 clicks, MAIN R likewise (allmyfriendsaresynths's
+MKII, 7 Oct 2026, built from main `6f9e5bc9`;
+[USB AUDIO OUT TRACKS POST](../usb-audio-out-tracks-post/README.md), *On the unit*).
 
 ## On the unit
 

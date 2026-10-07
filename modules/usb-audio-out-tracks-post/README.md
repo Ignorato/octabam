@@ -145,14 +145,68 @@ Under the port, 5 Oct 2026:
 
 ## On the unit
 
-**This module** (P3, `usb-out-tracks-post`, the build this tree makes):
-a smoke test on a MKII (5 Oct 2026, allmyfriendsaresynths (@clickysteve)).
-The unit booted and ran normally; the host saw sixteen channels, each
-track on its own stereo pair; each track's LEVEL, mute and unmute, solo,
-and the scene/crossfader level followed in its stem; no instability or
-audio fault was heard. A listening test, not a null: the null is the
-diagnostic build below. Not run on a unit: MASTER TRACK, CF METER (the
-CPU cost), a long soak.
+All on allmyfriendsaresynths's (@clickysteve) MKII.
+
+**This module** (P3, `usb-out-tracks-post` built from this module's source
+on main `faa32663`; the platform under it has changed since, so today's
+build is not that binary): a smoke test, 5 Oct 2026. The unit booted and
+ran normally; the host saw sixteen channels, each track on its own stereo
+pair; each track's LEVEL, mute and unmute, solo, and the scene/crossfader
+level followed in its stem; no instability or audio fault was heard. A
+listening test, not a null: the null is the diagnostic build below. Not
+run on a unit: MASTER TRACK, a long soak.
+
+**Latency, tracks against MAIN** (7 Oct 2026). The stems come from the
+same read-back block, in the same frame, as USB AUDIO OUT TRACKS MAIN
+CUE's track channels, so that layout's track-to-MAIN offset is this
+module's. `usb-out-tracks-main-cue` built from main `6f9e5bc9` (BUILD L1),
+a click on T1 every 2 s, nothing else playing, MASTER TRACK off, T1 not
+cued; three 20 s takes (`tools/rec`), the USB cable unplugged and
+replugged between them, each through `tools/hw/usb_offset.py --ref 1 --ch
+17`:
+
+| take | clicks | MAIN L against T1 L | corr |
+|---|---|---|---|
+| 1 | 10 | 0 samples on every click (xcorr and onset) | 1.000 |
+| 2 | 10 | 0 samples on every click | 1.000 |
+| 3 | 10 | 0 samples on every click | 1.000 |
+
+MAIN R against T1 R (channels 18 / 2) is 0 on every click too; only T1
+and MAIN carried signal, MAIN at 0.61 of T1's peak. The port's 0
+(`verify_usb_align`) holds on the unit.
+
+**CPU, POST against OUT TRACKS while streaming** (7 Oct 2026):
+`cfmeter-post` (BUILD C2) and `cfmeter-tracks` (BUILD C1), the same
+selection but for the USB layout, built from this branch on `6f9e5bc9`;
+each loaded fresh with the same project (T1-T7 playing looping tones, T8
+FX2 = CF METER at a fixed LEVEL, unmuted); three 8 s takes on each over
+USB, `tools/harness/cfmeter.py --lr 14,15`. The frame interrupt's mean
+duration alternates between consecutive 2 s cycles on a playing unit;
+"balanced" is the two phases' average:
+
+| image | take | low phase | high phase | balanced | TUE / ROE |
+|---|---|---|---|---|---|
+| OUT TRACKS | 1 | 230.0 µs | 246.0 µs | 238.0 µs | 0 / 0 |
+| | 2 | 230.2 | 246.0 | 238.1 | 0 / 0 |
+| | 3 | 230.6 | 246.4 | 238.5 | 0 / 0 |
+| OUT TRACKS POST | 1 | 233.7 | 248.7 | 241.2 | 0 / 0 |
+| | 2 | 233.5 | 248.2 | 240.8 | 0 / 0 |
+| | 3 | 233.3 | 248.4 | 240.9 | 0 / 0 |
+
+POST minus OUT TRACKS: **+2.8 µs** a frame (balanced means 241.0 − 238.2;
++3.2 on the low phase, +2.3 on the high), 0.8% of the 362.8 µs frame;
+frame period 362.8 µs on every take. A first POST take with the
+sequencer stopped (T1-T7 silent) read 123 µs and is not counted.
+
+The difference is smaller than the port's count predicts: on these two
+images the hook runs 1,737 more instructions a block (median 4,503 against
+2,766, below), and 2.8 µs is ~730 core cycles at 264 MHz, about 0.4 cycles
+an instruction, where the unit's other frame-interrupt work measures 1.1 to
+4.4 (`docs/firmware/ARCHITECTURE.md`). CF METER's exit stamp is the
+epilogue at `0x4000d9a6`, where the USB hook rejoins, so the hook is inside
+the span it times. Why the unit is this much cheaper is not found.
+
+No host (USB cable out, CUE into an interface): not run.
 
 **The gain engine** and the per-sample multiply this module uses ran on a
 MKII (5 Oct 2026, allmyfriendsaresynths (@clickysteve)) in a 20-channel
@@ -186,15 +240,19 @@ building included) and with no host:
 | OUT TRACKS MAIN CUE | 3,438 | 17 |
 | **OUT TRACKS POST** | **4,278** (+1,639 on OUT TRACKS) | **447** |
 
-**Time is estimated, not measured on a unit.** Bryan T's unit put OUT
-TRACKS MAIN CUE 26.7 µs per frame above OUT MAIN CUE streaming with no
-voices (`docs/firmware/ARCHITECTURE.md` "ColdFire time per frame on a
-unit"); 2,611 instructions apart here, that is about 10 ns an instruction,
-and the read-back words make those instructions dearer than POST's mostly
-register and EMAC ones. On that scale OUT TRACKS POST costs about 17 µs a
-frame more than OUT TRACKS (4.7% of the 362.8 µs frame) and about 9 µs
-more than OUT TRACKS MAIN CUE; with no host, about 4.5 µs (the history and
-the ramp state run every block). CF METER on a unit is the measurement.
+On `cfmeter-post` and `cfmeter-tracks` (CF METER and SYNTH MACHINE beside
+the USB module) the same count gives 4,503 and 2,766 (medians; minimums
+4,278 and 2,631).
+
+**Time, measured on a unit while streaming: +2.8 µs a frame over OUT
+TRACKS** (0.8% of the frame; *On the unit*, above). This replaces the
+earlier estimate of about 17 µs, which scaled the instruction count by
+Bryan T's ~10 ns an instruction for OUT TRACKS MAIN CUE's read-back work;
+the unit runs POST's extra instructions far faster than that, and faster
+than the port's count suggests (not explained). **With no host, not
+measured** (the 447 instructions a block that run whether or not a host
+is connected); the same scaling's ~4.5 µs is not carried over, since it
+overstated the streaming cost about sixfold.
 
 Memory: the `usbaudio` unit grows by 428 B of code (2,434 → 2,862) and 1,920 B of
 data (the four-block history, the ramp state, the per-block gain table and
@@ -202,7 +260,11 @@ the 1 KB XLV table), in the platform reserve.
 
 ## Open
 
-- MASTER TRACK and the CPU cost have not been measured on a unit.
+- MASTER TRACK and the no-host CPU cost have not been measured on a unit.
+- The streaming cost on the unit (+2.8 µs for ~1,740 more instructions a
+  block under the port) means about 0.4 core cycles an instruction, below
+  the 1.1 to 4.4 measured for the unit's other frame-interrupt work; not
+  explained.
 - The split word (`0x8000485a + 8t`, a sample offset in the block) was
   exercised under the port by poking it; what the sequencer writes there
   on a unit was not observed (the diagnostic take nulled, but which splits

@@ -43,7 +43,7 @@ Modules
 - STEM REC, piece 5: every track after its fader (its share of MAIN, from core 0's own gain arithmetic redone in the frame hook), MAIN, CUE and the inputs AB/CD as sources (stereo or mono), 24-bit files, an 8 MiB ring; the menu's labels keep moving when the card falls behind (Yves Rosius, 1-4 Oct).
 - KITS (new): 256 Kits per project through the stock Part slots: each pattern's Kit is copied into a slot nothing plays before the pattern is scheduled; LOAD/SAVE KIT on the stock list menu with Octakit's key map, UNDO KIT, list copy/paste/clear/undo, AUTOSAVE and KEEP LEVELS, the pattern clipboard carrying the Kit, FUNC+PASTE+PART, PTN+FUNC+RIGHT, PTN+FUNC+TRIG; kits.work/kits.strd, migration of the stock Parts, import of Octakit's kits3a/b.work; no `illegal` (6 Oct, port: `verify_kits`, 89 checks; on the unit in image A6).
 - OCTAKIT, SCENES KITS, SCENES P2 KITS, KITS RELOAD removed, with the build's Runtime/ArenaReserve machinery (every other remix's image and report bit-identical; refhash 24/24); TEMPO BUS and MODE DEFAULTS no longer push Octakit's token (6 Oct).
-- USB AUDIO OUT TRACKS POST: the sixteen track channels after each track's own MAIN gain (LEVEL, mute, solo, XLV, core 0's 16-sample ramp; MAIN_LEVEL left out), `USB_LAYOUT = 5` of the shared source; every other layout byte-identical (5 Oct; on a MKII as P3, below; CPU cost estimated, not measured on a unit; MASTER TRACK checked under the port only).
+- USB AUDIO OUT TRACKS POST: the sixteen track channels after each track's own MAIN gain (LEVEL, mute, solo, XLV, core 0's 16-sample ramp; MAIN_LEVEL left out), `USB_LAYOUT = 5` of the shared source; every other layout byte-identical (5 Oct; on a MKII as P3, below; streaming cost +2.8 µs a frame over OUT TRACKS on the unit, the no-host cost not measured; MASTER TRACK checked under the port only).
 - OCTAKIT: patch 0002, a track button within ~250 ms of a queued pattern change ran her Part-refresh writer into its context fatal (BUSY during the handoff; ems-octakit#5's setting); on BUSY the writer now runs stock unwrapped (5 Oct, port-measured).
 - USB AUDIO OUT (every layout): the producer runs only while the host asks for the stream, with the 64-slot start cushion zeroed at the first produced block (5 Oct, port only); Bryan T measured the always-on producer at 13–25 µs of frame interrupt per frame with no host.
 - USB AUDIO IN (AB, CD, ABCD): the per-frame transfer to core 0 stops once a block with word 0 = 0 has landed while the stream is closed (5 Oct, port only).
@@ -89,6 +89,12 @@ Docs
 - `docs/contributing/TESTING.md`: every gate, how to write one, what it costs (29 Sep).
 - ColdFire load on a unit: Bryan T's CF METER takes (4 Oct; `docs/firmware/ARCHITECTURE.md` section 6): ~16.5 µs per playing voice at CPI ~4.4 against the port, no first-voice premium (the morning's +37 µs retracted the same evening), the USB stack ~14 µs idle / ~25 µs playing, no crossbar contention; OUT TRACKS MAIN CUE costs 27–50 µs of frame interrupt over OUT MAIN CUE, most of it with no host connected; TSTR and the stock DELAY not measurable; interrupt levels from the ICR writes in `KERNEL.md`.
 - Removed: `PLAN.md`, `docs/TIMESTRETCH_PIPELINE.md` (27 Sep).
+
+## L1, C1 and C2 — 7 Oct 2026 (`usb-out-tracks-main-cue`, `cfmeter-tracks`, `cfmeter-post`, allmyfriendsaresynths's builds for #625)
+
+On allmyfriendsaresynths's (@clickysteve) MKII, built on main `6f9e5bc9`.
+- L1 (`usb-out-tracks-main-cue`): MAIN against T1 by `tools/hw/usb_offset.py`, three takes with the USB cable replugged between them: 0 samples on all 30 clicks, both sides.
+- C1 (`cfmeter-tracks`) and C2 (`cfmeter-post`), the same project loaded fresh on each, three 8 s streaming takes: frame interrupt 238.2 µs and 241.0 µs (balanced means), POST +2.8 µs; TUE/ROE 0. No-host takes not run.
 
 ## STEMS3 — 6 Oct 2026 (`stems` at `fc7baad`)
 
