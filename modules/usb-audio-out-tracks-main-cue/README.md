@@ -77,10 +77,12 @@ MAIN lag on his unit (25 Sep 2026), the same direction. Since 28 Sep the
 producer writes MAIN/CUE into the ring slot `MAIN_CUE_LAG_BLOCKS` = 1 block
 behind the tracks' slot (the consumer runs `AUD_TARGET` = 64 frames behind (512 until 28 Sep
 2026), which is more than one 16-frame block, so the slot is
-unread), and `verify_usb_align` reads 0 under the port. The size of the lag
-on hardware is inferred from the port's structure, not measured on a unit.
-To measure it: a click on T1, a twenty-channel `tools/rec` take and
-`tools/hw/usb_offset.py take.wav --ref 1 --ch 17`.
+unread), and `verify_usb_align` reads 0 under the port. On a unit the lag is 0:
+a click on T1, three twenty-channel `tools/rec` takes (the USB cable
+replugged between them) through `tools/hw/usb_offset.py take.wav --ref 1
+--ch 17`, 0 samples on all 30 clicks, MAIN R likewise (allmyfriendsaresynths's
+MKII, 7 Oct 2026, built from main `6f9e5bc9`;
+[USB AUDIO OUT TRACKS POST](../usb-audio-out-tracks-post/README.md), *On the unit*).
 
 ## On the unit
 
@@ -215,7 +217,7 @@ only (`verify_usb`).
 
 ## Variants
 
-`usbaudio.s` is assembled three ways, one module each; a remix carries one
+`usbaudio.s` is assembled once per module, one layout each; a remix carries one
 (they take the same hook sites, and the build refuses two by name):
 
 | module | `USB_LAYOUT` | high speed | full speed |
@@ -223,6 +225,7 @@ only (`verify_usb`).
 | USB AUDIO OUT TRACKS MAIN CUE (this) | 0 | 20 channels: tracks 1–16, MAIN, CUE | the tracks' stereo sum |
 | [USB AUDIO OUT TRACKS](../usb-audio-out-tracks/README.md) | 1 | 16 channels: the tracks | the tracks' stereo sum |
 | [USB AUDIO OUT MASTER](../usb-audio-out-master/README.md) | 2 | 2 channels: track 8's L/R | track 8's L/R |
+| [USB AUDIO OUT TRACKS POST](../usb-audio-out-tracks-post/README.md) | 5 | 16 channels: the tracks after their own MAIN gain | the stems' stereo sum |
 
 The layout is a `.set` in the `remix.inc` each module's `Linked` unit
 writes. Every `USB_LAYOUT = 0` path is the source as it was; this module's

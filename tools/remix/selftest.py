@@ -839,6 +839,7 @@ def main():
                  "PLATE REV", "SPRING REV", "DARK REV", "COMPRESSOR", "LO-FI",
                  "DJ EQ", "COMB FILTER")
     _want = {"mods": (), "ok-ms": (), "usb-out-tracks-main-cue": (), "usb-out-tracks": (), "usb-out-master": (),
+             "usb-out-tracks-post": (),
              "usb-out-main-cue": (), "usb-out-main": (), "usb-midi": (), "stems": (),     # stock effects + ColdFire modules, no DSP words
              "repitch": (), "plocks-p2": (), "kits": (), "analog-bassdrum": ("SPRING REV",),
              "sidechain-compressor": ("SPRING REV",), "kyoti-mute-sidechain": ("SPRING REV",),   # its DSP section in SPRING's words
@@ -850,7 +851,7 @@ def main():
              **{f"usb-io-{o}-{i}": ("SPATIALIZER",) for o in ("tracks", "tracks-main-cue", "main-cue", "main") for i in ("ab", "cd", "abcd")},
              "octatrick": ("SPATIALIZER",),   # USB AUDIO IN ABCD's inject, as in the io remixes
              "sos-capture": ("SPATIALIZER",),   # usb-io-tracks-ab + the recorder fixes
-             "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",),   # the readout insert's words
+             "cfmeter": ("DARK REV",), "cfmeter-port": ("DARK REV",), "cfmeter-post": ("DARK REV",), "cfmeter-tracks": ("DARK REV",),   # the readout insert's words
              "waveload": ("DARK REV",), "waveload-port": ("DARK REV",),   # CF METER's readout insert, as cfmeter
              "wave": ("SPRING REV", "DARK REV"),   # WAVE runs in their words
              "transient": ("PLATE REV",),   # TRANSIENT runs in its words; the other 13 stay

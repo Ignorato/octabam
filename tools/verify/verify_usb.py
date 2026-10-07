@@ -42,6 +42,7 @@ MIDI_FIFO_HEAD = 0x46100b80         # midi_rx_fifo_head: +1 per byte midi_rx_enq
 LAYOUTS = {
     "USB AUDIO OUT TRACKS MAIN CUE": (20, 960, 2, [(t, c) for t in range(8) for c in (0, 1)] + [(8, 0), (8, 1), (9, 0), (9, 1)]),
     "USB AUDIO OUT TRACKS": (16, 768, 2, [(t, c) for t in range(8) for c in (0, 1)]),
+    "USB AUDIO OUT TRACKS POST": (16, 768, 2, [(t, c) for t in range(8) for c in (0, 1)]),
     "USB AUDIO OUT MASTER": (2, 96, 2, [(7, 0), (7, 1)]),
     "USB AUDIO OUT MAIN CUE": (4, 192, 2, [(8, 0), (8, 1), (9, 0), (9, 1)]),
     "USB AUDIO OUT MAIN": (2, 96, 2, [(8, 0), (8, 1)]),
@@ -59,6 +60,29 @@ def tap_word(src, lr, frame):
 
 TAP_RB = b"".join(tap_word(t, c, f).to_bytes(4, "big") for _bank in range(2) for t in range(8) for f in range(16) for c in (0, 1))
 TAP_MC = b"".join(tap_word(8 + k, c, f).to_bytes(4, "big") for k in (0, 1) for f in range(16) for c in (0, 1))
+
+# USB AUDIO OUT TRACKS POST multiplies each track by its own MAIN gain, so a
+# word cannot name its source: the taps are amplitudes instead, source k =
+# 2t + c at (k + 1) << 17, and every track's gain at the boot defaults (LEVEL
+# 108, nothing muted or soloed, XLV unlocked once the crossfader's weights
+# exist) is one G. Channel k then carries floor(g (k + 1) / 16) with g within
+# 15 of G (core 0's ramp settles up to 15 below its target), ranges far apart.
+POST_TAP = lambda k: (k + 1) << 17
+TAP_RB_POST = b"".join((POST_TAP(t * 2 + c) << 8).to_bytes(4, "big", signed=True)
+                       for _bank in range(2) for t in range(8) for f in range(16) for c in (0, 1))
+XFADE_WEIGHTS, XFADE_64 = 0x80003c60, bytes.fromhex("bf7fc081") * 10   # the crossfader at 64: unlocked XLV = 0x7f00
+
+
+def post_g_default():
+    """G for the boot defaults (MAIN word 0x6c00, XLV 0x7f00), as the unit's
+    post_frame computes it, from the XLV table the build extracts."""
+    import importlib.util
+    sys.path.insert(0, str(ROOT / "tools/harness"))
+    import usb_post_model
+    spec = importlib.util.spec_from_file_location("usb_post_manifest", ROOT / "modules/usb-audio-out-tracks-post/manifest.py")
+    man = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(man)
+    return usb_post_model.target(0x6c00, 0x7f00, man.xlv_table())
 
 
 def main():
@@ -221,21 +245,35 @@ def main():
             # eDMA rewrites the current bank each frame). Every channel must
             # carry only its own source's words, and every source it should.
             tapped = []
+            post = audio == "USB AUDIO OUT TRACKS POST"
+            if post:
+                b.poke(XFADE_WEIGHTS, XFADE_64)
             for _ in range(1200):
-                b.poke(RB_BASE, TAP_RB)
+                b.poke(RB_BASE, TAP_RB_POST if post else TAP_RB)
                 b.poke(MAIN_CUE_BASE, TAP_MC)
                 tapped.append(b.ep_in(3, 1024))
             tw = [int.from_bytes(w[i:i + 4], "little") for w in tapped[-400:] for i in range(0, len(w), 4)]
             seen, wrong = [0] * nch, []
+            if post:
+                g = post_g_default()
+                band = [((g - 15) * (k + 1) >> 4, g * (k + 1) >> 4) for k in range(16)]
             for i, w in enumerate(tw):
-                src, lr = (w >> 24) - 0x10, ((w >> 16) & 0xff) - 0x20
+                if post:
+                    v = (w >> 8) - (1 << 24) if w & 0x80000000 else w >> 8
+                    k = next((k for k, (lo, hi) in enumerate(band) if lo <= v <= hi), None)
+                    if k is None:
+                        continue
+                    src, lr = divmod(k, 2)
+                else:
+                    src, lr = (w >> 24) - 0x10, ((w >> 16) & 0xff) - 0x20
                 if 0 <= src < 10 and lr in (0, 1):
                     if (src, lr) == taps[i % nch]:
                         seen[i % nch] += 1
                     else:
                         wrong.append((i % nch, f"{w:08x}"))
             names = ["T%d %s" % (s + 1, "LR"[c]) if s < 8 else ("MAIN", "CUE")[s - 8] + " " + "LR"[c] for s, c in taps]
-            check(f"{audio}: channels 1-{nch} carry {', '.join(names) if nch <= 4 else names[0] + ' .. ' + names[-1]}, each its own source's words only",
+            check(f"{audio}: channels 1-{nch} carry {', '.join(names) if nch <= 4 else names[0] + ' .. ' + names[-1]}, each its own source's words only"
+                  + (f" (POST: tap k at (k+1)<<17 times the boot gain G = 0x{post_g_default():06x})" if post else ""),
                   not wrong and all(n >= 100 for n in seen), f"per-channel hits {seen}; wrong {wrong[:6]}")
             b.ctrl_nodata(0x01, 0x0b, 0, 4)
             after = [len(b.ep_in(3, 1024)) for _ in range(8)]
