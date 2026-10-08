@@ -211,7 +211,9 @@ The error names: `RING FULL` (the card fell behind; the files still play),
   frame, and the ring would fill in about 160 s (STEM_REC.md 18.9). On
   the unit (STEMS3), eleven stereo files at 24 bits, 2.91 MB/s, peaked
   the ring at 13 to 16% on a light project and filled it on a busy one:
-  RING FULL, cause open (STEM_REC.md 17.3).
+  RING FULL, cause open (STEM_REC.md 17.3). BuMa measured a MKI's card
+  writes at 4.7–5.7 MB/s with the sequencer stopped and 1.4–2.1 MB/s with
+  Static tracks streaming (STEM_REC.md 19.1).
 - A power cut or a card pull before the end loses the take: each file is
   left at 0 bytes, because its length is set only at the end
   (STEM_REC.md 12.3).
