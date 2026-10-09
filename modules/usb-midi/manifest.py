@@ -43,7 +43,8 @@ MODULE = Module(
                include=descriptors.remix_inc),
     ),
     gates=(Gate("tools/verify/verify_usbmidi_rx.py", stage="image"),
-           Gate("tools/verify/verify_usbmidi_clock.py", stage="image")),
+           Gate("tools/verify/verify_usbmidi_clock.py", stage="image"),
+           Gate("tools/verify/verify_usbmidi_replug.py", stage="image")),
     detours=(
         Detour(0x4001d9ca, H("4879400b9868"), "usbmidi_rx", "usbmidi_rx_setcfg_shim",
                "SET_CONFIGURATION body: note the speed, then usbmidi's EP2 bring-up (512-byte packets at high speed)"),
@@ -53,6 +54,14 @@ MODULE = Module(
                "midi_send entry: queue the message for the USB encoder", pad_to=8),
         Detour(0x400108b0, H("2f02122f000b"), "usbmidi", "usbmidi_prio_shim",
                "priority (realtime) byte sender: queue the byte for the USB encoder"),
+        # Bus reset and session end take EP2 down (usbmidi_rx.s); the same two
+        # sites as USB AUDIO's audio_reset_shim / audio_sessend_shim, which
+        # override these and call usbmidi_rx_bus_end when a USB AUDIO module
+        # is in the remix.
+        Detour(0x4001e91c, H("4ebaed9a7040"), "usbmidi_rx", "usbmidi_rx_reset_shim",
+               "USBSTS.URI handler: a bus reset takes EP2 down until the next SET_CONFIGURATION"),
+        Detour(0x4001e952, H("2039fc0b0140"), "usbmidi_rx", "usbmidi_rx_sessend_shim",
+               "OTGSC.BSVIS session end (cable pulled): the same, before USBCMD.RS is cleared"),
         Detour(0x4001daec, H("303946c8ce0c"), "usbmidi", "usbmidi_clrfeat_shim",
                "CLEAR_FEATURE(ENDPOINT_HALT): answer for EP2 instead of stalling"),
         # GET_DESCRIPTOR(CONFIG / OTHER_SPEED): the responder's two hardcoded
