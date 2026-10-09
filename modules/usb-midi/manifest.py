@@ -28,7 +28,7 @@ H = bytes.fromhex
 MODULE = Module(
     name="usb-midi", key="USB MIDI", kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author="markandrus/octemu", author_url="https://github.com/markandrus/octemu",
-    proof=Proof.HARDWARE, proof_note="Sam's MKII (image 64, 25 Sep 2026: enumerates, receives 7,950 msg/s); Tim's MKI (OCTATRICK9, 26 Sep 2026); USB clock tempo on Kazeko's MKI (#633, 6 Oct 2026); transmit from the unit not measured",
+    proof=Proof.HARDWARE, proof_note="Sam's MKII (image 64, 25 Sep 2026: enumerates, receives 7,950 msg/s); Tim's MKI (OCTATRICK9, 26 Sep 2026); USB clock tempo on Kazeko's MKI (#633, 6 Oct 2026); transmit, and transmit after three cable replugs, on Ignorato's MKII (OCTABAM21, 9 Oct 2026, macOS and Windows 10)",
     doc="Class-compliant USB-MIDI in and out on the OT's own USB port, mirroring the DIN ports (markandrus/octemu).",
     linked=(
         # his unit, verbatim: the build re-links it at his zone address and

@@ -52,7 +52,7 @@ DETOURS = (
 MODULE = Module(
     name="usb-audio-out-tracks-main-cue", key="USB AUDIO OUT TRACKS MAIN CUE", kind=Kind.CF_PATCH,
     category=Category.MIDI_USB, author="markandrus/octemu", author_url="https://github.com/markandrus/octemu",
-    proof=Proof.PORT, proof_note="bus reset and session-end shims (audio_reset_shim, audio_sessend_shim): `verify_usb` under the port only; the rest ran on Sam's MKII (image 64, 25 Sep 2026) and Tim's MKI (OCTATRICK9, 26 Sep 2026)",
+    proof=Proof.PORT, proof_note="bus reset and session-end shims (audio_reset_shim, audio_sessend_shim): the alt 0 request `verify_usb` under the port only, the `usbmidi_rx_bus_end` call on Ignorato's MKII (OCTABAM21, 9 Oct 2026, three replugs); the rest ran on Sam's MKII (image 64, 25 Sep 2026) and Tim's MKI (OCTATRICK9, 26 Sep 2026)",
     doc="Twenty 24-bit channels over USB (UAC2): the tracks post-FX pre-fader, MAIN, CUE; the stereo sum at full speed (markandrus/octemu). Costs the ColdFire 27-50 us of each 362.8 us frame over OUT MAIN CUE, host or not (one MKII, 4 Oct 2026).",
     linked=(Linked("usbaudio", SOURCE, cpu="5475", dram=True, include=layout_inc(0)),),
     detours=DETOURS,

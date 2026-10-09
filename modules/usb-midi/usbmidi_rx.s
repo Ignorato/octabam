@@ -208,6 +208,9 @@ usbmidi_rx_sessend_shim:
 | Linked.reference pins those bytes and verify_usbmidi_replug checks the
 | offset. Interrupts are masked for the three stores, as usbmidi.s masks its
 | own accumulator. Saves everything it uses.
+| usbmidi_tx_kick sets tx_busy and runs the encoder with interrupts unmasked;
+| a reset or session end in that window is followed by the encoder's EP2 IN
+| prime. The flush here at SET_CONFIGURATION cancels it before EP2_INIT.
 usbmidi_rx_bus_end:
     lea     %sp@(-16),%sp
     moveml  %d0-%d3,%sp@

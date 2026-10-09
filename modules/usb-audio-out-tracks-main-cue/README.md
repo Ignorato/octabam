@@ -353,9 +353,12 @@ displace one instruction pair each (`jsr 0x4001d6b8; moveq #64,%d0`, and
 down (`usbmidi_rx_reset_shim`, `usbmidi_rx_sessend_shim`); this module
 overrides those detours and its shims call `usbmidi_rx_bus_end` after the
 alt 0 request (`modules/usb-midi/README.md`, "Bus reset and session end").
-Port only. On the session-end path the frame ISR's
-`audio_ep3_flush` runs with USBCMD.RS already clear; the port's flush
-completes at once, so that case is unmeasured.
+Ignorato's MKII ran these shims in OCTABAM21 (9 Oct 2026): USB MIDI transmit
+came back after each of three replugs on macOS and Windows 10, which is the
+`usbmidi_rx_bus_end` call. The alt 0 request itself is measured under the
+port only. On the session-end path the frame ISR's `audio_ep3_flush` runs
+with USBCMD.RS already clear; the port's flush completes at once, so that
+case is unmeasured.
 
 ## Ground
 

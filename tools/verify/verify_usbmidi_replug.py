@@ -73,6 +73,9 @@ def check(what, ok, detail=""):
 
 def symbols():
     nm = shutil.which("m68k-elf-nm") or shutil.which("m68k-linux-gnu-nm")
+    if not nm:
+        print("  [FAIL] verify_usbmidi_replug: neither m68k-elf-nm nor m68k-linux-gnu-nm is on PATH")
+        sys.exit(1)
     out = subprocess.run([nm, str(ELF)], capture_output=True, text=True).stdout
     return {p[2]: int(p[0], 16) for p in (l.split() for l in out.splitlines()) if len(p) == 3}
 

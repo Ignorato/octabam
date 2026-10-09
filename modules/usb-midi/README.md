@@ -146,7 +146,21 @@ cleared, any EP2 completion dropped. The two sites are USB AUDIO's too:
 with a USB AUDIO OUT module in the remix its `audio_reset_shim` and
 `audio_sessend_shim` override these detours and call `usbmidi_rx_bus_end`.
 After the change all 21 of `verify_usbmidi_replug`'s checks pass (five fail
-before). On a unit: not yet measured.
+before).
+
+On a unit (Ignorato's MKII, 9 Oct 2026, image OCTABAM21 = the OCTABAM14
+test remix plus this change; MIDI clock send on, the host only listening,
+the unit sends clock about 48 times a second while stopped). Each run: a
+power cycle with the cable in, then three unplug and replug cycles in the
+same port:
+
+| host | before (OCTABAM14) | after (OCTABAM21) |
+|---|---|---|
+| Mac mini M1, macOS 26.4.1, CoreMIDI | power cycle: 720 clocks in 15 s; replugs: 0, 0, 0, 0 (four in a row) | power cycle and all three replugs: 720 clocks in 15 s each |
+| Lenovo laptop, Windows 10 22H2, AMD USB 3.1 xHCI, in-box driver | power cycle: 720; replug: 0 (2 of 2 each) | power cycle and all three replugs: 720 each |
+
+Not measured on a unit: host-to-unit MIDI after a replug (port only), many
+replugs, host sleep and wake, a hub.
 
 ## On the unit
 
